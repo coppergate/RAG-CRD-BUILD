@@ -1,0 +1,71 @@
+
+graph TD
+subgraph "External Clients"
+Browser[Web Browser]
+DevDB[Dev Database Tools]
+end
+
+subgraph "Kubernetes: rag-system namespace"
+UI[rag-web-ui]
+Gateway[llm-gateway]
+Worker[rag-worker]
+DBAdapter[db-adapter]
+Ingestor[rag-ingestion-service]
+end
+
+subgraph "Pulsar Message Bus (rag-pipeline namespace)"
+direction LR
+Tasks[data/llm-tasks]
+Results[data/llm-results]
+Prompts[data/chat-prompts]
+Responses[data/chat-responses]
+Ops[operations/db-ops]
+QOps[operations/qdrant-ops]
+QRes[operations/qdrant-ops-results]
+end
+
+subgraph "Storage & Infrastructure"
+S3[(Rook-Ceph S3)]
+Qdrant[(Qdrant Vector DB)]
+TDB[(TimescaleDB)]
+Ollama[Ollama LLM Service]
+end
+
+%% Interaction Flows
+Browser <-->|HTTP/80| UI
+Browser -->|HTTP/80| Gateway
+
+%% Ingestion Flow
+UI -->|Upload| S3
+UI -->|Trigger| Ingestor
+Ingestor -->|Store Metadata| TDB
+Ingestor -->|Store Vectors| Qdrant
+Ingestor -->|Read Files| S3
+Ingestor -->|Embeddings| Ollama
+
+%% Chat Flow (Asynchronous)
+Gateway -.->|1. Publish| Prompts
+Gateway -.->|2. Publish| Tasks
+
+Tasks -.->|3. Consume| Worker
+Worker -->|4. Search| Qdrant
+Worker -->|5. Inference| Ollama
+Worker -.->|6. Publish| Responses
+Worker -.->|6. Publish| Results
+
+Results -.->|7. Consume| Gateway
+Gateway -->|8. HTTP Response| Browser
+
+%% Persistent Flow (DB Adapter)
+Prompts -.->|Consume| DBAdapter
+Responses -.->|Consume| DBAdapter
+Ops -.->|Consume| DBAdapter
+DBAdapter -->|Persist| TDB
+
+%% External DB Access
+DevDB -->|LoadBalancer| TDB
+
+%% Operations Flow
+Worker -.->|Operations| QOps
+QOps -.->|Consume| Worker
+Worker -.->|Results| QRes

@@ -1,0 +1,124 @@
+apiVersion: grafana.integreatly.org/v1beta1
+kind: Grafana
+metadata:
+  name: central-grafana
+  namespace: monitoring
+  labels:
+    dashboards: "true"
+spec:
+  config:
+    log:
+      mode: console
+    auth.anonymous:
+      enabled: "false"
+    security:
+      admin_user: admin
+      admin_password: admin
+  service:
+    spec:
+      type: ClusterIP
+  ingress:
+    metadata:
+      annotations:
+        traefik.ingress.kubernetes.io/router.entrypoints: web
+    spec:
+      ingressClassName: traefik
+      rules:
+        - host: grafana.rag.hierocracy.home
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: central-grafana-service
+                    port:
+                      number: 3000
+  persistentVolumeClaim:
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: rook-ceph-block
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: loki
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  datasource:
+    name: Loki
+    type: loki
+    access: proxy
+    url: http://loki-gateway.monitoring.svc.cluster.local
+    isDefault: false
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: tempo
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  datasource:
+    name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo-gateway.monitoring.svc.cluster.local
+    isDefault: false
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: mimir
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  datasource:
+    name: Mimir
+    type: mimir
+    access: proxy
+    url: http://mimir-gateway.monitoring.svc.cluster.local
+    isDefault: false
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  datasource:
+    name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://mimir-gateway.monitoring.svc.cluster.local/prometheus
+    isDefault: true
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: nvidia-dcgm
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  grafanaCom:
+    id: 12239
+    revision: 2
+  datasources:
+    - inputName: "DS_PROMETHEUS"
+      datasourceName: "Prometheus"

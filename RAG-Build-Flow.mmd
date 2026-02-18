@@ -1,0 +1,19 @@
+flowchart LR
+    Repo[Git Repo / Source] --> BuildScript[build-and-push.sh]
+    BuildScript --> Podman[Podman Build]
+
+    subgraph "Docker Build Stage"
+        GoSum[go.sum Sync] --> GoMod[go mod download]
+        GoMod --> Build[go build]
+    end
+
+    Podman --> Registry[Local Registry: 172.20.1.26:5000]
+    Registry --> K8s[Kubernetes Cluster]
+
+    subgraph "Deployment"
+        Setup[setup-all.sh]
+        Update[update-to-iteration-4.sh]
+    end
+
+    Setup --> K8s
+    Update --> K8s

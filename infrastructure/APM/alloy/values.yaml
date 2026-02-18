@@ -1,0 +1,36 @@
+alloy:
+  configMap:
+    create: true
+    content: |
+      logging {
+        level = "info"
+        format = "logfmt"
+      }
+
+      prometheus.exporter.unix "default" {
+        set_collectors = ["cpu", "meminfo", "diskstats", "filesystem", "loadavg", "netdev"]
+      }
+
+      prometheus.scrape "default" {
+        targets    = prometheus.exporter.unix.default.targets
+        forward_to = [prometheus.remote_write.mimir.receiver]
+      }
+
+      // Scrape DCGM Exporter (GPUs)
+      prometheus.scrape "dcgm" {
+        targets = [
+          {"__address__" = "dcgm-exporter.gpu-operator.svc.cluster.local:9400"},
+        ]
+        forward_to = [prometheus.remote_write.mimir.receiver]
+        scrape_interval = "15s"
+      }
+
+      prometheus.remote_write "mimir" {
+        endpoint {
+          url = "http://mimir-gateway.monitoring.svc.cluster.local/api/v1/push"
+        }
+      }
+
+controller:
+  type: deployment
+  replicas: 1

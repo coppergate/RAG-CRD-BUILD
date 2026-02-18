@@ -1,0 +1,6 @@
+- the user should be able to pick multiple files and/or multiple directories for the upload at once.
+  - the interface should show all the paths to files and/or directories that will be uploaded 
+- the user will need to be able to delete the ingested data by tags as well... 
+  - the user will be able to specify one or more tags and delete uploaded sets of data that have all the tags associated to them
+- if a dataset is removed from s3 we need to clean up the session information and the vector store.
+- the user will need to be able to view the status of the upload and the progress of the upload

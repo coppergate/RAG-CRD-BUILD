@@ -1,0 +1,26 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: loki-storage
+  namespace: monitoring
+spec:
+  generateBucketName: loki-data
+  storageClassName: rook-ceph-delete-bucket
+---
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: tempo-storage
+  namespace: monitoring
+spec:
+  generateBucketName: tempo-data
+  storageClassName: rook-ceph-delete-bucket
+---
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: mimir-storage
+  namespace: monitoring
+spec:
+  generateBucketName: mimir-data
+  storageClassName: rook-ceph-delete-bucket

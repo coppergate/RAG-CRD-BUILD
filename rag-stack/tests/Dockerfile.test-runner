@@ -1,0 +1,23 @@
+FROM python:3.9-slim
+
+# Install system dependencies for pulsar-client and psycopg2
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    make \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-install python packages
+RUN pip install --no-cache-dir \
+    boto3 \
+    requests \
+    qdrant-client \
+    pulsar-client \
+    psycopg2-binary
+
+WORKDIR /tests
+
+# Default command to keep container alive or be overridden by Job
+CMD ["python", "--version"]

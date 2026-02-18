@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rag-integration-test
+  namespace: rag-system
+spec:
+  template:
+    spec:
+      enableServiceLinks: false
+      containers:
+      - name: tester
+        image: registry.container-registry.svc.cluster.local:5000/rag-test-runner:latest
+        imagePullPolicy: Always
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "--- Running Integration Tests ---"
+            python /tests/integration_test.py
+            echo "--- Running Pulsar CRUD Tests ---"
+            python /tests/pulsar_crud_test.py
+            echo "--- Running Context Verification (Setup) ---"
+            python /tests/context_verification.py
+        env:
+        - name: DB_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secret
+              key: url
+        - name: S3_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_HOST
+        - name: BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_NAME
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: rag-codebase-bucket
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: rag-codebase-bucket
+              key: AWS_SECRET_ACCESS_KEY
+        - name: QDRANT_HOST
+          value: "qdrant"
+        - name: GATEWAY_URL
+          value: "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
+        volumeMounts:
+        - name: tests
+          mountPath: /tests
+      volumes:
+      - name: tests
+        configMap:
+          name: rag-integration-tests
+      restartPolicy: Never
+  backoffLimit: 0

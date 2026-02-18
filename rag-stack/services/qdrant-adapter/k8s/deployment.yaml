@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant-adapter
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant-adapter
+  template:
+    metadata:
+      labels:
+        app: qdrant-adapter
+    spec:
+      containers:
+        - name: qdrant-adapter
+          image: registry.container-registry.svc.cluster.local:5000/qdrant-adapter:1.0.0
+          imagePullPolicy: Always
+          env:
+            - name: PULSAR_URL
+              value: pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650
+            - name: PULSAR_QDRANT_OPS_TOPIC
+              value: persistent://rag-pipeline/operations/qdrant-ops
+            - name: PULSAR_QDRANT_RESULTS_TOPIC
+              value: persistent://rag-pipeline/operations/qdrant-ops-results
+            - name: QDRANT_HOST
+              value: qdrant.rag-system.svc.cluster.local
+            - name: QDRANT_PORT
+              value: "6333"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          ports:
+            - containerPort: 8080

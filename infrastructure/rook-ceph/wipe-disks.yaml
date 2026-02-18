@@ -1,0 +1,91 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-0
+  namespace: rook-ceph
+spec:
+  template:
+    spec:
+      containers:
+      - name: wipe
+        image: busybox
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          wipefs -a /dev/vdb /dev/vdc
+          dd if=/dev/zero of=/dev/vdb bs=1M count=100
+          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-0
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-1
+  namespace: rook-ceph
+spec:
+  template:
+    spec:
+      containers:
+      - name: wipe
+        image: busybox
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          wipefs -a /dev/vdb /dev/vdc
+          dd if=/dev/zero of=/dev/vdb bs=1M count=100
+          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-1
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-2
+  namespace: rook-ceph
+spec:
+  template:
+    spec:
+      containers:
+      - name: wipe
+        image: busybox
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          wipefs -a /dev/vdb /dev/vdc
+          dd if=/dev/zero of=/dev/vdb bs=1M count=100
+          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-2
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-3
+  namespace: rook-ceph
+spec:
+  template:
+    spec:
+      containers:
+      - name: wipe
+        image: busybox
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          wipefs -a /dev/vdb /dev/vdc
+          dd if=/dev/zero of=/dev/vdb bs=1M count=100
+          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-3
+      restartPolicy: Never

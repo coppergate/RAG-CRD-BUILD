@@ -1,0 +1,44 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: loki-s3-bucket
+  namespace: monitoring
+spec:
+  generateBucketName: loki-data
+  storageClassName: rook-ceph-bucket
+---
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: tempo-s3-bucket
+  namespace: monitoring
+spec:
+  generateBucketName: tempo-data
+  storageClassName: rook-ceph-bucket
+---
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: mimir-s3-bucket
+  namespace: monitoring
+spec:
+  generateBucketName: mimir-data
+  storageClassName: rook-ceph-bucket
+---
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: mimir-ruler-s3-bucket
+  namespace: monitoring
+spec:
+  generateBucketName: mimir-ruler
+  storageClassName: rook-ceph-bucket
+---
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: mimir-alertmanager-s3-bucket
+  namespace: monitoring
+spec:
+  generateBucketName: mimir-alertmanager
+  storageClassName: rook-ceph-bucket

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb-rw
+  namespace: timescaledb
+  annotations:
+    purelb.io/addresspool: default
+spec:
+  selector:
+    app: timescaledb-rw
+  ports:
+    - name: http
+      port: 5432
+      targetPort: 5432
+  type: LoadBalancer

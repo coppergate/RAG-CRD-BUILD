@@ -1,0 +1,48 @@
+storage:
+  trace:
+    backend: s3
+    s3:
+      bucket: ${BUCKET_NAME}
+      endpoint: ${S3_ENDPOINT}
+      access_key: ${AWS_ACCESS_KEY_ID}
+      secret_key: ${AWS_SECRET_ACCESS_KEY}
+      insecure: true
+
+# Replicas set to 1 for small/demo environment
+ingester:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: rook-ceph-block
+    size: 10Gi
+
+querier:
+  replicas: 1
+
+queryFrontend:
+  replicas: 1
+
+distributor:
+  replicas: 1
+  config:
+    log_received_spans:
+      enabled: true
+
+compactor:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: rook-ceph-block
+    size: 10Gi
+
+# Enable OTLP receivers in the distributor
+traces:
+  otlp:
+    grpc:
+      enabled: true
+    http:
+      enabled: true
+
+# Optional: gateway can provide a single entry point
+gateway:
+  enabled: true

@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-worker
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-worker
+  template:
+    metadata:
+      labels:
+        app: rag-worker
+    spec:
+      enableServiceLinks: false
+      containers:
+      - name: worker
+        image: registry.container-registry.svc.cluster.local:5000/rag-worker:1.0.0
+        imagePullPolicy: Always
+        env:
+        - name: DB_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secret
+              key: url
+        - name: PULSAR_URL
+          value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+        - name: QDRANT_HOST
+          value: "qdrant"
+        - name: OLLAMA_URL
+          value: "http://ollama.llms-ollama.svc.cluster.local:11434"
+        - name: PULSAR_REQUEST_TOPIC
+          value: "persistent://rag-pipeline/data/llm-tasks"
+        - name: PULSAR_RESPONSE_TOPIC
+          value: "persistent://rag-pipeline/data/chat-responses"
+        - name: PULSAR_QDRANT_OPS_TOPIC
+          value: "persistent://rag-pipeline/operations/qdrant-ops"
+        - name: PULSAR_QDRANT_RESULTS_TOPIC
+          value: "persistent://rag-pipeline/operations/qdrant-ops-results"
+      volumes:
+      - name: app-dir
+        emptyDir: {}

@@ -1,0 +1,34 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: timescaledb
+  namespace: timescaledb
+  labels:
+    release: timescaledb
+spec:
+  instances: 1
+  imageName: ghcr.io/imusmanmalik/timescaledb-postgis:16-3.5
+  env:
+    - name: POSTGRES_USER
+      value: app
+    - name: POSTGRES_PASSWORD
+      value: app
+    - name: POSTGRES_DB
+      value: app
+  affinity:
+    nodeSelector:
+      rag.role.timescaledb-node: "true"
+  storage:
+    storageClass: rook-ceph-block
+    size: 50Gi
+  bootstrap:
+    initdb:
+      postInitTemplateSQL:
+        - CREATE EXTENSION IF NOT EXISTS timescaledb;
+        - CREATE EXTENSION IF NOT EXISTS postgis;
+        - CREATE EXTENSION IF NOT EXISTS postgis_topology;
+        - CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
+        - CREATE EXTENSION IF NOT EXISTS postgis_tiger_geocoder;
+  postgresql:
+    shared_preload_libraries:
+      - timescaledb

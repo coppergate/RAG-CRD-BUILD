@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-ingestion-service
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-ingestion-service
+  template:
+    metadata:
+      labels:
+        app: rag-ingestion-service
+    spec:
+      enableServiceLinks: false
+      containers:
+      - name: ingestor
+        image: registry.container-registry.svc.cluster.local:5000/rag-ingestion:1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        env:
+        - name: OLLAMA_URL
+          value: "http://ollama.llms-ollama.svc.cluster.local:11434"
+        - name: DB_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secret
+              key: url
+        - name: QDRANT_HOST
+          value: "qdrant"
+        - name: S3_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_HOST
+        - name: BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_NAME
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: rag-codebase-bucket
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: rag-codebase-bucket
+              key: AWS_SECRET_ACCESS_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-ingestion-service
+  namespace: rag-system
+spec:
+  selector:
+    app: rag-ingestion-service
+  ports:
+  - port: 80
+    targetPort: 8000

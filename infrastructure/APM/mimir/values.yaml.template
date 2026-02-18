@@ -1,0 +1,82 @@
+mimir:
+  structuredConfig:
+    common:
+      storage:
+        backend: s3
+        s3:
+          endpoint: ${S3_ENDPOINT}
+          access_key_id: ${AWS_ACCESS_KEY_ID}
+          secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+          insecure: true
+          bucket_name: ${BUCKET_NAME}
+    blocks_storage:
+      s3:
+        bucket_name: ${BUCKET_NAME}
+      backend: s3
+      tsdb:
+        dir: /data/tsdb
+    alertmanager_storage:
+      backend: s3
+      s3:
+        bucket_name: ${ALERTMANAGER_BUCKET_NAME}
+        access_key_id: ${ALERTMANAGER_ACCESS_KEY}
+        secret_access_key: ${ALERTMANAGER_SECRET_KEY}
+    ruler_storage:
+      backend: s3
+      s3:
+        bucket_name: ${RULER_BUCKET_NAME}
+        access_key_id: ${RULER_ACCESS_KEY}
+        secret_access_key: ${RULER_SECRET_KEY}
+    distributor:
+      ring:
+        instance_id: distributor
+    ingester:
+      ring:
+        replication_factor: 1
+      push_grpc_method_enabled: true
+    # Disable Kafka/Ingest storage explicitly
+    ingest_storage:
+      enabled: false
+    # Disable usage stats
+    usage_stats:
+      enabled: false
+
+# Using small development mode
+rollout_strategy:
+  type: RollingUpdate
+
+minio:
+  enabled: false
+
+# Disable optional components that might require extra storage/config
+kafka:
+  enabled: false
+
+# Global persistence settings to catch all components
+common:
+  storageClass: rook-ceph-block
+
+# Configure persistent storage for Mimir components
+alertmanager:
+  persistentVolume:
+    enabled: true
+    storageClass: rook-ceph-block
+    size: 10Gi
+
+ingester:
+  persistentVolume:
+    enabled: true
+    storageClass: rook-ceph-block
+    size: 10Gi
+
+compactor:
+  persistentVolume:
+    enabled: true
+    storageClass: rook-ceph-block
+    size: 10Gi
+
+store_gateway:
+  persistentVolume:
+    enabled: true
+    storageClass: rook-ceph-block
+    size: 10Gi
