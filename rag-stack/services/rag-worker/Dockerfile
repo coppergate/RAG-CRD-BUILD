@@ -1,4 +1,5 @@
-FROM golang:1.24-alpine AS builder
+# Go toolchain pinned for reproducibility and to satisfy upstream deps (genproto >= go1.25)
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 

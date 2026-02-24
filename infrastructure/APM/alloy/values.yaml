@@ -25,6 +25,19 @@ alloy:
         scrape_interval = "15s"
       }
 
+      // Scrape Apache Pulsar components (no PodMonitor/ServiceMonitor required)
+      prometheus.scrape "pulsar" {
+        targets = [
+          {"__address__" = "pulsar-zookeeper.apache-pulsar.svc.cluster.local:8000"},
+          {"__address__" = "pulsar-bookie.apache-pulsar.svc.cluster.local:8000"},
+          {"__address__" = "pulsar-recovery.apache-pulsar.svc.cluster.local:8000"},
+          {"__address__" = "pulsar-broker.apache-pulsar.svc.cluster.local:8080"},
+          {"__address__" = "pulsar-proxy.apache-pulsar.svc.cluster.local:8080"},
+        ]
+        forward_to = [prometheus.remote_write.mimir.receiver]
+        scrape_interval = "30s"
+      }
+
       prometheus.remote_write "mimir" {
         endpoint {
           url = "http://mimir-gateway.monitoring.svc.cluster.local/api/v1/push"

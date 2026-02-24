@@ -33,6 +33,32 @@ $KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.y
 mark_step_done "timescaledb"
 fi
 
+# Apply unified application schema and privileges so 'app' owns and can access all objects
+if ! is_step_done "db-schema"; then
+echo "--- 2.1 Applying Unified Application Schema (TimescaleDB) ---"
+DB_NAMESPACE="timescaledb"
+DB_POD=$($KUBECTL get pods -n $DB_NAMESPACE -l "cnpg.io/cluster=timescaledb,role=primary" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+if [ -z "$DB_POD" ]; then
+  echo "Waiting for TimescaleDB primary pod..."
+  sleep 10
+  DB_POD=$($KUBECTL get pods -n $DB_NAMESPACE -l "cnpg.io/cluster=timescaledb,role=primary" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+fi
+if [ -n "$DB_POD" ]; then
+  echo "Ensuring role 'app' exists and has create on schema public"
+  $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- \
+    sh -lc "psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_roles WHERE rolname='app'\" | grep -q 1 || psql -U postgres -d postgres -c \"CREATE ROLE app LOGIN PASSWORD 'app'\""
+  $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- \
+    psql -U postgres -d app -c "GRANT CONNECT ON DATABASE app TO app; GRANT USAGE, CREATE ON SCHEMA public TO app;"
+
+  echo "Applying schema as role 'app' so objects are owned by app"
+  $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U app -d app < "$REPO_DIR/infrastructure/timescaledb/schema.sql"
+  mark_step_done "db-schema"
+else
+  echo "ERROR: Could not find TimescaleDB primary pod to apply schema."
+  exit 1
+fi
+fi
+
 if ! is_step_done "pulsar"; then
 echo "--- 3. Deploying Infrastructure: Apache Pulsar ---"
 $REPO_DIR/infrastructure/pulsar/install.sh
@@ -45,6 +71,21 @@ $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-pvc.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-deploy.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-service.yaml"
 mark_step_done "qdrant"
+fi
+
+# APM ConfigMap for tests and services to export OTEL traces
+if ! is_step_done "apm-config"; then
+echo "--- 4.1 Creating/Updating APM ConfigMap for OTLP endpoint ---"
+APM_OTLP_ENDPOINT="${APM_OTLP_ENDPOINT:-http://alloy.observability.svc.cluster.local:4318}"
+cat <<EOF | $KUBECTL -n $NAMESPACE apply -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apm-config
+data:
+  OTEL_EXPORTER_OTLP_ENDPOINT: "$APM_OTLP_ENDPOINT"
+EOF
+mark_step_done "apm-config"
 fi
 
 if ! is_step_done "s3-obc"; then
@@ -73,8 +114,10 @@ mark_step_done "rag-worker"
 fi
 
 if ! is_step_done "object-store-mgr"; then
-echo "--- 8. Deploying Object Store Manager (Go) ---"
-$KUBECTL apply -f "$REPO_DIR/services/object-store-mgr/mgr-deployment.yaml"
+echo "--- 8. Running Object Store Manager Job (one-shot) ---"
+# Remove old Deployment if it exists, then run the Job
+$KUBECTL -n $NAMESPACE delete deploy/object-store-mgr --ignore-not-found
+$KUBECTL apply -f "$REPO_DIR/services/object-store-mgr/mgr-job.yaml"
 mark_step_done "object-store-mgr"
 fi
 

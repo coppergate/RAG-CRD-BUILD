@@ -1,15 +1,16 @@
 package pulsar
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"sync"
-	"time"
+    "context"
+    "encoding/json"
+    "fmt"
+    "sync"
+    "time"
 
-	"github.com/apache/pulsar-client-go/pulsar"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
+    "github.com/apache/pulsar-client-go/pulsar"
+    "go.opentelemetry.io/otel"
+    "go.opentelemetry.io/otel/propagation"
+    "app-builds/llm-gateway/internal/config"
 )
 
 type PulsarClient struct {

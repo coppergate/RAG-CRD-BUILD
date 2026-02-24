@@ -2,9 +2,29 @@ import os
 import json
 import time
 import uuid
+import sys
+from datetime import datetime
 import psycopg2
 from pulsar import Client, MessageId, Producer, Consumer
-from datetime import datetime
+
+# Optional OpenTelemetry tracing for test visibility
+OTEL_ENABLED = bool(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+if OTEL_ENABLED:
+    try:
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        resource = Resource.create({"service.name": "rag-tests", "service.version": "1.0.0"})
+        provider = TracerProvider(resource=resource)
+        processor = BatchSpanProcessor(OTLPSpanExporter())
+        provider.add_span_processor(processor)
+        trace.set_tracer_provider(provider)
+        tracer = trace.get_tracer("rag-tests.pulsar-crud")
+    except Exception as e:
+        print(f"[WARN] Failed to initialize OTEL tracing: {e}")
+        OTEL_ENABLED = False
 
 # Configuration from environment
 PULSAR_URL = os.getenv("PULSAR_URL", "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650")
@@ -16,7 +36,7 @@ QDRANT_RESULTS_TOPIC = os.getenv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://ra
 DB_CONN_STRING = os.getenv("DB_CONN_STRING", "postgres://app:app@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=disable")
 
 def test_pulsar_db_crud():
-    print("[TEST] Pulsar & Database CRUD Interaction")
+    print(f"[{datetime.utcnow().isoformat()}] [TEST] Pulsar & Database CRUD Interaction")
     
     # 1. Initialize Pulsar Client
     print(f"  - Connecting to Pulsar at {PULSAR_URL}")
@@ -29,7 +49,12 @@ def test_pulsar_db_crud():
     consumer = client.subscribe(RESPONSE_TOPIC, "test-crud-sub-" + str(uuid.uuid4())[:8])
 
     # 2. Connect to Database
-    print("  - Connecting to TimescaleDB")
+    print("  - Connecting to TimescaleDB with conn string (redacted host):")
+    try:
+        safe_conn = DB_CONN_STRING.replace("app:app@", "***:***@")
+        print(f"    {safe_conn}")
+    except Exception:
+        pass
     conn = psycopg2.connect(DB_CONN_STRING)
     conn.autocommit = True
     cur = conn.cursor()
@@ -52,12 +77,20 @@ def test_pulsar_db_crud():
     }
     
     print(f"  - Sending prompt to Pulsar topic {PROMPT_TOPIC} (ID: {correlation_id})")
-    producer.send(json.dumps(prompt_payload).encode('utf-8'))
+    headers = {}
+    if OTEL_ENABLED:
+        try:
+            from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+            propagator = TraceContextTextMapPropagator()
+            propagator.inject(headers)
+        except Exception as e:
+            print(f"    [WARN] Trace inject failed: {e}")
+    producer.send(json.dumps(prompt_payload).encode('utf-8'), properties=headers)
 
     # 5. Step B: Verify DB Adapter picked it up (Prompts table)
     print("  - Waiting for DB Adapter to insert prompt into TimescaleDB...")
     found_prompt = False
-    for _ in range(10):
+    for i in range(10):
         cur.execute("SELECT content FROM prompts WHERE prompt_id = %s", (correlation_id,))
         row = cur.fetchone()
         if row:
@@ -65,6 +98,7 @@ def test_pulsar_db_crud():
             print("    [OK] Prompt found in 'prompts' table.")
             found_prompt = True
             break
+        print(f"    [WAIT] Prompt not found yet (attempt {i+1}/10)")
         time.sleep(2)
     
     if not found_prompt:
@@ -88,7 +122,7 @@ def test_pulsar_db_crud():
     }
     
     print(f"  - Sending task to Pulsar topic {REQUEST_TOPIC}")
-    task_producer.send(json.dumps(task_payload).encode('utf-8'))
+    task_producer.send(json.dumps(task_payload).encode('utf-8'), properties=headers)
 
     # 7. Step D: Catch response in Pulsar
     print("  - Waiting for response on Pulsar topic chat-responses...")
@@ -109,13 +143,14 @@ def test_pulsar_db_crud():
     # 8. Step E: Verify DB Adapter inserted response into DB
     print("  - Verifying response in TimescaleDB 'responses' table...")
     found_response = False
-    for _ in range(10):
+    for i in range(10):
         cur.execute("SELECT content FROM responses WHERE prompt_id = (SELECT id FROM prompts WHERE prompt_id = %s LIMIT 1)", (correlation_id,))
         row = cur.fetchone()
         if row:
             print(f"    [OK] Response found in 'responses' table: {row[0][:50]}...")
             found_response = True
             break
+        print(f"    [WAIT] Response not found yet (attempt {i+1}/10)")
         time.sleep(2)
 
     if not found_response:
@@ -127,16 +162,17 @@ def test_pulsar_db_crud():
         "op": "delete_session",
         "id": session_id
     }
-    ops_producer.send(json.dumps(delete_payload).encode('utf-8'))
+    ops_producer.send(json.dumps(delete_payload).encode('utf-8'), properties=headers)
     
     print("  - Verifying deletion in DB...")
     deleted = False
-    for _ in range(10):
+    for i in range(10):
         cur.execute("SELECT 1 FROM sessions WHERE session_id = %s", (session_id,))
         if not cur.fetchone():
             print("    [OK] Session successfully deleted via Pulsar.")
             deleted = True
             break
+        print(f"    [WAIT] Session still present (attempt {i+1}/10)")
         time.sleep(2)
     
     if not deleted:
@@ -185,4 +221,7 @@ if __name__ == "__main__":
         test_pulsar_qdrant_ops()
     except Exception as e:
         print(f"\n[FAILURE] CRUD Test failed: {e}")
+        print("[DIAG] Python:", sys.version)
+        print("[DIAG] Env PULSAR_URL=", os.getenv("PULSAR_URL"))
+        print("[DIAG] Env DB_CONN_STRING=", os.getenv("DB_CONN_STRING"))
         exit(1)

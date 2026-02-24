@@ -13,7 +13,7 @@ echo "--- 1. Updating TimescaleDB Cluster & Secret ---"
 bash "$REPO_DIR/infrastructure/timescaledb/update-timescaledb-cr.sh"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
 
-echo "--- 2. Applying Database Schema (Iteration 4) ---"
+echo "--- 2. Applying Unified Database Schema ---"
 # We need to find the primary pod to run the schema
 TS_POD=$($KUBECTL get pods -n timescaledb -l "cnpg.io/cluster=timescaledb,role=primary" -o jsonpath='{.items[0].metadata.name}')
 if [ -z "$TS_POD" ]; then
@@ -23,8 +23,8 @@ if [ -z "$TS_POD" ]; then
 fi
 
 if [ -n "$TS_POD" ]; then
-    echo "Applying schema to $TS_POD..."
-    $KUBECTL exec -i -n timescaledb "$TS_POD" -- psql -U app app < "$REPO_DIR/infrastructure/timescaledb/iteration-4-schema.sql"
+    echo "Applying unified schema to $TS_POD..."
+    $KUBECTL exec -i -n timescaledb "$TS_POD" -- psql -U app app < "$REPO_DIR/infrastructure/timescaledb/schema.sql"
 else
     echo "ERROR: Could not find TimescaleDB primary pod. Please ensure the cluster is running."
     exit 1

@@ -31,10 +31,4 @@ spec:
           value: "persistent://rag-pipeline/data/chat-responses"
         - name: PULSAR_DB_OPS_TOPIC
           value: "persistent://rag-pipeline/operations/db-ops"
-        volumeMounts:
-        - name: source
-          mountPath: /mnt
-      volumes:
-      - name: source
-        configMap:
-          name: db-adapter-source
+        # Removed dev-only source ConfigMap mount. Images are the deployment artifact.

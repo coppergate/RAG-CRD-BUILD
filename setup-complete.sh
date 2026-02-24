@@ -1,7 +1,24 @@
 #!/bin/bash
 ## setup-complete.sh - Master Orchestration Script
 ## To be executed on host: hierophant
+## Usage: FRESH_INSTALL=true [FORCE_REINIT=true] [REPO_DIR=<path>] ./setup-complete.sh
+## Purpose: 
+#     End-to-end bootstrap: 
+#       basic infra (Rook-Ceph/Traefik), 
+#       APM (LGTM+Alloy), 
+#       NVIDIA stack, 
+#       local registry, 
+#       build+push RAG images, 
+#       deploy RAG stack; 
+#       resumable via scripts/journal-helper.sh.
+## Config (optional): 
+# FRESH_INSTALL=true -> clean from-scratch where supported; 
+# FORCE_REINIT=true -> force Pulsar BookKeeper rejoin; 
+# REPO_DIR -> override RAG stack path; 
+# set NO_PROXY to include cluster CIDRs and .hierocracy.home; 
+# child scripts default to KUBECTL=/home/k8s/kube/kubectl and KUBECONFIG=/home/k8s/kube/config/kubeconfig.
 #
+
 set -e
 #
 BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -10,29 +27,34 @@ export BASE_DIR
 source "$BASE_DIR/scripts/journal-helper.sh"
 init_journal
 
-#echo "===================================================="
-#echo "Starting Complete Kubernetes Build and RAG Stack"
-#echo "===================================================="
-#
+echo "===================================================="
+echo "Starting Complete Kubernetes Build and RAG Stack"
+echo "===================================================="
+
+#if ! is_step_done "basic"; then
 #echo ""
-#echo "Step 1: Basic Infrastructure Setup"
+#echo "Step 1: Basic Infrastructure Setup (includes Rook-Ceph)"
 #echo "----------------------------------------------------"
 #$BASE_DIR/setup-01-basic.sh
-#
-#echo "SLEEPING FOR 30 minutes while rook-ceph comes up"
-#echo "30 mins"
-#sleep 600
-#echo "20 mins"
-#sleep 600
-#echo "10 mins"
-#sleep 600
-#echo "DONE"
+#mark_step_done "basic"
+#fi
 
+if ! is_step_done "apm"; then
+echo ""
+echo "Step 1.2: APM (LGTM + Grafana Alloy)"
+echo "----------------------------------------------------"
+bash $BASE_DIR/infrastructure/APM/install.sh
+mark_step_done "apm"
+fi
+
+if ! is_step_done "nvidia"; then
 echo ""
 echo "Step 1.4: NVIDIA Infrastructure Setup"
 echo "----------------------------------------------------"
 # Deploy NVIDIA device plugin and runtime class
 bash $BASE_DIR/infrastructure/nvidia-operator.sh
+mark_step_done "nvidia"
+fi
 
 if ! is_step_done "registry"; then
 echo ""

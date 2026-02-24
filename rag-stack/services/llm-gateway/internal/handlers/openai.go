@@ -1,15 +1,15 @@
 package handlers
 
 import (
-	"context"
-	"encoding/json"
-	"log"
-	"net/http"
-	"time"
+    "database/sql"
+    "encoding/json"
+    "log"
+    "net/http"
+    "time"
 
-	"app-builds/llm-gateway/internal/pulsar"
-	"github.com/google/uuid"
-	"go.opentelemetry.io/otel"
+    "app-builds/llm-gateway/internal/pulsar"
+    "github.com/google/uuid"
+    "go.opentelemetry.io/otel"
 )
 
 type OpenAIHandler struct {

@@ -1,6 +1,6 @@
 module app-builds/qdrant-adapter
 
-go 1.24
+go 1.25
 
 require (
 	github.com/apache/pulsar-client-go v0.14.0

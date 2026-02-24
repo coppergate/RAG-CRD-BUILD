@@ -75,21 +75,6 @@ spec:
     url: http://tempo-gateway.monitoring.svc.cluster.local
     isDefault: false
 ---
-apiVersion: grafana.integreatly.org/v1beta1
-kind: GrafanaDatasource
-metadata:
-  name: mimir
-  namespace: monitoring
-spec:
-  instanceSelector:
-    matchLabels:
-      dashboards: "true"
-  datasource:
-    name: Mimir
-    type: mimir
-    access: proxy
-    url: http://mimir-gateway.monitoring.svc.cluster.local
-    isDefault: false
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
@@ -122,3 +107,28 @@ spec:
   datasources:
     - inputName: "DS_PROMETHEUS"
       datasourceName: "Prometheus"
+
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: timescaledb
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  datasource:
+    name: TimescaleDB
+    type: postgres
+    access: proxy
+    url: timescaledb-external.timescaledb.svc.cluster.local:5432
+    user: app
+    database: app
+    jsonData:
+      sslmode: "disable"
+      postgresVersion: 1600
+      timescaledb: true
+    secureJsonData:
+      password: app
+    isDefault: false

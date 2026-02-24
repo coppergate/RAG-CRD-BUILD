@@ -9,7 +9,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: tester
-        image: registry.container-registry.svc.cluster.local:5000/rag-test-runner:latest
+        image: registry.hierocracy.home:5000/rag-test-runner:latest
         imagePullPolicy: Always
         command: ["/bin/sh", "-c"]
         args:
@@ -20,6 +20,8 @@ spec:
             python /tests/pulsar_crud_test.py
             echo "--- Running Context Verification (Setup) ---"
             python /tests/context_verification.py
+            echo "--- Running Contract Schema Tests ---"
+            python /tests/test_contracts.py
         env:
         - name: DB_CONN_STRING
           valueFrom:
@@ -50,6 +52,22 @@ spec:
           value: "qdrant"
         - name: GATEWAY_URL
           value: "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
+        - name: PULSAR_URL
+          value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+        - name: PULSAR_PROMPT_TOPIC
+          value: "persistent://rag-pipeline/data/chat-prompts"
+        - name: PULSAR_RESPONSE_TOPIC
+          value: "persistent://rag-pipeline/data/chat-responses"
+        - name: PULSAR_DB_OPS_TOPIC
+          value: "persistent://rag-pipeline/operations/db-ops"
+        - name: PULSAR_QDRANT_OPS_TOPIC
+          value: "persistent://rag-pipeline/operations/qdrant-ops"
+        - name: PULSAR_QDRANT_RESULTS_TOPIC
+          value: "persistent://rag-pipeline/operations/qdrant-ops-results"
+        envFrom:
+        - configMapRef:
+            name: apm-config
+            optional: true
         volumeMounts:
         - name: tests
           mountPath: /tests

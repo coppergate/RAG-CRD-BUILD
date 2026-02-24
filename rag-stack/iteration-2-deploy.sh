@@ -21,8 +21,7 @@ fi
 
 echo "Found primary DB pod: $DB_POD"
 
-# Apply schema to database
-# We ensure the 'app' database exists as the services are configured to use it
+# Apply unified schema to database (idempotent)
 $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U postgres -d app < "$REPO_DIR/infrastructure/timescaledb/schema.sql"
 
 echo "--- 2. Redeploying Updated Services ---"
