@@ -3,7 +3,7 @@
 #
 # Purpose:
 #   - Canonically configure Talos registry mirrors so nodes can pull images by
-#     service name `registry.container-registry.svc.cluster.local:5000` and by LB IP.
+#     service name `registry.hierocracy.home:5000` and by LB IP.
 #   - Perform a careful rolling reboot of worker nodes with cordon/drain and
 #     Ceph health checks between nodes to avoid disrupting the Ceph cluster.
 #   - Integrate Ceph maintenance best-practices: set `noout` before maintenance,
@@ -47,9 +47,9 @@ TALOSCTL="/home/k8s/talos/talosctl"
 export TALOSCONFIG="/home/k8s/talos/config/talosconfig"
 VIRSH_BIN="${VIRSH_BIN:-virsh}"
 
-REGISTRY_SVC_FQDN="registry.container-registry.svc.cluster.local:5000"
-REGISTRY_LB_IP="172.20.1.26:5000"
-REGISTRY_HTTP_ENDPOINT="http://172.20.1.26:5000"
+REGISTRY_SVC_FQDN="registry.hierocracy.home:5000"
+REGISTRY_LB_IP="registry.hierocracy.home:5000"
+REGISTRY_HTTP_ENDPOINT="http://registry.hierocracy.home:5000"
 
 RAG_NAMESPACE="rag-system"
 LLM_NAMESPACE="llms-ollama"

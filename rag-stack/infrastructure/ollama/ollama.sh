@@ -18,7 +18,7 @@ $KUBECTL label nodes inference-1 role=inference-node llm-model=granite3.1-dense-
 
 # Deploy using the OCI artifacts pushed to the local registry
 # We revert image.repository to the base Ollama image and specify models to pull from the local registry.
-REGISTRY="registry.container-registry.svc.cluster.local:5000"
+REGISTRY="registry.hierocracy.home:5000"
 
 $HELM upgrade --install ollama-llama3 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
   --set nodeSelector."llm-model"=llama3.1 \

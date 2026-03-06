@@ -2,9 +2,9 @@
 # trigger-build.sh - Trigger cluster-native build from local sources
 # Run on hierophant
 
-set -e
+set -Eeuo pipefail
 
-SERVICE="${1}"
+SERVICE="${1:-}"
 VERSION="${2:-1.5.7}"
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 NAMESPACE="build-pipeline"
@@ -18,17 +18,34 @@ if [[ -z "$SERVICE" ]]; then
     exit 1
 fi
 
-echo "--- 1. Packaging sources for $SERVICE ---"
-TARBALL="sources-$(date +%s).tar.gz"
-# Pack 'services' folder so Kaniko sees 'common/' and the target service
-cd "$REPO_DIR/services"
-tar -czf "$SAFE_TMP_DIR/$TARBALL" .
-cd - > /dev/null
+SHARED_SOURCE_URL="${SOURCE_URL:-}"
+SHARED_SOURCE_TARBALL="${SOURCE_TARBALL:-}"
+CREATED_TARBALL="false"
+PRESIGNED_URL="$SHARED_SOURCE_URL"
+TARBALL="$SHARED_SOURCE_TARBALL"
+UPLOADER_POD="s3-uploader-${SERVICE}-$$"
 
-echo "--- 2. Uploading sources to S3 ---"
-# Create a temporary uploader pod that has the S3 bucket access
-# Using a more restricted security context to avoid PodSecurity violations
-$KUBECTL run s3-uploader -n $NAMESPACE --image=amazon/aws-cli --overrides='
+cleanup() {
+    $KUBECTL delete pod "$UPLOADER_POD" -n "$NAMESPACE" --ignore-not-found --now >/dev/null 2>&1 || true
+    if [[ "$CREATED_TARBALL" == "true" ]]; then
+        rm -f "$SAFE_TMP_DIR/$TARBALL"
+    fi
+}
+trap cleanup EXIT
+
+if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
+    echo "--- 1. Packaging sources for $SERVICE ---"
+    TARBALL="sources-$(date +%s)-$$.tar.gz"
+    CREATED_TARBALL="true"
+    # Pack 'services' folder so Kaniko sees 'common/' and the target service
+    cd "$REPO_DIR/services"
+    tar -czf "$SAFE_TMP_DIR/$TARBALL" .
+    cd - > /dev/null
+
+    echo "--- 2. Uploading sources to S3 ---"
+    # Create a temporary uploader pod that has the S3 bucket access
+    # Using a more restricted security context to avoid PodSecurity violations
+    $KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image=amazon/aws-cli --overrides='
 {
   "spec": {
     "containers": [{
@@ -54,16 +71,19 @@ $KUBECTL run s3-uploader -n $NAMESPACE --image=amazon/aws-cli --overrides='
   }
 }' --restart=Never
 
-# Wait for uploader to be ready
-$KUBECTL wait --for=condition=Ready pod/s3-uploader -n $NAMESPACE --timeout=60s
+    # Wait for uploader to be ready
+    $KUBECTL wait --for=condition=Ready "pod/$UPLOADER_POD" -n "$NAMESPACE" --timeout=60s
 
-# Stream tarball directly to S3 via stdin to avoid 'tar' dependency in the container
-# Capture pre-signed URL to avoid AWS SDK credential issues in Kaniko
-PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n $NAMESPACE s3-uploader -- \
-  sh -c "aws --endpoint-url http://\$S3_ENDPOINT s3 cp - s3://\$BUCKET_NAME/$TARBALL > /dev/null && aws --endpoint-url http://\$S3_ENDPOINT s3 presign s3://\$BUCKET_NAME/$TARBALL --expires-in 3600")
+    # Stream tarball directly to S3 via stdin to avoid 'tar' dependency in the container
+    # Capture pre-signed URL to avoid AWS SDK credential issues in Kaniko
+    PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n "$NAMESPACE" "$UPLOADER_POD" -- \
+      sh -c "aws --endpoint-url http://\$S3_ENDPOINT s3 cp - s3://\$BUCKET_NAME/$TARBALL > /dev/null && aws --endpoint-url http://\$S3_ENDPOINT s3 presign s3://\$BUCKET_NAME/$TARBALL --expires-in 3600")
 
-# Cleanup uploader pod
-$KUBECTL delete pod s3-uploader -n $NAMESPACE --now
+    # Cleanup uploader pod early
+    $KUBECTL delete pod "$UPLOADER_POD" -n "$NAMESPACE" --now >/dev/null 2>&1 || true
+else
+    echo "--- 1. Reusing shared source context for $SERVICE ---"
+fi
 
 echo "--- 3. Triggering Orchestrator via Pulsar ---"
 # Construct the task JSON
@@ -74,7 +94,7 @@ TASK_JSON=$(cat <<EOF
   "dockerfile_path": "$SERVICE/Dockerfile",
   "source_tarball": "$TARBALL",
   "source_url": "$PRESIGNED_URL",
-  "registry": "172.20.1.26:5000"
+  "registry": "registry.hierocracy.home:5000"
 }
 EOF
 )
@@ -96,4 +116,3 @@ $KUBECTL exec -n $PULSAR_NAMESPACE "$PULSAR_POD" -- \
 
 echo "Build triggered for $SERVICE:$VERSION"
 echo "Check Kaniko logs: $KUBECTL get jobs -n $NAMESPACE"
-rm "$SAFE_TMP_DIR/$TARBALL"

@@ -11,8 +11,8 @@
 # Optional env vars:
 #   SERVICES           Space-separated list of repos (default: common RAG services)
 #   VERSION            Tag to verify (default: 1.0.0)
-#   REGISTRY_DNS       Default: registry.container-registry.svc.cluster.local:5000
-#   REGISTRY_IP        Default: 172.20.1.26:5000
+#   REGISTRY_DNS       Default: registry.hierocracy.home:5000
+#   REGISTRY_IP        Default: registry.hierocracy.home:5000
 #   REGISTRY_ENDPOINTS Comma-separated endpoints to compare (default: "$REGISTRY_DNS,$REGISTRY_IP")
 #   REGISTRY_SCHEME    http or https (default: http)
 
@@ -21,8 +21,8 @@ set -Eeuo pipefail
 SERVICES=${SERVICES:-"rag-test-runner rag-worker rag-ingestion rag-web-ui llm-gateway db-adapter qdrant-adapter object-store-mgr"}
 VERSION=${VERSION:-"1.0.0"}
 REGISTRY_CANON=${REGISTRY_CANON:-"registry.hierocracy.home:5000"}
-REGISTRY_DNS=${REGISTRY_DNS:-"registry.container-registry.svc.cluster.local:5000"}
-REGISTRY_IP=${REGISTRY_IP:-"172.20.1.26:5000"}
+REGISTRY_DNS=${REGISTRY_DNS:-"registry.hierocracy.home:5000"}
+REGISTRY_IP=${REGISTRY_IP:-"registry.hierocracy.home:5000"}
 # By default, check only the canonical endpoint; you may add others for comparison
 REGISTRY_ENDPOINTS=${REGISTRY_ENDPOINTS:-"$REGISTRY_CANON"}
 REGISTRY_SCHEME=${REGISTRY_SCHEME:-"http"}

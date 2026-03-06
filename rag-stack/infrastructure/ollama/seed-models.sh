@@ -5,7 +5,7 @@
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="llms-ollama"
-REGISTRY="registry.container-registry.svc.cluster.local:5000"
+REGISTRY="registry.hierocracy.home:5000"
 
 echo "--- Seeding Models into PVCs ---"
 

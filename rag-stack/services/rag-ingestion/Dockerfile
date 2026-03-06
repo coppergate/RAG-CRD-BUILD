@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
-COPY rag-ingestion/requirements.txt .
+COPY requirements.txt .
 RUN python -m pip install --upgrade pip==26.0.1 \
     && pip --version \
     && pip install --no-cache-dir -r requirements.txt
 
 # Copy source
-COPY rag-ingestion/service.py .
+COPY service.py .
 
 CMD ["uvicorn", "service:app", "--host", "0.0.0.0", "--port", "8000"]

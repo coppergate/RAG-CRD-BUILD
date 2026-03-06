@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-REGISTRY="${REGISTRY:-172.20.1.26:5000}"
+REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
 VERSION="${VERSION:-1.5.3}"
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 OUT_DIR="/mnt/hegemon-share/share/code/complete-build/ai-changes/build-output"

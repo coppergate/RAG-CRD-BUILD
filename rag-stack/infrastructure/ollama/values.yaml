@@ -23,7 +23,7 @@ knative:
 # Docker image
 image:
   # -- Docker image registry
-  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  repository: registry.hierocracy.home:5000/ollama/ollama
 
   # -- Docker pull policy
   pullPolicy: IfNotPresent

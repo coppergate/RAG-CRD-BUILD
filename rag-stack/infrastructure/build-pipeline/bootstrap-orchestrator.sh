@@ -9,7 +9,7 @@ NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 VERSION="latest"
-REGISTRY="172.20.1.26:5000"
+REGISTRY="registry.hierocracy.home:5000"
 
 source "$REPO_DIR/../scripts/journal-helper.sh"
 

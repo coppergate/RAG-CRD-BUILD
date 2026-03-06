@@ -43,13 +43,13 @@ if ! is_step_done "registry-trust-verified"; then
         echo "FRESH_INSTALL detected. Skipping pre-check; registry trust will be applied in Step 1.5."
     else
         echo "Checking registry configuration on nodes..."
-        # Heuristic: Check if '172.20.1.26:5000' is in the mirrors of the first node
+        # Heuristic: Check if 'registry.hierocracy.home:5000' is in the mirrors of the first node
         FIRST_NODE=$($KUBECTL get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' --request-timeout=5s 2>/dev/null || echo "")
         
         NEEDS_PATCH=false
         if [[ -n "$FIRST_NODE" ]]; then
             # Check mirrors using talosctl. We use the LB IP as the primary indicator.
-            if ! $TALOSCTL -n "$FIRST_NODE" get machineconfig -o yaml 2>/dev/null | grep -q "172.20.1.26:5000"; then
+            if ! $TALOSCTL -n "$FIRST_NODE" get machineconfig -o yaml 2>/dev/null | grep -q "registry.hierocracy.home:5000"; then
                 NEEDS_PATCH=true
             fi
         else

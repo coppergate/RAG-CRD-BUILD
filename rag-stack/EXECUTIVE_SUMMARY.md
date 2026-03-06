@@ -28,7 +28,7 @@ The system utilizes a modular "micro-services" approach, combining **Go** for hi
 
 #### 3. Operational & DevOps Excellence
 
-*   **Local Container Registry**: Integrated private registry (`172.20.1.26:5000`) with Talos-level trust, enabling near-instant pod startups and bypassing external network bottlenecks.
+*   **Local Container Registry**: Integrated private registry (`registry.hierocracy.home:5000`) with Talos-level trust, enabling near-instant pod startups and bypassing external network bottlenecks.
 *   **Shadow Build Strategy**: Optimized build pipeline on `hierophant` that vendors dependencies and pre-bakes images, removing all `initContainer` overhead and runtime compilation.
 *   **Fast E2E Verification**: A dedicated Go-based integration test driver that validates the entire RAG pipeline—from tag creation and S3 upload to LLM response verification—in under **60 seconds**.
 *   **Dark-Themed UI**: A professional-grade Control Center featuring real-time upload progress (v3.1.2), directory pickers, and integrated dataset cleanup tools.

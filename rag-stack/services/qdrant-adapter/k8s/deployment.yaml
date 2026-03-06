@@ -18,7 +18,7 @@ spec:
       enableServiceLinks: false
       containers:
         - name: qdrant-adapter
-          image: registry.container-registry.svc.cluster.local:5000/qdrant-adapter:__VERSION__
+          image: registry.hierocracy.home:5000/qdrant-adapter:__VERSION__
           imagePullPolicy: Always
           startupProbe:
             httpGet:

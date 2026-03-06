@@ -3,16 +3,22 @@
 # setup-all.sh - Orchestrate the entire RAG stack deployment
 # To be executed on host: hierophant
 
-set -e
+set -Eeuo pipefail
 
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export REPO_DIR
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
+VERSION="${VERSION:-1.5.7}"
 
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/journal-helper.sh"
 init_journal
+
+apply_manifest() {
+  local manifest="$1"
+  sed "s#__VERSION__#${VERSION}#g" "$manifest" | "$KUBECTL" apply -f -
+}
 
 if ! is_step_done "namespace"; then
 echo "--- 1. Creating Namespace ---"
@@ -42,15 +48,18 @@ echo "here"
 DB_NAMESPACE="timescaledb"
 echo "$DB_NAMESPACE"
 
-DB_POD=$($KUBECTL get pods -n $DB_NAMESPACE -l "cnpg.io/cluster=timescaledb,role=primary" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+DB_POD=""
+echo "Waiting for TimescaleDB primary pod..."
+for _ in $(seq 1 60); do
+  DB_POD=$($KUBECTL get pods -n "$DB_NAMESPACE" -l "cnpg.io/cluster=timescaledb,role=primary" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  if [[ -n "$DB_POD" ]]; then
+    break
+  fi
+  sleep 5
+done
 
-echo "-- got pod $DB_POD"
+echo "-- got pod ${DB_POD:-<none>}"
 
-if [ -z "$DB_POD" ]; then
-  echo "Waiting for TimescaleDB primary pod..."
-  sleep 10
-  DB_POD=$($KUBECTL get pods -n $DB_NAMESPACE -l "cnpg.io/cluster=timescaledb,role=primary" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-fi
 if [ -n "$DB_POD" ]; then
   echo "Ensuring role 'app' exists and has create on schema public"
   $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- \
@@ -118,13 +127,13 @@ if ! is_step_done "llm-gateway"; then
 echo "--- 6. Deploying LLM Gateway (Go) ---"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-secret.yaml"
 $KUBECTL apply -f "$REPO_DIR/services/llm-gateway/k8s/configmap.yaml"
-$KUBECTL apply -f "$REPO_DIR/services/llm-gateway/k8s/deployment.yaml"
+apply_manifest "$REPO_DIR/services/llm-gateway/k8s/deployment.yaml"
 mark_step_done "llm-gateway"
 fi
 
 if ! is_step_done "rag-worker"; then
 echo "--- 7. Deploying RAG Worker (Go) ---"
-$KUBECTL apply -f "$REPO_DIR/services/rag-worker/k8s/deployment.yaml"
+apply_manifest "$REPO_DIR/services/rag-worker/k8s/deployment.yaml"
 mark_step_done "rag-worker"
 fi
 
@@ -132,25 +141,25 @@ if ! is_step_done "object-store-mgr"; then
 echo "--- 8. Running Object Store Manager Job (one-shot) ---"
 # Remove old Deployment if it exists, then run the Job
 $KUBECTL -n $NAMESPACE delete deploy/object-store-mgr --ignore-not-found
-$KUBECTL apply -f "$REPO_DIR/services/object-store-mgr/mgr-job.yaml"
+apply_manifest "$REPO_DIR/services/object-store-mgr/mgr-job.yaml"
 mark_step_done "object-store-mgr"
 fi
 
 if ! is_step_done "rag-web-ui"; then
 echo "--- 9. Deploying RAG Web UI (Go) ---"
-$KUBECTL apply -f "$REPO_DIR/services/rag-web-ui/ui-deployment.yaml"
+apply_manifest "$REPO_DIR/services/rag-web-ui/ui-deployment.yaml"
 mark_step_done "rag-web-ui"
 fi
 
 if ! is_step_done "db-adapter"; then
 echo "--- 10. Deploying DB Adapter (Go) ---"
-$KUBECTL apply -f "$REPO_DIR/services/db-adapter/k8s/deployment.yaml"
+apply_manifest "$REPO_DIR/services/db-adapter/k8s/deployment.yaml"
 mark_step_done "db-adapter"
 fi
 
 if ! is_step_done "qdrant-adapter"; then
 echo "--- 11. Deploying Qdrant Adapter (Go) ---"
-$KUBECTL apply -f "$REPO_DIR/services/qdrant-adapter/k8s/deployment.yaml"
+apply_manifest "$REPO_DIR/services/qdrant-adapter/k8s/deployment.yaml"
 mark_step_done "qdrant-adapter"
 fi
 
