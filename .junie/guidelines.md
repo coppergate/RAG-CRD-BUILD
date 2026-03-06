@@ -19,12 +19,39 @@
   - **Kubeconfig**: `/home/k8s/kube/config/kubeconfig`
   - Example: `ssh -i ~/.ssh/id_hierophant_access junie@hierophant "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && /home/k8s/kube/kubectl get pods"`
 - ** USE SERVICE NAMES **: any interservice calls on k8s should use the service names and not the ip addresses.
+- ** NODE AFFINITY **: When scheduling pods, make certain that all non-inference work that can be done off of the 'inference' nodes is done on the 'worker' nodes.
+  - don't use inference nodes for pods that don't need access to the GPU whenever possible
+  - use inference nodes for pods that are processing inference requests
+  - use worker nodes for storage, apm and any external interfacing where possible
+  - use the role 'storage-node' for identifying nodes available for non-inference work
 ## Database Access
 - **Database Operations**: Database operations, schema modifications, and queries are intended to be executed on **hierophant** using the postgresql (timescaledb) database.
 ## Code Management & Versioning
 - **Code Management**: If an edit process involves more than 5 lines of code, store the original file in a sub-directory matching its current structure under the **'/mnt/hegemon-share/share/code/ai-changes/original'** directory, and create a new file with the edited content.
   - Only store 1 file back; we don't need a full history, just a single file with the latest changes.
-- **Versioning**: When repeatedly pushing images into the local cluster repository, version subsequent images with a major.minor.build number version starting with 1.0.0.
+- **Versioning**: Maintain a `major.minor.build` versioning scheme (e.g., `1.0.0`). 
+  - Increment the `build` number for every service update within an iteration.
+  - Increment the `minor` version for each new "Iteration" (e.g., Iteration 5 corresponds to `1.5.0`).
+  - Update all image tags and Kubernetes deployment specifications accordingly when versioning up.
+- **Change Logs**: Maintain a changelog in the repository to track significant changes and updates to code and configurations.
+  - Use a structured JSON format with the datetime stamp and a brief description of the change.
+  - the change log should be written to the ./ai-changes' directory
+  - the change log should be a single file with the most recent changes at the top.
+  - the changes should be recorded at the conclusion of each prompting session when the changes are made.
+- **Before running tests ensure that the most recent version of the code is being used.**
+  - Keep a list of all active services and their respective versions in a centralized location for easy reference.
+  - Ensure that the latest version of the code is deployed and running before initiating tests.
+- **Obfuscation for logs**
+  - when cloaking a username or password don't just replace characters with asterisks, change the length as well as the character type to avoid pattern recognition.
+- **Git Commit Policy**:
+  - Commit all changes to the local branch in git any time changes are made.
+  - **Commit message**: A simple timestamp (e.g., 2026-03-02 08:30).
+  - **File Size Limit**: Do not commit any files larger than 1MB without asking first.
+  - **Clean History (Rebase & Squash)**:
+    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
+    - Rebase with autosquash: Run `git rebase -i --autosquash main` before pushing. This ensures commits are squashed before pushing.
+    - Push safely: Use `git push --force-with-lease origin <branch>` if the branch was already pushed.
+- **Daily Push**: Every day, make a new push to GIT with the current committed code.
 ## Document Processing (PDF)
 - **PDF Generation**: Use `paps` for converting text files to PDF.
   - Example: `paps --format=pdf --paper=letter --font="Monospace 10" input.txt -o output.pdf`
