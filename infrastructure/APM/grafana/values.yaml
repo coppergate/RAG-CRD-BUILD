@@ -1,3 +1,5 @@
+nodeSelector:
+  role: storage-node
 enabled: true
 adminPassword: admin
 datasources:

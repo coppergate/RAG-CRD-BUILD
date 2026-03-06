@@ -9,8 +9,8 @@ VERSION="${VERSION:-1.0.0}"
 TLS_VERIFY="${TLS_VERIFY:-false}"
 
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
-BUILD_DIR="/home/junie/build"
-JOURNAL_DIR="${JOURNAL_DIR:-/home/junie/.rag-build}"
+BUILD_DIR="${BUILD_DIR:-$HOME/build}"
+JOURNAL_DIR="${JOURNAL_DIR:-$HOME/.rag-build}"
 ONLY="${ONLY:-}"
 START_FROM="${START_FROM:-}"
 FORCE_BUILD="${FORCE_BUILD:-false}"
@@ -74,8 +74,8 @@ elif ! is_pushed "rag-test-runner" "$VERSION"; then
 fi
 if [[ "$NEED_BUILD_TEST_RUNNER" == "true" ]]; then
   podman build -t "$REGISTRY/rag-test-runner:$VERSION" -t "$REGISTRY/rag-test-runner:latest" -f "$REPO_DIR/tests/Dockerfile.test-runner" "$REPO_DIR/tests"
-  podman push "$REGISTRY/rag-test-runner:$VERSION" --tls-verify="$TLS_VERIFY" || true
-  podman push "$REGISTRY/rag-test-runner:latest"  --tls-verify="$TLS_VERIFY" || true
+  podman push "$REGISTRY/rag-test-runner:$VERSION" --tls-verify="$TLS_VERIFY"
+  podman push "$REGISTRY/rag-test-runner:latest"  --tls-verify="$TLS_VERIFY"
   save_hash "rag-test-runner" "$VERSION" "$TT_HASH"
   mark_pushed "rag-test-runner" "$VERSION"
 else
@@ -116,12 +116,19 @@ for service in "${SERVICES[@]}"; do
   if [[ "$do_build" == "true" ]]; then
     echo "--- Building $service:$VERSION ---"
     BUILD_TAG="build-$(date +%s)"
-    podman build --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" .
+    
+    # Handle context based on service requirements (Go services need 'common/')
+    if [[ "$service" == "rag-ingestion" ]]; then
+      podman build --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" .
+    else
+      # All other Go services use the parent 'services' directory as context to include 'common/'
+      podman build --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" -f "$REPO_DIR/services/$service/Dockerfile" "$REPO_DIR/services"
+    fi
   fi
 
   echo "--- Pushing $service:$VERSION ---"
-  podman push "$REGISTRY/$service:$VERSION" --tls-verify="$TLS_VERIFY" || true
-  podman push "$REGISTRY/$service:latest"  --tls-verify="$TLS_VERIFY" || true
+  podman push "$REGISTRY/$service:$VERSION" --tls-verify="$TLS_VERIFY"
+  podman push "$REGISTRY/$service:latest"  --tls-verify="$TLS_VERIFY"
 
   save_hash "$service" "$VERSION" "$local_hash"
   mark_pushed "$service" "$VERSION"

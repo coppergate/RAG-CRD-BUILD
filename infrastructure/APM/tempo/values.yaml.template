@@ -15,18 +15,26 @@ ingester:
     enabled: true
     storageClass: rook-ceph-block
     size: 10Gi
+  nodeSelector:
+    role: storage-node
 
 querier:
   replicas: 1
+  nodeSelector:
+    role: storage-node
 
 queryFrontend:
   replicas: 1
+  nodeSelector:
+    role: storage-node
 
 distributor:
   replicas: 1
   config:
     log_received_spans:
       enabled: true
+  nodeSelector:
+    role: storage-node
 
 compactor:
   replicas: 1
@@ -34,6 +42,8 @@ compactor:
     enabled: true
     storageClass: rook-ceph-block
     size: 10Gi
+  nodeSelector:
+    role: storage-node
 
 # Enable OTLP receivers in the distributor
 traces:
@@ -46,3 +56,15 @@ traces:
 # Optional: gateway can provide a single entry point
 gateway:
   enabled: true
+  nodeSelector:
+    role: storage-node
+
+memcached:
+  enabled: true
+  nodeSelector:
+    role: storage-node
+
+tempoQuery:
+  enabled: true
+  nodeSelector:
+    role: storage-node

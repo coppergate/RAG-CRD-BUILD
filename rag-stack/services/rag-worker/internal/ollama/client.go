@@ -6,26 +6,27 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"app-builds/rag-worker/internal/config"
 )
 
 type OllamaClient struct {
-	cfg *config.Config
+	url        string
+	model      string
 	httpClient *http.Client
 }
 
-func NewClient(cfg *config.Config) *OllamaClient {
+func NewClient(url, model string) *OllamaClient {
 	return &OllamaClient{
-		cfg: cfg,
+		url:   url,
+		model: model,
 		httpClient: &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
 func (o *OllamaClient) Chat(messages []map[string]string) (string, error) {
-	url := fmt.Sprintf("%s/v1/chat/completions", o.cfg.OllamaURL)
+	url := fmt.Sprintf("%s/v1/chat/completions", o.url)
 	
 	payload := map[string]interface{}{
-		"model":    o.cfg.OllamaModel,
+		"model":    o.model,
 		"messages": messages,
 		"stream":   false,
 	}
@@ -61,10 +62,10 @@ func (o *OllamaClient) Chat(messages []map[string]string) (string, error) {
 }
 
 func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
-    url := fmt.Sprintf("%s/api/embeddings", o.cfg.OllamaURL)
+    url := fmt.Sprintf("%s/api/embeddings", o.url)
     
     payload := map[string]interface{}{
-        "model":  o.cfg.OllamaModel,
+        "model":  o.model,
         "prompt": text,
     }
     

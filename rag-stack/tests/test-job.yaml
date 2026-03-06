@@ -9,19 +9,30 @@ spec:
       enableServiceLinks: false
       containers:
       - name: tester
-        image: registry.hierocracy.home:5000/rag-test-runner:latest
+        image: registry.container-registry.svc.cluster.local:5000/rag-test-runner:__VERSION__
         imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
         command: ["/bin/sh", "-c"]
         args:
           - |
             echo "--- Running Integration Tests ---"
             python /tests/integration_test.py
+            echo "--- Running Recursive RAG Flow Tests ---"
+            python /tests/recursive_rag_test.py
             echo "--- Running Pulsar CRUD Tests ---"
             python /tests/pulsar_crud_test.py
-            echo "--- Running Context Verification (Setup) ---"
-            python /tests/context_verification.py
-            echo "--- Running Contract Schema Tests ---"
-            python /tests/test_contracts.py
+            echo "--- Seeding Qdrant Context ---"
+            python /tests/seed_qdrant_context.py
+            echo "--- Running Context Verification (Query) ---"
+            python /tests/context_verification.py --query-only
+            echo "--- Running Sad Path Tests ---"
+            python /tests/sad_path_test.py
         env:
         - name: DB_CONN_STRING
           valueFrom:
@@ -57,7 +68,13 @@ spec:
         - name: PULSAR_PROMPT_TOPIC
           value: "persistent://rag-pipeline/data/chat-prompts"
         - name: PULSAR_RESPONSE_TOPIC
-          value: "persistent://rag-pipeline/data/chat-responses"
+          value: "persistent://rag-pipeline/stage/results"
+        - name: PULSAR_INGRESS_TOPIC
+          value: "persistent://rag-pipeline/stage/ingress"
+        - name: PULSAR_RESULTS_TOPIC
+          value: "persistent://rag-pipeline/stage/results"
+        - name: PULSAR_STATUS_TOPIC
+          value: "persistent://rag-pipeline/stage/status"
         - name: PULSAR_DB_OPS_TOPIC
           value: "persistent://rag-pipeline/operations/db-ops"
         - name: PULSAR_QDRANT_OPS_TOPIC

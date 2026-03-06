@@ -36,8 +36,16 @@ fi
 # Apply unified application schema and privileges so 'app' owns and can access all objects
 if ! is_step_done "db-schema"; then
 echo "--- 2.1 Applying Unified Application Schema (TimescaleDB) ---"
+
+echo "here"
+
 DB_NAMESPACE="timescaledb"
+echo "$DB_NAMESPACE"
+
 DB_POD=$($KUBECTL get pods -n $DB_NAMESPACE -l "cnpg.io/cluster=timescaledb,role=primary" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+
+echo "-- got pod $DB_POD"
+
 if [ -z "$DB_POD" ]; then
   echo "Waiting for TimescaleDB primary pod..."
   sleep 10
@@ -51,7 +59,8 @@ if [ -n "$DB_POD" ]; then
     psql -U postgres -d app -c "GRANT CONNECT ON DATABASE app TO app; GRANT USAGE, CREATE ON SCHEMA public TO app;"
 
   echo "Applying schema as role 'app' so objects are owned by app"
-  $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U app -d app < "$REPO_DIR/infrastructure/timescaledb/schema.sql"
+  (echo "SET ROLE app;"; cat "$REPO_DIR/infrastructure/timescaledb/schema.sql") | \
+    $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U postgres -d app
   mark_step_done "db-schema"
 else
   echo "ERROR: Could not find TimescaleDB primary pod to apply schema."
@@ -63,6 +72,12 @@ if ! is_step_done "pulsar"; then
 echo "--- 3. Deploying Infrastructure: Apache Pulsar ---"
 $REPO_DIR/infrastructure/pulsar/install.sh
 mark_step_done "pulsar"
+fi
+
+if ! is_step_done "pulsar-init"; then
+echo "--- 3.1 Initializing Pulsar Tenants and Namespaces ---"
+bash "$REPO_DIR/infrastructure/pulsar/init-rag-pulsar.sh"
+mark_step_done "pulsar-init"
 fi
 
 if ! is_step_done "qdrant"; then

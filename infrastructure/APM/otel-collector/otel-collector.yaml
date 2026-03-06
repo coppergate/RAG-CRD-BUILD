@@ -64,6 +64,8 @@ spec:
       labels:
         app: otel-collector
     spec:
+      nodeSelector:
+        role: storage-node
       containers:
       - name: otel-collector
         image: otel/opentelemetry-collector-contrib:latest

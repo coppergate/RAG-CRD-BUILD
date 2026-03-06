@@ -5,20 +5,32 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"app-builds/db-adapter/internal/config"
-	"app-builds/db-adapter/internal/telemetry"
+	"app-builds/common/telemetry"
 	"github.com/apache/pulsar-client-go/pulsar"
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+)
+
+var (
+	meter          = telemetry.Meter("db-adapter")
+	queryCounter, _ = meter.Int64Counter("db_queries_total")
+	errorCounter, _ = meter.Int64Counter("db_errors_total")
+	queryLatency, _ = meter.Float64Histogram("db_query_duration_ms", metric.WithUnit("ms"))
 )
 
 func main() {
 	cfg := config.Load()
+	startHealthServer(":8080")
 
 	shutdown, err := telemetry.InitTracer("db-adapter")
 	if err != nil {
@@ -89,16 +101,26 @@ func main() {
 					continue
 				}
 
+				start := time.Now()
 				// Extract tracing context from Pulsar message properties
 				msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
 				tracer := otel.Tracer("db-adapter")
-				_, span := tracer.Start(msgCtx, "HandleDBOp")
+				msgCtx, span := tracer.Start(msgCtx, "HandleDBOp")
+
+				attrs := []attribute.KeyValue{attribute.String("op", "delete_session")}
+				defer func() {
+					duration := float64(time.Since(start).Milliseconds())
+					queryLatency.Record(msgCtx, duration, metric.WithAttributes(attrs...))
+				}()
+				queryCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
 
 				var payload struct {
 					Op string `json:"op"` // "delete_session"
 					ID string `json:"id"` // session_id
 				}
-				if err := json.Unmarshal(msg.Payload(), &payload); err == nil {
+				if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+					log.Printf("Error unmarshaling DB op payload: %v. Raw: %s", err, string(msg.Payload()))
+				} else {
 					if payload.Op == "delete_session" {
 						_, err := db.Exec("DELETE FROM sessions WHERE session_id = $1", payload.ID)
 						if err != nil {
@@ -136,13 +158,15 @@ func main() {
 				SessionID string `json:"session_id"`
 				Content   string `json:"content"`
 			}
-			if err := json.Unmarshal(msg.Payload(), &payload); err == nil {
+			if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+				log.Printf("Error unmarshaling prompt payload: %v. Raw: %s", err, string(msg.Payload()))
+			} else {
 				_, err := db.Exec(`
 					INSERT INTO prompts (prompt_id, session_id, content) 
 					VALUES ($1, $2, $3)`,
 					payload.ID, payload.SessionID, payload.Content)
 				if err != nil {
-					log.Printf("Failed to insert prompt %s: %v", payload.ID, err)
+					log.Printf("Failed to insert prompt %s for session %s: %v", payload.ID, payload.SessionID, err)
 				} else {
 					log.Printf("Inserted prompt %s for session %s", payload.ID, payload.SessionID)
 				}
@@ -176,7 +200,9 @@ func main() {
 				SequenceNumber int    `json:"sequence_number"`
 				Model          string `json:"model"`
 			}
-			if err := json.Unmarshal(msg.Payload(), &payload); err == nil {
+			if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+				log.Printf("Error unmarshaling response payload: %v. Raw: %s", err, string(msg.Payload()))
+			} else {
 				log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)
 				// Handle empty model name to avoid UUID syntax error if it's treated as one
 				var modelName interface{}
@@ -205,7 +231,7 @@ func main() {
 					)`,
 					payload.ID, sessionID, payload.Result, payload.SequenceNumber, modelName)
 				if err != nil {
-					log.Printf("Failed to insert response for prompt %s: %v", payload.ID, err)
+					log.Printf("Failed to insert response for prompt %s (session %v): %v", payload.ID, sessionID, err)
 				} else {
 					log.Printf("Inserted response for prompt %s (seq %d)", payload.ID, payload.SequenceNumber)
 				}
@@ -219,4 +245,18 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Println("Shutting down DB Adapter...")
+}
+
+func startHealthServer(addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	go func() {
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			log.Printf("Health server stopped: %v", err)
+		}
+	}()
 }

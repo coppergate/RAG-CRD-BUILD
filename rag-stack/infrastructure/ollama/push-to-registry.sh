@@ -3,7 +3,7 @@
 # To be executed on host: hierophant
 set -e
 
-REGISTRY="registry.container-registry.svc.cluster.local:5000"
+REGISTRY="registry.hierocracy.home:5000"
 OLLAMA_IMAGE="${REGISTRY}/ollama/ollama"
 
 ## 1. Pull and Push Ollama Image

@@ -12,6 +12,8 @@ spec:
       labels:
         app: ollama
     spec:
+      nodeSelector:
+        role: inference-node
       containers:
         - name: ollama
           image: ollama/ollama:latest

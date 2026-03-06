@@ -15,14 +15,31 @@ spec:
       labels:
         app: qdrant
     spec:
+      nodeSelector:
+        role: storage-node
       containers:
       - name: qdrant
         image: qdrant/qdrant:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6333
           name: http
         - containerPort: 6334
           name: grpc
+        readinessProbe:
+          tcpSocket:
+            port: 6333
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 10
+        livenessProbe:
+          tcpSocket:
+            port: 6333
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 6
         resources:
           limits:
             cpu: "4"

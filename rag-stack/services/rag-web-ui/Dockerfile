@@ -6,17 +6,18 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 # Cache modules layer
-COPY go.mod .
-RUN go mod download
+COPY common/ /common/
+COPY rag-web-ui/go.mod ./
+RUN CGO_ENABLED=0 go mod download
 
 # Copy sources and build
-COPY . .
-RUN go get go.opentelemetry.io/otel \
+COPY rag-web-ui/ .
+RUN CGO_ENABLED=0 go get go.opentelemetry.io/otel \
     go.opentelemetry.io/otel/sdk \
     go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp \
     go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
-RUN go mod tidy
-RUN go build -debug-trace=trace.json -o rag-web-ui cmd/ui/main.go
+RUN CGO_ENABLED=0 go mod tidy
+RUN CGO_ENABLED=0 go build -debug-trace=trace.json -o rag-web-ui cmd/ui/main.go
 
 FROM alpine:latest
 

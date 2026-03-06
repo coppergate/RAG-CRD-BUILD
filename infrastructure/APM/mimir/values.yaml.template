@@ -52,31 +52,93 @@ minio:
 kafka:
   enabled: false
 
-# Global persistence settings to catch all components
-common:
-  storageClass: rook-ceph-block
-
-# Configure persistent storage for Mimir components
+# Configure persistent storage and affinity for Mimir components
 alertmanager:
   persistentVolume:
     enabled: true
     storageClass: rook-ceph-block
     size: 10Gi
+  nodeSelector:
+    role: storage-node
+  zoneAwareReplication:
+    enabled: false
 
 ingester:
   persistentVolume:
     enabled: true
     storageClass: rook-ceph-block
     size: 10Gi
+  nodeSelector:
+    role: storage-node
+  zoneAwareReplication:
+    enabled: false
 
 compactor:
   persistentVolume:
     enabled: true
     storageClass: rook-ceph-block
     size: 10Gi
+  nodeSelector:
+    role: storage-node
 
 store_gateway:
   persistentVolume:
     enabled: true
     storageClass: rook-ceph-block
     size: 10Gi
+  nodeSelector:
+    role: storage-node
+  zoneAwareReplication:
+    enabled: false
+
+distributor:
+  nodeSelector:
+    role: storage-node
+
+querier:
+  nodeSelector:
+    role: storage-node
+
+query_frontend:
+  nodeSelector:
+    role: storage-node
+
+query_scheduler:
+  nodeSelector:
+    role: storage-node
+
+ruler:
+  nodeSelector:
+    role: storage-node
+  zoneAwareReplication:
+    enabled: false
+
+rollout_operator:
+  enabled: true
+  replicas: 2
+  nodeSelector:
+    role: storage-node
+
+overrides_exporter:
+  nodeSelector:
+    role: storage-node
+
+memcached:
+  nodeSelector:
+    role: storage-node
+
+gateway:
+  nodeSelector:
+    role: storage-node
+
+nginx:
+  nodeSelector:
+    role: storage-node
+
+smoke_test:
+  nodeSelector:
+    role: storage-node
+
+continuous_test:
+  nodeSelector:
+    role: storage-node

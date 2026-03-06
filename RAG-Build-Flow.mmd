@@ -1,19 +1,27 @@
-flowchart LR
-    Repo[Git Repo / Source] --> BuildScript[build-and-push.sh]
-    BuildScript --> Podman[Podman Build]
-
-    subgraph "Docker Build Stage"
-        GoSum[go.sum Sync] --> GoMod[go mod download]
-        GoMod --> Build[go build]
+flowchart TD
+    subgraph "Phase 1: Bootstrap (Cluster-Native)"
+        Repo[Local Source] --> Pack[tar source]
+        Pack --> Upload[S3 Upload Pod]
+        Upload --> S3[(Build S3/OBC)]
+        S3 --> BootstrapJob[Kaniko Bootstrap Job]
+        BootstrapJob --> Registry[Local Registry: 172.20.1.26:5000]
+        Registry --> OrchDeploy[Deploy Build Orchestrator]
     end
 
-    Podman --> Registry[Local Registry: 172.20.1.26:5000]
+    subgraph "Phase 2: RAG Service Builds (Cluster-Native)"
+        Trigger[trigger-build.sh] --> S3_2[(Build S3/OBC)]
+        Trigger -.->|Pulsar Msg| Orch[Build Orchestrator]
+        Orch --> Kaniko[Kaniko K8s Job]
+        S3_2 --> Kaniko
+        Kaniko --> Registry
+    end
+
     Registry --> K8s[Kubernetes Cluster]
-
-    subgraph "Deployment"
-        Setup[setup-all.sh]
-        Update[update-to-iteration-4.sh]
+    
+    subgraph "Orchestration"
+        Setup[setup-complete.sh]
     end
-
-    Setup --> K8s
-    Update --> K8s
+    
+    Setup --> Phase1
+    Setup --> Phase2
+    Phase2 --> Deploy[Deploy RAG Services]

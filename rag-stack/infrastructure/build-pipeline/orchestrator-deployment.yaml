@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: build-orchestrator
+  namespace: build-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: build-orchestrator
+  template:
+    metadata:
+      labels:
+        app: build-orchestrator
+    spec:
+      nodeSelector:
+        role: storage-node
+      serviceAccountName: build-orchestrator-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: orchestrator
+        image: 172.20.1.26:5000/build-orchestrator:latest
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        env:
+        - name: PULSAR_URL
+          value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+        - name: BUILD_TOPIC
+          value: "persistent://public/default/build-tasks"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: build-orchestrator-sa
+  namespace: build-pipeline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: build-orchestrator-role
+  namespace: build-pipeline
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: build-orchestrator-rb
+  namespace: build-pipeline
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: build-orchestrator-role
+subjects:
+- kind: ServiceAccount
+  name: build-orchestrator-sa
+  namespace: build-pipeline

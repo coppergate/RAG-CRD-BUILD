@@ -46,14 +46,22 @@ spec:
       labels:
         app: rag-web-ui
     spec:
+      nodeSelector:
+        role: storage-node
       enableServiceLinks: false
       serviceAccountName: rag-web-ui
       containers:
       - name: web-ui
-        image: registry.container-registry.svc.cluster.local:5000/rag-web-ui:1.0.0
+        image: registry.container-registry.svc.cluster.local:5000/rag-web-ui:__VERSION__
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 30
         readinessProbe:
           httpGet:
             path: /health
@@ -66,6 +74,13 @@ spec:
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
+        resources:
+          requests:
+            cpu: "150m"
+            memory: "256Mi"
+          limits:
+            cpu: "750m"
+            memory: "1Gi"
         env:
         - name: DB_CONN_STRING
           valueFrom:
@@ -117,4 +132,3 @@ spec:
     port: 80
     targetPort: 8080
   type: LoadBalancer
-

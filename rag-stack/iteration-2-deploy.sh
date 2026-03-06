@@ -21,8 +21,9 @@ fi
 
 echo "Found primary DB pod: $DB_POD"
 
-# Apply unified schema to database (idempotent)
-$KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U postgres -d app < "$REPO_DIR/infrastructure/timescaledb/schema.sql"
+# Apply unified schema as role 'app' to database (idempotent)
+(echo "SET ROLE app;"; cat "$REPO_DIR/infrastructure/timescaledb/schema.sql") | \
+  $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U postgres -d app
 
 echo "--- 2. Redeploying Updated Services ---"
 

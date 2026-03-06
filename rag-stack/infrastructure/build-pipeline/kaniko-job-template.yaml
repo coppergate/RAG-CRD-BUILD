@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko-build-${SERVICE_NAME}-${VERSION}
+  namespace: build-pipeline
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: fetch-context
+        image: busybox
+        command: ["sh", "-c"]
+        args: ["wget -O /workspace/context.tar.gz \"${SOURCE_URL}\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+      containers:
+      - name: kaniko
+        image: martizih/kaniko:latest
+        args:
+        - "--dockerfile=${DOCKERFILE_PATH}"
+        - "--context=dir:///workspace"
+        - "--destination=${REGISTRY}/${SERVICE_NAME}:${VERSION}"
+        - "--destination=${REGISTRY}/${SERVICE_NAME}:latest"
+        - "--insecure" # Assuming local registry without TLS
+        - "--skip-tls-verify"
+        securityContext:
+          allowPrivilegeEscalation: true
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+      volumes:
+      - name: workspace
+        emptyDir: {}
+      restartPolicy: Never
+  backoffLimit: 1

@@ -23,8 +23,9 @@ if [ -z "$TS_POD" ]; then
 fi
 
 if [ -n "$TS_POD" ]; then
-    echo "Applying unified schema to $TS_POD..."
-    $KUBECTL exec -i -n timescaledb "$TS_POD" -- psql -U app app < "$REPO_DIR/infrastructure/timescaledb/schema.sql"
+    echo "Applying unified schema as role 'app' to $TS_POD..."
+    (echo "SET ROLE app;"; cat "$REPO_DIR/infrastructure/timescaledb/schema.sql") | \
+      $KUBECTL exec -i -n timescaledb "$TS_POD" -- psql -U postgres -d app
 else
     echo "ERROR: Could not find TimescaleDB primary pod. Please ensure the cluster is running."
     exit 1

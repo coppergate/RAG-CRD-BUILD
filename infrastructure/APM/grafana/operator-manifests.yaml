@@ -42,6 +42,12 @@ spec:
         requests:
           storage: 5Gi
       storageClassName: rook-ceph-block
+  deployment:
+    spec:
+      template:
+        spec:
+          nodeSelector:
+            role: storage-node
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
@@ -75,7 +81,6 @@ spec:
     url: http://tempo-gateway.monitoring.svc.cluster.local
     isDefault: false
 ---
----
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:
@@ -107,7 +112,178 @@ spec:
   datasources:
     - inputName: "DS_PROMETHEUS"
       datasourceName: "Prometheus"
-
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: rag-performance
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Graphics --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "title": "Request Rates (Gateway & UI)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            { "expr": "sum(rate(gateway_requests_total[5m])) by (service_name)", "legendFormat": "{{service_name}}" }
+          ]
+        },
+        {
+          "title": "P95 Latency (ms)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            { "expr": "histogram_quantile(0.95, sum(rate(gateway_request_duration_ms_bucket[5m])) by (le, service_name))", "legendFormat": "Gateway P95 {{service_name}}" },
+            { "expr": "histogram_quantile(0.95, sum(rate(worker_task_duration_ms_bucket[5m])) by (le, stage))", "legendFormat": "Worker P95 {{stage}}" }
+          ]
+        },
+        {
+          "title": "Error Counts",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+          "targets": [
+            { "expr": "sum(rate(gateway_errors_total[5m])) by (service_name, type)", "legendFormat": "Error {{service_name}} {{type}}" },
+            { "expr": "sum(rate(db_errors_total[5m])) by (operation)", "legendFormat": "DB Error {{operation}}" },
+            { "expr": "sum(rate(qdrant_errors_total[5m])) by (action)", "legendFormat": "Qdrant Error {{action}}" }
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 38,
+      "style": "dark",
+      "tags": ["rag-stack", "metrics"],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "RAG Stack Performance Overview",
+      "uid": "rag-performance",
+      "version": 1,
+      "weekStart": ""
+    }
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: rag-logs
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Graphics --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "title": "Error Logs by Service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+          "datasource": { "type": "loki", "uid": "Loki" },
+          "targets": [
+            {
+              "expr": "sum by (app) (count_over_time({namespace=\"rag-system\"} |= \"error\" [5m]))",
+              "legendFormat": "{{app}}"
+            },
+            {
+                "expr": "sum by (app) (count_over_time({namespace=\"rag-system\"} |= \"fail\" [5m]))",
+                "legendFormat": "{{app}} (fail)"
+            }
+          ]
+        },
+        {
+          "title": "Recent Error Log Lines",
+          "type": "logs",
+          "gridPos": { "h": 12, "w": 24, "x": 0, "y": 8 },
+          "datasource": { "type": "loki", "uid": "Loki" },
+          "targets": [
+            {
+              "expr": "{namespace=\"rag-system\"} |= \"error\" or |= \"fail\" or |= \"Warning\"",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": true,
+            "showCommonLabels": false,
+            "wrapLogLines": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "sortOrder": "Descending"
+          }
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 38,
+      "style": "dark",
+      "tags": ["rag-stack", "logs"],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "RAG Stack Logs & Errors",
+      "uid": "rag-logs",
+      "version": 1,
+      "weekStart": ""
+    }
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource

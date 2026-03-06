@@ -2,10 +2,11 @@
 
 # Configuration
 NAMESPACE="rag-system"
-CODE_DIR="/mnt/hegemon-share/share/code/kubernetes-app-setup"
-TEST_DIR="${CODE_DIR}/app-builds/RAG/tests"
+CODE_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
+TEST_DIR="${CODE_DIR}/tests"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
+VERSION="${VERSION:-1.5.7}"
 
 echo "--- Preparing RAG Integration Tests ---"
 
@@ -14,7 +15,11 @@ echo "Updating tests ConfigMap..."
 $KUBECTL delete configmap rag-integration-tests -n $NAMESPACE --ignore-not-found
 $KUBECTL create configmap rag-integration-tests -n $NAMESPACE \
     --from-file="${TEST_DIR}/integration_test.py" \
-    --from-file="${TEST_DIR}/context_verification.py"
+    --from-file="${TEST_DIR}/context_verification.py" \
+    --from-file="${TEST_DIR}/recursive_rag_test.py" \
+    --from-file="${TEST_DIR}/pulsar_crud_test.py" \
+    --from-file="${TEST_DIR}/seed_qdrant_context.py" \
+    --from-file="${TEST_DIR}/sad_path_test.py"
 
 # 2. Delete existing job
 echo "Removing old test job..."
@@ -22,7 +27,10 @@ $KUBECTL delete job rag-integration-test -n $NAMESPACE --ignore-not-found
 
 # 3. Apply the job
 echo "Launching test job..."
-$KUBECTL apply -f "${TEST_DIR}/test-job.yaml"
+RENDERED_JOB="/tmp/rag-integration-test-${VERSION}.yaml"
+sed "s|:__VERSION__|:${VERSION}|g" "${TEST_DIR}/test-job.yaml" > "$RENDERED_JOB"
+$KUBECTL apply -f "$RENDERED_JOB"
+rm -f "$RENDERED_JOB"
 
 # 4. Wait for pod and follow logs
 echo "Waiting for pod to start..."

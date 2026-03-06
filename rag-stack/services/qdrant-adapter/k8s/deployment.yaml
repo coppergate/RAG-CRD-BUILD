@@ -13,10 +13,35 @@ spec:
       labels:
         app: qdrant-adapter
     spec:
+      nodeSelector:
+        role: storage-node
+      enableServiceLinks: false
       containers:
         - name: qdrant-adapter
-          image: registry.container-registry.svc.cluster.local:5000/qdrant-adapter:1.0.0
+          image: registry.container-registry.svc.cluster.local:5000/qdrant-adapter:__VERSION__
           imagePullPolicy: Always
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
           env:
             - name: PULSAR_URL
               value: pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650
@@ -30,10 +55,10 @@ spec:
               value: "6333"
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
+              cpu: "200m"
+              memory: "256Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "1000m"
+              memory: "1Gi"
           ports:
             - containerPort: 8080

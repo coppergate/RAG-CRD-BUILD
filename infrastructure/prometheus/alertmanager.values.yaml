@@ -4,6 +4,8 @@ metadata:
   name: otlp
 spec:
   replicas: 3
+  nodeSelector:
+    role: storage-node
   alertmanagerConfigSelector:
     matchLabels:
       alertmanagerConfig: otlp

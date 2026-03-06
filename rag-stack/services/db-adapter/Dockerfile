@@ -6,14 +6,15 @@ WORKDIR /app
 RUN apk add --no-cache gcc musl-dev git
 
 # Cache modules layer
-COPY go.mod go.sum ./
-RUN go mod download
+COPY common/ /common/
+COPY db-adapter/go.mod db-adapter/go.sum ./
+RUN CGO_ENABLED=0 go mod download
 
 # Copy sources and build
-COPY . .
-RUN go get google.golang.org/genproto/googleapis/api@latest google.golang.org/genproto/googleapis/rpc@latest
-RUN go mod tidy
-RUN go build -debug-trace=trace.json -o db-adapter cmd/adapter/main.go
+COPY db-adapter/ .
+RUN CGO_ENABLED=0 go get google.golang.org/genproto/googleapis/api@latest google.golang.org/genproto/googleapis/rpc@latest
+RUN CGO_ENABLED=0 go mod tidy
+RUN CGO_ENABLED=0 go build -v -o db-adapter cmd/adapter/main.go
 
 FROM alpine:latest
 

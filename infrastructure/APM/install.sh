@@ -68,7 +68,7 @@ function deploy_lgtm_component() {
         AWS_ACCESS_KEY_ID=$($KUBECTL get secret $bucket_secret -n $NAMESPACE -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
         AWS_SECRET_ACCESS_KEY=$($KUBECTL get secret $bucket_secret -n $NAMESPACE -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
         
-        echo "Generating values.yaml for $name in /tmp..."
+        echo "Generating values.yaml for $name in $SAFE_TMP_DIR..."
         # Create temporary values file from template
         export S3_ENDPOINT BUCKET_NAME AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
         
@@ -86,7 +86,7 @@ function deploy_lgtm_component() {
             export RULER_BUCKET_NAME ALERTMANAGER_BUCKET_NAME RULER_ACCESS_KEY RULER_SECRET_KEY ALERTMANAGER_ACCESS_KEY ALERTMANAGER_SECRET_KEY
         fi
         
-        envsubst < "$REPO_DIR/$name/values.yaml.template" > "/tmp/$name-values.yaml"
+        envsubst < "$REPO_DIR/$name/values.yaml.template" > "$SAFE_TMP_DIR/$name-values.yaml"
         
         echo "Adding Helm repo $repo_url..."
         helm repo add grafana $repo_url
@@ -96,7 +96,7 @@ function deploy_lgtm_component() {
         echo "Chart: $chart"
         helm upgrade --install $name $chart \
             --namespace $NAMESPACE \
-            --values "/tmp/$name-values.yaml" \
+            --values "$SAFE_TMP_DIR/$name-values.yaml" \
             --wait --timeout 15m \
             --debug
         
@@ -126,6 +126,7 @@ if ! is_step_done "deploy-grafana"; then
     echo "Installing Grafana Operator..."
     helm upgrade --install grafana-operator grafana/grafana-operator \
         --namespace $NAMESPACE \
+        --set nodeSelector.role=storage-node \
         --wait
     
     echo "Applying Grafana Operator manifests..."

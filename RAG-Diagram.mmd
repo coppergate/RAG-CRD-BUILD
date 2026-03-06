@@ -1,71 +1,86 @@
-
 graph TD
-subgraph "External Clients"
-Browser[Web Browser]
-DevDB[Dev Database Tools]
-end
+    subgraph "External Clients"
+        Browser[Web Browser]
+        DevDB[Dev Database Tools]
+    end
 
-subgraph "Kubernetes: rag-system namespace"
-UI[rag-web-ui]
-Gateway[llm-gateway]
-Worker[rag-worker]
-DBAdapter[db-adapter]
-Ingestor[rag-ingestion-service]
-end
+    subgraph "Kubernetes: rag-system namespace"
+        UI[rag-web-ui]
+        Gateway[llm-gateway]
+        Worker[rag-worker]
+        DBAdapter[db-adapter]
+        Ingestor[rag-ingestion-service]
+        QAdapter[qdrant-adapter]
+        OSMgr[object-store-mgr]
+    end
 
-subgraph "Pulsar Message Bus (rag-pipeline namespace)"
-direction LR
-Tasks[data/llm-tasks]
-Results[data/llm-results]
-Prompts[data/chat-prompts]
-Responses[data/chat-responses]
-Ops[operations/db-ops]
-QOps[operations/qdrant-ops]
-QRes[operations/qdrant-ops-results]
-end
+    subgraph "Kubernetes: monitoring namespace (APM)"
+        Alloy[Grafana Alloy]
+        OTel[OTel Collector]
+        Loki[Loki - Logs]
+        Mimir[Mimir - Metrics]
+        Tempo[Tempo - Traces]
+        Grafana[Grafana Dashboards]
+    end
 
-subgraph "Storage & Infrastructure"
-S3[(Rook-Ceph S3)]
-Qdrant[(Qdrant Vector DB)]
-TDB[(TimescaleDB)]
-Ollama[Ollama LLM Service]
-end
+    subgraph "Pulsar Message Bus (rag-pipeline namespace)"
+        direction LR
+        Tasks[data/llm-tasks]
+        Results[data/llm-results]
+        Prompts[data/chat-prompts]
+        Responses[data/chat-responses]
+        Ops[operations/db-ops]
+        QOps[operations/qdrant-ops]
+        QRes[operations/qdrant-ops-results]
+    end
 
-%% Interaction Flows
-Browser <-->|HTTP/80| UI
-Browser -->|HTTP/80| Gateway
+    subgraph "Storage & Infrastructure"
+        S3[(Rook-Ceph S3)]
+        Qdrant[(Qdrant Vector DB)]
+        TDB[(TimescaleDB)]
+        Ollama[Ollama LLM Service]
+    end
 
-%% Ingestion Flow
-UI -->|Upload| S3
-UI -->|Trigger| Ingestor
-Ingestor -->|Store Metadata| TDB
-Ingestor -->|Store Vectors| Qdrant
-Ingestor -->|Read Files| S3
-Ingestor -->|Embeddings| Ollama
+    %% Interaction Flows
+    Browser <-->|HTTP/80| UI
+    Browser -->|HTTP/80| Gateway
+    
+    %% Ingestion Flow
+    UI -->|Upload| S3
+    UI -->|Trigger| Ingestor
+    Ingestor -->|Store Metadata| TDB
+    Ingestor -.->|1. Publish| QOps
+    QAdapter -.->|2. Consume| QOps
+    QAdapter -->|3. Upsert| Qdrant
+    Ingestor -->|Read Files| S3
+    Ingestor -->|Embeddings| Ollama
 
-%% Chat Flow (Asynchronous)
-Gateway -.->|1. Publish| Prompts
-Gateway -.->|2. Publish| Tasks
+    %% Chat Flow (Asynchronous)
+    Gateway -.->|1. Publish| Prompts
+    Gateway -.->|2. Publish| Tasks
+    
+    Tasks -.->|3. Consume| Worker
+    Worker -.->|4. Search Op| QOps
+    QOps -.->|5. Consume| QAdapter
+    QAdapter -->|6. HTTP| Qdrant
+    QAdapter -.->|7. Publish| QRes
+    QRes -.->|8. Consume| Worker
+    Worker -->|9. Inference| Ollama
+    Worker -.->|10. Publish| Responses
+    Worker -.->|10. Publish| Results
 
-Tasks -.->|3. Consume| Worker
-Worker -->|4. Search| Qdrant
-Worker -->|5. Inference| Ollama
-Worker -.->|6. Publish| Responses
-Worker -.->|6. Publish| Results
+    Results -.->|11. Consume| Gateway
+    Gateway -->|12. HTTP Response| Browser
 
-Results -.->|7. Consume| Gateway
-Gateway -->|8. HTTP Response| Browser
+    %% Persistent Flow (DB Adapter)
+    Prompts -.->|Consume| DBAdapter
+    Responses -.->|Consume| DBAdapter
+    Ops -.->|Consume| DBAdapter
+    DBAdapter -->|Persist| TDB
 
-%% Persistent Flow (DB Adapter)
-Prompts -.->|Consume| DBAdapter
-Responses -.->|Consume| DBAdapter
-Ops -.->|Consume| DBAdapter
-DBAdapter -->|Persist| TDB
-
-%% External DB Access
-DevDB -->|LoadBalancer| TDB
-
-%% Operations Flow
-Worker -.->|Operations| QOps
-QOps -.->|Consume| Worker
-Worker -.->|Results| QRes
+    %% Observability Flow
+    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|Metrics/Traces| OTel
+    Alloy -->|Kubernetes Logs| Loki
+    OTel --> Mimir
+    OTel --> Tempo
+    Mimir & Loki & Tempo --> Grafana

@@ -1,6 +1,9 @@
 machine:
   registries:
     mirrors:
+      "*":
+        endpoints:
+          - http://172.20.1.26:5000
       172.20.1.26:5000:
         endpoints:
           - http://172.20.1.26:5000

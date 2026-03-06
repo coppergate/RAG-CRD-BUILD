@@ -13,8 +13,9 @@ export PULSAR_INSTALL="$REPO_DIR/infrastructure/pulsar"
 PULSAR_REMOVE="${PULSAR_REMOVE:-${FRESH_INSTALL:-false}}"
 
 # Journaling (resumable install)
-JOURNAL_DIR="${INSTALL_JOURNAL_DIR:-/tmp/complete-build/pulsar-install}"
+JOURNAL_DIR="${INSTALL_JOURNAL_DIR:-$HOME/.complete-build/journal/pulsar}"
 mkdir -p "$JOURNAL_DIR"
+chmod 700 "$JOURNAL_DIR" 2>/dev/null || true
 STEP_PREFIX="pulsar"
 
 log()  { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
@@ -63,9 +64,13 @@ fi
 
 echo "--- 1.5. Labeling Nodes for Pulsar ---"
 if ! is_done 15.nodeLabels; then
-  # Ensure only worker nodes (not control-plane) have the required label for Pulsar components
-  # Using --selector instead of -l to avoid shell interpolation issues with !
-  $KUBECTL label nodes --selector="!node-role.kubernetes.io/control-plane" rag.role.pulsar-worker=true --overwrite || true
+  # Ensure only worker nodes (not control-plane or inference nodes) have the required label for Pulsar components
+  WORKER_NODES=$($KUBECTL get nodes -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^worker' || echo "")
+  if [[ -n "$WORKER_NODES" ]]; then
+      for node in $WORKER_NODES; do
+          $KUBECTL label node "$node" rag.role.pulsar-worker=true --overwrite
+      done
+  fi
   mark_done 15.nodeLabels
 else
   log "Node labeling already completed (journal 15.nodeLabels)"

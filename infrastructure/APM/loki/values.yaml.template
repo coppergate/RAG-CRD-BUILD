@@ -1,7 +1,7 @@
 loki:
   auth_enabled: false
   commonConfig:
-    replication_factor: 1
+    replication_factor: 3
   storage:
     type: s3
     s3:
@@ -29,11 +29,32 @@ loki:
 deploymentMode: SingleBinary
 
 singleBinary:
-  replicas: 1
+  replicas: 3
+  nodeSelector:
+    role: storage-node
   persistence:
     enabled: true
     size: 10Gi
     storageClass: rook-ceph-block
+
+# Scale down caches if needed, or pin them to worker nodes
+resultsCache:
+  nodeSelector:
+    role: storage-node
+  allocated_memory: 512MB
+chunksCache:
+  nodeSelector:
+    role: storage-node
+  allocated_memory: 512MB
+indexQueriesCache:
+  nodeSelector:
+    role: storage-node
+  allocated_memory: 512MB
+
+gateway:
+  enabled: true
+  nodeSelector:
+    role: storage-node
 
 read:
   replicas: 0
@@ -47,9 +68,6 @@ write:
   replicas: 0
   persistence:
     enabled: false
-
-gateway:
-  enabled: true
 
 # Monitoring integration
 monitoring:

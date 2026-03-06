@@ -5,14 +5,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
-	"app-builds/qdrant-adapter/internal/config"
-	"app-builds/qdrant-adapter/internal/qdrant"
-	"app-builds/qdrant-adapter/internal/telemetry"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
+ "app-builds/qdrant-adapter/internal/config"
+ "app-builds/qdrant-adapter/internal/qdrant"
+        "app-builds/common/telemetry"
+        "go.opentelemetry.io/otel"
+        "go.opentelemetry.io/otel/attribute"
+        "go.opentelemetry.io/otel/metric"
+        "go.opentelemetry.io/otel/propagation"
+)
+
+var (
+        meter         = telemetry.Meter("qdrant-adapter")
+        opCounter, _  = meter.Int64Counter("qdrant_ops_total")
+        errorCounter, _ = meter.Int64Counter("qdrant_errors_total")
+        opLatency, _  = meter.Float64Histogram("qdrant_op_duration_ms", metric.WithUnit("ms"))
 )
 
 type Adapter struct {
@@ -24,6 +34,7 @@ type Adapter struct {
 
 func main() {
 	cfg := config.LoadConfig()
+	startHealthServer(":8080")
 
 	shutdown, err := telemetry.InitTracer("qdrant-adapter")
 	if err != nil {
@@ -77,7 +88,22 @@ func main() {
 	}
 }
 
+func startHealthServer(addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	go func() {
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			log.Printf("Health server stopped: %v", err)
+		}
+	}()
+}
+
 func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsar.Consumer) {
+	start := time.Now()
 	defer consumer.Ack(msg)
 
 	tracer := otel.Tracer("qdrant-adapter")
@@ -86,13 +112,23 @@ func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsa
 
 	var data map[string]interface{}
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
-		log.Printf("bad payload: %v", err)
+		log.Printf("bad payload: %v. Raw: %s", err, string(msg.Payload()))
 		return
 	}
 
 	opID, _ := data["id"].(string)
 	action, _ := data["action"].(string)
 	collection, _ := data["collection"].(string)
+
+	attrs := []attribute.KeyValue{
+		attribute.String("action", action),
+		attribute.String("collection", collection),
+	}
+	defer func() {
+		duration := float64(time.Since(start).Milliseconds())
+		opLatency.Record(ctx, duration, metric.WithAttributes(attrs...))
+	}()
+	opCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 
 	var (
 		result interface{}
@@ -127,11 +163,16 @@ func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsa
 	}
 	if err != nil {
 		resp["error"] = err.Error()
+		log.Printf("[%s] Qdrant action '%s' failed on collection '%s': %v", opID, action, collection, err)
 	} else {
 		resp["result"] = result
 	}
 
-	payload, _ := json.Marshal(resp)
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("[%s] Failed to marshal Qdrant result: %v", opID, err)
+		return
+	}
 
 	msgOut := &pulsar.ProducerMessage{
 		Payload: payload,

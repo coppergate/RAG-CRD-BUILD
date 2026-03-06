@@ -914,7 +914,7 @@ Domain: 'inference-0'
   vcpu.6.irq_injections.sum=9059
   vcpu.6.directed_yield_successful.sum=0
   vcpu.6.pf_mmio_spte_created.sum=1
-  vcpu.6.halt_poll_fail_ns.sum=456910556924
+  vcpu.6.halt_poll_fail_ns.sum=45691.5.7924
   vcpu.6.notify_window_exits.sum=0
   vcpu.6.blocking.cur=yes
   vcpu.6.host_state_reload.sum=63066766
@@ -1010,7 +1010,7 @@ Domain: 'inference-0'
   net.1.rx.pkts=2161341
   net.1.rx.errs=0
   net.1.rx.drop=0
-  net.1.tx.bytes=1175664544
+  net.1.tx.bytes=11.5.74544
   net.1.tx.pkts=2203472
   net.1.tx.errs=0
   net.1.tx.drop=0
@@ -1363,7 +1363,7 @@ Domain: 'worker-2'
   vcpu.6.time=15730660000000
   vcpu.6.wait=0
   vcpu.6.delay=9207751723
-  vcpu.6.pf_fixed.sum=14506016
+  vcpu.6.pf_fixed.sum=1.5.7016
   vcpu.6.halt_wait_ns.sum=158872308452076
   vcpu.6.mmio_exits.sum=25385
   vcpu.6.request_irq_exits.sum=0
@@ -1420,7 +1420,7 @@ Domain: 'worker-2'
   net.1.rx.pkts=1694770
   net.1.rx.errs=0
   net.1.rx.drop=0
-  net.1.tx.bytes=1053631681
+  net.1.tx.bytes=1.5.731681
   net.1.tx.pkts=1673655
   net.1.tx.errs=0
   net.1.tx.drop=0
@@ -1970,7 +1970,7 @@ Domain: 'control-2'
   vcpu.0.pf_taken.sum=103309503
   vcpu.0.pf_emulate.sum=154
   vcpu.0.irq_exits.sum=30012624
-  vcpu.0.halt_successful_poll.sum=119566395
+  vcpu.0.halt_successful_poll.sum=11.5.7395
   vcpu.0.nmi_window_exits.sum=0
   vcpu.0.l1d_flush.sum=272032935
   vcpu.0.hypercalls.sum=1
@@ -2612,7 +2612,7 @@ Domain: 'control-1'
   vcpu.1.req_event.sum=75364
   vcpu.1.tlb_flush.sum=438849
   vcpu.1.guest_mode.cur=no
-  vcpu.1.halt_wakeup.sum=135175665
+  vcpu.1.halt_wakeup.sum=1351.5.75
   vcpu.1.exits.sum=1073669236
   vcpu.1.irq_window_exits.sum=0
   vcpu.1.directed_yield_attempted.sum=0
@@ -2848,7 +2848,7 @@ Domain: 'inference-1'
   vcpu.2.irq_exits.sum=20088943
   vcpu.2.halt_successful_poll.sum=25886071
   vcpu.2.nmi_window_exits.sum=0
-  vcpu.2.l1d_flush.sum=125668972
+  vcpu.2.l1d_flush.sum=1.5.78972
   vcpu.2.hypercalls.sum=153154
   vcpu.2.pf_fast.sum=15
   vcpu.2.preemption_reported.sum=49419
@@ -2873,7 +2873,7 @@ Domain: 'inference-1'
   vcpu.3.signal_exits.sum=5
   vcpu.3.halt_exits.sum=98452305
   vcpu.3.halt_attempted_poll.sum=45797056
-  vcpu.3.pf_spurious.sum=117536
+  vcpu.3.pf_spurious.sum=11.5.7
   vcpu.3.insn_emulation_fail.sum=0
   vcpu.3.invlpg.sum=0
   vcpu.3.insn_emulation.sum=33379
@@ -3005,7 +3005,7 @@ Domain: 'inference-1'
   vcpu.6.halt_poll_fail_ns.sum=644321036054
   vcpu.6.notify_window_exits.sum=0
   vcpu.6.blocking.cur=yes
-  vcpu.6.host_state_reload.sum=71551663
+  vcpu.6.host_state_reload.sum=71.5.763
   vcpu.6.nested_run.sum=0
   vcpu.6.nmi_injections.sum=0
   vcpu.6.signal_exits.sum=6

@@ -21,9 +21,10 @@ fi
 
 echo "Found primary DB pod: $DB_POD"
 
-# Apply schema to database
+# Apply schema as role 'app' to database
 # We ensure the 'app' database exists as the services are configured to use it
-$KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U postgres -d app < "$REPO_DIR/infrastructure/timescaledb/schema.sql"
+(echo "SET ROLE app;"; cat "$REPO_DIR/infrastructure/timescaledb/schema.sql") | \
+  $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U postgres -d app
 
 echo "--- 2. Redeploying Updated Services ---"
 

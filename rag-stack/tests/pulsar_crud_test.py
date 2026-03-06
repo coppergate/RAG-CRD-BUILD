@@ -29,11 +29,12 @@ if OTEL_ENABLED:
 # Configuration from environment
 PULSAR_URL = os.getenv("PULSAR_URL", "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650")
 PROMPT_TOPIC = os.getenv("PULSAR_PROMPT_TOPIC", "persistent://rag-pipeline/data/chat-prompts")
-RESPONSE_TOPIC = os.getenv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/data/chat-responses")
+RESPONSE_TOPIC = os.getenv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/stage/results")
 DB_OPS_TOPIC = os.getenv("PULSAR_DB_OPS_TOPIC", "persistent://rag-pipeline/operations/db-ops")
 QDRANT_OPS_TOPIC = os.getenv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops")
 QDRANT_RESULTS_TOPIC = os.getenv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops-results")
 DB_CONN_STRING = os.getenv("DB_CONN_STRING", "postgres://app:app@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=disable")
+INGRESS_TOPIC = os.getenv("PULSAR_INGRESS_TOPIC", "persistent://rag-pipeline/stage/ingress")
 
 def test_pulsar_db_crud():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Pulsar & Database CRUD Interaction")
@@ -107,8 +108,7 @@ def test_pulsar_db_crud():
     # 6. Step C: Verify RAG Worker picked it up and produced a response
     print("  - Waiting for RAG Worker and DB Adapter to process response...")
     
-    REQUEST_TOPIC = os.getenv("PULSAR_REQUEST_TOPIC", "persistent://rag-pipeline/data/llm-tasks")
-    task_producer = client.create_producer(REQUEST_TOPIC)
+    task_producer = client.create_producer(INGRESS_TOPIC)
     
     task_payload = {
         "id": correlation_id,
@@ -121,16 +121,16 @@ def test_pulsar_db_crud():
         "timestamp": datetime.now().isoformat()
     }
     
-    print(f"  - Sending task to Pulsar topic {REQUEST_TOPIC}")
+    print(f"  - Sending task to Pulsar topic {INGRESS_TOPIC}")
     task_producer.send(json.dumps(task_payload).encode('utf-8'), properties=headers)
 
     # 7. Step D: Catch response in Pulsar
-    print("  - Waiting for response on Pulsar topic chat-responses...")
+    print(f"  - Waiting for response on Pulsar topic {RESPONSE_TOPIC}...")
     pulsar_response_received = False
     try:
         msg = consumer.receive(timeout_millis=60000) # 60s timeout
         if msg is None:
-            raise Exception("Timeout: No message received on chat-responses topic after 60s")
+            raise Exception(f"Timeout: No message received on {RESPONSE_TOPIC} topic after 60s")
         res_data = json.loads(msg.data())
         print(f"    [OK] Received response from Pulsar: {res_data.get('result', 'N/A')[:50]}...")
         assert res_data['id'] == correlation_id
@@ -167,6 +167,7 @@ def test_pulsar_db_crud():
     print("  - Verifying deletion in DB...")
     deleted = False
     for i in range(10):
+        # We need to use the actual session_id from the session_id variable
         cur.execute("SELECT 1 FROM sessions WHERE session_id = %s", (session_id,))
         if not cur.fetchone():
             print("    [OK] Session successfully deleted via Pulsar.")

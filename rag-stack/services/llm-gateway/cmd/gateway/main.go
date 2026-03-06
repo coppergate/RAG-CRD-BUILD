@@ -10,7 +10,7 @@ import (
 	"app-builds/llm-gateway/internal/config"
 	"app-builds/llm-gateway/internal/handlers"
 	"app-builds/llm-gateway/internal/pulsar"
-	"app-builds/llm-gateway/internal/telemetry"
+	"app-builds/common/telemetry"
 	"context"
 	"database/sql"
 	_ "github.com/lib/pq"

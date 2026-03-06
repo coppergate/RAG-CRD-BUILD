@@ -13,13 +13,38 @@ spec:
       labels:
         app: rag-ingestion-service
     spec:
+      nodeSelector:
+        role: storage-node
       enableServiceLinks: false
       containers:
       - name: ingestor
-        image: registry.container-registry.svc.cluster.local:5000/rag-ingestion:1.0.0
+        image: registry.container-registry.svc.cluster.local:5000/rag-ingestion:__VERSION__
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 45
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "3Gi"
         env:
         - name: OLLAMA_URL
           value: "http://ollama.llms-ollama.svc.cluster.local:11434"

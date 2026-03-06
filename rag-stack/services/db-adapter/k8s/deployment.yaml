@@ -13,10 +13,44 @@ spec:
       labels:
         app: db-adapter
     spec:
+      nodeSelector:
+        role: storage-node
+      enableServiceLinks: false
       containers:
       - name: adapter
-        image: registry.container-registry.svc.cluster.local:5000/db-adapter:1.0.0
+        image: registry.container-registry.svc.cluster.local:5000/db-adapter:__VERSION__
         imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          timeoutSeconds: 2
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
         env:
         - name: DB_CONN_STRING
           valueFrom:
@@ -28,7 +62,7 @@ spec:
         - name: PULSAR_PROMPT_TOPIC
           value: "persistent://rag-pipeline/data/chat-prompts"
         - name: PULSAR_RESPONSE_TOPIC
-          value: "persistent://rag-pipeline/data/chat-responses"
+          value: "persistent://rag-pipeline/stage/results"
         - name: PULSAR_DB_OPS_TOPIC
           value: "persistent://rag-pipeline/operations/db-ops"
         # Removed dev-only source ConfigMap mount. Images are the deployment artifact.

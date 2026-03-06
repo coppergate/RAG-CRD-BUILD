@@ -14,6 +14,7 @@ mkdir -p "$OUT_DIR"
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
+VERSION="${VERSION:-1.5.7}"
 
 echo "[INFO] Preflight: Checking connectivity to hierophant and cluster..."
 # 1. Ping hierophant
@@ -58,7 +59,10 @@ echo "[STEP] Refresh tests ConfigMap" | tee -a "${OUT_DIR}/job.log"
 # 2) Launch the test job
 echo "[STEP] Apply test job" | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" delete job rag-integration-test --ignore-not-found | tee -a "${OUT_DIR}/job.log"
-"$KUBECTL" apply -f /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/test-job.yaml | tee -a "${OUT_DIR}/job.log"
+RENDERED_JOB="/tmp/rag-integration-test-${VERSION}.yaml"
+sed "s|:__VERSION__|:${VERSION}|g" /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/test-job.yaml > "$RENDERED_JOB"
+"$KUBECTL" apply -f "$RENDERED_JOB" | tee -a "${OUT_DIR}/job.log"
+rm -f "$RENDERED_JOB"
 
 # 3) Wait for pod and follow logs
 echo "[STEP] Wait for test pod" | tee -a "${OUT_DIR}/job.log"

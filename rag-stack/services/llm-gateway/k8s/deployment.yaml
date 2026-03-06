@@ -13,12 +13,38 @@ spec:
       labels:
         app: llm-gateway
     spec:
+      nodeSelector:
+        role: storage-node
+      enableServiceLinks: false
       containers:
       - name: gateway
-        image: registry.container-registry.svc.cluster.local:5000/llm-gateway:1.0.0
+        image: registry.container-registry.svc.cluster.local:5000/llm-gateway:__VERSION__
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
         env:
         - name: DB_CONN_STRING
           valueFrom:

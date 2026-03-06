@@ -3,10 +3,13 @@ module app-builds/llm-gateway
 go 1.25
 
 require (
+	app-builds/common v0.0.0
 	github.com/apache/pulsar-client-go v0.14.0
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 )
+
+replace app-builds/common => ../common
 
 require (
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect

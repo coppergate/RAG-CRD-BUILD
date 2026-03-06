@@ -21,6 +21,8 @@ The system is built as a set of modular microservices:
 - **RAG Worker (Go)**: The retrieval engine that orchestrates semantic searches in Qdrant and augmented prompt completion.
 - **Ingestion Service (FastAPI)**: Handles multi-source data ingestion and embedding generation.
 - **Qdrant Adapter & DB Adapter**: Specialized services for centralized access to the vector store and relational database.
+- **Object Store Manager (Go)**: Centralized management of S3 storage and file metadata.
+- **Build Orchestrator (Go)**: Cluster-native service that automates image builds via Kaniko and Pulsar messages.
 - **Infrastructure**:
     - **Pulsar**: Message bus for task orchestration.
     - **Qdrant**: High-performance vector database.
@@ -37,9 +39,10 @@ The project is designed for deployment on the **hierophant** host using automate
 
 - **Main Entry Point**: `setup-complete.sh` — Orchestrates everything from basic infra (Rook-Ceph/Traefik) to the RAG stack deployment.
 - **RAG Stack Deployment**: `rag-stack/setup-all.sh` — Handles Namespaces, ConfigMaps, Secrets, and Microservice rollouts.
-- **Build System**: `rag-stack/build-and-push.sh` — Uses Podman on the host to build and push images to the local registry.
+- **Build System**: Features a **Zero-Host Build Architecture** using a cluster-native pipeline (Kaniko + S3 + Pulsar) to prevent host resource exhaustion.
 
 For detailed instructions, refer to:
+- [**Installation Guide**](./INSTALLATION.md)
 - [**RAG Stack Deployment Guide**](./rag-stack/README.md)
 
 ## 📈 Project Evolution & Roadmaps

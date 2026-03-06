@@ -277,6 +277,16 @@ sleep 1m;
 mark_step_done "metrics-server"
 fi
 
+if ! is_step_done "kube-state-metrics"; then
+echo "installing kube-state-metrics"
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm upgrade --install kube-state-metrics prometheus-community/kube-state-metrics \
+  --namespace kube-system \
+  --set selfMonitor.enabled=true
+mark_step_done "kube-state-metrics"
+fi
+
 if ! is_step_done "rook-ceph-operator"; then
 echo "install rook-ceph operator"
 

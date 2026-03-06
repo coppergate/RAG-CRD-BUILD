@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ingest-codebase-s3
+  namespace: rag-system
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+      - name: ingestor
+        image: python:3.9-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            pip install qdrant-client sentence-transformers boto3 psycopg2-binary torch --extra-index-url https://download.pytorch.org/whl/cpu
+            python /scripts/ingest.py
+        env:
+        - name: DB_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              key: url
+              name: timescaledb-secret
+        - name: QDRANT_HOST
+          value: qdrant
+        - name: S3_ENDPOINT
+          value: "http://rook-ceph-rgw-ceph-object-store.rook-ceph.svc"
+        - name: BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              key: BUCKET_NAME
+              name: rag-codebase-bucket
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              key: AWS_ACCESS_KEY_ID
+              name: rag-codebase-bucket
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              key: AWS_SECRET_ACCESS_KEY
+              name: rag-codebase-bucket
+        - name: ALLOWED_EXTENSIONS
+          value: .md,.sh,.yaml,.yml,.py,.txt,.c,.h,.cpp,.hpp,.cs,.json
+        volumeMounts:
+        - name: script
+          mountPath: /scripts
+      volumes:
+      - name: script
+        configMap:
+          name: ingest-s3-script
+      restartPolicy: Never

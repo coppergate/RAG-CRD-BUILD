@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"app-builds/rag-web-ui/internal/telemetry"
+	"app-builds/common/telemetry"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -111,7 +111,9 @@ func ingestionPageHandler(w http.ResponseWriter, r *http.Request) {
 		resp, err := s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 			Bucket: aws.String(bucketName),
 		})
-		if err == nil {
+		if err != nil {
+			log.Printf("Error listing S3 objects: %v", err)
+		} else {
 			for _, item := range resp.Contents {
 				data.Files = append(data.Files, *item.Key)
 			}
@@ -120,11 +122,16 @@ func ingestionPageHandler(w http.ResponseWriter, r *http.Request) {
 
 	if db != nil {
 		rows, err := db.Query("SELECT t.tag_id, t.tag_name, EXISTS (SELECT 1 FROM code_ingestion_tag cit WHERE cit.tag_id = t.tag_id) as has_data FROM tag t ORDER BY t.tag_name")
-		if err == nil {
+		if err != nil {
+			log.Printf("Error querying tags: %v", err)
+		} else {
 			defer rows.Close()
 			for rows.Next() {
 				var t Tag
-				rows.Scan(&t.ID, &t.Name, &t.HasData)
+				if err := rows.Scan(&t.ID, &t.Name, &t.HasData); err != nil {
+					log.Printf("Error scanning tag: %v", err)
+					continue
+				}
 				data.Tags = append(data.Tags, t)
 			}
 		}
@@ -146,11 +153,16 @@ func chatPageHandler(w http.ResponseWriter, r *http.Request) {
 
 	if db != nil {
 		rows, err := db.Query("SELECT tag_id, tag_name FROM tag ORDER BY tag_name")
-		if err == nil {
+		if err != nil {
+			log.Printf("Error querying tags for chat: %v", err)
+		} else {
 			defer rows.Close()
 			for rows.Next() {
 				var t Tag
-				rows.Scan(&t.ID, &t.Name)
+				if err := rows.Scan(&t.ID, &t.Name); err != nil {
+					log.Printf("Error scanning tag for chat: %v", err)
+					continue
+				}
 				data.Tags = append(data.Tags, t)
 			}
 		}
@@ -163,12 +175,17 @@ func getSessionsHandler(w http.ResponseWriter, r *http.Request) {
 	var sessions []Session
 	if db != nil {
 		rows, err := db.Query("SELECT session_id, name, description, created_at FROM sessions ORDER BY created_at DESC")
-		if err == nil {
+		if err != nil {
+			log.Printf("Error querying sessions: %v", err)
+		} else {
 			defer rows.Close()
 			for rows.Next() {
 				var s Session
 				var desc sql.NullString
-				rows.Scan(&s.ID, &s.Name, &desc, &s.CreatedAt)
+				if err := rows.Scan(&s.ID, &s.Name, &desc, &s.CreatedAt); err != nil {
+					log.Printf("Error scanning session: %v", err)
+					continue
+				}
 				s.Description = desc.String
 				sessions = append(sessions, s)
 			}
@@ -191,11 +208,16 @@ func getHistoryHandler(w http.ResponseWriter, r *http.Request) {
 			 FROM responses WHERE session_id = $1)
 			ORDER BY created_at ASC, seq ASC`
 		rows, err := db.Query(query, sessionID)
-		if err == nil {
+		if err != nil {
+			log.Printf("Error querying history for session %s: %v", sessionID, err)
+		} else {
 			defer rows.Close()
 			for rows.Next() {
 				var m Message
-				rows.Scan(&m.ID, &m.Role, &m.Content, &m.CreatedAt, &m.SequenceNumber)
+				if err := rows.Scan(&m.ID, &m.Role, &m.Content, &m.CreatedAt, &m.SequenceNumber); err != nil {
+					log.Printf("Error scanning history message: %v", err)
+					continue
+				}
 				if keyword != "" && !strings.Contains(strings.ToLower(m.Content), strings.ToLower(keyword)) {
 					continue
 				}
@@ -220,14 +242,21 @@ func askHandler(w http.ResponseWriter, r *http.Request) {
 	if sID == "" {
 		sID = uuid.New().String()
 		if db != nil {
-			db.Exec("INSERT INTO sessions (session_id, name, description) VALUES ($1, $2, $3) ON CONFLICT (session_id) DO NOTHING", sID, req.SessionName, req.SessionDesc)
+			_, err := db.Exec("INSERT INTO sessions (session_id, name, description) VALUES ($1, $2, $3) ON CONFLICT (session_id) DO NOTHING", sID, req.SessionName, req.SessionDesc)
+			if err != nil {
+				log.Printf("Error creating session %s: %v", sID, err)
+			}
 		}
 	}
 
 	if db != nil && len(req.Tags) > 0 {
-		db.Exec("DELETE FROM session_tag WHERE session_id = $1", sID)
+		if _, err := db.Exec("DELETE FROM session_tag WHERE session_id = $1", sID); err != nil {
+			log.Printf("Error deleting session tags for %s: %v", sID, err)
+		}
 		for _, tID := range req.Tags {
-			db.Exec("INSERT INTO session_tag (session_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", sID, tID)
+			if _, err := db.Exec("INSERT INTO session_tag (session_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", sID, tID); err != nil {
+				log.Printf("Error inserting session tag %s for session %s: %v", tID, sID, err)
+			}
 		}
 	}
 
@@ -261,8 +290,15 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseMultipartForm(500 << 20)
 	files := r.MultipartForm.File["file"]
 	for _, fh := range files {
-		f, _ := fh.Open()
-		s3Client.PutObject(context.TODO(), &s3.PutObjectInput{Bucket: aws.String(bucketName), Key: aws.String(fh.Filename), Body: f})
+		f, err := fh.Open()
+		if err != nil {
+			log.Printf("Error opening uploaded file %s: %v", fh.Filename, err)
+			continue
+		}
+		_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{Bucket: aws.String(bucketName), Key: aws.String(fh.Filename), Body: f})
+		if err != nil {
+			log.Printf("Error uploading file %s to S3: %v", fh.Filename, err)
+		}
 		f.Close()
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -273,19 +309,34 @@ func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 	tags := r.Form["tags"]
 	if db != nil {
 		var ingestionID string
-		db.QueryRow("INSERT INTO code_ingestion (s3_bucket_id) VALUES ($1) RETURNING ingestion_id", bucketName).Scan(&ingestionID)
+		err := db.QueryRow("INSERT INTO code_ingestion (s3_bucket_id) VALUES ($1) RETURNING ingestion_id", bucketName).Scan(&ingestionID)
+		if err != nil {
+			log.Printf("Error starting ingestion: %v", err)
+			http.Error(w, "Failed to start ingestion", http.StatusInternalServerError)
+			return
+		}
 		for _, tid := range tags {
-			db.Exec("INSERT INTO code_ingestion_tag (ingestion_id, tag_id) VALUES ($1, $2)", ingestionID, tid)
+			if _, err := db.Exec("INSERT INTO code_ingestion_tag (ingestion_id, tag_id) VALUES ($1, $2)", ingestionID, tid); err != nil {
+				log.Printf("Error linking tag %s to ingestion %s: %v", tid, ingestionID, err)
+			}
 		}
 		go func() {
 			var tNames []string
 			for _, tid := range tags {
 				var n string
-				db.QueryRow("SELECT tag_name FROM tag WHERE tag_id = $1", tid).Scan(&n)
+				if err := db.QueryRow("SELECT tag_name FROM tag WHERE tag_id = $1", tid).Scan(&n); err != nil {
+					log.Printf("Error fetching tag name for %s: %v", tid, err)
+					continue
+				}
 				tNames = append(tNames, n)
 			}
 			p, _ := json.Marshal(map[string]interface{}{"ingestion_id": ingestionID, "tag_names": tNames, "tag_ids": tags})
-			http.Post("http://rag-ingestion-service.rag-system.svc.cluster.local/ingest", "application/json", bytes.NewBuffer(p))
+			resp, err := http.Post("http://rag-ingestion-service.rag-system.svc.cluster.local/ingest", "application/json", bytes.NewBuffer(p))
+			if err != nil {
+				log.Printf("Error triggering ingestion service: %v", err)
+			} else {
+				resp.Body.Close()
+			}
 		}()
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -294,7 +345,9 @@ func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 func createTagHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("tag_name")
 	if name != "" && db != nil {
-		db.Exec("INSERT INTO tag (tag_name) VALUES ($1) ON CONFLICT DO NOTHING", name)
+		if _, err := db.Exec("INSERT INTO tag (tag_name) VALUES ($1) ON CONFLICT DO NOTHING", name); err != nil {
+			log.Printf("Error creating tag %s: %v", name, err)
+		}
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -303,7 +356,9 @@ func deleteDataHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	tags := r.Form["tags"]
 	for _, tid := range tags {
-		db.Exec("DELETE FROM code_ingestion WHERE ingestion_id IN (SELECT ingestion_id FROM code_ingestion_tag WHERE tag_id = $1)", tid)
+		if _, err := db.Exec("DELETE FROM code_ingestion WHERE ingestion_id IN (SELECT ingestion_id FROM code_ingestion_tag WHERE tag_id = $1)", tid); err != nil {
+			log.Printf("Error deleting ingestion for tag %s: %v", tid, err)
+		}
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

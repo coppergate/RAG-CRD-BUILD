@@ -13,11 +13,44 @@ spec:
       labels:
         app: rag-worker
     spec:
+      nodeSelector:
+        role: storage-node
       enableServiceLinks: false
       containers:
       - name: worker
-        image: registry.container-registry.svc.cluster.local:5000/rag-worker:1.0.0
+        image: registry.container-registry.svc.cluster.local:5000/rag-worker:__VERSION__
         imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          timeoutSeconds: 2
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "300m"
+            memory: "512Mi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
         env:
         - name: DB_CONN_STRING
           valueFrom:
@@ -28,12 +61,24 @@ spec:
           value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
         - name: QDRANT_HOST
           value: "qdrant"
-        - name: OLLAMA_URL
+        - name: PULSAR_INGRESS_TOPIC
+          value: "persistent://rag-pipeline/stage/ingress"
+        - name: PULSAR_PLAN_TOPIC
+          value: "persistent://rag-pipeline/stage/plan"
+        - name: PULSAR_EXEC_TOPIC
+          value: "persistent://rag-pipeline/stage/exec"
+        - name: PULSAR_STATUS_TOPIC
+          value: "persistent://rag-pipeline/stage/status"
+        - name: PULSAR_RESULTS_TOPIC
+          value: "persistent://rag-pipeline/stage/results"
+        - name: PLANNER_URL
           value: "http://ollama.llms-ollama.svc.cluster.local:11434"
-        - name: PULSAR_REQUEST_TOPIC
-          value: "persistent://rag-pipeline/data/llm-tasks"
-        - name: PULSAR_RESPONSE_TOPIC
-          value: "persistent://rag-pipeline/data/chat-responses"
+        - name: PLANNER_MODEL
+          value: "llama3.1"
+        - name: EXECUTOR_URL
+          value: "http://ollama-code.llms-ollama.svc.cluster.local:11434"
+        - name: EXECUTOR_MODEL
+          value: "granite3.1-dense:8b"
         - name: PULSAR_QDRANT_OPS_TOPIC
           value: "persistent://rag-pipeline/operations/qdrant-ops"
         - name: PULSAR_QDRANT_RESULTS_TOPIC

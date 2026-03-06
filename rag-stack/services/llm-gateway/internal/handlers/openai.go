@@ -7,10 +7,20 @@ import (
     "net/http"
     "time"
 
-    "app-builds/llm-gateway/internal/pulsar"
-    "github.com/google/uuid"
-    "go.opentelemetry.io/otel"
-)
+   	"app-builds/llm-gateway/internal/pulsar"
+   	"app-builds/common/telemetry"
+   	"github.com/google/uuid"
+   	"go.opentelemetry.io/otel"
+   	"go.opentelemetry.io/otel/attribute"
+   	"go.opentelemetry.io/otel/metric"
+   )
+
+   var (
+   	meter          = telemetry.Meter("llm-gateway")
+   	requestCounter, _ = meter.Int64Counter("gateway_requests_total")
+   	errorCounter, _   = meter.Int64Counter("gateway_errors_total")
+   	latencyHist, _    = meter.Float64Histogram("gateway_request_duration_ms", metric.WithUnit("ms"))
+   )
 
 type OpenAIHandler struct {
 	Pulsar *pulsar.PulsarClient
@@ -27,19 +37,34 @@ type ChatCompletionRequest struct {
 }
 
 func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	ctx := r.Context()
 	tracer := otel.Tracer("llm-gateway")
 	ctx, span := tracer.Start(ctx, "HandleChatCompletions")
 	defer span.End()
 
+	attrs := []attribute.KeyValue{
+		attribute.String("method", r.Method),
+		attribute.String("path", "/v1/chat/completions"),
+	}
+
+	defer func() {
+		duration := float64(time.Since(start).Milliseconds())
+		latencyHist.Record(ctx, duration, metric.WithAttributes(attrs...))
+	}()
+
+	requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
+
 	if r.Method != http.MethodPost {
+		log.Printf("Method not allowed: %s %s", r.Method, r.URL.Path)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req ChatCompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+		log.Printf("Bad request: %v", err)
+		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -73,7 +98,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	if len(req.Messages) > 0 {
 		userMsg := req.Messages[len(req.Messages)-1].Content
 		if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, userMsg); err != nil {
-			log.Printf("Failed to send prompt event: %v", err)
+			log.Printf("[%s] Failed to send prompt event for session %s: %v", correlationID, sessionID, err)
 		}
 	}
 
@@ -88,6 +113,8 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 
 	result, err := h.Pulsar.SendRequest(ctx, correlationID, pulsarPayload)
 	if err != nil {
+		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "pulsar_send")))
+		log.Printf("[%s] Pulsar request failed for session %s: %v", correlationID, sessionID, err)
 		http.Error(w, "Service unavailable: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}

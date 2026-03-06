@@ -6,8 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
-
-	"app-builds/rag-s3-mgr-go/internal/telemetry"
+	"app-builds/common/telemetry"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -53,12 +52,13 @@ func main() {
 		Bucket: aws.String(bucket),
 	})
 	if err != nil {
-		log.Fatalf("unable to list objects, %v", err)
-	}
-
-	fmt.Printf("Current objects in bucket %s:\n", bucket)
-	for _, item := range resp.Contents {
-		fmt.Printf("- %s (Size: %d)\n", *item.Key, item.Size)
+		log.Printf("Error: unable to list objects in bucket %s: %v", bucket, err)
+		// Don't fatal here, maybe it's just an empty bucket or temporary issue
+	} else {
+		fmt.Printf("Current objects in bucket %s:\n", bucket)
+		for _, item := range resp.Contents {
+			fmt.Printf("- %s (Size: %d)\n", *item.Key, item.Size)
+		}
 	}
 }
 

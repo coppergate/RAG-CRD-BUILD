@@ -1,0 +1,151 @@
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: rag-overview
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  datasources:
+    - inputName: DS_PROMETHEUS
+      datasourceName: Prometheus
+    - inputName: DS_LOKI
+      datasourceName: Loki
+    - inputName: DS_TEMPO
+      datasourceName: Tempo
+  json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": "-- Grafana --",
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "type": "row",
+          "title": "GPU Health",
+          "collapsed": false,
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+        },
+        {
+          "type": "timeseries",
+          "title": "GPU Utilization % (DCGM)",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}},
+          "targets": [
+            {
+              "expr": "avg by (pod) (DCGM_FI_DEV_GPU_UTIL)",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1}
+        },
+        {
+          "type": "timeseries",
+          "title": "GPU Memory Used (MiB)",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "MiB"}},
+          "targets": [
+            {
+              "expr": "avg by (pod) (DCGM_FI_DEV_FB_USED) / 1048576",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1}
+        },
+        {
+          "type": "row",
+          "title": "RAG Pipeline",
+          "collapsed": false,
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9}
+        },
+        {
+          "type": "timeseries",
+          "title": "Stage Latency (ms)",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "ms"}},
+          "targets": [
+            {"expr": "histogram_quantile(0.95, sum by (le,stage) (rate(rag_stage_latency_ms_bucket[5m])))", "legendFormat": "p95 {{stage}}", "refId": "A"},
+            {"expr": "sum by (stage) (rate(rag_stage_errors_total[5m]))", "legendFormat": "errors {{stage}}", "refId": "B"}
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10}
+        },
+        {
+          "type": "stat",
+          "title": "Active Sessions",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "short"}},
+          "targets": [
+            {"expr": "sum(rag_active_sessions)", "refId": "A"}
+          ],
+          "gridPos": {"h": 8, "w": 4, "x": 12, "y": 10}
+        },
+        {
+          "type": "stat",
+          "title": "Recursions / min",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "short"}},
+          "targets": [
+            {"expr": "sum(rate(rag_recursions_total[5m]))", "refId": "A"}
+          ],
+          "gridPos": {"h": 8, "w": 4, "x": 16, "y": 10}
+        },
+        {
+          "type": "stat",
+          "title": "Messages/min",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "fieldConfig": {"defaults": {"unit": "short"}},
+          "targets": [
+            {"expr": "sum(rate(rag_messages_total[5m]))", "refId": "A"}
+          ],
+          "gridPos": {"h": 8, "w": 4, "x": 20, "y": 10}
+        },
+        {
+          "type": "row",
+          "title": "Logs & Traces",
+          "collapsed": false,
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18}
+        },
+        {
+          "type": "logs",
+          "title": "Live Logs (gateway/worker)",
+          "datasource": {"type": "loki", "uid": "${DS_LOKI}"},
+          "targets": [
+            {"expr": "{namespace=\"rag-system\", app=~\"llm-gateway|rag-worker\"}"}
+          ],
+          "gridPos": {"h": 10, "w": 12, "x": 0, "y": 19}
+        },
+        {
+          "type": "traces",
+          "title": "Recent RAG Traces",
+          "datasource": {"type": "tempo", "uid": "${DS_TEMPO}"},
+          "gridPos": {"h": 10, "w": 12, "x": 12, "y": 19}
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "style": "dark",
+      "tags": ["rag", "observability"],
+      "templating": {"list": []},
+      "time": {"from": "now-6h", "to": "now"},
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "RAG Overview",
+      "version": 1
+    }
