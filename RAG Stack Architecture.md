@@ -1,4 +1,4 @@
-Based on the current implementation of the RAG stack (Iteration 5), here is a graphical representation of the components, the build process, and the asynchronous message interconnections via the Pulsar bus.
+Based on the current implementation of the RAG stack (Iteration 6 planning + Iteration 5 runtime), here is a refreshed architecture representation of components, build flow, and asynchronous interconnections.
 
 #### 1. Architecture & Message Interconnections (Mermaid Diagram)
 
@@ -17,6 +17,7 @@ graph TD
         Ingestor[rag-ingestion-service]
         QAdapter[qdrant-adapter]
         OSMgr[object-store-mgr]
+        MemCtl[memory-controller]
     end
 
     subgraph "Kubernetes: monitoring namespace (APM)"
@@ -44,6 +45,10 @@ graph TD
         QOps[operations/qdrant-ops]
         QRes[operations/qdrant-ops-results]
         BuildTopic[operations/builds]
+        MWrite[operations/memory-write]
+        MRetrieve[operations/memory-retrieve]
+        MPack[operations/memory-pack]
+        MAudit[operations/memory-audit]
     end
 
     subgraph "Storage & Infrastructure"
@@ -56,7 +61,7 @@ graph TD
     %% Interaction Flows
     Browser <-->|HTTP/80| UI
     Browser -->|HTTP/80| Gateway
-    
+
     %% Ingestion Flow
     UI -->|Upload| S3
     UI -->|Trigger| Ingestor
@@ -70,13 +75,26 @@ graph TD
     %% Chat Flow (Asynchronous)
     Gateway -.->|1. Publish| Prompts
     Gateway -.->|2. Publish| Tasks
-    
+
     Tasks -.->|3. Consume| Worker
     Worker -.->|4. Search Op| QOps
     QOps -.->|5. Consume| QAdapter
     QAdapter -->|6. HTTP| Qdrant
     QAdapter -.->|7. Publish| QRes
     QRes -.->|8. Consume| Worker
+
+    %% Memory Flow (Iteration 6)
+    Worker -.->|A. Publish| MRetrieve
+    MRetrieve -.->|B. Consume| MemCtl
+    MemCtl -->|C. Read/Rank| TDB
+    MemCtl -.->|D. Optional semantic recall| QOps
+    MemCtl -.->|E. Publish| MPack
+    MPack -.->|F. Consume| Worker
+    Worker -.->|G. Publish| MWrite
+    MWrite -.->|H. Consume| MemCtl
+    MemCtl -->|I. Persist memory state| TDB
+    MemCtl -.->|J. Publish audit| MAudit
+
     Worker -->|9. Inference| Ollama
     Worker -.->|10. Publish| Responses
     Worker -.->|10. Publish| Results
@@ -91,7 +109,7 @@ graph TD
     DBAdapter -->|Persist| TDB
 
     %% Observability Flow
-    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|Metrics/Traces| OTel
+    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr & MemCtl -->|Metrics/Traces| OTel
     Alloy -->|Kubernetes Logs| Loki
     OTel --> Mimir
     OTel --> Tempo
@@ -106,17 +124,18 @@ graph TD
 
 #### 2. Component Descriptions
 
-*   **`rag-web-ui`**: The front-end service providing pages for **Data Ingestion** and **Interactive Chat**. It triggers ingestion via REST and interacts with the `llm-gateway`.
-*   **`llm-gateway`**: Acts as an OpenAI-compatible entry point. It publishes user prompts to the Pulsar bus and waits for results asynchronously.
-*   **`rag-worker`**: The core processing unit. It consumes tasks, initiates async vector searches via the `qdrant-adapter`, generates context, and calls Ollama for the final LLM response.
-*   **`qdrant-adapter`**: A dedicated service that centralizes all Qdrant database access. It listens to the `qdrant-ops` topic and publishes results to `qdrant-ops-results`, supporting horizontal scaling via Pulsar shared subscriptions.
-*   **`db-adapter`**: A dedicated service for data persistence. It listens to all chat-related topics (`chat-prompts`, `chat-responses`) and administrative operations (`db-ops`) to keep TimescaleDB in sync.
-*   **`object-store-mgr`**: Manages S3 operations and metadata for the RAG stack.
-*   **`build-orchestrator`**: A cluster-native service that listens to build requests on Pulsar and orchestrates **Kaniko** jobs to build container images within the cluster.
-*   **`common/telemetry`**: A shared Go library used by all services to initialize OpenTelemetry (OTLP) metrics and distributed tracing.
-*   **Pulsar Bus**: Divided into `data` and `operations` namespaces to segregate application traffic from system management tasks.
-*   **TimescaleDB**: Stores session metadata, chat history (split into `prompts` and `responses`), and ingestion tracking.
-*   **APM Stack**: Includes Loki (logs), Mimir (metrics), Tempo (traces), and Grafana for visualization. Grafana Alloy collects Kubernetes logs, while the OpenTelemetry Collector receives application telemetry.
+- `rag-web-ui`: Front-end for data ingestion and interactive chat.
+- `llm-gateway`: OpenAI-compatible entry point; publishes prompts/tasks and returns final async response.
+- `rag-worker`: Core orchestration engine for retrieval + generation, now requesting/synthesizing memory packs.
+- `memory-controller`: New Iteration 6 service for memory write/retrieve orchestration, ranking, retention updates, and audit events.
+- `qdrant-adapter`: Centralized vector DB adapter consuming `qdrant-ops` and returning `qdrant-ops-results`.
+- `db-adapter`: Persists prompts/responses and db operations into TimescaleDB.
+- `object-store-mgr`: S3 metadata and object lifecycle manager.
+- `build-orchestrator`: Cluster-native Kaniko build dispatcher.
+- `common/telemetry`: Shared OTLP/tracing initialization package used by Go services.
+- Pulsar bus: Segregated `data` and `operations` topics, extended with memory topics.
+- TimescaleDB: Session/chat state plus Iteration 6 memory model (`memory_items`, `memory_links`, `memory_events`).
+- APM stack: Loki, Mimir, Tempo, Grafana, and Alloy.
 
 #### 3. Build & Deployment Flow
 
@@ -127,7 +146,7 @@ flowchart TD
         Pack --> Upload[S3 Upload Pod]
         Upload --> S3[(Build S3/OBC)]
         S3 --> BootstrapJob[Kaniko Bootstrap Job]
-        BootstrapJob --> Registry[Local Registry: 172.20.1.26:5000]
+        BootstrapJob --> Registry[Local Registry: registry.hierocracy.home:5000]
         Registry --> OrchDeploy[Deploy Build Orchestrator]
     end
 
@@ -139,17 +158,25 @@ flowchart TD
         Kaniko --> Registry
     end
 
+    subgraph "Phase 3: Iteration 6 Memory Enablement"
+        Migrate[Apply TimescaleDB memory migration] --> MemDeploy[Deploy memory-controller]
+        MemDeploy --> TopicInit[Create memory topics]
+        TopicInit --> WorkerWire[Wire rag-worker memory request/pack path]
+        WorkerWire --> GatewayFlags[Enable memory_mode flags in gateway]
+        GatewayFlags --> Eval[Run recall/latency benchmarks]
+    end
+
     Registry --> K8s[Kubernetes Cluster]
-    
+
     subgraph "Orchestration"
         Setup[setup-complete.sh]
     end
-    
+
     Setup --> Phase1
     Setup --> Phase2
-    Phase2 --> Deploy[Deploy RAG Services]
+    Setup --> Deploy[Deploy RAG Services]
+    Deploy --> Phase3
 ```
 
-*   **Zero-Host Build Architecture**: The entire stack, including the `build-orchestrator` itself, is now built using cluster-native tools (Kaniko). The `hierophant` host performs only lightweight source packaging (`tar`) and orchestration (`kubectl`/`pulsar-client`).
-*   **Kaniko & S3**: Source code is packaged and uploaded to a dedicated S3 bucket (OBC) in the `build-pipeline` namespace. Kaniko pods download these tarballs to build images, avoiding the need for a local Docker/Podman daemon.
-*   **Orchestration**: The master script `setup-complete.sh` ensures that the build infrastructure is bootstrapped first, then triggers builds for all services, and finally deploys the RAG stack once images are verified in the registry.
+- Zero-host build architecture remains unchanged: source packaging + in-cluster Kaniko builds.
+- Iteration 6 adds a memory enablement deployment phase after core service deployment.

@@ -12,6 +12,7 @@ graph TD
         Ingestor[rag-ingestion-service]
         QAdapter[qdrant-adapter]
         OSMgr[object-store-mgr]
+        MemCtl[memory-controller]
     end
 
     subgraph "Kubernetes: monitoring namespace (APM)"
@@ -32,6 +33,10 @@ graph TD
         Ops[operations/db-ops]
         QOps[operations/qdrant-ops]
         QRes[operations/qdrant-ops-results]
+        MWrite[operations/memory-write]
+        MRetrieve[operations/memory-retrieve]
+        MPack[operations/memory-pack]
+        MAudit[operations/memory-audit]
     end
 
     subgraph "Storage & Infrastructure"
@@ -44,7 +49,7 @@ graph TD
     %% Interaction Flows
     Browser <-->|HTTP/80| UI
     Browser -->|HTTP/80| Gateway
-    
+
     %% Ingestion Flow
     UI -->|Upload| S3
     UI -->|Trigger| Ingestor
@@ -58,13 +63,26 @@ graph TD
     %% Chat Flow (Asynchronous)
     Gateway -.->|1. Publish| Prompts
     Gateway -.->|2. Publish| Tasks
-    
+
     Tasks -.->|3. Consume| Worker
     Worker -.->|4. Search Op| QOps
     QOps -.->|5. Consume| QAdapter
     QAdapter -->|6. HTTP| Qdrant
     QAdapter -.->|7. Publish| QRes
     QRes -.->|8. Consume| Worker
+
+    %% Memory Flow (Iteration 6)
+    Worker -.->|A. Publish| MRetrieve
+    MRetrieve -.->|B. Consume| MemCtl
+    MemCtl -->|C. Read/Rank| TDB
+    MemCtl -.->|D. Optional semantic recall| QOps
+    MemCtl -.->|E. Publish| MPack
+    MPack -.->|F. Consume| Worker
+    Worker -.->|G. Publish| MWrite
+    MWrite -.->|H. Consume| MemCtl
+    MemCtl -->|I. Persist memory state| TDB
+    MemCtl -.->|J. Publish audit| MAudit
+
     Worker -->|9. Inference| Ollama
     Worker -.->|10. Publish| Responses
     Worker -.->|10. Publish| Results
@@ -79,7 +97,7 @@ graph TD
     DBAdapter -->|Persist| TDB
 
     %% Observability Flow
-    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|Metrics/Traces| OTel
+    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr & MemCtl -->|Metrics/Traces| OTel
     Alloy -->|Kubernetes Logs| Loki
     OTel --> Mimir
     OTel --> Tempo

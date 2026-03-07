@@ -4,7 +4,7 @@ flowchart TD
         Pack --> Upload[S3 Upload Pod]
         Upload --> S3[(Build S3/OBC)]
         S3 --> BootstrapJob[Kaniko Bootstrap Job]
-        BootstrapJob --> Registry[Local Registry: 172.20.1.26:5000]
+        BootstrapJob --> Registry[Local Registry: registry.hierocracy.home:5000]
         Registry --> OrchDeploy[Deploy Build Orchestrator]
     end
 
@@ -16,12 +16,21 @@ flowchart TD
         Kaniko --> Registry
     end
 
+    subgraph "Phase 3: Iteration 6 Memory Enablement"
+        Migrate[Apply TimescaleDB memory migration] --> MemDeploy[Deploy memory-controller]
+        MemDeploy --> TopicInit[Create memory topics]
+        TopicInit --> WorkerWire[Wire rag-worker memory request/pack path]
+        WorkerWire --> GatewayFlags[Enable memory_mode flags in gateway]
+        GatewayFlags --> Eval[Run recall/latency benchmarks]
+    end
+
     Registry --> K8s[Kubernetes Cluster]
-    
+
     subgraph "Orchestration"
         Setup[setup-complete.sh]
     end
-    
+
     Setup --> Phase1
     Setup --> Phase2
-    Phase2 --> Deploy[Deploy RAG Services]
+    Setup --> Deploy[Deploy RAG Services]
+    Deploy --> Phase3
