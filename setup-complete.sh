@@ -25,6 +25,9 @@ BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
 VERSION="${VERSION:-1.5.7}"
 export VERSION
+IMAGE_PREFETCH_ON_START="${IMAGE_PREFETCH_ON_START:-true}"
+IMAGE_PREFETCH_GROUPS="${IMAGE_PREFETCH_GROUPS:-bootstrap,storage,apm-core,pulsar-core,registry,data-services,ollama}"
+IMAGE_PREFETCH_PARALLELISM="${IMAGE_PREFETCH_PARALLELISM:-3}"
 
 # Tools & context (explicit paths per guidelines)
 KUBECTL="/home/k8s/kube/kubectl"
@@ -35,10 +38,30 @@ export TALOSCONFIG="/home/k8s/talos/config/talosconfig"
 source "$BASE_DIR/scripts/journal-helper.sh"
 init_journal
 
+INSTALL_TIMING_LOG="${INSTALL_TIMING_LOG:-$JOURNAL_FILE_DIR/setup-complete-timing.log}"
+touch "$INSTALL_TIMING_LOG"
+chmod 600 "$INSTALL_TIMING_LOG" 2>/dev/null || true
+
+log_step_timing() {
+    local step_name="$1"
+    local start_epoch="$2"
+    local end_epoch="$3"
+    local status="${4:-ok}"
+    local duration=$((end_epoch - start_epoch))
+    local start_iso end_iso line
+    start_iso="$(date -u -d "@$start_epoch" +'%Y-%m-%dT%H:%M:%SZ')"
+    end_iso="$(date -u -d "@$end_epoch" +'%Y-%m-%dT%H:%M:%SZ')"
+    line="timing|step=${step_name}|status=${status}|start=${start_iso}|end=${end_iso}|duration_seconds=${duration}"
+    echo "$line" | tee -a "$INSTALL_TIMING_LOG" >/dev/null
+    # Append timing marker to the journal file as requested, while keeping is_step_done matching intact.
+    echo "$line" >> "$JOURNAL_FILE"
+}
+
 echo "--- 0. Verifying Cluster Registry Trust ---"
 # Check if registry mirrors are configured on nodes. If not, patch and reboot.
 # This ensures that Step 1.6 (Cluster-Native Builds) and Step 2 (Deployment) can pull images.
 if ! is_step_done "registry-trust-verified"; then
+    STEP_TS_START=$(date +%s)
     if [[ "${FRESH_INSTALL:-false}" == "true" ]]; then
         echo "FRESH_INSTALL detected. Skipping pre-check; registry trust will be applied in Step 1.5."
     else
@@ -75,10 +98,13 @@ if ! is_step_done "registry-trust-verified"; then
         fi
     fi
     mark_step_done "registry-trust-verified"
+    STEP_TS_END=$(date +%s)
+    log_step_timing "registry-trust-verified" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 echo "--- 0.5. Labeling Worker Nodes ---"
 if ! is_step_done "worker-labeling"; then
+    STEP_TS_START=$(date +%s)
     echo "Labeling nodes starting with 'worker' as 'role=storage-node'..."
     # Get all node names starting with worker
     WORKER_NODES=$($KUBECTL get nodes -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^worker' || echo "")
@@ -93,6 +119,8 @@ if ! is_step_done "worker-labeling"; then
         echo "No nodes matching 'worker*' found. Skipping labeling."
     fi
     mark_step_done "worker-labeling"
+    STEP_TS_END=$(date +%s)
+    log_step_timing "worker-labeling" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 echo "===================================================="
@@ -101,47 +129,75 @@ echo "Target service image version: $VERSION"
 echo "===================================================="
 
 if ! is_step_done "basic"; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1: Basic Infrastructure Setup (includes Rook-Ceph)"
 echo "----------------------------------------------------"
 $BASE_DIR/setup-01-basic.sh
 mark_step_done "basic"
+STEP_TS_END=$(date +%s)
+log_step_timing "basic" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
+if ! is_step_done "registry" || ! $KUBECTL get namespace registry >/dev/null 2>&1; then
+STEP_TS_START=$(date +%s)
+echo ""
+echo "Step 1.5: Local Registry Setup"
+echo "----------------------------------------------------"
+$BASE_DIR/infrastructure/registry/install.sh
+mark_step_done "registry"
+STEP_TS_END=$(date +%s)
+log_step_timing "registry" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
+if [[ "$IMAGE_PREFETCH_ON_START" == "true" ]] && ! is_step_done "image-prefetch-initial"; then
+STEP_TS_START=$(date +%s)
+echo ""
+echo "Step 1.5.1: Initial Image Prefetch to Local Registry"
+echo "----------------------------------------------------"
+APPLY=true MIRROR_GROUPS="$IMAGE_PREFETCH_GROUPS" PARALLELISM="$IMAGE_PREFETCH_PARALLELISM" \
+  bash "$BASE_DIR/scripts/mirror-all-images.sh"
+mark_step_done "image-prefetch-initial"
+STEP_TS_END=$(date +%s)
+log_step_timing "image-prefetch-initial" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if ! is_step_done "apm"; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.2: APM (LGTM + Grafana Alloy)"
 echo "----------------------------------------------------"
 bash $BASE_DIR/infrastructure/APM/install.sh
 mark_step_done "apm"
+STEP_TS_END=$(date +%s)
+log_step_timing "apm" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if ! is_step_done "nvidia"; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.4: NVIDIA Infrastructure Setup"
 echo "----------------------------------------------------"
 # Deploy NVIDIA device plugin and runtime class
 bash $BASE_DIR/infrastructure/nvidia-operator.sh
 mark_step_done "nvidia"
-fi
-
-if ! is_step_done "registry"; then
-echo ""
-echo "Step 1.5: Local Registry Setup"
-echo "----------------------------------------------------"
-$BASE_DIR/infrastructure/registry/install.sh
-mark_step_done "registry"
+STEP_TS_END=$(date +%s)
+log_step_timing "nvidia" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if ! is_step_done "kubernetes-dashboard"; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.5: Kubernetes Dashboard Setup"
 echo "----------------------------------------------------"
 bash $BASE_DIR/infrastructure/kubernetes-dashboard/dashboard.sh
 mark_step_done "kubernetes-dashboard"
+STEP_TS_END=$(date +%s)
+log_step_timing "kubernetes-dashboard" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if ! is_step_done "pulsar"; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.7: Apache Pulsar Infrastructure"
 echo "----------------------------------------------------"
@@ -149,25 +205,34 @@ echo "----------------------------------------------------"
 export REPO_DIR="$BASE_DIR/rag-stack"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/install.sh
 mark_step_done "pulsar"
+STEP_TS_END=$(date +%s)
+log_step_timing "pulsar" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if ! is_step_done "pulsar-init"; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.7.1: Pulsar Initialization"
 echo "----------------------------------------------------"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh
 mark_step_done "pulsar-init"
+STEP_TS_END=$(date +%s)
+log_step_timing "pulsar-init" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "build-pipeline-infra"; then
+if ! is_step_done "build-pipeline-infra" || ! $KUBECTL get namespace build-pipeline >/dev/null 2>&1; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.8: Build Pipeline Infrastructure (Kaniko + S3)"
 echo "----------------------------------------------------"
 bash $BASE_DIR/rag-stack/infrastructure/build-pipeline/install.sh
 mark_step_done "build-pipeline-infra"
+STEP_TS_END=$(date +%s)
+log_step_timing "build-pipeline-infra" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if ! is_step_done "rag-images"; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.6: Build and Push RAG Images (Cluster-Native)"
 echo "----------------------------------------------------"
@@ -176,9 +241,12 @@ echo "----------------------------------------------------"
 # We wait for completion here to ensure Step 2 has the images it needs.
     VERSION="$VERSION" bash $BASE_DIR/rag-stack/build-all-on-cluster.sh --wait
 mark_step_done "rag-images"
+STEP_TS_END=$(date +%s)
+log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if ! is_step_done "rag-stack"; then
+STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 2: RAG Stack Deployment"
 echo "----------------------------------------------------"
@@ -189,6 +257,8 @@ echo "----------------------------------------------------"
 export REPO_DIR="$BASE_DIR/rag-stack"
     VERSION="$VERSION" $REPO_DIR/setup-all.sh
 mark_step_done "rag-stack"
+STEP_TS_END=$(date +%s)
+log_step_timing "rag-stack" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 clear_journal
