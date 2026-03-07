@@ -2,7 +2,7 @@
 # install.sh - Grafana LGTM Stack (Loki, Grafana, Tempo, Mimir)
 # To be executed on host: hierophant
 
-set -e
+set -Eeuo pipefail
 
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 KUBECTL="/home/k8s/kube/kubectl"
@@ -11,6 +11,39 @@ NAMESPACE="monitoring"
 
 source "$REPO_DIR/../../scripts/journal-helper.sh"
 init_journal
+
+OBC_WAIT_TIMEOUT_SECONDS="${OBC_WAIT_TIMEOUT_SECONDS:-600}"
+OBC_WAIT_POLL_SECONDS="${OBC_WAIT_POLL_SECONDS:-5}"
+
+function obc_diagnostics() {
+    local bucket="$1"
+    echo "Diagnostics for $bucket:"
+    $KUBECTL get obc "$bucket" -n "$NAMESPACE" -o wide || true
+    $KUBECTL get obc "$bucket" -n "$NAMESPACE" -o yaml | sed -n '1,220p' || true
+    $KUBECTL get storageclass rook-ceph-bucket -o wide || true
+    $KUBECTL get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 40 || true
+}
+
+function wait_for_bucket_secret() {
+    local bucket="$1"
+    local waited=0
+
+    echo "Checking bucket: $bucket"
+    while ! $KUBECTL get secret "$bucket" -n "$NAMESPACE" >/dev/null 2>&1; do
+        local phase=""
+        phase="$($KUBECTL get obc "$bucket" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+        echo "Still waiting for $bucket... phase=${phase:-unknown} elapsed=${waited}s"
+        sleep "$OBC_WAIT_POLL_SECONDS"
+        waited=$((waited + OBC_WAIT_POLL_SECONDS))
+        if [[ "$waited" -ge "$OBC_WAIT_TIMEOUT_SECONDS" ]]; then
+            echo "ERROR: Timeout waiting for bucket secret for $bucket after ${OBC_WAIT_TIMEOUT_SECONDS}s"
+            obc_diagnostics "$bucket"
+            return 1
+        fi
+    done
+
+    echo "Bucket $bucket is ready."
+}
 
 if ! is_step_done "monitoring-ns"; then
     echo "--- Creating Monitoring Namespace ---"
@@ -29,14 +62,9 @@ if ! is_step_done "s3-obc"; then
     $KUBECTL apply -f "$REPO_DIR/common/s3-storage.yaml"
     
     # Wait for OBCs to be bound
-    echo "Waiting for buckets to be ready..."
+    echo "Waiting for buckets to be ready (timeout=${OBC_WAIT_TIMEOUT_SECONDS}s)..."
     for bucket in loki-s3-bucket tempo-s3-bucket mimir-s3-bucket mimir-ruler-s3-bucket mimir-alertmanager-s3-bucket; do
-        echo "Checking bucket: $bucket"
-        until $KUBECTL get secret $bucket -n $NAMESPACE >/dev/null 2>&1; do
-            echo "Still waiting for $bucket..."
-            sleep 5
-        done
-        echo "Bucket $bucket is ready."
+        wait_for_bucket_secret "$bucket"
     done
     mark_step_done "s3-obc"
 else

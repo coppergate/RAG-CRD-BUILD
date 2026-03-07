@@ -101,15 +101,35 @@ EOF
 
 # Use pulsar-admin from an existing pulsar pod to send the message
 PULSAR_NAMESPACE="apache-pulsar"
-# Wait for the toolset pod to be ready if it exists (or wait for it to appear)
-echo "Waiting for Pulsar toolset pod in $PULSAR_NAMESPACE..."
-until $KUBECTL get pods -n $PULSAR_NAMESPACE -l component=toolset -o jsonpath='{.items[0].metadata.name}' >/dev/null 2>&1; do
-    echo "Pulsar toolset pod not found yet. Sleeping 10s..."
+PULSAR_WAIT_SECONDS="${PULSAR_TOOL_POD_WAIT_SECONDS:-600}"
+PULSAR_POD=""
+elapsed=0
+while [[ "$elapsed" -lt "$PULSAR_WAIT_SECONDS" ]]; do
+    for sel in "component=toolset" "app.kubernetes.io/component=toolset" "component=broker" "app.kubernetes.io/component=broker"; do
+        PULSAR_POD=$($KUBECTL get pods -n "$PULSAR_NAMESPACE" -l "$sel" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+        if [[ -n "$PULSAR_POD" ]]; then
+            break
+        fi
+    done
+    if [[ -z "$PULSAR_POD" ]]; then
+        PULSAR_POD=$($KUBECTL get pods -n "$PULSAR_NAMESPACE" -o name 2>/dev/null | grep -E 'toolset|broker' | head -n1 | cut -d/ -f2 || true)
+    fi
+    if [[ -n "$PULSAR_POD" ]]; then
+        break
+    fi
+    echo "Pulsar admin pod not found yet. Sleeping 10s..."
     sleep 10
+    elapsed=$((elapsed + 10))
 done
 
-PULSAR_POD=$($KUBECTL get pods -n $PULSAR_NAMESPACE -l component=toolset -o jsonpath='{.items[0].metadata.name}')
-$KUBECTL wait --for=condition=Ready pod/$PULSAR_POD -n $PULSAR_NAMESPACE --timeout=60s
+if [[ -z "$PULSAR_POD" ]]; then
+    echo "ERROR: Could not find a toolset/broker pod in namespace $PULSAR_NAMESPACE after ${PULSAR_WAIT_SECONDS}s"
+    $KUBECTL get pods -n "$PULSAR_NAMESPACE" -o wide || true
+    $KUBECTL get events -n "$PULSAR_NAMESPACE" --sort-by=.lastTimestamp | tail -n 60 || true
+    exit 1
+fi
+
+$KUBECTL wait --for=condition=Ready "pod/$PULSAR_POD" -n "$PULSAR_NAMESPACE" --timeout=120s
 
 $KUBECTL exec -n $PULSAR_NAMESPACE "$PULSAR_POD" -- \
   /pulsar/bin/pulsar-client produce persistent://public/default/build-tasks -m "$TASK_JSON"
