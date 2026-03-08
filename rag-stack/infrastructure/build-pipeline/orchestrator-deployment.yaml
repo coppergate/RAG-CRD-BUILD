@@ -24,6 +24,7 @@ spec:
       containers:
       - name: orchestrator
         image: registry.hierocracy.home:5000/build-orchestrator:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - name: http
           containerPort: 8080
@@ -42,8 +43,12 @@ spec:
           value: "persistent://public/default/build-status"
         - name: MAX_CONCURRENT_BUILDS
           value: "3"
+        - name: MAX_TASK_RETRIES
+          value: "2"
         - name: HTTP_ADDR
           value: ":8080"
+        - name: FAILED_TASK_TOPIC
+          value: "persistent://public/default/build-tasks-deadletter"
         readinessProbe:
           httpGet:
             path: /health

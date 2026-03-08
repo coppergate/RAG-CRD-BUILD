@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MemoryRetrieveRequest",
+  "type": "object",
+  "required": ["request_id", "scope", "query_text", "limits"],
+  "properties": {
+    "request_id": {"type": "string"},
+    "correlation_id": {"type": "string"},
+    "memory_mode": {"type": "string", "enum": ["off", "session", "full"], "default": "full"},
+    "scope": {
+      "type": "object",
+      "properties": {
+        "session_id": {"type": "string"},
+        "user_id": {"type": "string"},
+        "project_id": {"type": "string"},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "additionalProperties": true
+    },
+    "query_text": {"type": "string"},
+    "query_embedding": {
+      "type": "array",
+      "items": {"type": "number"}
+    },
+    "filters": {
+      "type": "object",
+      "properties": {
+        "memory_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["short_term_memory", "long_term_memory", "persistent_memory"]
+          }
+        },
+        "min_salience": {"type": "number", "minimum": 0, "maximum": 1},
+        "min_retention_score": {"type": "number", "minimum": 0, "maximum": 1},
+        "pinned_only": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
+    "limits": {
+      "type": "object",
+      "required": ["max_items", "max_tokens"],
+      "properties": {
+        "max_items": {"type": "integer", "minimum": 1},
+        "max_tokens": {"type": "integer", "minimum": 32},
+        "short_term_tokens": {"type": "integer", "minimum": 0},
+        "long_term_tokens": {"type": "integer", "minimum": 0},
+        "persistent_tokens": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "debug": {"type": "boolean", "default": false}
+  },
+  "additionalProperties": true
+}

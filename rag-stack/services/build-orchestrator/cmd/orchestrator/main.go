@@ -145,6 +145,11 @@ type statusPublisher struct {
 	producer pulsar.Producer
 }
 
+type failedTaskPublisher struct {
+	producer pulsar.Producer
+	topic    string
+}
+
 func (p *statusPublisher) Publish(evt BuildStatusEvent) {
 	if evt.Timestamp == "" {
 		evt.Timestamp = time.Now().UTC().Format(time.RFC3339)
@@ -172,6 +177,29 @@ func (p *statusPublisher) Publish(evt BuildStatusEvent) {
 	}
 }
 
+func (p *failedTaskPublisher) Publish(task BuildTask, msg pulsar.Message, reason string) {
+	if p == nil || p.producer == nil {
+		return
+	}
+	payload := map[string]interface{}{
+		"task":             task,
+		"original_payload": string(msg.Payload()),
+		"reason":           reason,
+		"redelivery_count": msg.RedeliveryCount(),
+		"published_at":     time.Now().UTC().Format(time.RFC3339),
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Error marshaling failed task payload: %v", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := p.producer.Send(ctx, &pulsar.ProducerMessage{Payload: b}); err != nil {
+		log.Printf("Error publishing failed task to %s: %v", p.topic, err)
+	}
+}
+
 func main() {
 	pulsarURL := os.Getenv("PULSAR_URL")
 	topic := os.Getenv("BUILD_TOPIC")
@@ -180,10 +208,15 @@ func main() {
 	}
 
 	statusTopic := getenvDefault("BUILD_STATUS_TOPIC", "persistent://public/default/build-status")
+	failedTaskTopic := strings.TrimSpace(os.Getenv("FAILED_TASK_TOPIC"))
 	httpAddr := getenvDefault("HTTP_ADDR", ":8080")
 	maxConcurrent := getenvIntDefault("MAX_CONCURRENT_BUILDS", 3)
+	maxTaskRetries := getenvIntDefault("MAX_TASK_RETRIES", 2)
 	if maxConcurrent < 1 {
 		maxConcurrent = 1
+	}
+	if maxTaskRetries < 0 {
+		maxTaskRetries = 0
 	}
 
 	config, err := rest.InClusterConfig()
@@ -219,9 +252,18 @@ func main() {
 		}
 		defer statusProducer.Close()
 	}
+	var failedProducer pulsar.Producer
+	if failedTaskTopic != "" {
+		failedProducer, err = client.CreateProducer(pulsar.ProducerOptions{Topic: failedTaskTopic})
+		if err != nil {
+			log.Fatalf("Could not create failed-task topic producer: %v", err)
+		}
+		defer failedProducer.Close()
+	}
 
 	hub := newStatusHub(250)
 	publisher := &statusPublisher{hub: hub, producer: statusProducer}
+	failedPublisher := &failedTaskPublisher{producer: failedProducer, topic: failedTaskTopic}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -253,14 +295,27 @@ func main() {
 
 					err := processTask(ctx, clientset, env.task, publisher)
 					if err != nil {
-						publisher.Publish(BuildStatusEvent{
-							ServiceName: env.task.ServiceName,
-							Version:     env.task.Version,
-							JobName:     jobName,
-							Status:      "failed",
-							Message:     err.Error(),
-						})
-						consumer.Nack(env.msg)
+						redelivery := int(env.msg.RedeliveryCount())
+						if redelivery >= maxTaskRetries {
+							publisher.Publish(BuildStatusEvent{
+								ServiceName: env.task.ServiceName,
+								Version:     env.task.Version,
+								JobName:     jobName,
+								Status:      "failed_terminal",
+								Message:     fmt.Sprintf("%s (redelivery=%d max=%d)", err.Error(), redelivery, maxTaskRetries),
+							})
+							failedPublisher.Publish(env.task, env.msg, err.Error())
+							consumer.Ack(env.msg)
+						} else {
+							publisher.Publish(BuildStatusEvent{
+								ServiceName: env.task.ServiceName,
+								Version:     env.task.Version,
+								JobName:     jobName,
+								Status:      "retrying",
+								Message:     fmt.Sprintf("%s (redelivery=%d max=%d)", err.Error(), redelivery, maxTaskRetries),
+							})
+							consumer.Nack(env.msg)
+						}
 					} else {
 						publisher.Publish(BuildStatusEvent{
 							ServiceName: env.task.ServiceName,
@@ -292,7 +347,11 @@ func main() {
 
 			var task BuildTask
 			if err := json.Unmarshal(msg.Payload(), &task); err != nil {
-				log.Printf("Error unmarshaling task: %v", err)
+				preview := strings.TrimSpace(string(msg.Payload()))
+				if len(preview) > 160 {
+					preview = preview[:160] + "..."
+				}
+				log.Printf("Error unmarshaling task: %v payload=%q", err, preview)
 				consumer.Ack(msg)
 				continue
 			}
@@ -321,7 +380,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("Build Orchestrator listening on %s; status topic=%s; max concurrent builds=%d", topic, statusTopic, maxConcurrent)
+	log.Printf("Build Orchestrator listening on %s; status topic=%s; failed-topic=%s; max concurrent builds=%d; max task retries=%d", topic, statusTopic, failedTaskTopic, maxConcurrent, maxTaskRetries)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -492,7 +551,7 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 					InitContainers: []corev1.Container{
 						{
 							Name:    "fetch-context",
-							Image:   "busybox",
+							Image:   "registry.hierocracy.home:5000/busybox:1.37.0",
 							Command: []string{"sh", "-c"},
 							Args: []string{
 								fmt.Sprintf("wget -O /workspace/context.tar.gz \"%s\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz", contextURL),
@@ -516,14 +575,19 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 					Containers: []corev1.Container{
 						{
 							Name:  "kaniko",
-							Image: "gcr.io/kaniko-project/executor:latest",
+							Image: "registry.hierocracy.home:5000/gcr.io/kaniko-project/executor:v1.24.0",
 							Args: []string{
 								"--dockerfile=" + task.DockerfilePath,
 								"--context=dir:///workspace",
 								"--destination=" + task.Registry + "/" + task.ServiceName + ":" + task.Version,
 								"--destination=" + task.Registry + "/" + task.ServiceName + ":latest",
+								"--cache=true",
+								"--cache-repo=" + task.Registry + "/kaniko-cache",
 								"--insecure",
+								"--insecure-pull",
+								"--insecure-registry=" + task.Registry,
 								"--skip-tls-verify",
+								"--skip-tls-verify-registry=" + task.Registry,
 							},
 							SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr(true)},
 							VolumeMounts: []corev1.VolumeMount{

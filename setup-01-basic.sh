@@ -287,6 +287,12 @@ helm upgrade --install kube-state-metrics prometheus-community/kube-state-metric
 mark_step_done "kube-state-metrics"
 fi
 
+if ! is_step_done "rook-ceph-image-prefetch"; then
+echo "prefetching rook-ceph images to node-local cache (pre-registry bootstrap)"
+bash $config_source_dir/scripts/prefetch-node-images.sh --group storage
+mark_step_done "rook-ceph-image-prefetch"
+fi
+
 if ! is_step_done "rook-ceph-operator"; then
 echo "install rook-ceph operator"
 
@@ -375,5 +381,4 @@ mark_step_done "traefik"
 fi
 
 clear_journal
-
 

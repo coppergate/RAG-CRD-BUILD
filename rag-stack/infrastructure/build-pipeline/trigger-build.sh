@@ -45,12 +45,12 @@ if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
     echo "--- 2. Uploading sources to S3 ---"
     # Create a temporary uploader pod that has the S3 bucket access
     # Using a more restricted security context to avoid PodSecurity violations
-    $KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image=amazon/aws-cli --overrides='
+    $KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image=registry.hierocracy.home:5000/amazon/aws-cli:2.34.4 --overrides='
 {
   "spec": {
     "containers": [{
       "name": "uploader",
-      "image": "amazon/aws-cli",
+        "image": "registry.hierocracy.home:5000/amazon/aws-cli:2.34.4",
       "command": ["sleep", "300"],
       "securityContext": {
         "allowPrivilegeEscalation": false,
@@ -86,18 +86,25 @@ else
 fi
 
 echo "--- 3. Triggering Orchestrator via Pulsar ---"
-# Construct the task JSON
-TASK_JSON=$(cat <<EOF
-{
-  "service_name": "$SERVICE",
-  "version": "$VERSION",
-  "dockerfile_path": "$SERVICE/Dockerfile",
-  "source_tarball": "$TARBALL",
-  "source_url": "$PRESIGNED_URL",
-  "registry": "registry.hierocracy.home:5000"
+# Escape JSON string values without external deps (jq/python).
+json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
 }
-EOF
-)
+
+# Construct the task JSON as a single line.
+TASK_JSON=$(printf '{"service_name":"%s","version":"%s","dockerfile_path":"%s","source_tarball":"%s","source_url":"%s","registry":"%s"}' \
+    "$(json_escape "$SERVICE")" \
+    "$(json_escape "$VERSION")" \
+    "$(json_escape "$SERVICE/Dockerfile")" \
+    "$(json_escape "$TARBALL")" \
+    "$(json_escape "$PRESIGNED_URL")" \
+    "registry.hierocracy.home:5000")
 
 # Use pulsar-admin from an existing pulsar pod to send the message
 PULSAR_NAMESPACE="apache-pulsar"
@@ -131,8 +138,14 @@ fi
 
 $KUBECTL wait --for=condition=Ready "pod/$PULSAR_POD" -n "$PULSAR_NAMESPACE" --timeout=120s
 
-$KUBECTL exec -n $PULSAR_NAMESPACE "$PULSAR_POD" -- \
-  /pulsar/bin/pulsar-client produce persistent://public/default/build-tasks -m "$TASK_JSON"
+TASK_B64="$(printf '%s' "$TASK_JSON" | base64 -w0)"
+$KUBECTL exec -n "$PULSAR_NAMESPACE" "$PULSAR_POD" -- sh -lc "
+set -eu
+TMP_MSG=\$(mktemp)
+printf '%s' '$TASK_B64' | base64 -d > \"\$TMP_MSG\"
+/pulsar/bin/pulsar-client produce persistent://public/default/build-tasks -f \"\$TMP_MSG\"
+rm -f \"\$TMP_MSG\"
+"
 
 echo "Build triggered for $SERVICE:$VERSION"
 echo "Check Kaniko logs: $KUBECTL get jobs -n $NAMESPACE"

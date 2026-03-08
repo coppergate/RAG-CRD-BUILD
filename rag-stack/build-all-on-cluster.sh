@@ -17,6 +17,9 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
 source "$BASE_DIR/../scripts/journal-helper.sh"
+REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
+BUILD_WAIT_TIMEOUT_SECONDS="${BUILD_WAIT_TIMEOUT_SECONDS:-2700}" # 45 minutes
+BUILD_WAIT_POLL_SECONDS="${BUILD_WAIT_POLL_SECONDS:-15}"
 
 services=(
     "db-adapter"
@@ -29,6 +32,34 @@ services=(
 )
 job_names=()
 trigger_pids=()
+
+require_cmd() {
+    local c="$1"
+    command -v "$c" >/dev/null 2>&1 || {
+        echo "ERROR: required command missing: $c"
+        exit 1
+    }
+}
+
+wait_for_image() {
+    local service="$1"
+    local version="$2"
+    local image="docker://${REGISTRY}/${service}:${version}"
+    local elapsed=0
+
+    echo "Waiting for image availability: ${REGISTRY}/${service}:${version}"
+    while [[ "$elapsed" -lt "$BUILD_WAIT_TIMEOUT_SECONDS" ]]; do
+        if skopeo inspect --tls-verify=false "$image" >/dev/null 2>&1; then
+            echo "Image ready: ${REGISTRY}/${service}:${version}"
+            return 0
+        fi
+        sleep "$BUILD_WAIT_POLL_SECONDS"
+        elapsed=$((elapsed + BUILD_WAIT_POLL_SECONDS))
+    done
+
+    echo "ERROR: Timed out waiting for image: ${REGISTRY}/${service}:${version}"
+    return 1
+}
 
 echo "===================================================="
 echo "Triggering Cluster-Native Build for all services (v$VERSION)"
@@ -50,12 +81,12 @@ cd "$BASE_DIR/services"
 tar -czf "$SAFE_TMP_DIR/$TARBALL" .
 cd - > /dev/null
 
-$KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image=amazon/aws-cli --overrides='
+$KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image=registry.hierocracy.home:5000/amazon/aws-cli:2.34.4 --overrides='
 {
   "spec": {
     "containers": [{
       "name": "uploader",
-      "image": "amazon/aws-cli",
+      "image": "registry.hierocracy.home:5000/amazon/aws-cli:2.34.4",
       "command": ["sleep", "300"],
       "securityContext": {
         "allowPrivilegeEscalation": false,
@@ -109,18 +140,19 @@ for pid in "${trigger_pids[@]}"; do
 done
 
 if [[ "$WAIT_FOR_COMPLETION" == "true" ]]; then
+    require_cmd skopeo
     echo ""
-    echo "--- Waiting for builds to complete ---"
-    for job in "${job_names[@]}"; do
-        echo "Waiting for $job..."
-        if ! $KUBECTL wait -n "$NAMESPACE" --for=condition=complete "job/$job" --timeout=45m; then
-            echo "ERROR: Build job did not complete: $job"
-            $KUBECTL get job "$job" -n "$NAMESPACE" -o wide || true
-            $KUBECTL logs -n "$NAMESPACE" -l "job-name=$job" --tail=200 || true
+    echo "--- Waiting for images to become available in registry ---"
+    for service in "${services[@]}"; do
+        if ! wait_for_image "$service" "$VERSION"; then
+            echo "Recent build jobs (if any):"
+            $KUBECTL get jobs -n "$NAMESPACE" -o wide || true
+            echo "Recent orchestrator logs:"
+            $KUBECTL logs -n "$NAMESPACE" deploy/build-orchestrator --tail=200 || true
             exit 1
         fi
     done
-    echo "All builds completed successfully."
+    echo "All service images are available in registry."
 else
     echo ""
     echo "All builds triggered. Monitor progress with:"

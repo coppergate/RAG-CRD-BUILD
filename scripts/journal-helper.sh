@@ -68,3 +68,12 @@ function clear_journal() {
         echo "Installation complete. Journal cleared."
     fi
 }
+
+function clear_all_journals() {
+    # Clears all journal artifacts (including sub-journal directories like pulsar/)
+    # under the configured journal root. Intended for FRESH_INSTALL=true flows.
+    if [[ -d "$JOURNAL_FILE_DIR" ]]; then
+        rm -rf "${JOURNAL_FILE_DIR:?}/"*
+        echo "Cleared all journals under: $JOURNAL_FILE_DIR"
+    fi
+}

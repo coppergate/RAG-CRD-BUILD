@@ -5,13 +5,13 @@
 set -Eeuo pipefail
 
 declare -A IMAGE_GROUPS
-IMAGE_GROUPS[bootstrap]="busybox:latest busybox:1.36 amazon/aws-cli:latest martizih/kaniko:latest gcr.io/kaniko-project/executor:latest"
-IMAGE_GROUPS[storage]="docker.io/rook/ceph:v1.18.8 quay.io/ceph/ceph:v19.2.3 quay.io/ceph/ceph:v19 quay.io/cephcsi/ceph-csi-operator:v0.4.1 quay.io/cephcsi/cephcsi:v3.15.0 quay.io/csiaddons/k8s-sidecar:v0.5.0 registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.13.0 registry.k8s.io/sig-storage/csi-provisioner:v5.2.0 registry.k8s.io/sig-storage/csi-snapshotter:v6.3.0 registry.k8s.io/sig-storage/csi-attacher:v4.8.0 registry.k8s.io/sig-storage/csi-resizer:v1.13.0"
-IMAGE_GROUPS[apm-core]="otel/opentelemetry-collector-contrib:latest quay.io/prometheus-operator/prometheus-operator:v0.80.1"
+IMAGE_GROUPS[bootstrap]="busybox:1.37.0 busybox:1.36 amazon/aws-cli:2.34.4 martizih/kaniko:v1.27.0 gcr.io/kaniko-project/executor:v1.24.0"
+IMAGE_GROUPS[storage]="busybox:1.36 docker.io/rook/ceph:v1.18.8 quay.io/ceph/ceph:v19.2.3 quay.io/ceph/ceph:v19 quay.io/cephcsi/ceph-csi-operator:v0.4.1 quay.io/cephcsi/cephcsi:v3.15.0 quay.io/csiaddons/k8s-sidecar:v0.5.0 registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.13.0 registry.k8s.io/sig-storage/csi-provisioner:v5.2.0 registry.k8s.io/sig-storage/csi-snapshotter:v6.3.0 registry.k8s.io/sig-storage/csi-attacher:v4.8.0 registry.k8s.io/sig-storage/csi-resizer:v1.13.2"
+IMAGE_GROUPS[apm-core]="otel/opentelemetry-collector-contrib:0.147.0 quay.io/prometheus-operator/prometheus-operator:v0.80.1"
 IMAGE_GROUPS[pulsar-core]="apachepulsar/pulsar-all:3.0.7 apachepulsar/pulsar-manager:v0.4.0 streamnative/oxia:0.11.9"
 IMAGE_GROUPS[registry]="registry:2"
 IMAGE_GROUPS[ollama]="ollama/ollama:0.15.6"
-IMAGE_GROUPS[data-services]="qdrant/qdrant:latest python:3.9-slim"
+IMAGE_GROUPS[data-services]="qdrant/qdrant:v1.17.0 python:3.9-slim golang:1.25-alpine alpine:3.23.3"
 
 # Local images built in-cluster or on-host and pushed to registry.hierocracy.home:5000
 # These are not mirrored from external registries by this script.

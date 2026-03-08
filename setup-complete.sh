@@ -36,6 +36,13 @@ TALOSCTL="/home/k8s/talos/talosctl"
 export TALOSCONFIG="/home/k8s/talos/config/talosconfig"
 
 source "$BASE_DIR/scripts/journal-helper.sh"
+
+# On full fresh installs, clear all nested journals first (including sub-journals
+# used by child scripts such as Pulsar's ~/.complete-build/journal/pulsar/*.done).
+if [[ "${FRESH_INSTALL:-false}" == "true" ]]; then
+    clear_all_journals
+fi
+
 init_journal
 
 INSTALL_TIMING_LOG="${INSTALL_TIMING_LOG:-$JOURNAL_FILE_DIR/setup-complete-timing.log}"

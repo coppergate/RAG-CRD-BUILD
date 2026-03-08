@@ -1,5 +1,5 @@
 # Go toolchain pinned for reproducibility and to satisfy upstream deps (genproto >= go1.25)
-FROM golang:1.25-alpine AS builder
+FROM registry.hierocracy.home:5000/golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -12,11 +12,9 @@ RUN CGO_ENABLED=0 go mod download
 
 # Copy sources and build
 COPY db-adapter/ .
-RUN CGO_ENABLED=0 go get google.golang.org/genproto/googleapis/api@latest google.golang.org/genproto/googleapis/rpc@latest
-RUN CGO_ENABLED=0 go mod tidy
-RUN CGO_ENABLED=0 go build -v -o db-adapter cmd/adapter/main.go
+RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o db-adapter cmd/adapter/main.go
 
-FROM alpine:latest
+FROM registry.hierocracy.home:5000/alpine:3.23.3
 
 WORKDIR /app
 COPY --from=builder /app/db-adapter .

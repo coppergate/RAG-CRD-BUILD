@@ -19,7 +19,7 @@ spec:
         role: storage-node
       containers:
       - name: qdrant
-        image: qdrant/qdrant:latest
+        image: qdrant/qdrant:v1.17.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6333

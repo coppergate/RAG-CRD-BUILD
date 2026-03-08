@@ -8,6 +8,8 @@ REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
+REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
+ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-latest}"
 
 source "$REPO_DIR/../../../scripts/journal-helper.sh"
 init_journal
@@ -36,15 +38,27 @@ if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
     mark_step_done "build-pipeline-ns"
 fi
 
-if should_run_step "build-orchestrator-image" "$KUBECTL get namespace $NAMESPACE"; then
+if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1 && skopeo inspect --tls-verify=false docker://$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"; then
     echo "--- Bootstrapping Build Orchestrator Image (Cluster-Native) ---"
-    bash "$REPO_DIR/bootstrap-orchestrator.sh"
+    ORCHESTRATOR_TAG="$ORCHESTRATOR_TAG" REGISTRY="$REGISTRY" bash "$REPO_DIR/bootstrap-orchestrator.sh"
     mark_step_done "build-orchestrator-image"
 fi
 
-if should_run_step "build-orchestrator" "$KUBECTL get deployment build-orchestrator -n $NAMESPACE"; then
+if should_run_step "build-orchestrator" "$KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=30s"; then
     echo "--- Deploying Build Orchestrator ---"
     $KUBECTL apply -f "$REPO_DIR/orchestrator-deployment.yaml"
+    $KUBECTL -n "$NAMESPACE" set image deploy/build-orchestrator orchestrator="$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
+    # Force a fresh rollout in case the deployment is unchanged but prior pods are stuck.
+    $KUBECTL rollout restart deploy/build-orchestrator -n $NAMESPACE || true
+    if ! $KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=300s; then
+        echo "ERROR: build-orchestrator rollout failed; diagnostics follow."
+        $KUBECTL -n "$NAMESPACE" get deploy,rs,pods -l app=build-orchestrator -o wide || true
+        POD_NAME=$($KUBECTL -n "$NAMESPACE" get pods -l app=build-orchestrator -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+        if [[ -n "$POD_NAME" ]]; then
+            $KUBECTL -n "$NAMESPACE" describe pod "$POD_NAME" || true
+        fi
+        exit 1
+    fi
     mark_step_done "build-orchestrator"
 fi
 

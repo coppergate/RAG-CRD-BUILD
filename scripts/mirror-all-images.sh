@@ -11,6 +11,8 @@ TARGET_REGISTRY="${TARGET_REGISTRY:-registry.hierocracy.home:5000}"
 APPLY="${APPLY:-false}"
 PARALLELISM="${PARALLELISM:-3}"
 SKOPEO_TLS_VERIFY="${SKOPEO_TLS_VERIFY:-false}"
+SKOPEO_SRC_TLS_VERIFY="${SKOPEO_SRC_TLS_VERIFY:-true}"
+SOURCE_CACHE_ROOT="${SOURCE_CACHE_ROOT:-/mnt/hegemon-share/share/code/complete-build/image-source-cache}"
 GROUPS_CSV="${MIRROR_GROUPS:-}"
 STEP_NAME="${STEP:-}"
 LIST_GROUPS="false"
@@ -41,6 +43,9 @@ Env:
   TARGET_REGISTRY=host:port        Destination registry prefix
   PARALLELISM=3                    xargs parallelism for apply mode
   SKOPEO_TLS_VERIFY=false          Destination TLS verify flag
+  SKOPEO_SRC_TLS_VERIFY=true       Source TLS verify flag
+  SOURCE_CACHE_ROOT=.../image-source-cache
+                                   Local upstream image cache root
   PLAN_FILE=.../install-image-plan.sh
   TIMING_LOG=.../mirror-timing.log Timing output log path
 USAGE
@@ -182,7 +187,21 @@ printf "timing|run_start|time=%s|mode=%s|groups=%s|images=%s\n" \
 copy_cmd() {
   local src="$1"
   local dst="$TARGET_REGISTRY/$src"
-  echo "skopeo copy --all --dest-tls-verify=$SKOPEO_TLS_VERIFY docker://$src docker://$dst"
+  local last_path_part repo tag cache_dir
+  last_path_part="${src##*/}"
+  if [[ "$last_path_part" == *:* ]]; then
+    repo="${src%:*}"
+    tag="${src##*:}"
+  else
+    repo="$src"
+    tag="latest"
+  fi
+  cache_dir="$SOURCE_CACHE_ROOT/images/$repo/$tag"
+  if [[ -f "$cache_dir/.cached" ]]; then
+    echo "skopeo copy --all --dest-tls-verify=$SKOPEO_TLS_VERIFY dir:$cache_dir docker://$dst   # cache-hit"
+  else
+    echo "skopeo copy --all --src-tls-verify=$SKOPEO_SRC_TLS_VERIFY docker://$src dir:$cache_dir && skopeo copy --all --dest-tls-verify=$SKOPEO_TLS_VERIFY dir:$cache_dir docker://$dst   # cache-miss"
+  fi
 }
 
 if [[ "$APPLY" != "true" ]]; then
@@ -199,40 +218,85 @@ fi
 
 require_cmd skopeo
 
+mkdir -p "$SOURCE_CACHE_ROOT/images"
+
 timing_tmp_dir="$(mktemp -d)"
 cleanup_tmp() { rm -rf "$timing_tmp_dir"; }
 trap cleanup_tmp EXIT
 
 set +e
-printf '%s\n' "${images[@]}" | xargs -n1 -P "$PARALLELISM" -I{} bash -c '
+printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
   set -Eeuo pipefail
   src="$1"
   target_registry="$2"
-  tls_verify="$3"
-  timing_dir="$4"
+  tls_verify_dest="$3"
+  tls_verify_src="$4"
+  source_cache_root="$5"
+  timing_dir="$6"
   dst="$target_registry/$src"
 
   start_epoch="$(date +%s)"
   start_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   status="ok"
   err_msg=""
+  cache_status="miss"
 
-  if ! skopeo copy --all --dest-tls-verify="$tls_verify" "docker://$src" "docker://$dst"; then
+  last_path_part="${src##*/}"
+  if [[ "$last_path_part" == *:* ]]; then
+    repo="${src%:*}"
+    tag="${src##*:}"
+  else
+    repo="$src"
+    tag="latest"
+  fi
+
+  cache_dir="$source_cache_root/images/$repo/$tag"
+  mkdir -p "$(dirname "$cache_dir")"
+
+  # Skip all work if target image:tag is already present in local registry.
+  if skopeo inspect --tls-verify="$tls_verify_dest" "docker://$dst" >/dev/null 2>&1; then
+    status="skip"
+    cache_status="registry-hit"
+    err_msg="already_present"
+  else
+    if [[ -f "$cache_dir/.cached" ]]; then
+      cache_status="hit"
+    else
+      cache_status="update"
+      # Populate/refresh source cache with exact image:tag first.
+      tmp_cache_dir="${cache_dir}.tmp.$$"
+      rm -rf "$tmp_cache_dir"
+      mkdir -p "$tmp_cache_dir"
+      if ! skopeo copy --all --src-tls-verify="$tls_verify_src" "docker://$src" "dir:$tmp_cache_dir"; then
+        status="fail"
+        err_msg="cache_fill_failed"
+        rm -rf "$tmp_cache_dir"
+      else
+        rm -rf "$cache_dir"
+        mv "$tmp_cache_dir" "$cache_dir"
+        printf "%s\n" "$src" > "$cache_dir/.cached"
+        date -u +%Y-%m-%dT%H:%M:%SZ > "$cache_dir/.cached_at"
+      fi
+    fi
+  fi
+
+  # Push to local registry from cache artifact (avoids re-downloading source image).
+  if [[ "$status" == "ok" ]] && ! skopeo copy --all --dest-tls-verify="$tls_verify_dest" "dir:$cache_dir" "docker://$dst"; then
     status="fail"
-    err_msg="copy_failed"
+    err_msg="copy_to_registry_failed"
   fi
 
   end_epoch="$(date +%s)"
   end_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   duration=$((end_epoch - start_epoch))
-  printf "timing|image=%s|status=%s|start=%s|end=%s|duration_seconds=%s|error=%s\n" \
-    "$src" "$status" "$start_iso" "$end_iso" "$duration" "$err_msg" \
+  printf "timing|image=%s|status=%s|cache=%s|start=%s|end=%s|duration_seconds=%s|error=%s\n" \
+    "$src" "$status" "$cache_status" "$start_iso" "$end_iso" "$duration" "$err_msg" \
     > "$timing_dir/${src//\//_}.timing"
 
-  if [[ "$status" != "ok" ]]; then
+  if [[ "$status" != "ok" && "$status" != "skip" ]]; then
     exit 1
   fi
-' _ {} "$TARGET_REGISTRY" "$SKOPEO_TLS_VERIFY" "$timing_tmp_dir"
+' _ {} "$TARGET_REGISTRY" "$SKOPEO_TLS_VERIFY" "$SKOPEO_SRC_TLS_VERIFY" "$SOURCE_CACHE_ROOT" "$timing_tmp_dir"
 copy_rc=$?
 set -e
 
@@ -251,5 +315,12 @@ printf "timing|run_end|time=%s|mode=%s|duration_seconds=%s|status=%s\n" \
   "$run_end_iso" "$APPLY" "$((run_end_epoch - run_start_epoch))" "$run_status" >> "$TIMING_LOG"
 
 log "Timing log updated: $TIMING_LOG"
-log "Mirror run complete."
+if [[ "$copy_rc" -ne 0 ]]; then
+  log "Mirror run FAILED."
+  log "Failed image timing entries (most recent run):"
+  grep 'status=fail' "$timing_tmp_dir"/*.timing 2>/dev/null || log "No per-image timing files found."
+  log "See $TIMING_LOG for full details."
+else
+  log "Mirror run complete."
+fi
 exit "$copy_rc"

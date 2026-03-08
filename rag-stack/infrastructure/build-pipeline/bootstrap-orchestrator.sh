@@ -10,6 +10,7 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 VERSION="latest"
 REGISTRY="registry.hierocracy.home:5000"
+ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
 
 source "$REPO_DIR/../scripts/journal-helper.sh"
 
@@ -22,12 +23,12 @@ cd - > /dev/null
 
 echo "--- 2. Uploading sources to S3 ---"
 # Create a temporary uploader pod
-$KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=amazon/aws-cli --overrides='
+$KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=registry.hierocracy.home:5000/amazon/aws-cli:2.34.4 --overrides='
 {
   "spec": {
     "containers": [{
       "name": "uploader",
-      "image": "amazon/aws-cli",
+      "image": "registry.hierocracy.home:5000/amazon/aws-cli:2.34.4",
       "command": ["sleep", "300"],
       "securityContext": {
         "allowPrivilegeEscalation": false,
@@ -70,7 +71,7 @@ spec:
     spec:
       initContainers:
       - name: fetch-context
-        image: busybox
+        image: registry.hierocracy.home:5000/busybox:1.37.0
         command: ["sh", "-c"]
         args: ["wget -O /workspace/context.tar.gz \"$PRESIGNED_URL\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz"]
         securityContext:
@@ -86,13 +87,17 @@ spec:
           mountPath: /workspace
       containers:
       - name: kaniko
-        image: martizih/kaniko:latest
+        image: registry.hierocracy.home:5000/martizih/kaniko:v1.27.0
         args:
         - "--dockerfile=Dockerfile"
         - "--context=dir:///workspace"
+        - "--destination=$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
         - "--destination=$REGISTRY/build-orchestrator:latest"
         - "--insecure"
+        - "--insecure-pull"
+        - "--insecure-registry=$REGISTRY"
         - "--skip-tls-verify"
+        - "--skip-tls-verify-registry=$REGISTRY"
         securityContext:
           allowPrivilegeEscalation: true
         volumeMounts:
@@ -115,7 +120,7 @@ until [[ "$($KUBECTL get job kaniko-bootstrap-orchestrator -n $NAMESPACE -o json
     sleep 10
 done
 
-echo "Bootstrap complete. Build Orchestrator image is in the registry."
+echo "Bootstrap complete. Build Orchestrator image is in the registry (tag=$ORCHESTRATOR_TAG)."
 # Cleanup the bootstrap job
 $KUBECTL delete job kaniko-bootstrap-orchestrator -n $NAMESPACE
 rm "$SAFE_TMP_DIR/$TARBALL"

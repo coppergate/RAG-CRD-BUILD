@@ -1,5 +1,5 @@
 # Go toolchain pinned for reproducibility and to satisfy upstream deps (genproto >= go1.25)
-FROM golang:1.25-alpine AS builder
+FROM registry.hierocracy.home:5000/golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -13,15 +13,12 @@ RUN CGO_ENABLED=0 go mod download
 
 # Copy the rest of the source
 COPY rag-worker/ .
-RUN CGO_ENABLED=0 go get google.golang.org/genproto/googleapis/api@latest google.golang.org/genproto/googleapis/rpc@latest
-# Ensure module metadata is synchronized (writes go.sum if needed)
-RUN CGO_ENABLED=0 go mod tidy
 
 # Build
-RUN CGO_ENABLED=0 go build -v -o rag-worker cmd/worker/main.go
+RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o rag-worker cmd/worker/main.go
 
 # Final image
-FROM alpine:latest
+FROM registry.hierocracy.home:5000/alpine:3.23.3
 
 WORKDIR /app
 COPY --from=builder /app/rag-worker .
