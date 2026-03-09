@@ -19,6 +19,7 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -53,8 +54,10 @@ type BuildStatusSnapshot struct {
 }
 
 type buildTaskEnvelope struct {
-	msg  pulsar.Message
-	task BuildTask
+	msg       pulsar.Message
+	task      BuildTask
+	requestID string
+	jobName   string
 }
 
 type statusHub struct {
@@ -177,7 +180,7 @@ func (p *statusPublisher) Publish(evt BuildStatusEvent) {
 	}
 }
 
-func (p *failedTaskPublisher) Publish(task BuildTask, msg pulsar.Message, reason string) {
+func (p *failedTaskPublisher) Publish(task BuildTask, msg pulsar.Message, reason string, requestID string, jobName string) {
 	if p == nil || p.producer == nil {
 		return
 	}
@@ -185,6 +188,8 @@ func (p *failedTaskPublisher) Publish(task BuildTask, msg pulsar.Message, reason
 		"task":             task,
 		"original_payload": string(msg.Payload()),
 		"reason":           reason,
+		"request_id":       requestID,
+		"job_name":         jobName,
 		"redelivery_count": msg.RedeliveryCount(),
 		"published_at":     time.Now().UTC().Format(time.RFC3339),
 	}
@@ -283,7 +288,7 @@ func main() {
 						return
 					}
 
-					jobName := buildJobName(env.task)
+					jobName := env.jobName
 					atomic.AddInt32(&activeBuilds, 1)
 					publisher.Publish(BuildStatusEvent{
 						ServiceName: env.task.ServiceName,
@@ -293,7 +298,7 @@ func main() {
 						Message:     fmt.Sprintf("Picked up by worker-%d", workerID),
 					})
 
-					err := processTask(ctx, clientset, env.task, publisher)
+					err := processTask(ctx, clientset, env.task, jobName, publisher)
 					if err != nil {
 						redelivery := int(env.msg.RedeliveryCount())
 						if redelivery >= maxTaskRetries {
@@ -304,7 +309,7 @@ func main() {
 								Status:      "failed_terminal",
 								Message:     fmt.Sprintf("%s (redelivery=%d max=%d)", err.Error(), redelivery, maxTaskRetries),
 							})
-							failedPublisher.Publish(env.task, env.msg, err.Error())
+							failedPublisher.Publish(env.task, env.msg, err.Error(), env.requestID, jobName)
 							consumer.Ack(env.msg)
 						} else {
 							publisher.Publish(BuildStatusEvent{
@@ -356,7 +361,8 @@ func main() {
 				continue
 			}
 
-			jobName := buildJobName(task)
+			requestID := requestIDFromMessage(msg)
+			jobName := buildJobName(task, requestID)
 			publisher.Publish(BuildStatusEvent{
 				ServiceName: task.ServiceName,
 				Version:     task.Version,
@@ -366,7 +372,7 @@ func main() {
 			})
 
 			select {
-			case taskQueue <- buildTaskEnvelope{msg: msg, task: task}:
+			case taskQueue <- buildTaskEnvelope{msg: msg, task: task, requestID: requestID, jobName: jobName}:
 			default:
 				publisher.Publish(BuildStatusEvent{
 					ServiceName: task.ServiceName,
@@ -375,7 +381,7 @@ func main() {
 					Status:      "queued",
 					Message:     "Waiting for available worker",
 				})
-				taskQueue <- buildTaskEnvelope{msg: msg, task: task}
+				taskQueue <- buildTaskEnvelope{msg: msg, task: task, requestID: requestID, jobName: jobName}
 			}
 		}
 	}()
@@ -389,9 +395,8 @@ func main() {
 	cancel()
 }
 
-func processTask(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask, publisher *statusPublisher) error {
+func processTask(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask, jobName string, publisher *statusPublisher) error {
 	namespace := "build-pipeline"
-	jobName := buildJobName(task)
 
 	publisher.Publish(BuildStatusEvent{
 		ServiceName: task.ServiceName,
@@ -401,15 +406,14 @@ func processTask(ctx context.Context, clientset *kubernetes.Clientset, task Buil
 		Message:     "Creating Kaniko job",
 	})
 
-	if err := launchKanikoJob(ctx, clientset, task); err != nil {
+	if err := launchKanikoJob(ctx, clientset, task, jobName); err != nil {
 		return fmt.Errorf("launch job: %w", err)
 	}
 
-	return waitForJobCompletion(ctx, clientset, namespace, task, publisher)
+	return waitForJobCompletion(ctx, clientset, namespace, task, jobName, publisher)
 }
 
-func waitForJobCompletion(ctx context.Context, clientset *kubernetes.Clientset, namespace string, task BuildTask, publisher *statusPublisher) error {
-	jobName := buildJobName(task)
+func waitForJobCompletion(ctx context.Context, clientset *kubernetes.Clientset, namespace string, task BuildTask, jobName string, publisher *statusPublisher) error {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -527,13 +531,8 @@ func runHTTPServer(ctx context.Context, addr string, hub *statusHub, activeBuild
 	}
 }
 
-func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask) error {
-	jobName := buildJobName(task)
+func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask, jobName string) error {
 	namespace := "build-pipeline"
-
-	_ = clientset.BatchV1().Jobs(namespace).Delete(ctx, jobName, metav1.DeleteOptions{
-		PropagationPolicy: ptr(metav1.DeletePropagationForeground),
-	})
 
 	contextURL := task.SourceURL
 	if contextURL == "" {
@@ -621,15 +620,72 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 	}
 
 	_, err := clientset.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		// Retries for the same request should observe the same job object.
+		return nil
+	}
 	return err
 }
 
-func buildJobName(task BuildTask) string {
-	return fmt.Sprintf("kaniko-build-%s-%s", task.ServiceName, task.Version)
+func buildJobName(task BuildTask, requestID string) string {
+	base := fmt.Sprintf("kaniko-build-%s-%s", sanitizeNamePart(task.ServiceName), sanitizeNamePart(task.Version))
+	suffix := sanitizeNamePart(requestID)
+	if suffix == "" {
+		suffix = "req"
+	}
+	maxBase := 63 - 1 - len(suffix)
+	if maxBase < 1 {
+		maxBase = 1
+	}
+	if len(base) > maxBase {
+		base = strings.Trim(base[:maxBase], "-")
+		if base == "" {
+			base = "kaniko"
+		}
+	}
+	return base + "-" + suffix
 }
 
 func statusKey(service, version string) string {
 	return strings.TrimSpace(service) + ":" + strings.TrimSpace(version)
+}
+
+func requestIDFromMessage(msg pulsar.Message) string {
+	raw := fmt.Sprintf("%v", msg.ID())
+	if strings.TrimSpace(raw) == "" {
+		raw = strconv.FormatInt(time.Now().UTC().UnixNano(), 36)
+	}
+	id := sanitizeNamePart(raw)
+	if len(id) > 12 {
+		id = id[len(id)-12:]
+	}
+	if id == "" {
+		id = "req"
+	}
+	return id
+}
+
+func sanitizeNamePart(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range s {
+		alnum := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if alnum {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "x"
+	}
+	return out
 }
 
 func getenvDefault(key, fallback string) string {

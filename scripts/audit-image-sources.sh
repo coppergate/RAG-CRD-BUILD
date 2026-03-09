@@ -5,7 +5,8 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLAN_FILE="$ROOT_DIR/scripts/install-image-plan.sh"
-LOCAL_REGISTRY_PREFIX="registry.hierocracy.home:5000/"
+LOCAL_REGISTRY_PREFIX_BOOTSTRAP="registry.hierocracy.home:5000/"
+LOCAL_REGISTRY_PREFIX_CLUSTER="registry.container-registry.svc.cluster.local:5000/"
 
 TMP_CONSUMED_RAW="$(mktemp)"
 TMP_CONSUMED_UPSTREAM="$(mktemp)"
@@ -19,11 +20,20 @@ normalize_to_upstream() {
   local ref="$1"
   ref="${ref%\"}"
   ref="${ref#\"}"
-  if [[ "$ref" == "$LOCAL_REGISTRY_PREFIX"* ]]; then
-    echo "${ref#$LOCAL_REGISTRY_PREFIX}"
-  else
-    echo "$ref"
+  if [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_BOOTSTRAP"* ]]; then
+    echo "${ref#$LOCAL_REGISTRY_PREFIX_BOOTSTRAP}"
+    return
   fi
+  if [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_CLUSTER"* ]]; then
+    echo "${ref#$LOCAL_REGISTRY_PREFIX_CLUSTER}"
+    return
+  fi
+  echo "$ref"
+}
+
+is_local_ref() {
+  local ref="$1"
+  [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_BOOTSTRAP"* ]] || [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_CLUSTER"* ]]
 }
 
 is_active_path() {
@@ -71,7 +81,11 @@ done | sort -u > "$TMP_CONSUMED_UPSTREAM"
 
 # read plan refs
 if [[ -f "$PLAN_FILE" ]]; then
-  sed -nE 's/^IMAGE_GROUPS\[[^]]+\]="(.*)"/\1/p' "$PLAN_FILE" | tr ' ' '\n' | sed '/^$/d' | sort -u > "$TMP_PLAN"
+  sed -nE 's/^IMAGE_GROUPS\[[^]]+\]="(.*)"/\1/p' "$PLAN_FILE" \
+    | tr ' ' '\n' \
+    | sed '/^$/d' \
+    | while read -r img; do normalize_to_upstream "$img"; done \
+    | sort -u > "$TMP_PLAN"
 fi
 
 consumed_count="$(wc -l < "$TMP_CONSUMED_UPSTREAM" | tr -d ' ')"
@@ -81,7 +95,7 @@ local_consumed_count=0
 nonlocal_consumed_count=0
 while read -r img; do
   [[ -z "$img" ]] && continue
-  if [[ "$img" == "$LOCAL_REGISTRY_PREFIX"* ]]; then
+  if is_local_ref "$img"; then
     ((local_consumed_count+=1))
   fi
 done < <(sort -u "$TMP_CONSUMED_RAW")
@@ -91,7 +105,7 @@ DIRECT_NONLOCAL="$(mktemp)"
 trap 'rm -f "$TMP_CONSUMED_RAW" "$TMP_CONSUMED_UPSTREAM" "$TMP_PLAN" "$DIRECT_NONLOCAL"' EXIT
 sort -u "$TMP_CONSUMED_RAW" | while read -r img; do
   [[ -z "$img" ]] && continue
-  if [[ "$img" != "$LOCAL_REGISTRY_PREFIX"* ]]; then
+  if ! is_local_ref "$img"; then
     echo "$img"
   fi
 done | sort -u > "$DIRECT_NONLOCAL"
@@ -110,4 +124,7 @@ fi
 
 echo
 echo "Consumed refs missing from install-image-plan.sh:"
-comm -23 "$TMP_CONSUMED_UPSTREAM" "$TMP_PLAN" | grep -Ev '^(build-orchestrator:latest|llm-gateway:__VERSION__|rag-worker:__VERSION__|rag-web-ui:__VERSION__|rag-ingestion:__VERSION__|db-adapter:__VERSION__|qdrant-adapter:__VERSION__|object-store-mgr:__VERSION__|rag-test-runner:__VERSION__)$' || true
+comm -23 "$TMP_CONSUMED_UPSTREAM" "$TMP_PLAN" \
+  | while read -r img; do normalize_to_upstream "$img"; done \
+  | sort -u \
+  | grep -Ev '^(build-orchestrator:latest|llm-gateway:__VERSION__|rag-worker:__VERSION__|rag-web-ui:__VERSION__|rag-ingestion:__VERSION__|db-adapter:__VERSION__|qdrant-adapter:__VERSION__|object-store-mgr:__VERSION__|rag-test-runner:__VERSION__)$' || true

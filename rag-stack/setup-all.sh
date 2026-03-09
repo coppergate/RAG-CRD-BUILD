@@ -43,11 +43,7 @@ fi
 if ! is_step_done "db-schema"; then
 echo "--- 2.1 Applying Unified Application Schema (TimescaleDB) ---"
 
-echo "here"
-
 DB_NAMESPACE="timescaledb"
-echo "$DB_NAMESPACE"
-
 DB_POD=""
 echo "Waiting for TimescaleDB primary pod..."
 for _ in $(seq 1 60); do
@@ -61,15 +57,44 @@ done
 echo "-- got pod ${DB_POD:-<none>}"
 
 if [ -n "$DB_POD" ]; then
+  echo "Waiting for PostgreSQL readiness in pod $DB_POD..."
+  READY=0
+  for _ in $(seq 1 60); do
+    if $KUBECTL exec -n "$DB_NAMESPACE" "$DB_POD" -- sh -lc 'pg_isready -U postgres -d postgres >/dev/null 2>&1' >/dev/null 2>&1; then
+      READY=1
+      break
+    fi
+    sleep 5
+  done
+
+  if [[ "$READY" -ne 1 ]]; then
+    echo "ERROR: PostgreSQL in $DB_POD did not become ready in time."
+    $KUBECTL -n "$DB_NAMESPACE" logs "$DB_POD" --tail=200 || true
+    exit 1
+  fi
+
+  run_psql_with_retry() {
+    local cmd="$1"
+    local attempts=0
+    until $KUBECTL exec -i -n "$DB_NAMESPACE" "$DB_POD" -- sh -lc "$cmd"; do
+      attempts=$((attempts + 1))
+      if [[ "$attempts" -ge 12 ]]; then
+        return 1
+      fi
+      sleep 5
+    done
+  }
+
   echo "Ensuring role 'app' exists and has create on schema public"
-  $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- \
-    sh -lc "psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_roles WHERE rolname='app'\" | grep -q 1 || psql -U postgres -d postgres -c \"CREATE ROLE app LOGIN PASSWORD 'app'\""
-  $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- \
-    psql -U postgres -d app -c "GRANT CONNECT ON DATABASE app TO app; GRANT USAGE, CREATE ON SCHEMA public TO app;"
+  run_psql_with_retry "psql -U postgres -d postgres -tc \"SELECT 1 FROM pg_roles WHERE rolname='app'\" | grep -q 1 || psql -U postgres -d postgres -c \"CREATE ROLE app LOGIN PASSWORD 'app'\""
+  run_psql_with_retry "psql -U postgres -d app -c \"GRANT CONNECT ON DATABASE app TO app; GRANT USAGE, CREATE ON SCHEMA public TO app;\""
 
   echo "Applying schema as role 'app' so objects are owned by app"
-  (echo "SET ROLE app;"; cat "$REPO_DIR/infrastructure/timescaledb/schema.sql") | \
-    $KUBECTL exec -i -n $DB_NAMESPACE "$DB_POD" -- psql -U postgres -d app
+  if ! (echo "SET ROLE app;"; cat "$REPO_DIR/infrastructure/timescaledb/schema.sql") | \
+    $KUBECTL exec -i -n "$DB_NAMESPACE" "$DB_POD" -- psql -U postgres -d app; then
+    echo "ERROR: failed applying schema to TimescaleDB."
+    exit 1
+  fi
   mark_step_done "db-schema"
 else
   echo "ERROR: Could not find TimescaleDB primary pod to apply schema."
@@ -161,6 +186,12 @@ if ! is_step_done "qdrant-adapter"; then
 echo "--- 11. Deploying Qdrant Adapter (Go) ---"
 apply_manifest "$REPO_DIR/services/qdrant-adapter/k8s/deployment.yaml"
 mark_step_done "qdrant-adapter"
+fi
+
+if ! is_step_done "rag-ingestion-service"; then
+echo "--- 11.5. Deploying RAG Ingestion Service (Python) ---"
+apply_manifest "$REPO_DIR/services/rag-ingestion/k8s/deployment.yaml"
+mark_step_done "rag-ingestion-service"
 fi
 
 if ! is_step_done "ingestion-job"; then

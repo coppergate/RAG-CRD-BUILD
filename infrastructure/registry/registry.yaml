@@ -23,6 +23,8 @@ metadata:
   namespace: container-registry
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: registry
@@ -35,7 +37,7 @@ spec:
         role: storage-node
       containers:
       - name: registry
-        image: registry.hierocracy.home:5000/registry:2
+        image: registry:2
         ports:
         - containerPort: 5000
         volumeMounts:

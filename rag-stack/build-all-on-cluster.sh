@@ -18,6 +18,7 @@ export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
 source "$BASE_DIR/../scripts/journal-helper.sh"
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
+TOOLING_REGISTRY="${TOOLING_REGISTRY:-registry.hierocracy.home:5000}"
 BUILD_WAIT_TIMEOUT_SECONDS="${BUILD_WAIT_TIMEOUT_SECONDS:-2700}" # 45 minutes
 BUILD_WAIT_POLL_SECONDS="${BUILD_WAIT_POLL_SECONDS:-15}"
 
@@ -81,12 +82,12 @@ cd "$BASE_DIR/services"
 tar -czf "$SAFE_TMP_DIR/$TARBALL" .
 cd - > /dev/null
 
-$KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image=registry.hierocracy.home:5000/amazon/aws-cli:2.34.4 --overrides='
+$KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image="$TOOLING_REGISTRY/amazon/aws-cli:2.34.4" --overrides='
 {
   "spec": {
     "containers": [{
       "name": "uploader",
-      "image": "registry.hierocracy.home:5000/amazon/aws-cli:2.34.4",
+      "image": "'"$TOOLING_REGISTRY"'/amazon/aws-cli:2.34.4",
       "command": ["sleep", "300"],
       "securityContext": {
         "allowPrivilegeEscalation": false,
@@ -107,7 +108,12 @@ $KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image=registry.hierocracy.home:50
   }
 }' --restart=Never
 
-$KUBECTL wait --for=condition=Ready "pod/$UPLOADER_POD" -n "$NAMESPACE" --timeout=60s
+if ! $KUBECTL wait --for=condition=Ready "pod/$UPLOADER_POD" -n "$NAMESPACE" --timeout=60s; then
+    echo "ERROR: uploader pod did not become Ready"
+    $KUBECTL -n "$NAMESPACE" describe "pod/$UPLOADER_POD" || true
+    $KUBECTL -n "$NAMESPACE" logs "pod/$UPLOADER_POD" --all-containers --tail=200 || true
+    exit 1
+fi
 
 PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n "$NAMESPACE" "$UPLOADER_POD" -- \
   sh -c "aws --endpoint-url http://\$S3_ENDPOINT s3 cp - s3://\$BUCKET_NAME/$TARBALL > /dev/null && aws --endpoint-url http://\$S3_ENDPOINT s3 presign s3://\$BUCKET_NAME/$TARBALL --expires-in 3600")
@@ -117,7 +123,9 @@ $KUBECTL delete pod "$UPLOADER_POD" -n "$NAMESPACE" --now >/dev/null 2>&1 || tru
 echo "--- Dispatching build tasks (parallelism=$TRIGGER_PARALLELISM) ---"
 for service in "${services[@]}"; do
     echo "Triggering build for $service..."
-    SOURCE_TARBALL="$TARBALL" SOURCE_URL="$PRESIGNED_URL" bash "$TRIGGER_SCRIPT" "$service" "$VERSION" &
+    REGISTRY="$REGISTRY" TOOLING_REGISTRY="$TOOLING_REGISTRY" \
+      SOURCE_TARBALL="$TARBALL" SOURCE_URL="$PRESIGNED_URL" \
+      bash "$TRIGGER_SCRIPT" "$service" "$VERSION" &
     trigger_pids+=("$!")
     job_names+=("kaniko-build-${service}-${VERSION}")
 

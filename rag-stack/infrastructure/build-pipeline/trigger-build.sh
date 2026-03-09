@@ -9,6 +9,8 @@ VERSION="${2:-1.5.7}"
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
+REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
+TOOLING_REGISTRY="${TOOLING_REGISTRY:-registry.hierocracy.home:5000}"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 
 source "$REPO_DIR/../scripts/journal-helper.sh"
@@ -45,12 +47,12 @@ if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
     echo "--- 2. Uploading sources to S3 ---"
     # Create a temporary uploader pod that has the S3 bucket access
     # Using a more restricted security context to avoid PodSecurity violations
-    $KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image=registry.hierocracy.home:5000/amazon/aws-cli:2.34.4 --overrides='
+    $KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image="${TOOLING_REGISTRY}/amazon/aws-cli:2.34.4" --overrides='
 {
   "spec": {
     "containers": [{
       "name": "uploader",
-        "image": "registry.hierocracy.home:5000/amazon/aws-cli:2.34.4",
+        "image": "'"$TOOLING_REGISTRY"'/amazon/aws-cli:2.34.4",
       "command": ["sleep", "300"],
       "securityContext": {
         "allowPrivilegeEscalation": false,
@@ -72,7 +74,12 @@ if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
 }' --restart=Never
 
     # Wait for uploader to be ready
-    $KUBECTL wait --for=condition=Ready "pod/$UPLOADER_POD" -n "$NAMESPACE" --timeout=60s
+    if ! $KUBECTL wait --for=condition=Ready "pod/$UPLOADER_POD" -n "$NAMESPACE" --timeout=60s; then
+        echo "ERROR: uploader pod did not become Ready"
+        $KUBECTL -n "$NAMESPACE" describe "pod/$UPLOADER_POD" || true
+        $KUBECTL -n "$NAMESPACE" logs "pod/$UPLOADER_POD" --all-containers --tail=200 || true
+        exit 1
+    fi
 
     # Stream tarball directly to S3 via stdin to avoid 'tar' dependency in the container
     # Capture pre-signed URL to avoid AWS SDK credential issues in Kaniko
@@ -104,7 +111,7 @@ TASK_JSON=$(printf '{"service_name":"%s","version":"%s","dockerfile_path":"%s","
     "$(json_escape "$SERVICE/Dockerfile")" \
     "$(json_escape "$TARBALL")" \
     "$(json_escape "$PRESIGNED_URL")" \
-    "registry.hierocracy.home:5000")
+    "$(json_escape "$REGISTRY")")
 
 # Use pulsar-admin from an existing pulsar pod to send the message
 PULSAR_NAMESPACE="apache-pulsar"

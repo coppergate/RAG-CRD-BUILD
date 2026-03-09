@@ -62,4 +62,8 @@
 - **TEMPORAL IMPORTANCE**: DO NOT ASSUME that all scripts or other resources described are current. ALWAYS ask before including a new script to make sure it is relevant to the current asks.
 - **SERVICE EXPOSURE**: All exposed services must use the `*.hierocracy.home` suffix (e.g., `grafana.rag.hierocracy.home`) for consistent internal routing.
 - **Corrections**: If the user indicates that some aspect of the reasoning or implementation needs to be done in a different way, add the requirement to this document.
+## Output Formatting
+- **Copyable Output Requirement**: Any commands, scripts, config blocks, or text the user is expected to copy/paste MUST be output as fenced code blocks.
+- **No Horizontal Scrolling**: Prefer multi-line command formatting with line continuations so code blocks stay readable and easy to copy without horizontal scroll.
+- **No Mixed Formatting for Copy Targets**: Do not place copy/paste content in prose paragraphs or bullet text; use code blocks only.
 ## pay attention

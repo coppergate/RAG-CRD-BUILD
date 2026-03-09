@@ -146,6 +146,17 @@ STEP_TS_END=$(date +%s)
 log_step_timing "basic" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+if ! is_step_done "kubernetes-dashboard"; then
+STEP_TS_START=$(date +%s)
+echo ""
+echo "Step 1.1: Kubernetes Dashboard Setup"
+echo "----------------------------------------------------"
+bash $BASE_DIR/infrastructure/kubernetes-dashboard/dashboard.sh
+mark_step_done "kubernetes-dashboard"
+STEP_TS_END=$(date +%s)
+log_step_timing "kubernetes-dashboard" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
 if ! is_step_done "registry" || ! $KUBECTL get namespace registry >/dev/null 2>&1; then
 STEP_TS_START=$(date +%s)
 echo ""
@@ -190,17 +201,6 @@ bash $BASE_DIR/infrastructure/nvidia-operator.sh
 mark_step_done "nvidia"
 STEP_TS_END=$(date +%s)
 log_step_timing "nvidia" "$STEP_TS_START" "$STEP_TS_END" "ok"
-fi
-
-if ! is_step_done "kubernetes-dashboard"; then
-STEP_TS_START=$(date +%s)
-echo ""
-echo "Step 1.5.5: Kubernetes Dashboard Setup"
-echo "----------------------------------------------------"
-bash $BASE_DIR/infrastructure/kubernetes-dashboard/dashboard.sh
-mark_step_done "kubernetes-dashboard"
-STEP_TS_END=$(date +%s)
-log_step_timing "kubernetes-dashboard" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if ! is_step_done "pulsar"; then

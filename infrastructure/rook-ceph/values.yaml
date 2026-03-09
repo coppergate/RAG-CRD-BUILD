@@ -480,7 +480,7 @@ csi:
   resizer:
     # -- Kubernetes CSI resizer image
     # @default -- `registry.k8s.io/sig-storage/csi-resizer:v1.7.0`
-    image: registry.hierocracy.home:5000/registry.k8s.io/sig-storage/csi-resizer:v1.13.0
+    image: registry.hierocracy.home:5000/registry.k8s.io/sig-storage/csi-resizer:v1.13.2
 
   # -- Image pull policy
   imagePullPolicy: IfNotPresent
