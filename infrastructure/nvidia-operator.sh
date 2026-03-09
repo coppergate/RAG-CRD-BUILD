@@ -89,7 +89,7 @@ spec:
       - operator: Exists
       containers:
       - name: validation-fix
-        image: busybox:1.36
+        image: registry.hierocracy.home:5000/busybox:1.36
         command:
         - sh
         - -c

@@ -35,7 +35,7 @@ spec:
         role: storage-node
       containers:
       - name: registry
-        image: registry:2
+        image: registry.hierocracy.home:5000/registry:2
         ports:
         - containerPort: 5000
         volumeMounts:

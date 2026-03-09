@@ -68,7 +68,7 @@ spec:
         role: storage-node
       containers:
       - name: otel-collector
-        image: otel/opentelemetry-collector-contrib:0.147.0
+        image: registry.hierocracy.home:5000/otel/opentelemetry-collector-contrib:0.147.0
         args:
         - "--config=/etc/otel-collector-config.yaml"
         volumeMounts:

@@ -28,7 +28,7 @@ fi
 
 if ! is_step_done "cnpg-operator-apply"; then
   echo "--- 1. Installing CloudNativePG Operator (v1.25.0) ---"
-  $KUBECTL apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/main/releases/cnpg-1.25.0.yaml \
+  $KUBECTL apply -f "$TIMESCALEDB_INSTALL/cnpg-1.25.0.yaml" \
     --server-side --force-conflicts
   mark_step_done "cnpg-operator-apply"
 fi

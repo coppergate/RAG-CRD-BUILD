@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM registry.hierocracy.home:5000/python:3.9-slim
 
 # Install system dependencies for pulsar-client and psycopg2
 RUN apt-get update && apt-get install -y \

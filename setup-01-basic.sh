@@ -53,11 +53,11 @@ fi
 if ! is_step_done "olm"; then
 echo "installing crds"
 $KUBECTL create -f \
-https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/deploy/upstream/quickstart/crds.yaml
+$config_source_dir/infrastructure/vendor/olm-crds.yaml
 
 echo "installing olm"
 $KUBECTL create -f \
-https://raw.githubusercontent.com/operator-framework/operator-lifecycle-manager/master/deploy/upstream/quickstart/olm.yaml
+$config_source_dir/infrastructure/vendor/olm.yaml
 
 # WaitForDeploymentToComplete namespace grepString sleepTime
 WaitForDeploymentToComplete olm olm-operator 15
@@ -156,7 +156,7 @@ echo "create cert-manager namespace"
 $KUBECTL create namespace cert-manager
 $KUBECTL label --overwrite namespace cert-manager  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
  
-$KUBECTL apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.yaml
+$KUBECTL apply -f "$config_source_dir/infrastructure/vendor/cert-manager-v1.19.2.yaml"
 
 $KUBECTL apply -f - <<EOF
 ---
@@ -270,7 +270,7 @@ sleep 1m;
 
 if ! is_step_done "metrics-server"; then
 echo "installing the metrics API"
-$KUBECTL apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+$KUBECTL apply -f "$config_source_dir/infrastructure/vendor/metrics-server-components.yaml"
 
 echo "waiting for 1 minute"
 sleep 1m;
@@ -381,4 +381,3 @@ mark_step_done "traefik"
 fi
 
 clear_journal
-

@@ -45,7 +45,7 @@ $HELM upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-das
   --set app.ingress.ingressClassName=traefik \
   --set app.ingress.annotations."traefik.ingress.kubernetes.io/router.entrypoints"=web || {
     echo "Helm installation failed, applying YAML manifests instead..."
-    $KUBECTL apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+    $KUBECTL apply -f "$SCRIPT_DIR/../vendor/kubernetes-dashboard-v2.7.0.yaml"
   }
 
 # 3. Create Service Account and ClusterRoleBinding for Admin access

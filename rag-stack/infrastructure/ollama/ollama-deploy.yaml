@@ -16,7 +16,7 @@ spec:
         role: inference-node
       containers:
         - name: ollama
-          image: ollama/ollama:latest
+          image: registry.hierocracy.home:5000/ollama/ollama:0.15.6
           ports:
             - containerPort: 11434
           env:
@@ -45,4 +45,4 @@ spec:
       volumes:
         - name: ollama-data
           persistentVolumeClaim:
-            claimName: ollama-pvcCopied!   
+            claimName: ollama-pvc   
