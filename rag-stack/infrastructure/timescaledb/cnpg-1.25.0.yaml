@@ -17555,7 +17555,7 @@ spec:
         - /manager
         env:
         - name: OPERATOR_IMAGE_NAME
-          value: ghcr.io/cloudnative-pg/cloudnative-pg:1.25.0
+          value: registry.hierocracy.home:5000/ghcr.io/cloudnative-pg/cloudnative-pg:1.25.0
         - name: OPERATOR_NAMESPACE
           valueFrom:
             fieldRef:

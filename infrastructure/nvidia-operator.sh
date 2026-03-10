@@ -89,20 +89,24 @@ spec:
       - operator: Exists
       containers:
       - name: validation-fix
-        image: registry.hierocracy.home:5000/busybox:1.36
+        image: 172.20.0.1:5000/busybox:1.36
         command:
         - sh
         - -c
         - |
           while true; do
             mkdir -p /run/nvidia/validations /run/nvidia/driver/usr
-            ln -sfn /host/usr/local/bin /run/nvidia/driver/usr/bin
-            ln -sfn /host/usr/local/glibc/usr/lib /run/nvidia/driver/usr/lib64
+            # On Talos, /usr/local is accessible from the host.
+            # This pod needs to create symlinks in /run/nvidia so the validator thinks the driver is ready.
+            ln -sfn /usr/local/bin /run/nvidia/driver/usr/bin
+            ln -sfn /usr/local/glibc/usr/lib /run/nvidia/driver/usr/lib64
             touch /run/nvidia/validations/driver-ready
             touch /run/nvidia/validations/toolkit-ready
             touch /run/nvidia/validations/cuda-ready
             sleep 30
           done
+        securityContext:
+          privileged: true
         volumeMounts:
         - name: run-nvidia
           mountPath: /run/nvidia
@@ -139,9 +143,13 @@ toolkit:
   enabled: false
 operator:
   defaultRuntime: nvidia
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
 devicePlugin:
   enabled: true
   runtimeClassName: nvidia
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
   config:
     name: nvidia-device-plugin-config
   env:
@@ -149,6 +157,14 @@ devicePlugin:
       value: "false"
     - name: DEVICE_LIST_STRATEGY
       value: "envvar"
+gfd:
+  enabled: true
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+dcgmExporter:
+  enabled: true
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
 EOF
 
   helm upgrade --install "$RELEASE_NAME" nvidia/gpu-operator \

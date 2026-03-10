@@ -9,7 +9,7 @@ To perform a complete, from-scratch installation of the basic infrastructure, bu
 ```bash
 ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 "cd /mnt/hegemon-share/share/code/complete-build && \
-FRESH_INSTALL=true VERSION=1.5.7 ./setup-complete.sh"
+FRESH_INSTALL=true VERSION=1.5.8 ./setup-complete.sh"
 ```
 
 ---
@@ -34,7 +34,7 @@ The installation process is **resumable**. If a step fails, you can investigate 
 ```bash
 ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 "cd /mnt/hegemon-share/share/code/complete-build && \
-VERSION=1.5.7 ./setup-complete.sh"
+VERSION=1.5.8 ./setup-complete.sh"
 ```
 
 ---
@@ -47,7 +47,7 @@ The master script orchestrates the following major steps:
 3. **NVIDIA stack**: Configures GPU support for inference nodes.
 4. **Local Registry**: Sets up the internal container registry.
 5. **Build Pipeline**: Configures the Kaniko + S3 cluster-native build system.
-6. **RAG Images**: Builds all Go and Python services (v1.5.7) and pushes them to the registry.
+6. **RAG Images**: Builds all Go and Python services (v1.5.8) and pushes them to the registry.
 7. **RAG Stack**: Deploys all services (LLM Gateway, Worker, Adapters, etc.) to the `rag-system` namespace.
 
 ---

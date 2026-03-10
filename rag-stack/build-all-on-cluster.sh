@@ -4,7 +4,7 @@
 
 set -Eeuo pipefail
 
-VERSION="${VERSION:-1.5.7}"
+VERSION="${VERSION:-1.5.8}"
 WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
 TRIGGER_PARALLELISM="${TRIGGER_PARALLELISM:-4}"
 if [[ "${1:-}" == "--wait" ]]; then
@@ -18,7 +18,8 @@ export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
 source "$BASE_DIR/../scripts/journal-helper.sh"
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-TOOLING_REGISTRY="${TOOLING_REGISTRY:-registry.hierocracy.home:5000}"
+INTERNAL_REGISTRY="${INTERNAL_REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
+TOOLING_REGISTRY="${TOOLING_REGISTRY:-$INTERNAL_REGISTRY}"
 BUILD_WAIT_TIMEOUT_SECONDS="${BUILD_WAIT_TIMEOUT_SECONDS:-2700}" # 45 minutes
 BUILD_WAIT_POLL_SECONDS="${BUILD_WAIT_POLL_SECONDS:-15}"
 

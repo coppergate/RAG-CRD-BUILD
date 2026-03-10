@@ -1,70 +1,60 @@
-storage:
-  trace:
-    backend: s3
-    s3:
-      bucket: ${BUCKET_NAME}
-      endpoint: ${S3_ENDPOINT}
-      access_key: ${AWS_ACCESS_KEY_ID}
-      secret_key: ${AWS_SECRET_ACCESS_KEY}
-      insecure: true
+# values.yaml.template - For unified grafana/tempo chart (Single Binary mode)
+# Compatible with grafana/tempo chart >= 1.2.0
 
-# Replicas set to 1 for small/demo environment
-ingester:
-  replicas: 1
-  persistence:
-    enabled: true
-    storageClass: rook-ceph-block
-    size: 10Gi
-  nodeSelector:
-    role: storage-node
+tempo:
+  structuredConfig:
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: ${BUCKET_NAME}
+          endpoint: ${S3_ENDPOINT}
+          access_key: ${AWS_ACCESS_KEY_ID}
+          secret_key: ${AWS_SECRET_ACCESS_KEY}
+          insecure: true
+    
+    # Retention and other settings
+    overrides:
+      defaults:
+        retention: 24h
 
-querier:
-  replicas: 1
-  nodeSelector:
-    role: storage-node
+    # Enable OTLP receivers
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
 
-queryFrontend:
-  replicas: 1
-  nodeSelector:
-    role: storage-node
+# Scaling for small environment
+replicas: 1
 
-distributor:
-  replicas: 1
-  config:
-    log_received_spans:
-      enabled: true
-  nodeSelector:
-    role: storage-node
-
-compactor:
-  replicas: 1
-  persistence:
-    enabled: true
-    storageClass: rook-ceph-block
-    size: 10Gi
-  nodeSelector:
-    role: storage-node
-
-# Enable OTLP receivers in the distributor
-traces:
-  otlp:
-    grpc:
-      enabled: true
-    http:
-      enabled: true
-
-# Optional: gateway can provide a single entry point
-gateway:
+persistence:
   enabled: true
-  nodeSelector:
-    role: storage-node
+  storageClass: rook-ceph-block
+  size: 10Gi
 
-memcached:
-  enabled: true
-  nodeSelector:
-    role: storage-node
+nodeSelector:
+  role: storage-node
 
+# Enable Tempo Query (Jaeger UI compatible search)
 tempoQuery:
   enabled: true
   nodeSelector:
     role: storage-node
+
+# Expose OTLP ports on the service
+service:
+  type: ClusterIP
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+    - name: jaeger-thrift-http
+      port: 14268
+      targetPort: 14268

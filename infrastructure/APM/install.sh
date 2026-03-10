@@ -135,7 +135,7 @@ function deploy_lgtm_component() {
 }
 
 deploy_lgtm_component "loki" "grafana/loki" "https://grafana.github.io/helm-charts" "loki-s3-bucket"
-deploy_lgtm_component "tempo" "grafana/tempo-distributed" "https://grafana.github.io/helm-charts" "tempo-s3-bucket"
+deploy_lgtm_component "tempo" "grafana/tempo" "https://grafana.github.io/helm-charts" "tempo-s3-bucket"
 deploy_lgtm_component "mimir" "grafana/mimir-distributed" "https://grafana.github.io/helm-charts" "mimir-s3-bucket"
 
 if ! is_step_done "deploy-otel-collector"; then

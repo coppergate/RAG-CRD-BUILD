@@ -8,7 +8,7 @@ K="${K:-/home/k8s/kube/kubectl}"
 
 BOOTSTRAP_REGISTRY="${BOOTSTRAP_REGISTRY:-registry.hierocracy.home:5000}"
 CLUSTER_REGISTRY="${CLUSTER_REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
-VERSION="${VERSION:-1.5.7}"
+VERSION="${VERSION:-1.5.8}"
 PARALLELISM="${PARALLELISM:-4}"
 
 echo "=== 1) Mirror missing OLM digest to bootstrap registry ==="

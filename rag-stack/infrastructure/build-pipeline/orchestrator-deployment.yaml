@@ -35,6 +35,10 @@ spec:
             drop:
             - ALL
         env:
+        - name: INTERNAL_REGISTRY_ADDR
+          value: "registry.container-registry.svc.cluster.local:5000"
+        - name: EXTERNAL_REGISTRY_NAME
+          value: "registry.hierocracy.home:5000"
         - name: PULSAR_URL
           value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
         - name: BUILD_TOPIC

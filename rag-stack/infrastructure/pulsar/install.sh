@@ -13,9 +13,9 @@ export PULSAR_INSTALL="$REPO_DIR/infrastructure/pulsar"
 PULSAR_REMOVE="${PULSAR_REMOVE:-${FRESH_INSTALL:-false}}"
 
 # Journaling (resumable install)
-JOURNAL_DIR="${INSTALL_JOURNAL_DIR:-$HOME/.complete-build/journal/pulsar}"
+JOURNAL_DIR="${INSTALL_JOURNAL_DIR:-/var/lib/complete-build/journal/pulsar}"
 mkdir -p "$JOURNAL_DIR"
-chmod 700 "$JOURNAL_DIR" 2>/dev/null || true
+chmod 777 "$JOURNAL_DIR" 2>/dev/null || true
 STEP_PREFIX="pulsar"
 
 log()  { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
@@ -23,7 +23,9 @@ warn() { log "WARN: $*"; }
 fail() { log "ERROR: $*"; exit 1; }
 
 mark_done() {
-  local step="$1"; touch "$JOURNAL_DIR/${STEP_PREFIX}.$step.done";
+  local step="$1"
+  touch "$JOURNAL_DIR/${STEP_PREFIX}.$step.done"
+  chmod 666 "$JOURNAL_DIR/${STEP_PREFIX}.$step.done" 2>/dev/null || true
 }
 is_done() {
   local step="$1"; [[ -f "$JOURNAL_DIR/${STEP_PREFIX}.$step.done" ]];

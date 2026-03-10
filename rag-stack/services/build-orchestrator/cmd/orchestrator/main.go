@@ -535,6 +535,18 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 	namespace := "build-pipeline"
 
 	contextURL := task.SourceURL
+	internalRegistryAddr := getenvDefault("INTERNAL_REGISTRY_ADDR", "")
+	externalRegistryName := getenvDefault("EXTERNAL_REGISTRY_NAME", "registry.hierocracy.home:5000")
+
+	pushRegistry := task.Registry
+	if pushRegistry == "" {
+		pushRegistry = externalRegistryName
+	}
+	if internalRegistryAddr != "" && pushRegistry == externalRegistryName {
+		pushRegistry = internalRegistryAddr
+	}
+
+	toolingRegistry := pushRegistry
 	if contextURL == "" {
 		contextURL = "s3://$(BUCKET_NAME)/" + task.SourceTarball
 	}
@@ -550,7 +562,7 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 					InitContainers: []corev1.Container{
 						{
 							Name:    "fetch-context",
-							Image:   "registry.hierocracy.home:5000/busybox:1.37.0",
+							Image:   toolingRegistry + "/busybox:1.37.0",
 							Command: []string{"sh", "-c"},
 							Args: []string{
 								fmt.Sprintf("wget -O /workspace/context.tar.gz \"%s\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz", contextURL),
@@ -574,19 +586,19 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 					Containers: []corev1.Container{
 						{
 							Name:  "kaniko",
-							Image: "registry.hierocracy.home:5000/gcr.io/kaniko-project/executor:v1.24.0",
+							Image: toolingRegistry + "/gcr.io/kaniko-project/executor:v1.24.0",
 							Args: []string{
 								"--dockerfile=" + task.DockerfilePath,
 								"--context=dir:///workspace",
-								"--destination=" + task.Registry + "/" + task.ServiceName + ":" + task.Version,
-								"--destination=" + task.Registry + "/" + task.ServiceName + ":latest",
+								"--destination=" + pushRegistry + "/" + task.ServiceName + ":" + task.Version,
+								"--destination=" + pushRegistry + "/" + task.ServiceName + ":latest",
 								"--cache=true",
-								"--cache-repo=" + task.Registry + "/kaniko-cache",
+								"--cache-repo=" + pushRegistry + "/kaniko-cache",
 								"--insecure",
 								"--insecure-pull",
-								"--insecure-registry=" + task.Registry,
+								"--insecure-registry=" + pushRegistry,
 								"--skip-tls-verify",
-								"--skip-tls-verify-registry=" + task.Registry,
+								"--skip-tls-verify-registry=" + pushRegistry,
 							},
 							SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr(true)},
 							VolumeMounts: []corev1.VolumeMount{

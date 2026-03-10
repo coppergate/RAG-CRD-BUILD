@@ -23,7 +23,7 @@ set -Eeuo pipefail
 #
 BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
-VERSION="${VERSION:-1.5.7}"
+VERSION="${VERSION:-1.5.8}"
 export VERSION
 IMAGE_PREFETCH_ON_START="${IMAGE_PREFETCH_ON_START:-true}"
 IMAGE_PREFETCH_GROUPS="${IMAGE_PREFETCH_GROUPS:-bootstrap,storage,apm-core,pulsar-core,registry,data-services,ollama}"
@@ -157,10 +157,11 @@ STEP_TS_END=$(date +%s)
 log_step_timing "kubernetes-dashboard" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "registry" || ! $KUBECTL get namespace registry >/dev/null 2>&1; then
+# Step 1.5 moved to setup-01-basic.sh
+if ! is_step_done "registry" || ! $KUBECTL get namespace container-registry >/dev/null 2>&1; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5: Local Registry Setup"
+echo "Step 1.5: Local Registry Setup (Ensuring Ready)"
 echo "----------------------------------------------------"
 $BASE_DIR/infrastructure/registry/install.sh
 mark_step_done "registry"
@@ -206,7 +207,7 @@ fi
 if ! is_step_done "pulsar"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5.7: Apache Pulsar Infrastructure"
+echo "Step 1.5.8: Apache Pulsar Infrastructure"
 echo "----------------------------------------------------"
 # REPO_DIR is needed for pulsar scripts
 export REPO_DIR="$BASE_DIR/rag-stack"
@@ -219,7 +220,7 @@ fi
 if ! is_step_done "pulsar-init"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5.7.1: Pulsar Initialization"
+echo "Step 1.5.8.1: Pulsar Initialization"
 echo "----------------------------------------------------"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh
 mark_step_done "pulsar-init"

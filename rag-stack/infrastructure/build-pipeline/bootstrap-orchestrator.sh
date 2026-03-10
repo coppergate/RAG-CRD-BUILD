@@ -10,6 +10,7 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 VERSION="latest"
 REGISTRY="registry.hierocracy.home:5000"
+INTERNAL_REGISTRY="registry.container-registry.svc.cluster.local:5000"
 ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
 
 source "$REPO_DIR/../scripts/journal-helper.sh"
@@ -23,12 +24,12 @@ cd - > /dev/null
 
 echo "--- 2. Uploading sources to S3 ---"
 # Create a temporary uploader pod
-$KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=registry.hierocracy.home:5000/amazon/aws-cli:2.34.4 --overrides='
+$KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=$INTERNAL_REGISTRY/amazon/aws-cli:2.34.4 --overrides='
 {
   "spec": {
     "containers": [{
       "name": "uploader",
-      "image": "registry.hierocracy.home:5000/amazon/aws-cli:2.34.4",
+      "image": "'"$INTERNAL_REGISTRY"'/amazon/aws-cli:2.34.4",
       "command": ["sleep", "300"],
       "securityContext": {
         "allowPrivilegeEscalation": false,
@@ -71,7 +72,7 @@ spec:
     spec:
       initContainers:
       - name: fetch-context
-        image: registry.hierocracy.home:5000/busybox:1.37.0
+        image: $INTERNAL_REGISTRY/busybox:1.37.0
         command: ["sh", "-c"]
         args: ["wget -O /workspace/context.tar.gz \"$PRESIGNED_URL\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz"]
         securityContext:
@@ -87,17 +88,17 @@ spec:
           mountPath: /workspace
       containers:
       - name: kaniko
-        image: registry.hierocracy.home:5000/martizih/kaniko:v1.27.0
+        image: $INTERNAL_REGISTRY/martizih/kaniko:v1.27.0
         args:
         - "--dockerfile=Dockerfile"
         - "--context=dir:///workspace"
-        - "--destination=$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
-        - "--destination=$REGISTRY/build-orchestrator:latest"
+        - "--destination=$INTERNAL_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
+        - "--destination=$INTERNAL_REGISTRY/build-orchestrator:latest"
         - "--insecure"
         - "--insecure-pull"
-        - "--insecure-registry=$REGISTRY"
+        - "--insecure-registry=$INTERNAL_REGISTRY"
         - "--skip-tls-verify"
-        - "--skip-tls-verify-registry=$REGISTRY"
+        - "--skip-tls-verify-registry=$INTERNAL_REGISTRY"
         securityContext:
           allowPrivilegeEscalation: true
         volumeMounts:

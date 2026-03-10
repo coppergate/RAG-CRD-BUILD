@@ -1,8 +1,11 @@
 /.idea/
 /.junie/enable-junie-hierophant.sh
-/.junie/enable-junie-hierophant.sh
 /.junie/hierophant_key
 /.venv/
 /ai-changes/
-/.idea/
-/.git/
+!/ai-changes/changelog.json
+/image-source-cache/
+/registry-cache/
+/research/
+/scripts/revert-journal.sh
+/scripts/set-setup-complete-resume.sh

@@ -137,7 +137,7 @@ components:
   pulsar_manager: true
 
 # default image repository for pulsar images
-defaultPulsarImageRepository: apachepulsar/pulsar-all
+defaultPulsarImageRepository: registry.container-registry.svc.cluster.local:5000/apachepulsar/pulsar-all
 
 # default image tag for pulsar images
 # uses chart's appVersion when unspecified
@@ -203,13 +203,13 @@ images:
     # uses defaultPullPolicy when unspecified
     pullPolicy:
   pulsar_manager:
-    repository: apachepulsar/pulsar-manager
+    repository: registry.container-registry.svc.cluster.local:5000/apachepulsar/pulsar-manager
     tag: v0.4.0
     # uses defaultPullPolicy when unspecified
     pullPolicy:
     hasCommand: false
   oxia:
-    repository: streamnative/oxia
+    repository: registry.container-registry.svc.cluster.local:5000/streamnative/oxia
     tag: 0.11.9
     pullPolicy: Always
 
@@ -355,8 +355,8 @@ zookeeper:
     follower: 2888
     leaderElection: 3888
     # admin: 9990
-    nodeSelector:
-      rag.role.pulsar-worker: "true"
+  nodeSelector:
+    rag.role.pulsar-worker: "true"
   probe:
     liveness:
       enabled: true
@@ -606,8 +606,8 @@ bookkeeper:
     http: 8000
     bookie: 3181
     statestore: 4181
-    nodeSelector:
-      rag.role.pulsar-worker: "true"
+  nodeSelector:
+    rag.role.pulsar-worker: "true"
   probe:
     liveness:
       enabled: true
@@ -928,8 +928,8 @@ broker:
     https: 8443
     pulsar: 6650
     pulsarssl: 6651
-    nodeSelector:
-      rag.role.pulsar-worker: "true"
+  nodeSelector:
+    rag.role.pulsar-worker: "true"
   probe:
     liveness:
       enabled: true

@@ -4,7 +4,7 @@ set -Eeuo pipefail
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
-VERSION="${VERSION:-1.5.7}"
+VERSION="${VERSION:-1.5.8}"
 SHOW_INVENTORY="${SHOW_INVENTORY:-true}"
 
 pass() { printf "[PASS] %s\n" "$1"; }

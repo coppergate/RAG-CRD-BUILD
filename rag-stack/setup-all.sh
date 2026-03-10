@@ -10,7 +10,7 @@ export REPO_DIR
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-1.5.7}"
+VERSION="${VERSION:-1.5.8}"
 
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/journal-helper.sh"
 init_journal

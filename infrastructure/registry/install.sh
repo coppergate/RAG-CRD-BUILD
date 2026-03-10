@@ -48,8 +48,14 @@ $KUBECTL apply -f "$REPO_DIR/registry.yaml"
 mark_step_done "registry-deploy"
 fi
 
+if ! is_step_done "registry-wait"; then
+echo "--- 1.1 Waiting for Registry Pod to be Ready ---"
+$KUBECTL wait --for=condition=ready pod -l app=registry -n container-registry --timeout=120s
+mark_step_done "registry-wait"
+fi
+
 if ! is_step_done "registry-seed-image"; then
-echo "--- 1.1 Seeding bootstrap registry image ---"
+echo "--- 1.2 Seeding bootstrap registry image ---"
 seed_registry_image_into_bootstrap_registry
 mark_step_done "registry-seed-image"
 fi
@@ -59,12 +65,6 @@ echo "--- 2. Applying Talos Registry Patches ---"
 # Note: apply-patch.sh expects absolute paths and uses talosctl
 bash "$REPO_DIR/apply-patch.sh"
 mark_step_done "registry-patch"
-fi
-
-if ! is_step_done "registry-wait"; then
-echo "--- 3. Waiting for Registry Pod to be Ready ---"
-$KUBECTL wait --for=condition=ready pod -l app=registry -n container-registry --timeout=120s
-mark_step_done "registry-wait"
 fi
 
 clear_journal

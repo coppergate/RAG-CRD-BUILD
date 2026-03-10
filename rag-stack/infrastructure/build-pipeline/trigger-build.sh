@@ -5,12 +5,13 @@
 set -Eeuo pipefail
 
 SERVICE="${1:-}"
-VERSION="${2:-1.5.7}"
+VERSION="${2:-1.5.8}"
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-TOOLING_REGISTRY="${TOOLING_REGISTRY:-registry.hierocracy.home:5000}"
+INTERNAL_REGISTRY="${INTERNAL_REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
+TOOLING_REGISTRY="${TOOLING_REGISTRY:-$INTERNAL_REGISTRY}"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 
 source "$REPO_DIR/../scripts/journal-helper.sh"

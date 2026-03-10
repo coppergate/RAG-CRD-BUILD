@@ -14,7 +14,7 @@ mkdir -p "$OUT_DIR"
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-1.5.7}"
+VERSION="${VERSION:-1.5.8}"
 
 echo "[INFO] Preflight: Checking connectivity to hierophant and cluster..."
 # 1. Ping hierophant
