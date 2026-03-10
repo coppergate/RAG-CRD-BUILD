@@ -14,4 +14,4 @@ $KUBECTL label --overwrite namespace $NAMESPACE \
 
 helm repo add traefik https://traefik.github.io/charts
 helm repo update
-helm install traefik traefik/traefik -n $NAMESPACE --set nodeSelector.role=storage-node
+helm upgrade --install traefik traefik/traefik -n $NAMESPACE --set nodeSelector.role=storage-node

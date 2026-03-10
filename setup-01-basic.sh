@@ -54,7 +54,7 @@ if ! is_step_done "k8tz"; then
 helm repo add k8tz https://k8tz.github.io/k8tz/
 helm repo update
 
-helm install k8tz k8tz/k8tz --set timezone=Europe/London
+helm upgrade --install k8tz k8tz/k8tz --set timezone=Europe/London
 mark_step_done "k8tz"
 fi
 
@@ -75,7 +75,7 @@ helm repo update
 $KUBECTL get namespace purelb >/dev/null 2>&1 || $KUBECTL create namespace purelb
 $KUBECTL label --overwrite namespace purelb  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
 
-helm install  --namespace=purelb purelb purelb/purelb
+helm upgrade --install  --namespace=purelb purelb purelb/purelb
 
 
 echo "waiting for the 'purelb' deployment"
@@ -123,10 +123,10 @@ fi
 
 helm repo add rook-release https://charts.rook.io/release
 
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/crds.yaml 
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/common.yaml 
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml 
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/crds.yaml 
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml 
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml 
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
 
 echo "Check the ceph-operator pod"
 WaitForPodsRunning "rook-ceph" "rook-ceph-operator" 240
@@ -136,10 +136,10 @@ fi
 if ! is_step_done "rook-ceph-cluster"; then
 echo "Next step the storage CRDs"
 
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/cluster.yaml
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/filesystem.yaml
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/object.yaml
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/pool.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/cluster.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/filesystem.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/object.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/pool.yaml
 
 
 echo "Check the ceph-rook-cephfs/rdb deploys"
@@ -151,7 +151,7 @@ fi
 
 if ! is_step_done "rook-ceph-storageclass"; then
 echo "Next step defined the storage classes"
-$KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
 mark_step_done "rook-ceph-storageclass"
 fi
 
@@ -163,11 +163,11 @@ fi
 
 if ! is_step_done "olm"; then
 echo "installing crds"
-$KUBECTL create -f \
+$KUBECTL apply -f \
 $config_source_dir/infrastructure/vendor/olm-crds.yaml
 
 echo "installing olm"
-$KUBECTL create -f \
+$KUBECTL apply -f \
 $config_source_dir/infrastructure/vendor/olm.yaml
 
 # WaitForDeploymentToComplete namespace grepString sleepTime
