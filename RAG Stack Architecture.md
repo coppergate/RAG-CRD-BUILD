@@ -56,11 +56,16 @@ graph TD
         Qdrant[(Qdrant Vector DB)]
         TDB[(TimescaleDB)]
         Ollama[Ollama LLM Service]
+        Reg[Local Registry]
     end
 
     %% Interaction Flows
     Browser <-->|HTTP/80| UI
     Browser -->|HTTP/80| Gateway
+
+    %% Registry Flow
+    UI & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr & MemCtl -.->|Pull| Reg
+    S3 & Qdrant & TDB & Ollama -.->|Pull| Reg
 
     %% Ingestion Flow
     UI -->|Upload| S3
@@ -137,15 +142,20 @@ graph TD
 - TimescaleDB: Session/chat state plus Iteration 6 memory model (`memory_items`, `memory_links`, `memory_events`).
 - APM stack: Loki, Mimir, Tempo, Grafana, and Alloy.
 
-#### 3. Build & Deployment Flow
+#### 3. Build & Deployment Flow (Hierophant Bootstrapped)
 
 ```mermaid
 flowchart TD
-    subgraph "Phase 1: Bootstrap (Cluster-Native)"
-        Repo[Local Source] --> Pack[tar source]
-        Pack --> Upload[S3 Upload Pod]
-        Upload --> S3[(Build S3/OBC)]
-        S3 --> BootstrapJob[Kaniko Bootstrap Job]
+    subgraph "Phase 0: Infrastructure Bootstrap (Hierophant)"
+        Talos[Talos Registry Trust Patch] --> Labels[Label storage-nodes]
+        Labels --> Basic[setup-01-basic.sh: Rook-Ceph/Traefik]
+        Basic --> Reg[Registry Install]
+        Reg --> Prefetch[Image Prefetch to Local Registry]
+    end
+
+    subgraph "Phase 1: RAG Build Pipeline Bootstrap"
+        Prefetch --> S3_1[(Build S3/OBC)]
+        S3_1 --> BootstrapJob[Kaniko Bootstrap Job]
         BootstrapJob --> Registry[Local Registry: registry.hierocracy.home:5000]
         Registry --> OrchDeploy[Deploy Build Orchestrator]
     end
@@ -158,12 +168,11 @@ flowchart TD
         Kaniko --> Registry
     end
 
-    subgraph "Phase 3: Iteration 6 Memory Enablement"
-        Migrate[Apply TimescaleDB memory migration] --> MemDeploy[Deploy memory-controller]
+    subgraph "Phase 3: RAG Stack Deployment"
+        Registry --> Deploy[Deploy RAG Services]
+        Deploy --> Migrate[Apply TimescaleDB memory migration]
+        Migrate --> MemDeploy[Deploy memory-controller]
         MemDeploy --> TopicInit[Create memory topics]
-        TopicInit --> WorkerWire[Wire rag-worker memory request/pack path]
-        WorkerWire --> GatewayFlags[Enable memory_mode flags in gateway]
-        GatewayFlags --> Eval[Run recall/latency benchmarks]
     end
 
     Registry --> K8s[Kubernetes Cluster]
@@ -172,11 +181,18 @@ flowchart TD
         Setup[setup-complete.sh]
     end
 
-    Setup --> Phase1
-    Setup --> Phase2
-    Setup --> Deploy[Deploy RAG Services]
+    Setup --> Phase0
+    Phase0 --> Phase1
+    Phase1 --> Phase2
+    Phase2 --> Deploy
     Deploy --> Phase3
 ```
 
-- Zero-host build architecture remains unchanged: source packaging + in-cluster Kaniko builds.
-- Iteration 6 adds a memory enablement deployment phase after core service deployment.
+- **Zero-host build architecture**: Source packaging + in-cluster Kaniko builds.
+- **Registry Isolation**: All components (Infra + RAG) pull from `registry.hierocracy.home:5000` after prefetch.
+- **Resumable Setup**: `setup-complete.sh` uses a journal to track progress across these phases.
+
+#### 4. Topology & Node Affinity
+- **storage-node**: Nodes labeled `role=storage-node` (e.g., worker-0..3) host Ceph OSDs, Pulsar brokers, and APM stack.
+- **inference-node**: GPU-enabled nodes reserved for `ollama` and GPU-intensive tasks.
+- **control-plane**: Talos control plane nodes managing the API and local registry.

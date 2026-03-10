@@ -44,11 +44,16 @@ graph TD
         Qdrant[(Qdrant Vector DB)]
         TDB[(TimescaleDB)]
         Ollama[Ollama LLM Service]
+        Reg[Local Registry]
     end
 
     %% Interaction Flows
     Browser <-->|HTTP/80| UI
     Browser -->|HTTP/80| Gateway
+
+    %% Registry Flow
+    K8s -.->|Pull| Reg
+    S3 & Qdrant & TDB & Ollama -.->|Pull| Reg
 
     %% Ingestion Flow
     UI -->|Upload| S3

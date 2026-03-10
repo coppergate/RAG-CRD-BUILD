@@ -1,9 +1,14 @@
 flowchart TD
-    subgraph "Phase 1: Bootstrap (Cluster-Native)"
-        Repo[Local Source] --> Pack[tar source]
-        Pack --> Upload[S3 Upload Pod]
-        Upload --> S3[(Build S3/OBC)]
-        S3 --> BootstrapJob[Kaniko Bootstrap Job]
+    subgraph "Phase 0: Infrastructure Bootstrap (Hierophant)"
+        Talos[Talos Registry Trust Patch] --> Labels[Label storage-nodes]
+        Labels --> Basic[setup-01-basic.sh: Rook-Ceph/Traefik]
+        Basic --> Reg[Registry Install]
+        Reg --> Prefetch[Image Prefetch to Local Registry]
+    end
+
+    subgraph "Phase 1: RAG Build Pipeline Bootstrap"
+        Prefetch --> S3_1[(Build S3/OBC)]
+        S3_1 --> BootstrapJob[Kaniko Bootstrap Job]
         BootstrapJob --> Registry[Local Registry: registry.hierocracy.home:5000]
         Registry --> OrchDeploy[Deploy Build Orchestrator]
     end
@@ -16,12 +21,11 @@ flowchart TD
         Kaniko --> Registry
     end
 
-    subgraph "Phase 3: Iteration 6 Memory Enablement"
-        Migrate[Apply TimescaleDB memory migration] --> MemDeploy[Deploy memory-controller]
+    subgraph "Phase 3: RAG Stack Deployment"
+        Registry --> Deploy[Deploy RAG Services]
+        Deploy --> Migrate[Apply TimescaleDB memory migration]
+        Migrate --> MemDeploy[Deploy memory-controller]
         MemDeploy --> TopicInit[Create memory topics]
-        TopicInit --> WorkerWire[Wire rag-worker memory request/pack path]
-        WorkerWire --> GatewayFlags[Enable memory_mode flags in gateway]
-        GatewayFlags --> Eval[Run recall/latency benchmarks]
     end
 
     Registry --> K8s[Kubernetes Cluster]
@@ -30,7 +34,8 @@ flowchart TD
         Setup[setup-complete.sh]
     end
 
-    Setup --> Phase1
-    Setup --> Phase2
-    Setup --> Deploy[Deploy RAG Services]
+    Setup --> Phase0
+    Phase0 --> Phase1
+    Phase1 --> Phase2
+    Phase2 --> Deploy
     Deploy --> Phase3
