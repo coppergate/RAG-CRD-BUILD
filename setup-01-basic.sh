@@ -108,6 +108,7 @@ if ! is_step_done "rook-ceph-operator"; then
 echo "install rook-ceph operator"
 
 $KUBECTL get namespace rook-ceph >/dev/null 2>&1 || $KUBECTL create namespace rook-ceph
+$KUBECTL label --overwrite namespace rook-ceph  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
 
 # wipe disks before cluster creation to ensure clean OSDs
 if ! is_step_done "rook-ceph-wipe-disks"; then
@@ -126,8 +127,6 @@ $KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/crds.yaml
 $KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/common.yaml 
 $KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml 
 $KUBECTL create -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
-
-$KUBECTL label --overwrite namespace rook-ceph  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
 
 echo "Check the ceph-operator pod"
 WaitForPodsRunning "rook-ceph" "rook-ceph-operator" 240
