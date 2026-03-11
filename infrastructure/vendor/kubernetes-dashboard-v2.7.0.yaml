@@ -190,7 +190,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: kubernetes-dashboard
-          image: hierophant.hierocracy.home:5000/kubernetesui/dashboard:v2.7.0
+          image: 10.0.0.1:5000/kubernetesui/dashboard:v2.7.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8443
@@ -275,7 +275,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: dashboard-metrics-scraper
-          image: hierophant.hierocracy.home:5000/kubernetesui/metrics-scraper:v1.0.8
+          image: 10.0.0.1:5000/kubernetesui/metrics-scraper:v1.0.8
           ports:
             - containerPort: 8000
               protocol: TCP

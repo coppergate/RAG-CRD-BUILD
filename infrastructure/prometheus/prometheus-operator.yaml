@@ -67222,13 +67222,13 @@ spec:
       containers:
       - args:
         - --kubelet-service=kube-system/kubelet
-        - --prometheus-config-reloader=hierophant.hierocracy.home:5000/quay.io/prometheus-operator/prometheus-config-reloader:v0.80.1
+        - --prometheus-config-reloader=10.0.0.1:5000/quay.io/prometheus-operator/prometheus-config-reloader:v0.80.1
         - --kubelet-endpoints=true
         - --kubelet-endpointslice=false
         env:
         - name: GOGC
           value: "30"
-        image: hierophant.hierocracy.home:5000/quay.io/prometheus-operator/prometheus-operator:v0.80.1
+        image: 10.0.0.1:5000/quay.io/prometheus-operator/prometheus-operator:v0.80.1
         name: prometheus-operator
         ports:
         - containerPort: 8080

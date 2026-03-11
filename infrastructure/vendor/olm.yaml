@@ -68,7 +68,7 @@ spec:
           - $(OPERATOR_NAMESPACE)
           - --writeStatusName
           - ""
-          image: hierophant.hierocracy.home:5000/quay.io/operator-framework/olm@sha256:e74b2ac57963c7f3ba19122a8c31c9f2a0deb3c0c5cac9e5323ccffd0ca198ed
+          image: 10.0.0.1:5000/quay.io/operator-framework/olm@sha256:e74b2ac57963c7f3ba19122a8c31c9f2a0deb3c0c5cac9e5323ccffd0ca198ed
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -126,10 +126,10 @@ spec:
           args:
           - '-namespace'
           - olm
-          - -configmapServerImage=hierophant.hierocracy.home:5000/quay.io/operator-framework/configmap-operator-registry:latest
+          - -configmapServerImage=10.0.0.1:5000/quay.io/operator-framework/configmap-operator-registry:latest
           - -util-image
-          -  hierophant.hierocracy.home:5000/quay.io/operator-framework/olm@sha256:e74b2ac57963c7f3ba19122a8c31c9f2a0deb3c0c5cac9e5323ccffd0ca198ed
-          image: hierophant.hierocracy.home:5000/quay.io/operator-framework/olm@sha256:e74b2ac57963c7f3ba19122a8c31c9f2a0deb3c0c5cac9e5323ccffd0ca198ed
+          -  10.0.0.1:5000/quay.io/operator-framework/olm@sha256:e74b2ac57963c7f3ba19122a8c31c9f2a0deb3c0c5cac9e5323ccffd0ca198ed
+          image: 10.0.0.1:5000/quay.io/operator-framework/olm@sha256:e74b2ac57963c7f3ba19122a8c31c9f2a0deb3c0c5cac9e5323ccffd0ca198ed
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -293,7 +293,7 @@ spec:
                 - "5443"
                 - --global-namespace
                 - olm
-                image: hierophant.hierocracy.home:5000/quay.io/operator-framework/olm@sha256:e74b2ac57963c7f3ba19122a8c31c9f2a0deb3c0c5cac9e5323ccffd0ca198ed
+                image: 10.0.0.1:5000/quay.io/operator-framework/olm@sha256:e74b2ac57963c7f3ba19122a8c31c9f2a0deb3c0c5cac9e5323ccffd0ca198ed
                 imagePullPolicy: Always
                 ports:
                 - containerPort: 5443
@@ -341,7 +341,7 @@ metadata:
   namespace: olm
 spec:
   sourceType: grpc
-  image: hierophant.hierocracy.home:5000/quay.io/operatorhubio/catalog:latest
+  image: 10.0.0.1:5000/quay.io/operatorhubio/catalog:latest
   displayName: Community Operators
   publisher: OperatorHub.io
   updateStrategy:
