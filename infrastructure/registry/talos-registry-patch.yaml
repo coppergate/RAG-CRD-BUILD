@@ -1,33 +1,45 @@
 machine:
+  network:
+    extraHostEntries:
+      - ip: 10.0.0.1
+        aliases:
+          - hierophant.hierocracy.home
+          - registry.hierocracy.home
+          - hierophant
   registries:
     mirrors:
       docker.io:
         endpoints:
-          - http://hierophant.hierocracy.home:5000
+          - http://10.0.0.1:5000
           - https://registry-1.docker.io
       quay.io:
         endpoints:
-          - http://hierophant.hierocracy.home:5000
+          - http://10.0.0.1:5000
           - https://quay.io
       registry.k8s.io:
         endpoints:
-          - http://hierophant.hierocracy.home:5000
+          - http://10.0.0.1:5000
           - https://registry.k8s.io
       ghcr.io:
         endpoints:
-          - http://hierophant.hierocracy.home:5000
+          - http://10.0.0.1:5000
           - https://ghcr.io
+      10.0.0.1:5000:
+        endpoints:
+          - http://10.0.0.1:5000
       hierophant.hierocracy.home:5000:
         endpoints:
-          - http://hierophant.hierocracy.home:5000
+          - http://10.0.0.1:5000
       registry.hierocracy.home:5000:
         endpoints:
-          - http://hierophant.hierocracy.home:5000
-          - http://172.20.1.26:5000
+          - http://10.0.0.1:5000
     config:
+      10.0.0.1:5000:
+        tls:
+          insecureSkipVerify: true
       hierophant.hierocracy.home:5000:
         tls:
-          insecure: true
+          insecureSkipVerify: true
       registry.hierocracy.home:5000:
         tls:
-          insecure: true
+          insecureSkipVerify: true

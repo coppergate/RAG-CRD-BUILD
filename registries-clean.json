@@ -12,8 +12,8 @@
         }
       },
       "config": {
-        "registry.container-registry.svc.cluster.local:5000": { "tls": { "insecure": true } },
-        "172.20.1.26:5000": { "tls": { "insecure": true } }
+        "registry.container-registry.svc.cluster.local:5000": { "insecure": true },
+        "172.20.1.26:5000": { "insecure": true }
       }
     }
   }
