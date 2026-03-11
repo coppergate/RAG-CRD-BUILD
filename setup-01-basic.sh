@@ -49,6 +49,55 @@ $KUBECTL label nodes inference-1 role=inference-node
 mark_step_done "labels"
 fi
 
+# rook-ceph-image-prefetch removed in favor of hierophant registry mirror bootstrap
+# This avoids downloading the same image 9 times from the internet.
+
+if ! is_step_done "rook-ceph-operator"; then
+echo "install rook-ceph operator"
+
+$KUBECTL get namespace rook-ceph >/dev/null 2>&1 || $KUBECTL create namespace rook-ceph
+$KUBECTL label --overwrite namespace rook-ceph  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
+
+# wipe disks before cluster creation to ensure clean OSDs
+if ! is_step_done "rook-ceph-wipe-disks"; then
+  bash $config_source_dir/infrastructure/rook-ceph/wipe-disks.sh
+  mark_step_done "rook-ceph-wipe-disks"
+fi
+
+helm repo add rook-release https://charts.rook.io/release
+
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/crds.yaml 
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml 
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml 
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
+
+echo "Check the ceph-operator pod"
+WaitForPodsRunning "rook-ceph" "rook-ceph-operator" 240
+mark_step_done "rook-ceph-operator"
+fi
+
+if ! is_step_done "rook-ceph-cluster"; then
+echo "Next step the storage CRDs"
+
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/cluster.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/filesystem.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/object.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/pool.yaml
+
+
+echo "Check the ceph-rook-cephfs/rdb deploys"
+sleep 60
+$KUBECTL rollout status -n rook-ceph deployment.apps/rook-ceph.cephfs.csi.ceph.com-ctrlplugin --timeout=600s
+$KUBECTL rollout status -n rook-ceph deployment.apps/rook-ceph.rbd.csi.ceph.com-ctrlplugin --timeout=600s
+mark_step_done "rook-ceph-cluster"
+fi
+
+if ! is_step_done "rook-ceph-storageclass"; then
+echo "Next step defined the storage classes"
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
+mark_step_done "rook-ceph-storageclass"
+fi
+
 # install a tz manager and set the local timezone to UTC
 if ! is_step_done "k8tz"; then
 helm repo add k8tz https://k8tz.github.io/k8tz/
@@ -99,60 +148,6 @@ spec:
       aggregation: default
 EOF
 mark_step_done "purelb-config"
-fi
-
-# rook-ceph-image-prefetch removed in favor of hierophant registry mirror bootstrap
-# This avoids downloading the same image 9 times from the internet.
-
-if ! is_step_done "rook-ceph-operator"; then
-echo "install rook-ceph operator"
-
-$KUBECTL get namespace rook-ceph >/dev/null 2>&1 || $KUBECTL create namespace rook-ceph
-$KUBECTL label --overwrite namespace rook-ceph  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
-
-# wipe disks before cluster creation to ensure clean OSDs
-if ! is_step_done "rook-ceph-wipe-disks"; then
-  bash $config_source_dir/infrastructure/rook-ceph/wipe-disks.sh
-  mark_step_done "rook-ceph-wipe-disks"
-fi
-
-# for the example crd:
-# cd /mnt/hegemon-share/code/kubernetes-app-setup/app-builds/rook/
-# git clone --single-branch --branch v1.16.5 https://github.com/rook/rook.git
-# cd /mnt/hegemon-share/code/kubernetes-app-setup/app-builds/rook/rook/deploy/examples
-
-helm repo add rook-release https://charts.rook.io/release
-
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/crds.yaml 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
-
-echo "Check the ceph-operator pod"
-WaitForPodsRunning "rook-ceph" "rook-ceph-operator" 240
-mark_step_done "rook-ceph-operator"
-fi
-
-if ! is_step_done "rook-ceph-cluster"; then
-echo "Next step the storage CRDs"
-
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/cluster.yaml
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/filesystem.yaml
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/object.yaml
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/pool.yaml
-
-
-echo "Check the ceph-rook-cephfs/rdb deploys"
-sleep 60
-$KUBECTL rollout status -n rook-ceph deployment.apps/rook-ceph.cephfs.csi.ceph.com-ctrlplugin --timeout=600s
-$KUBECTL rollout status -n rook-ceph deployment.apps/rook-ceph.rbd.csi.ceph.com-ctrlplugin --timeout=600s
-mark_step_done "rook-ceph-cluster"
-fi
-
-if ! is_step_done "rook-ceph-storageclass"; then
-echo "Next step defined the storage classes"
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
-mark_step_done "rook-ceph-storageclass"
 fi
 
 if ! is_step_done "local-registry"; then

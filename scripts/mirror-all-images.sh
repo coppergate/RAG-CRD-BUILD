@@ -188,8 +188,10 @@ copy_cmd() {
   local src="$1"
   local dst="$TARGET_REGISTRY/$src"
   local last_path_part repo tag cache_dir
-  last_path_part="${src##*/}"
-  if [[ "$last_path_part" == *:* ]]; then
+  if [[ "$src" == *@sha256:* ]]; then
+    repo="${src%@sha256:*}"
+    tag="sha256-${src##*@sha256:}"
+  elif [[ "$src" == *:* ]]; then
     repo="${src%:*}"
     tag="${src##*:}"
   else
@@ -241,8 +243,10 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
   err_msg=""
   cache_status="miss"
 
-  last_path_part="${src##*/}"
-  if [[ "$last_path_part" == *:* ]]; then
+  if [[ "$src" == *@sha256:* ]]; then
+    repo="${src%@sha256:*}"
+    tag="sha256-${src##*@sha256:}"
+  elif [[ "$src" == *:* ]]; then
     repo="${src%:*}"
     tag="${src##*:}"
   else

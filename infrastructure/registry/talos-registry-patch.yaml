@@ -1,31 +1,33 @@
 machine:
   registries:
     mirrors:
-      "*":
+      docker.io:
         endpoints:
-          - http://172.20.1.26:5000
-          - http://172.20.0.1:5000
-      172.20.1.26:5000:
+          - http://hierophant.hierocracy.home:5000
+          - https://registry-1.docker.io
+      quay.io:
         endpoints:
-          - http://172.20.1.26:5000
-      registry.container-registry.svc.cluster.local:5000:
+          - http://hierophant.hierocracy.home:5000
+          - https://quay.io
+      registry.k8s.io:
         endpoints:
-          - http://172.20.1.26:5000
-          - http://172.20.0.1:5000
+          - http://hierophant.hierocracy.home:5000
+          - https://registry.k8s.io
+      ghcr.io:
+        endpoints:
+          - http://hierophant.hierocracy.home:5000
+          - https://ghcr.io
+      hierophant.hierocracy.home:5000:
+        endpoints:
+          - http://hierophant.hierocracy.home:5000
       registry.hierocracy.home:5000:
         endpoints:
+          - http://hierophant.hierocracy.home:5000
           - http://172.20.1.26:5000
-          - http://172.20.0.1:5000
     config:
-      172.20.1.26:5000:
+      hierophant.hierocracy.home:5000:
         tls:
-          insecureSkipVerify: true
-      172.20.0.1:5000:
-        tls:
-          insecureSkipVerify: true
-      registry.container-registry.svc.cluster.local:5000:
-        tls:
-          insecureSkipVerify: true
+          insecure: true
       registry.hierocracy.home:5000:
         tls:
-          insecureSkipVerify: true
+          insecure: true
