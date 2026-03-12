@@ -7,39 +7,40 @@ This document provides a detailed description of the container registry architec
 The system uses a dual-registry topology to ensure high availability, fast pulls, and air-gap readiness.
 
 ### 1.1 Host Registry (Bootstrap)
-- **Address**: `10.0.0.1:5000` (`hierophant:5000`)
-- **DNS Alias**: `registry.hierocracy.home:5000`
+- **Address**: `https://10.0.0.1:5000` (`hierophant:5000`)
+- **DNS Alias**: `https://registry.hierocracy.home:5000`
 - **Purpose**: Acts as the primary mirror for all nodes in the cluster and the initial entry point for bootstrapping the in-cluster registry.
-- **Service**: Runs directly on the `hierophant` host.
+- **Service**: Runs as a Podman container directly on the `hierophant` host.
+- **Security**: TLS-enabled using a custom Root CA (trust distributed via Talos).
 
 ### 1.2 In-Cluster Registry (Cluster-Native)
 - **Namespace**: `container-registry`
 - **Service Type**: `LoadBalancer`
-- **Address**: `172.20.1.26:5000`
-- **Internal DNS**: `registry.container-registry.svc.cluster.local:5000`
+- **Address**: `https://172.20.1.26:5000`
+- **Internal DNS**: `https://registry.container-registry.svc.cluster.local:5000`
 - **Storage**: Rook-Ceph PVC (`registry-pvc`) using the `rook-ceph-block` storage class.
 - **Node Affinity**: Scheduled on `storage-node` role (worker nodes).
+- **Security**: TLS-enabled via Cert-Manager and the common Root CA.
 
 ## 2. Talos Node Configuration
 
 All nodes (control plane, workers, and inference) are patched with `infrastructure/registry/talos-registry-patch.yaml` to ensure they trust and use the local registry.
 
-### 2.1 Host Resolution
+### 2.1 Host Resolution & Trust
 The following entries are added to the `/etc/hosts` of all Talos nodes:
 - `10.0.0.1` -> `hierophant.hierocracy.home`, `registry.hierocracy.home`, `hierophant`
 
+The **Root CA** is added to the machine configuration trust store to allow verified HTTPS pulls from both registries.
+
 ### 2.2 Registry Mirrors
 To optimize image pulls and support air-gapped environments, public registries are mirrored to the local registry:
-- `docker.io` -> `http://10.0.0.1:5000`
-- `quay.io` -> `http://10.0.0.1:5000`
-- `registry.k8s.io` -> `http://10.0.0.1:5000`
-- `ghcr.io` -> `http://10.0.0.1:5000`
+- `docker.io` -> `https://10.0.0.1:5000`
+- `quay.io` -> `https://10.0.0.1:5000`
+- `registry.k8s.io` -> `https://10.0.0.1:5000`
+- `ghcr.io` -> `https://10.0.0.1:5000`
 
-### 2.3 Insecure Registry Access
-Because the local registry uses HTTP (or self-signed certificates), the following endpoints are configured with `insecureSkipVerify: true`:
-- `10.0.0.1:5000`
-- `hierophant.hierocracy.home:5000`
-- `registry.hierocracy.home:5000`
+### 2.3 Secure Registry Access
+The cluster now uses verified TLS for all registry communication. The `insecureSkipVerify` flag has been removed across the stack.
 
 ## 3. Image Management Lifecycle
 

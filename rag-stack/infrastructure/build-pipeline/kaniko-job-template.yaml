@@ -30,11 +30,11 @@ spec:
         - "--context=dir:///workspace"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:${VERSION}"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:latest"
-        - "--insecure" # Assuming local registry without TLS
-        - "--insecure-pull"
-        - "--insecure-registry=${REGISTRY}"
-        - "--skip-tls-verify"
-        - "--skip-tls-verify-registry=${REGISTRY}"
+        #- "--insecure" # No longer needed with TLS
+        #- "--insecure-pull"
+        #- "--insecure-registry=${REGISTRY}"
+        #- "--skip-tls-verify"
+        #- "--skip-tls-verify-registry=${REGISTRY}"
         securityContext:
           allowPrivilegeEscalation: true
         volumeMounts:

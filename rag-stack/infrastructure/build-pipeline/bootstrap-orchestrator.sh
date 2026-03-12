@@ -94,11 +94,11 @@ spec:
         - "--context=dir:///workspace"
         - "--destination=$INTERNAL_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
         - "--destination=$INTERNAL_REGISTRY/build-orchestrator:latest"
-        - "--insecure"
-        - "--insecure-pull"
-        - "--insecure-registry=$INTERNAL_REGISTRY"
-        - "--skip-tls-verify"
-        - "--skip-tls-verify-registry=$INTERNAL_REGISTRY"
+        #- "--insecure"
+        #- "--insecure-pull"
+        #- "--insecure-registry=$INTERNAL_REGISTRY"
+        #- "--skip-tls-verify"
+        #- "--skip-tls-verify-registry=$INTERNAL_REGISTRY"
         securityContext:
           allowPrivilegeEscalation: true
         volumeMounts:

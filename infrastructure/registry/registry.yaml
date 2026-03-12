@@ -40,13 +40,24 @@ spec:
         image: 10.0.0.1:5000/registry:2
         ports:
         - containerPort: 5000
+        env:
+        - name: REGISTRY_HTTP_TLS_CERTIFICATE
+          value: /certs/tls.crt
+        - name: REGISTRY_HTTP_TLS_KEY
+          value: /certs/tls.key
         volumeMounts:
         - name: storage
           mountPath: /var/lib/registry
+        - name: certs
+          mountPath: /certs
+          readOnly: true
       volumes:
       - name: storage
         persistentVolumeClaim:
           claimName: registry-pvc
+      - name: certs
+        secret:
+          secretName: in-cluster-registry-tls
 ---
 apiVersion: v1
 kind: Service

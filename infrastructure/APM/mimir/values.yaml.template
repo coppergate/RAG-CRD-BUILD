@@ -7,7 +7,7 @@ mimir:
           endpoint: ${S3_ENDPOINT}
           access_key_id: ${AWS_ACCESS_KEY_ID}
           secret_access_key: ${AWS_SECRET_ACCESS_KEY}
-          insecure: true
+          insecure: false
           bucket_name: ${BUCKET_NAME}
     blocks_storage:
       s3:

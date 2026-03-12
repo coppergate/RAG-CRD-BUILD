@@ -11,7 +11,7 @@ loki:
       access_key_id: ${AWS_ACCESS_KEY_ID}
       secret_access_key: ${AWS_SECRET_ACCESS_KEY}
       s3forcepathstyle: true
-      insecure: true
+      insecure: false
     bucketNames:
       chunks: ${BUCKET_NAME}
       ruler: ${BUCKET_NAME}
