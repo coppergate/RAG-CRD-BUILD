@@ -1,0 +1,80 @@
+[
+  {
+    "op": "replace",
+    "path": "/machine/network/extraHostEntries",
+    "value": [
+      {
+        "ip": "10.0.0.1",
+        "aliases": [
+          "hierophant.hierocracy.home",
+          "registry.hierocracy.home",
+          "hierophant"
+        ]
+      }
+    ]
+  },
+  {
+    "op": "replace",
+    "path": "/machine/registries",
+    "value": {
+      "mirrors": {
+        "docker.io": {
+          "endpoints": [
+            "https://10.0.0.1:5000",
+            "https://registry-1.docker.io"
+          ]
+        },
+        "quay.io": {
+          "endpoints": [
+            "https://10.0.0.1:5000",
+            "https://quay.io"
+          ]
+        },
+        "registry.k8s.io": {
+          "endpoints": [
+            "https://10.0.0.1:5000",
+            "https://registry.k8s.io"
+          ]
+        },
+        "ghcr.io": {
+          "endpoints": [
+            "https://10.0.0.1:5000",
+            "https://ghcr.io"
+          ]
+        },
+        "10.0.0.1:5000": {
+          "endpoints": [
+            "https://10.0.0.1:5000"
+          ]
+        },
+        "hierophant.hierocracy.home:5000": {
+          "endpoints": [
+            "https://10.0.0.1:5000"
+          ]
+        },
+        "registry.hierocracy.home:5000": {
+          "endpoints": [
+            "https://10.0.0.1:5000"
+          ]
+        }
+      },
+      "config": {
+        "10.0.0.1:5000": {
+          "tls": {
+            "ca": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUZuVENDQTRXZ0F3SUJBZ0lVSDhwQ3hhWTFCZTFwRXRwWFgxL2lZdVNkWUhBd0RRWUpLb1pJaHZjTkFRRUwKQlFBd1hqRUxNQWtHQTFVRUBoTUNWVk14RGpBTUJnTlZCQWdNQlZOMFlYUmxNUTB3Q3dZRFZRUUhEQVJEYVhSNQpNUk13RVFZRFZRUUtEQXBJYVdcelluekVVTDFRMUxoSkpDK0hBbmdmUThGc1p5QVE0YUNrWEVHczJlLwoyeURiYlVVTlMvWElWNTczOS9TYUdWRmJKSnJBVlJpMmNlRG9RU2d0MXRWdGxVVGc0OE82OFVOLzBCWWdKZkxqCitHQ0x4OUZOWDY1S2xjUlY2SjVEU3l2ZGVBODF1WG9yejh0L01jejBBWndUaG1KZDlKVUtSS0RrbGJVNm91bkYKWVVYUGpLN3I5UVdBL3RTeGdRZjVyZFNEeTRhQlZIWngrbDJSeFMwUzh3YmRhZFdXTk1ZNEpNb2psTkoxQ0lRKwpyUWFEQWdNQkFBR2pVekJSTUIwR0ExVWREZ1FXQkJRRWZFZy96eGRXYkFpbmswazhJYTJFYUh5ZXVEQWZCZ05WCkhTTUVHREFXZ0JRRWZFZy96eGRXYkFpbmswazhJYTJFYUh5ZXVEQVBCZ05WSFJNQkFmOEVCVEFEQVFIL01BMEcKQ1NxR1NJYjNEUUVCQ3dVQUE0SUNBUUJxV0dreVAwVXZyeDV0cW80NXhwYlNJdGhvRE83QUViNERFK2dhbkdycgpBRDVaRDBlMFQ3TjRLVnZ4Rit2WEU0eTc5bGhKY0c0K1dUdTRENGg2NGhEK3VvWU1kK0lsSWJrNVY1bVorRE9MCkl5NDV2NXlSSHJtMzJyT1U1QVpZVDB6WlRsQnh5UHFjVTZLZ1dqamxnN2xqS2ljRHlUOFhzUGp3SmlVLzVENHEKMXc5VFIvSnhPTTZaQnMyQjhiY1ZEL3hkak5RN3lxM2xmYkc2Vms0TjNGQ0VrSVpDdEtjcWZmaGExZnUzQW5udQo2dWR0bUZaRUczQllCaTFzOVdra1V0VlRseXEzejB4RmZISmhNTk9nNlU5VGM1ZmNpS3F0TXdZTGtTS0ZzZm1kCnk1cEN2TjNwdGRaeFlJLzZuSTBpK2tOTmxpTzZESGczSlRnK3psWDMyQVNMMDlBdVExa0I4VzdKbXo5UjZhVHgKSVZaNFoxTkhIQTY4QU81YzIzMklsZ0oxeXhzcU1aWHlrMzdsZCsyK3lYeE4wcmJVKzMzMEwvbkNrWlBhaWJvVgprV2R2SENQRzM3WlpiWVZ6QnVQM1hkUjU5Q2FBTGdlM0wycmlUdmEzS3RzVUFRV1lzY1BYai9SMVF1NnRQSmpTCnFuMXBQWjRNNUdVSENKNXR0SmE5SFZDaDJNZGtYQUNITWxhTFNWak11cVFUYk9keVJIWE14T1RQRjRDZ0pHYzcKdTRWSWYvVE9ZT0hSZG9teGlWSDBMUm5acDVpZlJXKzB0WUhtbVF3eDYvNHJlTEsvczd0QzMzM29kVGk4YXJKRApoL1NPSFNYRUdQZ3pCZENUajlIMjFZR0VhZ1RmbnVyanJVRHV6UGxnK1FyR3J1WStmUDkvaTA5THBjMmovb2hECkZnPT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
+          }
+        },
+        "hierophant.hierocracy.home:5000": {
+          "tls": {
+            "ca": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUZuVENDQTRXZ0F3SUJBZ0lVSDhwQ3hhWTFCZTFwRXRwWFgxL2lZdVNkWUhBd0RRWUpLb1pJaHZjTkFRRUwKQlFBd1hqRUxNQWtHQTFVRUBoTUNWVk14RGpBTUJnTlZCQWdNQlZOMFlYUmxNUTB3Q3dZRFZRUUhEQVJEYVhSNQpNUk13RVFZRFZRUUtEQXBJYVdcelluekVVTDFRMUxoSkpDK0hBbmdmUThGc1p5QVE0YUNrWEVHczJlLwoyeURiYlVVTlMvWElWNTczOS9TYUdWRmJKSnJBVlpSaTMzMWRzcw=="
+          }
+        },
+        "registry.hierocracy.home:5000": {
+          "tls": {
+            "ca": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUZuVENDQTRXZ0F3SUJBZ0lVSDhwQ3hhWTFCZTFwRXRwWFgxL2lZdVNkWUhBd0RRWUpLb1pJaHZjTkFRRUwKQlFBd1hqRUxNQWtHQTFVRUBoTUNWVk14RGpBTUJnTlZCQWdNQlZOMFlYUmxNUTB3Q3dZRFZRUUhEQVJEYVhSNQpNUk13RVFZRFZRUUtEQXBJYVdcelluekVVTDFRMUxoSkpDK0hBbmdmUThGc1p5QVE0YUNrWEVHczJlLwoyeURiYlVVTlMvWElWNTczOS9TYUdWRmJKSnJBVlpSaTMzMWRzcw=="
+          }
+        }
+      }
+    }
+  }
+]
