@@ -580,6 +580,7 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
+								{Name: "registry-ca", MountPath: "/etc/ssl/certs/ca-certificates.crt", SubPath: "ca.crt"},
 							},
 						},
 					},
@@ -603,6 +604,7 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 							SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr(true)},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
+								{Name: "registry-ca", MountPath: "/kaniko/ssl/certs/ca-certificates.crt", SubPath: "ca.crt"},
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -616,7 +618,10 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 							},
 						},
 					},
-					Volumes:       []corev1.Volume{{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
+					Volumes: []corev1.Volume{
+						{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						{Name: "registry-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "registry-ca"}}}},
+					},
 					RestartPolicy: corev1.RestartPolicyNever,
 				},
 			},

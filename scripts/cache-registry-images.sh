@@ -20,10 +20,10 @@ MODE="${1:-}"
 
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
 REGISTRY_API_SCHEME="${REGISTRY_API_SCHEME:-auto}" # auto|http|https
-REGISTRY_API_INSECURE="${REGISTRY_API_INSECURE:-true}"
+REGISTRY_API_INSECURE="${REGISTRY_API_INSECURE:-false}"
 CACHE_ROOT="${CACHE_ROOT:-/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache}"
 BUNDLE_DIR="${BUNDLE_DIR:-}"
-SKOPEO_TLS_VERIFY="${SKOPEO_TLS_VERIFY:-false}"
+SKOPEO_TLS_VERIFY="${SKOPEO_TLS_VERIFY:-true}"
 CACHE_CATALOG_PAGE_SIZE="${CACHE_CATALOG_PAGE_SIZE:-100}"
 BACKUP_SKIP_EXISTING="${BACKUP_SKIP_EXISTING:-true}"
 EFFECTIVE_API_SCHEME=""
@@ -76,6 +76,8 @@ curl_common_opts() {
   local opts=("-fsS")
   if [[ "$REGISTRY_API_INSECURE" == "true" ]]; then
     opts+=("-k")
+  elif [[ -f "/home/junie/.local/share/mkcert/rootCA.pem" ]]; then
+    opts+=("--cacert" "/home/junie/.local/share/mkcert/rootCA.pem")
   fi
   printf '%s\n' "${opts[@]}"
 }

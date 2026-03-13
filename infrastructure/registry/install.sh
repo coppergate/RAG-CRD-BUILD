@@ -18,11 +18,11 @@ seed_registry_image_into_bootstrap_registry() {
   echo "--- 0. Ensuring bootstrap image exists: ${target} ---"
 
   if command -v skopeo >/dev/null 2>&1; then
-    if skopeo inspect --tls-verify=false "docker://${target}" >/dev/null 2>&1; then
+    if skopeo inspect --tls-verify=true "docker://${target}" >/dev/null 2>&1; then
       echo "Bootstrap image already present: ${target}"
       return 0
     fi
-    skopeo copy --all --src-tls-verify=true --dest-tls-verify=false \
+    skopeo copy --all --src-tls-verify=true --dest-tls-verify=true \
       "docker://${BOOTSTRAP_IMAGE}" "docker://${target}"
     return 0
   fi
@@ -34,7 +34,7 @@ seed_registry_image_into_bootstrap_registry() {
     fi
     podman pull "docker.io/library/${BOOTSTRAP_IMAGE}"
     podman tag "docker.io/library/${BOOTSTRAP_IMAGE}" "${target}"
-    podman push --tls-verify=false "${target}"
+    podman push --tls-verify=true "${target}"
     return 0
   fi
 

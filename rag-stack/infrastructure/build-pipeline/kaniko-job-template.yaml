@@ -22,6 +22,9 @@ spec:
         volumeMounts:
         - name: workspace
           mountPath: /workspace
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
       containers:
       - name: kaniko
         image: registry.hierocracy.home:5000/martizih/kaniko:v1.27.0
@@ -40,6 +43,9 @@ spec:
         volumeMounts:
         - name: workspace
           mountPath: /workspace
+        - name: registry-ca
+          mountPath: /kaniko/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
         resources:
           requests:
             cpu: "2"
@@ -50,5 +56,8 @@ spec:
       volumes:
       - name: workspace
         emptyDir: {}
+      - name: registry-ca
+        configMap:
+          name: registry-ca
       restartPolicy: Never
   backoffLimit: 1
