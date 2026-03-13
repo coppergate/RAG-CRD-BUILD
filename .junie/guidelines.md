@@ -32,7 +32,7 @@
 - **Database Operations**: Database operations, schema modifications, and queries are intended to be executed on **hierophant** using the postgresql (timescaledb) database.
 
 ## Code Management & Versioning
-- **Code Management**: If an edit process involves more than 5 lines of code, store the original file in a sub-directory matching its current structure under the **'/mnt/hegemon-share/share/code/ai-changes/original'** directory, and create a new file with the edited content.
+- **Code Management**: If an edit process involves more than 5 lines of code, store the original file in a sub-directory matching its current structure under the **'/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original'** directory, and create a new file with the edited content.
   - Only store 1 file back; we don't need a full history, just a single file with the latest changes.
 - **Versioning**: Maintain a `major.minor.build` versioning scheme starting with `1.0.0`.
   - Increment the `build` number for every service update within an iteration.
@@ -40,13 +40,13 @@
   - Update all image tags and Kubernetes deployment specifications accordingly when versioning up.
 - **Change Logs**: Maintain a changelog in the repository to track significant changes and updates to code and configurations.
   - Use a structured JSON format with the datetime stamp and a brief description of the change.
-  - The change log should be written to the `./ai-changes` directory.
+  - The change log should be written to the `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes` directory.
   - The change log should be a single file with the most recent changes at the top.
   - The changes should be recorded at the conclusion of each prompting session when the changes are made.
 - **Deployment Verification**: Before running tests, ensure that the most recent version of the code is deployed and running.
   - Keep a list of all active services and their respective versions in a centralized location for easy reference.
 - **Obfuscation for logs**: When cloaking a username or password, don't just replace characters with asterisks; change the length as well as the character type to avoid pattern recognition.
-- **Search Optimization**: Handle local searches better. Use `--exclude-dir={registry-cache,image-source-cache}` or target specific directories (e.g., `grep -r "pattern" scripts/`) to keep searches fast.
+- **Search Optimization**: Handle local searches better. Use `--exclude-dir={registry-cache,image-source-cache,ai-changes}` or target specific directories (e.g., `grep -r "pattern" scripts/`) to keep searches fast.
 
 ## Git Policies
 - **Branching Policy**:

@@ -45,9 +45,9 @@ is_local_exception_ref() {
 is_active_path() {
   local p="$1"
   [[ "$p" != "$ROOT_DIR/.git/"* ]] &&
-  [[ "$p" != "$ROOT_DIR/ai-changes/original/"* ]] &&
-  [[ "$p" != "$ROOT_DIR/image-source-cache/"* ]] &&
-  [[ "$p" != "$ROOT_DIR/registry-cache/"* ]] &&
+  [[ "$p" != "/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/"* ]] &&
+  [[ "$p" != "/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/image-source-cache/"* ]] &&
+  [[ "$p" != "/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache/"* ]] &&
   [[ "$p" != "$ROOT_DIR/research/"* ]]
 }
 

@@ -5,12 +5,12 @@
 # Typical usage:
 #   # Before shutdown
 #   REGISTRY=registry.hierocracy.home:5000 \
-#   CACHE_ROOT=/mnt/hegemon-share/share/code/complete-build/registry-cache \
+#   CACHE_ROOT=/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache \
 #   bash scripts/cache-registry-images.sh backup
 #
 #   # After rebuild
 #   REGISTRY=registry.hierocracy.home:5000 \
-#   CACHE_ROOT=/mnt/hegemon-share/share/code/complete-build/registry-cache \
+#   CACHE_ROOT=/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache \
 #   bash scripts/cache-registry-images.sh restore
 
 set -Eeuo pipefail
@@ -21,7 +21,7 @@ MODE="${1:-}"
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
 REGISTRY_API_SCHEME="${REGISTRY_API_SCHEME:-auto}" # auto|http|https
 REGISTRY_API_INSECURE="${REGISTRY_API_INSECURE:-true}"
-CACHE_ROOT="${CACHE_ROOT:-/mnt/hegemon-share/share/code/complete-build/registry-cache}"
+CACHE_ROOT="${CACHE_ROOT:-/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache}"
 BUNDLE_DIR="${BUNDLE_DIR:-}"
 SKOPEO_TLS_VERIFY="${SKOPEO_TLS_VERIFY:-false}"
 CACHE_CATALOG_PAGE_SIZE="${CACHE_CATALOG_PAGE_SIZE:-100}"
@@ -53,7 +53,7 @@ Env:
   REGISTRY=registry.hierocracy.home:5000
   REGISTRY_API_SCHEME=auto|http|https (default: auto)
   REGISTRY_API_INSECURE=true|false    (default: true)
-  CACHE_ROOT=/mnt/hegemon-share/share/code/complete-build/registry-cache
+  CACHE_ROOT=/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache
   BUNDLE_DIR=/path/to/bundle          (optional for restore)
   SKOPEO_TLS_VERIFY=false             (set true if registry uses valid TLS)
   CACHE_CATALOG_PAGE_SIZE=100         Registry catalog page size for pagination

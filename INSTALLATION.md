@@ -54,7 +54,7 @@ The master script orchestrates the following major steps:
 
 ## Troubleshooting
 
-- **Logs**: Detailed logs for each service build are stored in `ai-changes/build-output/` on `hierophant`.
+- **Logs**: Detailed logs for each service build are stored in `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/build-output/` on `hierophant`.
 - **Journal**: Installation progress is tracked per-user under `~/.complete-build/journal/` on `hierophant`. Override with `INSTALL_JOURNAL_DIR` if needed.
 - **Temporary Files**: Scripts use a private, user-specific temporary directory at `~/.complete-build/tmp/` on `hierophant`. Override with `INSTALL_TMP_DIR` if needed.
 - **Kubernetes**: Use `/home/k8s/kube/kubectl` with `/home/k8s/kube/config/kubeconfig` on `hierophant` for cluster status.

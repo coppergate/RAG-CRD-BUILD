@@ -47,14 +47,14 @@ The cluster now uses verified TLS for all registry communication. The `insecureS
 The management of images involves mirroring from upstream sources, prefetching to local caches, and backup/restore operations.
 
 ### 3.1 Mirroring (scripts/mirror-all-images.sh)
-This script is used to copy images from public registries or the local `image-source-cache` to the `registry.hierocracy.home:5000` repository. It uses `skopeo` for high-performance mirroring.
+This script is used to copy images from public registries or the local upstream cache (`image-source-cache`) to the `registry.hierocracy.home:5000` repository. It uses `skopeo` for high-performance mirroring.
 
 ### 3.2 Prefetching (scripts/prefetch-node-images.sh)
 Prefetching ensures that critical images are available in the node-local `containerd` cache before they are requested by pods. This is done via a temporary `DaemonSet` during the bootstrap process.
 
 ### 3.3 Caching Strategies
-- **Upstream Cache**: `image-source-cache/images/` contains a local directory structure for public images, allowing for rapid mirroring without internet access.
-- **Registry Snapshots**: `registry-cache/` contains timestamped bundles of the entire local registry content, managed by `scripts/cache-registry-images.sh`. This is used to preserve the state across cluster rebuilds.
+- **Upstream Cache**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/image-source-cache/images/` contains a local directory structure for public images, allowing for rapid mirroring without internet access.
+- **Registry Snapshots**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache/` contains timestamped bundles of the entire local registry content, managed by `scripts/cache-registry-images.sh`. This is used to preserve the state across cluster rebuilds.
 
 ## 4. Image Reference (by Group)
 
