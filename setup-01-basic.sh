@@ -10,6 +10,9 @@ export config_source_dir="$BASE_DIR"
 source "$config_source_dir/scripts/k8s-install-helper-functions.sh"
 source "$config_source_dir/scripts/journal-helper.sh"
 
+# Ensure host trusts the registry CA for secure image mirroring/seeding
+bash "$config_source_dir/scripts/setup-host-trust.sh"
+
 init_journal
 
 #fresh k8s cluster

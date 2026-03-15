@@ -9,9 +9,13 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 BOOTSTRAP_REGISTRY="${BOOTSTRAP_REGISTRY:-10.0.0.1:5000}"
 BOOTSTRAP_IMAGE="${BOOTSTRAP_IMAGE:-registry:2}"
+BASE_DIR=$(cd "$REPO_DIR/../.." && pwd)
 
-source "${BASE_DIR:-.}/scripts/journal-helper.sh"
+source "$BASE_DIR/scripts/journal-helper.sh"
 init_journal
+
+# Ensure host trusts the registry CA
+bash "$BASE_DIR/scripts/setup-host-trust.sh"
 
 seed_registry_image_into_bootstrap_registry() {
   local target="${BOOTSTRAP_REGISTRY}/${BOOTSTRAP_IMAGE}"
