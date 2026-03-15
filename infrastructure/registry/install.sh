@@ -42,6 +42,20 @@ seed_registry_image_into_bootstrap_registry() {
   return 1
 }
 
+if ! is_step_done "registry-namespace"; then
+$KUBECTL get namespace container-registry >/dev/null 2>&1 || $KUBECTL create namespace container-registry
+$KUBECTL get namespace cert-manager >/dev/null 2>&1 || $KUBECTL create namespace cert-manager
+mark_step_done "registry-namespace"
+fi
+
+if ! is_step_done "registry-tls"; then
+echo "--- 0.1 Applying Registry TLS (Cert-Manager) ---"
+$KUBECTL apply -f "$REPO_DIR/cert-manager-tls.yaml"
+# wait for the certificate to be ready
+$KUBECTL wait --for=condition=Ready certificate/in-cluster-registry-cert -n container-registry --timeout=120s
+mark_step_done "registry-tls"
+fi
+
 if ! is_step_done "registry-deploy"; then
 echo "--- 1. Deploying Local Registry to K8s ---"
 $KUBECTL apply -f "$REPO_DIR/registry.yaml"

@@ -150,12 +150,6 @@ EOF
 mark_step_done "purelb-config"
 fi
 
-if ! is_step_done "local-registry"; then
-echo "--- Bootstrapping Local Registry ---"
-bash $config_source_dir/infrastructure/registry/install.sh
-mark_step_done "local-registry"
-fi
-
 if ! is_step_done "olm"; then
 echo "installing crds"
 $KUBECTL apply -f \
@@ -171,55 +165,6 @@ WaitForDeploymentToComplete olm catalog-operator 15
 WaitForDeploymentToComplete olm packageserver 15
 mark_step_done "olm"
 fi
-
-#setup an operator group in the registry namespace
-#then add the 'quay' operator (container registry service) subscription
-
-echo "apply the quay operator"
-
-if ! is_step_done "quay"; then
-$KUBECTL get namespace registry >/dev/null 2>&1 || $KUBECTL create namespace registry
-$KUBECTL label --overwrite namespace registry  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
-
-$KUBECTL apply -f - <<EOF
----
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: og-single
-  namespace: registry
-spec:
-  targetNamespaces:
-  - registry
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: quay
-  namespace: registry
-spec:
-  channel: stable-3.8
-  installPlanApproval: Automatic
-  name: project-quay
-  source: operatorhubio-catalog
-  sourceNamespace: olm
-  startingCSV: quay-operator.v3.8.1
-
-EOF
-
-WaitForDeploymentToComplete registry quay-operator 15
-mark_step_done "quay"
-fi
-# $KUBECTL expose deployment quay --name=quay-server --port=8080 --target-port=8080 --type=LoadBalancer -n registry
-
-echo "check the 'quay' subscription"
-$KUBECTL get sub -n registry
-
-echo "the 'quay' cluster service version"
-$KUBECTL get csv -n registry
-
-echo "the 'quay' deployment"
-$KUBECTL get deployment -n registry
 
 if ! is_step_done "cert-manager"; then
 echo "install the cert-manager"
@@ -339,6 +284,61 @@ EOF
 echo "waiting for 1 minute"
 
 sleep 1m;
+
+if ! is_step_done "local-registry"; then
+echo "--- Bootstrapping Local Registry ---"
+bash $config_source_dir/infrastructure/registry/install.sh
+mark_step_done "local-registry"
+fi
+
+#setup an operator group in the registry namespace
+#then add the 'quay' operator (container registry service) subscription
+
+echo "apply the quay operator"
+
+if ! is_step_done "quay"; then
+$KUBECTL get namespace registry >/dev/null 2>&1 || $KUBECTL create namespace registry
+$KUBECTL label --overwrite namespace registry  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
+
+$KUBECTL apply -f - <<EOF
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: og-single
+  namespace: registry
+spec:
+  targetNamespaces:
+  - registry
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: quay
+  namespace: registry
+spec:
+  channel: stable-3.8
+  installPlanApproval: Automatic
+  name: project-quay
+  source: operatorhubio-catalog
+  sourceNamespace: olm
+  startingCSV: quay-operator.v3.8.1
+
+EOF
+
+WaitForDeploymentToComplete registry quay-operator 15
+mark_step_done "quay"
+fi
+# $KUBECTL expose deployment quay --name=quay-server --port=8080 --target-port=8080 --type=LoadBalancer -n registry
+
+echo "check the 'quay' subscription"
+$KUBECTL get sub -n registry
+
+echo "the 'quay' cluster service version"
+$KUBECTL get csv -n registry
+
+echo "the 'quay' deployment"
+$KUBECTL get deployment -n registry
 
 if ! is_step_done "metrics-server"; then
 echo "installing the metrics API"
