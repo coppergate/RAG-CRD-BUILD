@@ -13,28 +13,21 @@ export PULSAR_INSTALL="$REPO_DIR/infrastructure/pulsar"
 PULSAR_REMOVE="${PULSAR_REMOVE:-${FRESH_INSTALL:-false}}"
 
 # Journaling (resumable install)
-JOURNAL_DIR="${INSTALL_JOURNAL_DIR:-/var/lib/complete-build/journal/pulsar}"
-mkdir -p "$JOURNAL_DIR"
-chmod 777 "$JOURNAL_DIR" 2>/dev/null || true
-STEP_PREFIX="pulsar"
+source "${REPO_DIR}/../scripts/journal-helper.sh"
+init_journal
 
 log()  { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
 warn() { log "WARN: $*"; }
 fail() { log "ERROR: $*"; exit 1; }
 
-mark_done() {
-  local step="$1"
-  touch "$JOURNAL_DIR/${STEP_PREFIX}.$step.done"
-  chmod 666 "$JOURNAL_DIR/${STEP_PREFIX}.$step.done" 2>/dev/null || true
-}
-is_done() {
-  local step="$1"; [[ -f "$JOURNAL_DIR/${STEP_PREFIX}.$step.done" ]];
-}
+# Bridge custom journaling to standard journal-helper
+mark_done() { mark_step_done "$1"; }
+is_done() { is_step_done "$1"; }
 
 # If we are forcibly removing/resetting, clear journal so we don't skip steps incorrectly
-if [ "$PULSAR_REMOVE" = "true" ] && [ -d "$JOURNAL_DIR" ]; then
-  log "PULSAR_REMOVE=true detected. Clearing install journal at $JOURNAL_DIR"
-  rm -f "$JOURNAL_DIR/${STEP_PREFIX}."*.done 2>/dev/null || true
+if [[ "${PULSAR_REMOVE:-false}" == "true" ]]; then
+  log "PULSAR_REMOVE=true detected. Clearing install journal."
+  clear_journal
 fi
 
 echo "--- 1. Preparing Namespace and Optional Cleanup ---"
@@ -255,3 +248,4 @@ else
 fi
 
 echo "Pulsar Installation Complete. BookKeeper cluster metadata validated."
+clear_journal
