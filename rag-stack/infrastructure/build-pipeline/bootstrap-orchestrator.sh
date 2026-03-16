@@ -58,6 +58,9 @@ PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n $NAMESPACE s3
 $KUBECTL delete pod s3-bootstrap-uploader -n $NAMESPACE --now
 
 echo "--- 3. Launching Bootstrap Kaniko Job ---"
+# Apply the CA ConfigMap first
+$KUBECTL apply -f "$REPO_DIR/infrastructure/build-pipeline/registry-ca-cm.yaml"
+
 # Delete existing job if it exists (for retries)
 $KUBECTL delete job kaniko-bootstrap-orchestrator -n $NAMESPACE --ignore-not-found=true
 # We define the job inline to avoid needing a separate file for the one-shot bootstrap
@@ -94,19 +97,20 @@ spec:
         - "--context=dir:///workspace"
         - "--destination=$INTERNAL_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
         - "--destination=$INTERNAL_REGISTRY/build-orchestrator:latest"
-        #- "--insecure"
-        #- "--insecure-pull"
-        #- "--insecure-registry=$INTERNAL_REGISTRY"
-        #- "--skip-tls-verify"
-        #- "--skip-tls-verify-registry=$INTERNAL_REGISTRY"
         securityContext:
           allowPrivilegeEscalation: true
         volumeMounts:
         - name: workspace
           mountPath: /workspace
+        - name: registry-ca
+          mountPath: /kaniko/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
       volumes:
       - name: workspace
         emptyDir: {}
+      - name: registry-ca
+        configMap:
+          name: registry-ca
       restartPolicy: Never
   backoffLimit: 0
 EOF

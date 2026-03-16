@@ -53,6 +53,12 @@ spec:
           value: ":8080"
         - name: FAILED_TASK_TOPIC
           value: "persistent://public/default/build-tasks-deadletter"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
         readinessProbe:
           httpGet:
             path: /health
@@ -76,6 +82,10 @@ spec:
           limits:
             cpu: 500m
             memory: 768Mi
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca
 ---
 apiVersion: v1
 kind: ServiceAccount

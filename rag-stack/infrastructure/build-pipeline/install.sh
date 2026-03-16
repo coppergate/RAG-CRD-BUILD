@@ -38,6 +38,12 @@ if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
     mark_step_done "build-pipeline-ns"
 fi
 
+if should_run_step "build-pipeline-ca" "$KUBECTL get configmap -n $NAMESPACE registry-ca"; then
+    echo "--- Applying Registry CA ---"
+    $KUBECTL apply -f "$REPO_DIR/registry-ca-cm.yaml"
+    mark_step_done "build-pipeline-ca"
+fi
+
 if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1 && skopeo inspect --tls-verify=false docker://$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"; then
     echo "--- Bootstrapping Build Orchestrator Image (Cluster-Native) ---"
     ORCHESTRATOR_TAG="$ORCHESTRATOR_TAG" REGISTRY="$REGISTRY" bash "$REPO_DIR/bootstrap-orchestrator.sh"

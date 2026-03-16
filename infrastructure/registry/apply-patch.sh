@@ -16,7 +16,9 @@ fi
 
 for ip in "${NODES[@]}"; do
   echo "Patching node $ip..."
-  # Use JSON patch (RFC 6902) which is more reliable for targeting specific config paths
+  # Clear existing extraHostEntries to avoid duplicates/stale entries
+  TALOSCONFIG=$TALOS_CONFIG $TALOS_BIN -n $ip patch machineconfig --patch '[{"op": "replace", "path": "/machine/network/extraHostEntries", "value": []}]'
+  # Apply the desired registry configuration
   TALOSCONFIG=$TALOS_CONFIG $TALOS_BIN -n $ip patch machineconfig --patch "@$PATCH_FILE"
 done
 

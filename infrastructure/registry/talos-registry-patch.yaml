@@ -4,10 +4,10 @@ machine:
       - ip: 10.0.0.1
         aliases:
           - hierophant.hierocracy.home
-          - registry.hierocracy.home
           - hierophant
       - ip: 172.20.1.26
         aliases:
+          - registry.hierocracy.home
           - registry.container-registry.svc.cluster.local
   registries:
     mirrors:
@@ -19,7 +19,7 @@ machine:
           - "https://hierophant.hierocracy.home:5000"
       "registry.hierocracy.home:5000":
         endpoints:
-          - "https://hierophant.hierocracy.home:5000"
+          - "https://registry.hierocracy.home:5000"
       "registry.container-registry.svc.cluster.local:5000":
         endpoints:
           - "https://registry.container-registry.svc.cluster.local:5000"
