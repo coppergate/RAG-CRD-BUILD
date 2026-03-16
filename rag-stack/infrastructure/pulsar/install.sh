@@ -59,6 +59,26 @@ if ! is_done 10.ns; then
     pod-security.kubernetes.io/audit=privileged \
     pod-security.kubernetes.io/warn=privileged \
     pod-security.kubernetes.io/enforce=privileged
+  
+  # Inject the registry Root CA ConfigMap
+  log "Injecting registry-ca-cm into $NAMESPACE..."
+  if $KUBECTL get configmap registry-ca-cm -n container-registry >/dev/null 2>&1; then
+      $KUBECTL get configmap registry-ca-cm -n container-registry -o yaml | \
+      sed "s/namespace: container-registry/namespace: $NAMESPACE/" | \
+      $KUBECTL apply -f -
+  else
+      # Fallback: Extract from talos patch if source CM is missing
+      CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+      if [ -n "$CA_B64" ]; then
+          log "Creating registry-ca-cm from Talos patch..."
+          echo "$CA_B64" | base64 -d > /tmp/ca.crt
+          $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt=/tmp/ca.crt --dry-run=client -o yaml | $KUBECTL apply -f -
+          rm /tmp/ca.crt
+      else
+          warn "Could not find registry-ca-cm or Talos patch to inject CA."
+      fi
+  fi
+
   mark_done 10.ns
 else
   log "Step 1 already completed (journal 10.ns)"
@@ -136,6 +156,14 @@ if ! is_done 30.helmInstall; then
       --set bookkeeper.volumes.ledgers.storageClassName=rook-ceph-block \
       --set pulsar_manager.volumes.persistence=true \
       --set pulsar_manager.volumes.data.storageClassName=rook-ceph-block \
+      --set "broker.extraVolumes[0].name=registry-ca,broker.extraVolumes[0].configMap.name=registry-ca-cm" \
+      --set "broker.extraVolumeMounts[0].name=registry-ca,broker.extraVolumeMounts[0].mountPath=/etc/ssl/certs/ca.crt,broker.extraVolumeMounts[0].subPath=ca.crt" \
+      --set "proxy.extraVolumes[0].name=registry-ca,proxy.extraVolumes[0].configMap.name=registry-ca-cm" \
+      --set "proxy.extraVolumeMounts[0].name=registry-ca,proxy.extraVolumeMounts[0].mountPath=/etc/ssl/certs/ca.crt,proxy.extraVolumeMounts[0].subPath=ca.crt" \
+      --set "pulsar_manager.extraVolumes[0].name=registry-ca,pulsar_manager.extraVolumes[0].configMap.name=registry-ca-cm" \
+      --set "pulsar_manager.extraVolumeMounts[0].name=registry-ca,pulsar_manager.extraVolumeMounts[0].mountPath=/etc/ssl/certs/ca.crt,pulsar_manager.extraVolumeMounts[0].subPath=ca.crt" \
+      --set "toolset.extraVolumes[0].name=registry-ca,toolset.extraVolumes[0].configMap.name=registry-ca-cm" \
+      --set "toolset.extraVolumeMounts[0].name=registry-ca,toolset.extraVolumeMounts[0].mountPath=/etc/ssl/certs/ca.crt,toolset.extraVolumeMounts[0].subPath=ca.crt" \
       --timeout 60m \
       --wait
   mark_done 30.helmInstall
