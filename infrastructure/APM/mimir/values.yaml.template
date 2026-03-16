@@ -1,3 +1,16 @@
+global:
+  extraEnv:
+    - name: SSL_CERT_FILE
+      value: /etc/ssl/certs/ca.crt
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
+
 mimir:
   structuredConfig:
     common:
@@ -8,25 +21,35 @@ mimir:
           access_key_id: ${AWS_ACCESS_KEY_ID}
           secret_access_key: ${AWS_SECRET_ACCESS_KEY}
           insecure: false
-          bucket_name: ${BUCKET_NAME}
     blocks_storage:
       s3:
         bucket_name: ${BUCKET_NAME}
+        endpoint: ${S3_ENDPOINT}
+        access_key_id: ${AWS_ACCESS_KEY_ID}
+        secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+        insecure: false
       backend: s3
       tsdb:
         dir: /data/tsdb
+        head_compaction_interval: 15m
+        wal_replay_concurrency: 3
+        retention_period: 168h
     alertmanager_storage:
       backend: s3
       s3:
         bucket_name: ${ALERTMANAGER_BUCKET_NAME}
+        endpoint: ${S3_ENDPOINT}
         access_key_id: ${ALERTMANAGER_ACCESS_KEY}
         secret_access_key: ${ALERTMANAGER_SECRET_KEY}
+        insecure: false
     ruler_storage:
       backend: s3
       s3:
         bucket_name: ${RULER_BUCKET_NAME}
+        endpoint: ${S3_ENDPOINT}
         access_key_id: ${RULER_ACCESS_KEY}
         secret_access_key: ${RULER_SECRET_KEY}
+        insecure: false
     distributor:
       ring:
         instance_id: distributor

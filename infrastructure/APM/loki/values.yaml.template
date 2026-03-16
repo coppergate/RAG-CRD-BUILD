@@ -1,3 +1,13 @@
+global:
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
+
 loki:
   auth_enabled: false
   commonConfig:
@@ -12,6 +22,8 @@ loki:
       secret_access_key: ${AWS_SECRET_ACCESS_KEY}
       s3forcepathstyle: true
       insecure: false
+      http_config:
+        ca_file: /etc/ssl/certs/ca.crt
     bucketNames:
       chunks: ${BUCKET_NAME}
       ruler: ${BUCKET_NAME}
@@ -30,6 +42,14 @@ deploymentMode: SingleBinary
 
 singleBinary:
   replicas: 3
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
   nodeSelector:
     role: storage-node
   persistence:

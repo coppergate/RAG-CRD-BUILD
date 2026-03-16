@@ -12,6 +12,8 @@ tempo:
           access_key: ${AWS_ACCESS_KEY_ID}
           secret_key: ${AWS_SECRET_ACCESS_KEY}
           insecure: false
+          http_config:
+            ca_file: /etc/ssl/certs/ca.crt
     
     # Retention and other settings
     overrides:
@@ -33,8 +35,17 @@ replicas: 1
 
 persistence:
   enabled: true
-  storageClass: rook-ceph-block
+  storageClassName: rook-ceph-block
   size: 10Gi
+
+extraVolumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+extraVolumeMounts:
+  - name: registry-ca
+    mountPath: /etc/ssl/certs/ca.crt
+    subPath: ca.crt
 
 nodeSelector:
   role: storage-node
