@@ -10,7 +10,8 @@ GLOBAL_JOURNAL_ROOT="/var/lib/complete-build/journal"
 JOURNAL_FILE_DIR="${INSTALL_JOURNAL_DIR:-$GLOBAL_JOURNAL_ROOT}"
 
 # Determine a safe temporary directory for the user (override with INSTALL_TMP_DIR)
-SAFE_TMP_DIR="${INSTALL_TMP_DIR:-/var/lib/complete-build/tmp}"
+# Prefer per-user /tmp directory to avoid permission issues in shared environments
+SAFE_TMP_DIR="${INSTALL_TMP_DIR:-/tmp/k8s-setup-${USER:-junie}}"
 export SAFE_TMP_DIR
 export TMPDIR="$SAFE_TMP_DIR"
 
