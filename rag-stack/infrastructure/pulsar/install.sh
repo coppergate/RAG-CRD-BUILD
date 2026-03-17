@@ -155,14 +155,6 @@ if ! is_done 30.helmInstall; then
       --set bookkeeper.volumes.ledgers.storageClassName=rook-ceph-block \
       --set pulsar_manager.volumes.persistence=true \
       --set pulsar_manager.volumes.data.storageClassName=rook-ceph-block \
-      --set "broker.extraVolumes[0].name=registry-ca,broker.extraVolumes[0].configMap.name=registry-ca-cm" \
-      --set "broker.extraVolumeMounts[0].name=registry-ca,broker.extraVolumeMounts[0].mountPath=/etc/ssl/certs/ca.crt,broker.extraVolumeMounts[0].subPath=ca.crt" \
-      --set "proxy.extraVolumes[0].name=registry-ca,proxy.extraVolumes[0].configMap.name=registry-ca-cm" \
-      --set "proxy.extraVolumeMounts[0].name=registry-ca,proxy.extraVolumeMounts[0].mountPath=/etc/ssl/certs/ca.crt,proxy.extraVolumeMounts[0].subPath=ca.crt" \
-      --set "pulsar_manager.extraVolumes[0].name=registry-ca,pulsar_manager.extraVolumes[0].configMap.name=registry-ca-cm" \
-      --set "pulsar_manager.extraVolumeMounts[0].name=registry-ca,pulsar_manager.extraVolumeMounts[0].mountPath=/etc/ssl/certs/ca.crt,pulsar_manager.extraVolumeMounts[0].subPath=ca.crt" \
-      --set "toolset.extraVolumes[0].name=registry-ca,toolset.extraVolumes[0].configMap.name=registry-ca-cm" \
-      --set "toolset.extraVolumeMounts[0].name=registry-ca,toolset.extraVolumeMounts[0].mountPath=/etc/ssl/certs/ca.crt,toolset.extraVolumeMounts[0].subPath=ca.crt" \
       --timeout 60m \
       --wait
   mark_done 30.helmInstall

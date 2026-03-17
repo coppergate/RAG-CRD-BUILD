@@ -394,15 +394,14 @@ zookeeper:
       cpu: 0.1
   # extraVolumes and extraVolumeMounts allows you to mount other volumes
   # Example Use Case: mount ssl certificates
-  extraVolumes: [ ]
-  #  - name: ca-certs
-  #    secret:
-  #      defaultMode: 420
-  #      secretName: pulsar-ca-tls
-  extraVolumeMounts: [ ]
-  #  - name: ca-certs
-  #    mountPath: /certs
-  #    readOnly: true
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
   # Ensures 2.10.0 non-root docker image works correctly.
   securityContext:
     fsGroup: 0
@@ -647,15 +646,14 @@ bookkeeper:
       cpu: 0.2
   # extraVolumes and extraVolumeMounts allows you to mount other volumes
   # Example Use Case: mount ssl certificates
-  extraVolumes: [ ]
-  #  - name: ca-certs
-  #    secret:
-  #      defaultMode: 420
-  #      secretName: pulsar-ca-tls
-  extraVolumeMounts: [ ]
-  #  - name: ca-certs
-  #    mountPath: /certs
-  #    readOnly: true
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
   # Ensures 2.10.0 non-root docker image works correctly.
   securityContext:
     fsGroup: 0
@@ -983,8 +981,14 @@ broker:
   #     mountPath: /certs
   #     readOnly: true
   
-  extraVolumes: [ ]
-  extraVolumeMounts: [ ]
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
   extraEnvs: [ ]
   #  - name: POD_NAME
   #    valueFrom:
@@ -1225,8 +1229,14 @@ proxy:
  #  - name: ca-certs
  #    mountPath: /certs
  #    readOnly: true
-  extraVolumes: [ ]
-  extraVolumeMounts: [ ]
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
   extraEnvs: [ ]
   #    - name: POD_IP
   #      valueFrom:
@@ -1343,10 +1353,16 @@ toolset:
       secret:
         defaultMode: 420
         secretName: pulsar-ca-tls
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
   extraVolumeMounts:
     - name: ca-certs
       mountPath: /certs
       readOnly: true
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
   ## Toolset service account
   ## templates/toolset-service-account.yaml
   service_account:
@@ -1465,8 +1481,14 @@ pulsar_manager:
   topologySpreadConstraints: [ ]
   annotations: { }
   tolerations: [ ]
-  extraVolumes: [ ]
-  extraVolumeMounts: [ ]
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
   gracePeriod: 30
   resources:
     requests:
