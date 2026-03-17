@@ -65,4 +65,14 @@ spec:
           value: "persistent://rag-pipeline/stage/results"
         - name: PULSAR_DB_OPS_TOPIC
           value: "persistent://rag-pipeline/operations/db-ops"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
         # Removed dev-only source ConfigMap mount. Images are the deployment artifact.

@@ -58,6 +58,6 @@ spec:
         emptyDir: {}
       - name: registry-ca
         configMap:
-          name: registry-ca
+          name: registry-ca-cm
       restartPolicy: Never
   backoffLimit: 1

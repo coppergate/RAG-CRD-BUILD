@@ -51,12 +51,21 @@ spec:
             secretKeyRef:
               name: timescaledb-secret
               key: url
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
         envFrom:
         - configMapRef:
             name: llm-gateway-config
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
       volumes:
       - name: app-dir
         emptyDir: {}
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
 ---
 apiVersion: v1
 kind: Service

@@ -289,7 +289,7 @@ autoscaling:
 volumes:
   - name: registry-ca
     configMap:
-      name: registry-ca
+      name: registry-ca-cm
 
 # -- Additional volumeMounts on the output Deployment definition.
 volumeMounts:

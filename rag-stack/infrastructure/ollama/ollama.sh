@@ -12,6 +12,29 @@ $KUBECTL label --overwrite namespace llms-ollama \
   pod-security.kubernetes.io/enforce=privileged \
   pod-security.kubernetes.io/audit=privileged \
   pod-security.kubernetes.io/warn=privileged
+
+# Inject Registry CA ConfigMap
+echo "--- Injecting Registry CA into llms-ollama ---"
+# Source journal-helper for SAFE_TMP_DIR and REPO_DIR (if available)
+REPO_DIR="${REPO_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+source "$REPO_DIR/../scripts/journal-helper.sh"
+mkdir -p "$SAFE_TMP_DIR"
+
+if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+    echo "Extracting CA from container-registry/in-cluster-registry-tls..."
+    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode > "$SAFE_TMP_DIR/ca.crt"
+    $KUBECTL create configmap registry-ca-cm -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+else
+    echo "Fallback: Extracting CA from Talos registry patch..."
+    CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+    if [ -n "$CA_B64" ]; then
+        echo "$CA_B64" | base64 -d > "$SAFE_TMP_DIR/ca.crt"
+        $KUBECTL create configmap registry-ca-cm -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+    else
+        echo "WARNING: Could not find CA to inject into llms-ollama."
+    fi
+fi
+rm -f "$SAFE_TMP_DIR/ca.crt"
   
 $KUBECTL label nodes inference-0 role=inference-node llm-model=llama3.1 --overwrite
 $KUBECTL label nodes inference-1 role=inference-node llm-model=granite3.1-dense-8b --overwrite

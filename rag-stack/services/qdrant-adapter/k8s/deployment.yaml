@@ -53,6 +53,12 @@ spec:
               value: qdrant.rag-system.svc.cluster.local
             - name: QDRANT_PORT
               value: "6333"
+            - name: SSL_CERT_FILE
+              value: "/etc/ssl/certs/ca-certificates.crt"
+          volumeMounts:
+            - name: registry-ca
+              mountPath: /etc/ssl/certs/ca-certificates.crt
+              subPath: ca.crt
           resources:
             requests:
               cpu: "200m"
@@ -62,3 +68,7 @@ spec:
               memory: "1Gi"
           ports:
             - containerPort: 8080
+      volumes:
+        - name: registry-ca
+          configMap:
+            name: registry-ca-cm

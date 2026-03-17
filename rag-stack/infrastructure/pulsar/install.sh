@@ -55,22 +55,28 @@ if ! is_done 10.ns; then
   
   # Inject the registry Root CA ConfigMap
   log "Injecting registry-ca-cm into $NAMESPACE..."
-  if $KUBECTL get configmap registry-ca-cm -n container-registry >/dev/null 2>&1; then
-      $KUBECTL get configmap registry-ca-cm -n container-registry -o yaml | \
-      sed "s/namespace: container-registry/namespace: $NAMESPACE/" | \
-      $KUBECTL apply -f -
+  
+  # Ensure SAFE_TMP_DIR exists
+  mkdir -p "$SAFE_TMP_DIR"
+  
+  # Try to extract the CA from the in-cluster secret first, then fallback to Talos patch
+  if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+      log "Extracting CA from container-registry/in-cluster-registry-tls..."
+      $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode > "$SAFE_TMP_DIR/ca.crt"
+      $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
   else
-      # Fallback: Extract from talos patch if source CM is missing
+      # Fallback: Extract from talos patch if source secret is missing
+      log "Fallback: Extracting CA from Talos registry patch..."
       CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
       if [ -n "$CA_B64" ]; then
-          log "Creating registry-ca-cm from Talos patch..."
-          echo "$CA_B64" | base64 -d > /tmp/ca.crt
-          $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt=/tmp/ca.crt --dry-run=client -o yaml | $KUBECTL apply -f -
-          rm /tmp/ca.crt
+          echo "$CA_B64" | base64 -d > "$SAFE_TMP_DIR/ca.crt"
+          $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
       else
           warn "Could not find registry-ca-cm or Talos patch to inject CA."
       fi
   fi
+  # Clean up the temporary cert file
+  rm -f "$SAFE_TMP_DIR/ca.crt"
 
   mark_done 10.ns
 else

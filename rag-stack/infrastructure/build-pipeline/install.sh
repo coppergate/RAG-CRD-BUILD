@@ -38,9 +38,30 @@ if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
     mark_step_done "build-pipeline-ns"
 fi
 
-if should_run_step "build-pipeline-ca" "$KUBECTL get configmap -n $NAMESPACE registry-ca"; then
+if should_run_step "build-pipeline-ca" "$KUBECTL get configmap -n $NAMESPACE registry-ca-cm"; then
     echo "--- Applying Registry CA ---"
-    $KUBECTL apply -f "$REPO_DIR/registry-ca-cm.yaml"
+    
+    # Ensure SAFE_TMP_DIR exists
+    mkdir -p "$SAFE_TMP_DIR"
+    
+    # Try to extract the CA from the in-cluster secret first, then fallback to Talos patch
+    if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+        echo "Extracting CA from container-registry/in-cluster-registry-tls..."
+        $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode > "$SAFE_TMP_DIR/ca.crt"
+        $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+    else
+        # Fallback: Extract from talos patch if source secret is missing
+        echo "Fallback: Extracting CA from Talos registry patch..."
+        CA_B64=$(grep "ca: " "$REPO_DIR/../../../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+        if [ -n "$CA_B64" ]; then
+            echo "$CA_B64" | base64 -d > "$SAFE_TMP_DIR/ca.crt"
+            $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+        else
+            echo "WARNING: Could not find registry-ca-cm or Talos patch to inject CA."
+        fi
+    fi
+    # Clean up the temporary cert file
+    rm -f "$SAFE_TMP_DIR/ca.crt"
     mark_step_done "build-pipeline-ca"
 fi
 

@@ -85,7 +85,7 @@ spec:
       volumes:
       - name: registry-ca
         configMap:
-          name: registry-ca
+          name: registry-ca-cm
 ---
 apiVersion: v1
 kind: ServiceAccount
