@@ -219,7 +219,7 @@ images:
 ## The chart is using cert-manager for provisioning TLS certs for
 ## brokers and proxies.
 tls:
-  enabled: false
+  enabled: true
   ca_suffix: ca-tls
   # common settings for generating certs
   common:
@@ -1237,6 +1237,9 @@ proxy:
     - name: registry-ca
       mountPath: /etc/ssl/certs/ca.crt
       subPath: ca.crt
+    - name: ca
+      mountPath: /pulsar/certs/ca
+      readOnly: true
   extraEnvs: [ ]
   #    - name: POD_IP
   #      valueFrom:
@@ -1349,17 +1352,10 @@ toolset:
   # extraVolumes and extraVolumeMounts allows you to mount other volumes
   # Example Use Case: mount ssl certificates
   extraVolumes:
-    - name: ca-certs
-      secret:
-        defaultMode: 420
-        secretName: pulsar-ca-tls
     - name: registry-ca
       configMap:
         name: registry-ca-cm
   extraVolumeMounts:
-    - name: ca-certs
-      mountPath: /certs
-      readOnly: true
     - name: registry-ca
       mountPath: /etc/ssl/certs/ca.crt
       subPath: ca.crt

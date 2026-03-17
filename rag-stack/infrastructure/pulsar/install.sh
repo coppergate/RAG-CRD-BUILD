@@ -197,7 +197,7 @@ fi
 
 if ! is_done 60.bkMeta; then
   # Pick a pod owned by the 'pulsar-bookie' StatefulSet (robust to label changes)
-  BK_POD=$($KUBECTL -n $NAMESPACE get pods -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].kind=="StatefulSet" && @.metadata.ownerReferences[0].name=="pulsar-bookie")]}{.metadata.name}{"\n"}{end}' | head -n1 2>/dev/null || true)
+  BK_POD=$($KUBECTL -n $NAMESPACE get pods -l app=pulsar,component=bookie --no-headers -o custom-columns=:metadata.name | head -n1 2>/dev/null || true)
   if [ -n "$BK_POD" ]; then
     echo "Using bookkeeper pod: $BK_POD to verify metadata"
     $KUBECTL -n $NAMESPACE exec -i "$BK_POD" -- bash -lc '
@@ -221,7 +221,7 @@ if ! is_done 60.bkMeta; then
     # Optional: clean local bookie data if FORCE_REINIT=true
     if [ "${FORCE_REINIT:-false}" = "true" ]; then
       echo "FORCE_REINIT=true detected. Cleaning local bookie data across pods..."
-      for POD in $($KUBECTL -n $NAMESPACE get pods -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].kind=="StatefulSet" && @.metadata.ownerReferences[0].name=="pulsar-bookie")]}{.metadata.name}{"\n"}{end}'); do
+      for POD in $($KUBECTL -n $NAMESPACE get pods -l app=pulsar,component=bookie --no-headers -o custom-columns=:metadata.name); do
         echo "Cleaning bookie on pod: $POD"
         $KUBECTL -n $NAMESPACE exec -i "$POD" -- bash -lc '
         set -e
@@ -234,7 +234,7 @@ if ! is_done 60.bkMeta; then
       done
       echo "Waiting for bookkeeper statefulset to become Ready after cleanup..."
       set +e
-      $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-bookkeeper --timeout=10m || true
+      $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-bookie --timeout=10m || true
       set -e
     fi
   else
