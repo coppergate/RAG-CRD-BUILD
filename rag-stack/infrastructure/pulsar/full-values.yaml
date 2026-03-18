@@ -833,6 +833,14 @@ autorecovery:
     requests:
       memory: 64Mi
       cpu: 0.05
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
   ## Bookkeeper auto-recovery service account
   ## templates/autorecovery-service-account.yaml
   service_account:
@@ -1239,9 +1247,6 @@ proxy:
     - name: registry-ca
       mountPath: /etc/ssl/certs/ca.crt
       subPath: ca.crt
-    - name: ca
-      mountPath: /pulsar/certs/ca
-      readOnly: true
   extraEnvs: [ ]
   #    - name: POD_IP
   #      valueFrom:
