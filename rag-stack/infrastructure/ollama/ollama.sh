@@ -24,12 +24,16 @@ if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 
     echo "Extracting CA from container-registry/in-cluster-registry-tls..."
     $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode > "$SAFE_TMP_DIR/ca.crt"
     $KUBECTL create configmap registry-ca-cm -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+    # Also create 'registry-ca' for legacy compatibility
+    $KUBECTL create configmap registry-ca -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
 else
     echo "Fallback: Extracting CA from Talos registry patch..."
     CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
     if [ -n "$CA_B64" ]; then
         echo "$CA_B64" | base64 -d > "$SAFE_TMP_DIR/ca.crt"
         $KUBECTL create configmap registry-ca-cm -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+        # Also create 'registry-ca' for legacy compatibility
+        $KUBECTL create configmap registry-ca -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
     else
         echo "WARNING: Could not find CA to inject into llms-ollama."
     fi

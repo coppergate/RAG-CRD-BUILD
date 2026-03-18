@@ -69,6 +69,8 @@ if should_run_step "build-pipeline-ca" "$KUBECTL get configmap -n $NAMESPACE reg
 
     if [ -s "$COMBINED_CA" ]; then
         $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+        # Also create 'registry-ca' for legacy/outdated images
+        $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
     else
         echo "WARNING: Could not find any CA to inject."
     fi
