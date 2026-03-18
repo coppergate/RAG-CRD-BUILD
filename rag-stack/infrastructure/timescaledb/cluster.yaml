@@ -32,3 +32,8 @@ spec:
   postgresql:
     shared_preload_libraries:
       - timescaledb
+  certificates:
+    issuerRef:
+      name: hierocracy-ca-issuer
+      kind: ClusterIssuer
+      group: cert-manager.io

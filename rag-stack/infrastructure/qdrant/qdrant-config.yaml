@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qdrant-config
+  namespace: rag-system
+data:
+  config.yaml: |
+    service:
+      enable_tls: true
+      https_port: 6333
+    tls:
+      cert: /qdrant/tls/tls.crt
+      key: /qdrant/tls/tls.key
+      ca_cert: /qdrant/tls/ca.crt

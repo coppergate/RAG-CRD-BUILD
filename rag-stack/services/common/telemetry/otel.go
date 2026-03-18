@@ -21,23 +21,31 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	if endpoint == "" {
-		endpoint = "otel-collector.apm.svc.cluster.local:4318"
+		endpoint = "otel-collector.monitoring.svc.cluster.local:4318"
+	}
+
+	useTLS := os.Getenv("OTEL_USE_TLS") == "true"
+
+	var traceOpts []otlptracehttp.Option
+	traceOpts = append(traceOpts, otlptracehttp.WithEndpoint(endpoint))
+	if !useTLS {
+		traceOpts = append(traceOpts, otlptracehttp.WithInsecure())
 	}
 
 	// Traces exporter
-	traceExp, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(endpoint),
-		otlptracehttp.WithInsecure(),
-	)
+	traceExp, err := otlptracehttp.New(ctx, traceOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
 	}
 
+	var metricOpts []otlpmetrichttp.Option
+	metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(endpoint))
+	if !useTLS {
+		metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
+	}
+
 	// Metrics exporter
-	metricExp, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpoint(endpoint),
-		otlpmetrichttp.WithInsecure(),
-	)
+	metricExp, err := otlpmetrichttp.New(ctx, metricOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
 	}

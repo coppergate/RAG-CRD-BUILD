@@ -10,8 +10,14 @@ data:
         protocols:
           grpc:
             endpoint: 0.0.0.0:4317
+            tls:
+              cert_file: /etc/otel/tls/tls.crt
+              key_file: /etc/otel/tls/tls.key
           http:
             endpoint: 0.0.0.0:4318
+            tls:
+              cert_file: /etc/otel/tls/tls.crt
+              key_file: /etc/otel/tls/tls.key
 
     processors:
       batch:
@@ -24,13 +30,14 @@ data:
 
     exporters:
       otlphttp/loki:
-        endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
+        endpoint: https://loki-gateway.monitoring.svc.cluster.local/otlp
       otlp/tempo:
         endpoint: tempo-distributor.monitoring.svc.cluster.local:4317
         tls:
-          insecure: true
+          insecure: false
+          ca_file: /etc/ssl/certs/ca.crt
       otlphttp/mimir:
-        endpoint: http://mimir-gateway.monitoring.svc.cluster.local/otlp
+        endpoint: https://mimir-gateway.monitoring.svc.cluster.local/otlp
       debug:
         verbosity: basic
 
@@ -71,10 +78,18 @@ spec:
         image: registry.container-registry.svc.cluster.local:5000/otel/opentelemetry-collector-contrib:0.147.0
         args:
         - "--config=/etc/otel-collector-config.yaml"
+        env:
+        - name: SSL_CERT_FILE
+          value: /etc/ssl/certs/ca.crt
         volumeMounts:
         - name: config
           mountPath: /etc/otel-collector-config.yaml
           subPath: otel-collector-config.yaml
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca.crt
+          subPath: ca.crt
+        - name: otel-tls
+          mountPath: /etc/otel/tls
         ports:
         - containerPort: 4317 # gRPC
         - containerPort: 4318 # HTTP
@@ -82,6 +97,12 @@ spec:
       - name: config
         configMap:
           name: otel-collector-conf
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+      - name: otel-tls
+        secret:
+          secretName: otel-collector-tls
 ---
 apiVersion: v1
 kind: Service

@@ -51,8 +51,16 @@ spec:
             secretKeyRef:
               name: timescaledb-secret
               key: url
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OTEL_USE_TLS
+          value: "true"
         envFrom:
         - configMapRef:
             name: llm-gateway-config
@@ -60,12 +68,21 @@ spec:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt
           subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
       volumes:
       - name: app-dir
         emptyDir: {}
       - name: registry-ca
         configMap:
           name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: llm-gateway-tls
 ---
 apiVersion: v1
 kind: Service
@@ -76,8 +93,9 @@ spec:
   selector:
     app: llm-gateway
   ports:
-  - port: 80
+  - port: 443
     targetPort: 8080
+    name: https
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -85,8 +103,13 @@ metadata:
   name: llm-gateway
   namespace: rag-system
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
+  tls:
+  - hosts:
+    - gateway.rag.local
+    secretName: llm-gateway-tls
   rules:
   - host: gateway.rag.local
     http:
@@ -97,4 +120,4 @@ spec:
           service:
             name: llm-gateway
             port:
-              number: 80
+              name: https

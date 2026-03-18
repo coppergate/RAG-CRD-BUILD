@@ -1,0 +1,96 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: llm-gateway-cert
+  namespace: rag-system
+spec:
+  secretName: llm-gateway-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: llm-gateway.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - llm-gateway
+    - llm-gateway.rag-system
+    - llm-gateway.rag-system.svc
+    - llm-gateway.rag-system.svc.cluster.local
+    - gateway.rag.local
+    - gateway.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rag-ingestion-cert
+  namespace: rag-system
+spec:
+  secretName: rag-ingestion-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: rag-ingestion-service.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - rag-ingestion-service
+    - rag-ingestion-service.rag-system
+    - rag-ingestion-service.rag-system.svc
+    - rag-ingestion-service.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rag-web-ui-cert
+  namespace: rag-system
+spec:
+  secretName: rag-web-ui-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: rag-web-ui.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - rag-web-ui
+    - rag-web-ui.rag-system
+    - rag-web-ui.rag-system.svc
+    - rag-web-ui.rag-system.svc.cluster.local
+    - ui.rag.local
+    - ui.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

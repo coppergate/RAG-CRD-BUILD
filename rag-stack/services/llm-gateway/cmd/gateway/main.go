@@ -67,8 +67,18 @@ func main() {
 	}
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Listen error: %v", err)
+		certFile := os.Getenv("TLS_CERT")
+		keyFile := os.Getenv("TLS_KEY")
+		if certFile != "" && keyFile != "" {
+			log.Printf("Listening with TLS on %s", cfg.ListenAddr)
+			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
+		} else {
+			log.Printf("Listening without TLS on %s", cfg.ListenAddr)
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
 		}
 	}()
 

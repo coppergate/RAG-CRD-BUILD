@@ -108,23 +108,34 @@ spec:
               name: rag-codebase-bucket
               key: AWS_SECRET_ACCESS_KEY
         - name: LLM_URL
-          value: "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
-        - name: QDRANT_HOST
-          value: "qdrant"
-        - name: QDRANT_PORT
-          value: "6333"
+          value: "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OTEL_USE_TLS
+          value: "true"
         volumeMounts:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt
           subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
       volumes:
       - name: app-dir
         emptyDir: {}
       - name: registry-ca
         configMap:
           name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: rag-web-ui-tls
 ---
 apiVersion: v1
 kind: Service
@@ -138,6 +149,7 @@ spec:
     app: rag-web-ui
   ports:
   - protocol: TCP
-    port: 80
+    port: 443
     targetPort: 8080
+    name: https
   type: LoadBalancer

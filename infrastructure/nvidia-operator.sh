@@ -89,7 +89,7 @@ spec:
       - operator: Exists
       containers:
       - name: validation-fix
-        image: 172.20.0.1:5000/busybox:1.36
+        image: 172.20.1.26:5000/busybox:1.36
         command:
         - sh
         - -c

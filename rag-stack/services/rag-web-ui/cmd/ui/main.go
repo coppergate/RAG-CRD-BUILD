@@ -43,12 +43,12 @@ func initEnv() {
 
 	endpoint := os.Getenv("S3_ENDPOINT")
 	if endpoint != "" && !strings.HasPrefix(endpoint, "http") {
-		endpoint = "http://" + endpoint
+		endpoint = "https://" + endpoint
 	}
 	bucketName = os.Getenv("BUCKET_NAME")
 	llmURL = os.Getenv("LLM_URL")
 	if llmURL == "" {
-		llmURL = "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
+		llmURL = "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
 	}
 	llmModel = os.Getenv("LLM_MODEL")
 	if llmModel == "" {
@@ -331,7 +331,7 @@ func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 				tNames = append(tNames, n)
 			}
 			p, _ := json.Marshal(map[string]interface{}{"ingestion_id": ingestionID, "tag_names": tNames, "tag_ids": tags})
-			resp, err := http.Post("http://rag-ingestion-service.rag-system.svc.cluster.local/ingest", "application/json", bytes.NewBuffer(p))
+			resp, err := http.Post("https://rag-ingestion-service.rag-system.svc.cluster.local/ingest", "application/json", bytes.NewBuffer(p))
 			if err != nil {
 				log.Printf("Error triggering ingestion service: %v", err)
 			} else {
@@ -514,6 +514,29 @@ func main() {
 
 	otelHandler := otelhttp.NewHandler(mux, "rag-web-ui")
 
-	fmt.Println("RAG Interactive UI v4 listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", otelHandler))
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: otelHandler,
+	}
+
+	go func() {
+		certFile := os.Getenv("TLS_CERT")
+		keyFile := os.Getenv("TLS_KEY")
+		if certFile != "" && keyFile != "" {
+			fmt.Printf("RAG Interactive UI v4 listening with TLS on :8080\n")
+			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
+		} else {
+			fmt.Printf("RAG Interactive UI v4 listening on :8080\n")
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+	log.Println("Shutting down RAG Web UI...")
 }

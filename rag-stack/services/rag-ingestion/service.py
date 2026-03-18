@@ -27,7 +27,13 @@ logger = logging.getLogger("rag-ingestor")
 # OpenTelemetry Setup
 resource = Resource(attributes={SERVICE_NAME: "rag-ingestion"})
 provider = TracerProvider(resource=resource)
-otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector.apm.svc.cluster.local:4318/v1/traces")
+otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector.monitoring.svc.cluster.local:4318/v1/traces")
+if os.getenv("OTEL_USE_TLS") == "true":
+    if otlp_endpoint.startswith("http://"):
+        otlp_endpoint = otlp_endpoint.replace("http://", "https://")
+    elif not otlp_endpoint.startswith("https://"):
+        otlp_endpoint = f"https://{otlp_endpoint}"
+
 processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
 provider.add_span_processor(processor)
 trace.set_tracer_provider(provider)
@@ -201,4 +207,11 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    tls_cert = os.getenv("TLS_CERT")
+    tls_key = os.getenv("TLS_KEY")
+    if tls_cert and tls_key:
+        logger.info(f"Starting RAG Ingestion Service with TLS on port 8000")
+        uvicorn.run(app, host="0.0.0.0", port=8000, ssl_certfile=tls_cert, ssl_keyfile=tls_key)
+    else:
+        logger.info(f"Starting RAG Ingestion Service without TLS on port 8000")
+        uvicorn.run(app, host="0.0.0.0", port=8000)

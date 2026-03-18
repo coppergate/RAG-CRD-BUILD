@@ -48,6 +48,12 @@ spec:
         env:
         - name: OLLAMA_URL
           value: "http://ollama.llms-ollama.svc.cluster.local:11434"
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
         - name: DB_CONN_STRING
           valueFrom:
             secretKeyRef:
@@ -77,14 +83,25 @@ spec:
               key: AWS_SECRET_ACCESS_KEY
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OTEL_USE_TLS
+          value: "true"
         volumeMounts:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt
           subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
       volumes:
       - name: registry-ca
         configMap:
           name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: rag-ingestion-tls
 ---
 apiVersion: v1
 kind: Service
@@ -95,5 +112,6 @@ spec:
   selector:
     app: rag-ingestion-service
   ports:
-  - port: 80
+  - port: 443
     targetPort: 8000
+    name: https
