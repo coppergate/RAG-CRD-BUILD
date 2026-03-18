@@ -39,29 +39,42 @@ if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
 fi
 
 if should_run_step "build-pipeline-ca" "$KUBECTL get configmap -n $NAMESPACE registry-ca-cm"; then
-    echo "--- Applying Registry CA ---"
+    echo "--- Applying Combined Registry & Pulsar CA ---"
     
     # Ensure SAFE_TMP_DIR exists
     mkdir -p "$SAFE_TMP_DIR"
     
-    # Try to extract the CA from the in-cluster secret first, then fallback to Talos patch
+    COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+    rm -f "$COMBINED_CA"
+    touch "$COMBINED_CA"
+
+    # 1. Extract Registry CA
     if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
         echo "Extracting CA from container-registry/in-cluster-registry-tls..."
-        $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode > "$SAFE_TMP_DIR/ca.crt"
-        $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+        $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
     else
-        # Fallback: Extract from talos patch if source secret is missing
-        echo "Fallback: Extracting CA from Talos registry patch..."
+        echo "Fallback: Extracting Registry CA from Talos registry patch..."
         CA_B64=$(grep "ca: " "$REPO_DIR/../../../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
         if [ -n "$CA_B64" ]; then
-            echo "$CA_B64" | base64 -d > "$SAFE_TMP_DIR/ca.crt"
-            $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
-        else
-            echo "WARNING: Could not find registry-ca-cm or Talos patch to inject CA."
+            echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
         fi
     fi
-    # Clean up the temporary cert file
-    rm -f "$SAFE_TMP_DIR/ca.crt"
+
+    # 2. Extract Pulsar CA
+    if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+        echo "Extracting CA from apache-pulsar/pulsar-ca-tls..."
+        echo "" >> "$COMBINED_CA" # Ensure newline
+        $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+    fi
+
+    if [ -s "$COMBINED_CA" ]; then
+        $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+    else
+        echo "WARNING: Could not find any CA to inject."
+    fi
+
+    # Clean up
+    rm -f "$COMBINED_CA"
     mark_step_done "build-pipeline-ca"
 fi
 

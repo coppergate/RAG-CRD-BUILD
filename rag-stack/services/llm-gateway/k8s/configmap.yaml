@@ -4,7 +4,7 @@ metadata:
   name: llm-gateway-config
   namespace: rag-system
 data:
-  PULSAR_URL: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+  PULSAR_URL: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
   PULSAR_REQUEST_TOPIC: "persistent://rag-pipeline/stage/ingress"
   PULSAR_RESPONSE_TOPIC: "persistent://rag-pipeline/stage/results"
   PULSAR_PROMPT_TOPIC: "persistent://rag-pipeline/data/chat-prompts"

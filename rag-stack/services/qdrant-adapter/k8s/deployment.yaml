@@ -44,7 +44,7 @@ spec:
             failureThreshold: 3
           env:
             - name: PULSAR_URL
-              value: pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650
+              value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
             - name: PULSAR_QDRANT_OPS_TOPIC
               value: persistent://rag-pipeline/operations/qdrant-ops
             - name: PULSAR_QDRANT_RESULTS_TOPIC

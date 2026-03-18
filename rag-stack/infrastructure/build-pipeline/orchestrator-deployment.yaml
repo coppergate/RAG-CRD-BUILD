@@ -40,7 +40,7 @@ spec:
         - name: EXTERNAL_REGISTRY_NAME
           value: "registry.hierocracy.home:5000"
         - name: PULSAR_URL
-          value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: BUILD_TOPIC
           value: "persistent://public/default/build-tasks"
         - name: BUILD_STATUS_TOPIC

@@ -240,14 +240,16 @@ tls:
     createCert: true
     # The dnsNames field specifies a list of Subject Alternative Names to be associated with the certificate.
     dnsNames:
-    # - example.com
+    - pulsar-proxy.apache-pulsar.svc.cluster.local
+    - pulsar-proxy
   # settings for generating certs for broker
   broker:
     enabled: true
     cert_name: tls-broker
     # The dnsNames field specifies a list of Subject Alternative Names to be associated with the certificate.
     dnsNames:
-    # - example.com
+    - pulsar-broker.apache-pulsar.svc.cluster.local
+    - pulsar-broker
   # settings for generating certs for bookies
   bookie:
     enabled: true

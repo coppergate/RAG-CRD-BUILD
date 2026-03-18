@@ -620,7 +620,7 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 					},
 					Volumes: []corev1.Volume{
 						{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-						{Name: "registry-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "registry-ca"}}}},
+						{Name: "registry-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "registry-ca-cm"}}}},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
 				},

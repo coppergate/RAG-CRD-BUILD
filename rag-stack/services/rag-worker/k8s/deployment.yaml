@@ -58,7 +58,7 @@ spec:
               name: timescaledb-secret
               key: url
         - name: PULSAR_URL
-          value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: QDRANT_HOST
           value: "qdrant"
         - name: PULSAR_INGRESS_TOPIC
