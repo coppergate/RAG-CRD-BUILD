@@ -13,32 +13,44 @@ $KUBECTL label --overwrite namespace llms-ollama \
   pod-security.kubernetes.io/audit=privileged \
   pod-security.kubernetes.io/warn=privileged
 
-# Inject Registry CA ConfigMap
-echo "--- Injecting Registry CA into llms-ollama ---"
+# Inject Registry & Pulsar CA ConfigMap
+echo "--- Injecting Registry & Pulsar CA into llms-ollama ---"
 # Source journal-helper for SAFE_TMP_DIR and REPO_DIR (if available)
 REPO_DIR="${REPO_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 source "$REPO_DIR/../scripts/journal-helper.sh"
 mkdir -p "$SAFE_TMP_DIR"
 
+COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+rm -f "$COMBINED_CA"
+touch "$COMBINED_CA"
+
+# 1. Extract Registry CA
 if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
-    echo "Extracting CA from container-registry/in-cluster-registry-tls..."
-    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode > "$SAFE_TMP_DIR/ca.crt"
-    $KUBECTL create configmap registry-ca-cm -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
-    # Also create 'registry-ca' for legacy compatibility
-    $KUBECTL create configmap registry-ca -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+    echo "Extracting Registry CA from container-registry/in-cluster-registry-tls..."
+    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
 else
-    echo "Fallback: Extracting CA from Talos registry patch..."
+    echo "Fallback: Extracting Registry CA from Talos registry patch..."
     CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
     if [ -n "$CA_B64" ]; then
-        echo "$CA_B64" | base64 -d > "$SAFE_TMP_DIR/ca.crt"
-        $KUBECTL create configmap registry-ca-cm -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
-        # Also create 'registry-ca' for legacy compatibility
-        $KUBECTL create configmap registry-ca -n llms-ollama --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
-    else
-        echo "WARNING: Could not find CA to inject into llms-ollama."
+        echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
     fi
 fi
-rm -f "$SAFE_TMP_DIR/ca.crt"
+
+# 2. Extract Pulsar CA (if available)
+if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+    echo "Extracting Pulsar CA from apache-pulsar/pulsar-ca-tls..."
+    echo "" >> "$COMBINED_CA" # Ensure newline
+    $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+
+if [ -s "$COMBINED_CA" ]; then
+    $KUBECTL create configmap registry-ca-cm -n llms-ollama --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+    # Also create 'registry-ca' for legacy compatibility
+    $KUBECTL create configmap registry-ca -n llms-ollama --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+else
+    echo "WARNING: Could not find any CA to inject into llms-ollama."
+fi
+rm -f "$COMBINED_CA"
   
 $KUBECTL label nodes inference-0 role=inference-node llm-model=llama3.1 --overwrite
 $KUBECTL label nodes inference-1 role=inference-node llm-model=granite3.1-dense-8b --overwrite

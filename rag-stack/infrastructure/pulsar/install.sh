@@ -53,34 +53,46 @@ if ! is_done 10.ns; then
     pod-security.kubernetes.io/warn=privileged \
     pod-security.kubernetes.io/enforce=privileged
   
-  # Inject the registry Root CA ConfigMap
-  log "Injecting registry-ca-cm into $NAMESPACE..."
+  # Inject the registry & Pulsar Root CA ConfigMap
+  log "Ensuring registry-ca-cm (combined Registry & Pulsar) in $NAMESPACE..."
   
   # Ensure SAFE_TMP_DIR exists
   mkdir -p "$SAFE_TMP_DIR"
   
-  # Try to extract the CA from the in-cluster secret first, then fallback to Talos patch
+  COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+  rm -f "$COMBINED_CA"
+  touch "$COMBINED_CA"
+
+  # 1. Extract Registry CA
   if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
-      log "Extracting CA from container-registry/in-cluster-registry-tls..."
-      $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode > "$SAFE_TMP_DIR/ca.crt"
-      $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
-      # Also create 'registry-ca' for legacy compatibility
-      $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
+      log "Extracting Registry CA from container-registry/in-cluster-registry-tls..."
+      $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
   else
       # Fallback: Extract from talos patch if source secret is missing
-      log "Fallback: Extracting CA from Talos registry patch..."
+      log "Fallback: Extracting Registry CA from Talos registry patch..."
       CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
       if [ -n "$CA_B64" ]; then
-          echo "$CA_B64" | base64 -d > "$SAFE_TMP_DIR/ca.crt"
-          $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
-          # Also create 'registry-ca' for legacy compatibility
-          $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$SAFE_TMP_DIR/ca.crt" --dry-run=client -o yaml | $KUBECTL apply -f -
-      else
-          warn "Could not find registry-ca-cm or Talos patch to inject CA."
+          echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
       fi
   fi
+
+  # 2. Extract Pulsar CA (if available - might not be yet on first install)
+  if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+      log "Extracting Pulsar CA from apache-pulsar/pulsar-ca-tls..."
+      echo "" >> "$COMBINED_CA" # Ensure newline
+      $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+  fi
+
+  if [ -s "$COMBINED_CA" ]; then
+      $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+      # Also create 'registry-ca' for legacy compatibility
+      $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+  else
+      warn "Could not find any CA to inject into $NAMESPACE."
+  fi
+
   # Clean up the temporary cert file
-  rm -f "$SAFE_TMP_DIR/ca.crt"
+  rm -f "$COMBINED_CA"
 
   mark_done 10.ns
 else
@@ -165,6 +177,25 @@ if ! is_done 30.helmInstall; then
 else
   log "Helm install/upgrade already completed (journal 30.helmInstall)"
 fi
+
+# Update CA ConfigMap now that Pulsar CA might be newly created/rotated
+log "Updating registry-ca-cm with latest combined CAs..."
+mkdir -p "$SAFE_TMP_DIR"
+COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+rm -f "$COMBINED_CA"
+touch "$COMBINED_CA"
+if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+    echo "" >> "$COMBINED_CA"
+    $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+if [ -s "$COMBINED_CA" ]; then
+    $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+    $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+fi
+rm -f "$COMBINED_CA"
 
 echo "--- 4. Exposing Pulsar Manager admin ---"
 if ! is_done 40.exposePM; then

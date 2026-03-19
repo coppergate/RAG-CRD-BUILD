@@ -23,6 +23,8 @@ apply_manifest() {
 if ! is_step_done "namespace"; then
 echo "--- 1. Creating Namespace ---"
 $KUBECTL apply -f "$REPO_DIR/namespace.yaml"
+mark_step_done "namespace"
+fi
 
 # Inject Registry & Pulsar CA ConfigMap into rag-system
 echo "--- Injecting Combined Registry & Pulsar CA into $NAMESPACE ---"
@@ -58,9 +60,7 @@ else
     echo "WARNING: Could not find any CA to inject into $NAMESPACE."
 fi
 rm -f "$COMBINED_CA"
-
-mark_step_done "namespace"
-fi
+mark_step_done "registry-ca"
 
 if ! is_step_done "ollama"; then
 echo "--- 1.5. Deploying LLM: Ollama ---"
