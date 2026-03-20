@@ -9,7 +9,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: ingestor
-        image: registry.hierocracy.home:5000/python:3.9-slim
+        image: registry.container-registry.svc.cluster.local:5000/python:3.9-slim
         command: ["/bin/sh", "-c"]
         args:
           - |

@@ -31,30 +31,34 @@ data:
     exporters:
       otlphttp/loki:
         endpoint: https://loki-gateway.monitoring.svc.cluster.local/otlp
+        tls:
+          ca_file: /etc/ssl/certs/ca.crt
       otlp/tempo:
-        endpoint: tempo-distributor.monitoring.svc.cluster.local:4317
+        endpoint: tempo.monitoring.svc.cluster.local:4317
         tls:
           insecure: false
           ca_file: /etc/ssl/certs/ca.crt
       otlphttp/mimir:
         endpoint: https://mimir-gateway.monitoring.svc.cluster.local/otlp
+        tls:
+          ca_file: /etc/ssl/certs/ca.crt
       debug:
         verbosity: basic
 
     service:
       pipelines:
         traces:
-          receivers: [otlp]
-          processors: [memory_limiter, probabilistic_sampler, batch]
-          exporters: [otlp/tempo, debug]
+          receivers: [ otlp ]
+          processors: [ memory_limiter, probabilistic_sampler, batch ]
+          exporters: [ otlp/tempo, debug ]
         metrics:
-          receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [otlphttp/mimir, debug]
+          receivers: [ otlp ]
+          processors: [ memory_limiter, batch ]
+          exporters: [ otlphttp/mimir, debug ]
         logs:
-          receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [otlphttp/loki, debug]
+          receivers: [ otlp ]
+          processors: [ memory_limiter, batch ]
+          exporters: [ otlphttp/loki, debug ]
 ---
 apiVersion: apps/v1
 kind: Deployment

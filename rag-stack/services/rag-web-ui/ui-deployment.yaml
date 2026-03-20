@@ -52,7 +52,7 @@ spec:
       serviceAccountName: rag-web-ui
       containers:
       - name: web-ui
-        image: registry.hierocracy.home:5000/rag-web-ui:__VERSION__
+        image: registry.container-registry.svc.cluster.local:5000/rag-web-ui:1.5.8
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -60,18 +60,21 @@ spec:
           httpGet:
             path: /health
             port: 8080
+            scheme: HTTPS
           periodSeconds: 5
           failureThreshold: 30
         readinessProbe:
           httpGet:
             path: /health
             port: 8080
+            scheme: HTTPS
           initialDelaySeconds: 10
           periodSeconds: 5
         livenessProbe:
           httpGet:
             path: /health
             port: 8080
+            scheme: HTTPS
           initialDelaySeconds: 30
           periodSeconds: 10
         resources:

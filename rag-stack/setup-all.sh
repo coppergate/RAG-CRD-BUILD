@@ -11,13 +11,14 @@ NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 VERSION="${VERSION:-1.5.8}"
+REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
 
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/journal-helper.sh"
 init_journal
 
 apply_manifest() {
   local manifest="$1"
-  sed "s#__VERSION__#${VERSION}#g" "$manifest" | "$KUBECTL" apply -f -
+  sed -e "s#__VERSION__#${VERSION}#g" -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" "$manifest" | "$KUBECTL" apply -f -
 }
 
 if ! is_step_done "namespace"; then

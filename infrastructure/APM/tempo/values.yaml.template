@@ -2,6 +2,23 @@
 # Compatible with grafana/tempo chart >= 1.2.0
 
 tempo:
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+    - name: service-tls
+      secret:
+        secretName: tempo-tls
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
+    - name: service-tls
+      mountPath: /etc/ssl/certs/tls.crt
+      subPath: tls.crt
+    - name: service-tls
+      mountPath: /etc/ssl/certs/tls.key
+      subPath: tls.key
   structuredConfig:
     storage:
       trace:
@@ -27,8 +44,14 @@ tempo:
           protocols:
             grpc:
               endpoint: 0.0.0.0:4317
+              tls:
+                cert_file: /etc/ssl/certs/tls.crt
+                key_file: /etc/ssl/certs/tls.key
             http:
               endpoint: 0.0.0.0:4318
+              tls:
+                cert_file: /etc/ssl/certs/tls.crt
+                key_file: /etc/ssl/certs/tls.key
 
 # Scaling for small environment
 replicas: 1
@@ -37,15 +60,6 @@ persistence:
   enabled: true
   storageClassName: rook-ceph-block
   size: 10Gi
-
-extraVolumes:
-  - name: registry-ca
-    configMap:
-      name: registry-ca-cm
-extraVolumeMounts:
-  - name: registry-ca
-    mountPath: /etc/ssl/certs/ca.crt
-    subPath: ca.crt
 
 nodeSelector:
   role: storage-node
@@ -65,6 +79,9 @@ service:
       targetPort: 4317
     - name: otlp-http
       port: 4318
+      targetPort: 4318
+    - name: https
+      port: 443
       targetPort: 4318
     - name: jaeger-thrift-http
       port: 14268

@@ -1,6 +1,8 @@
 package telemetry
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"context"
 	"fmt"
 	"os"
@@ -25,11 +27,27 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 	}
 
 	useTLS := os.Getenv("OTEL_USE_TLS") == "true"
+	var tlsConfig *tls.Config
+	if useTLS {
+		caFile := os.Getenv("SSL_CERT_FILE")
+		if caFile != "" {
+			caCert, err := os.ReadFile(caFile)
+			if err == nil {
+				caCertPool := x509.NewCertPool()
+				caCertPool.AppendCertsFromPEM(caCert)
+				tlsConfig = &tls.Config{
+					RootCAs: caCertPool,
+				}
+			}
+		}
+	}
 
 	var traceOpts []otlptracehttp.Option
 	traceOpts = append(traceOpts, otlptracehttp.WithEndpoint(endpoint))
 	if !useTLS {
 		traceOpts = append(traceOpts, otlptracehttp.WithInsecure())
+	} else if tlsConfig != nil {
+		traceOpts = append(traceOpts, otlptracehttp.WithTLSClientConfig(tlsConfig))
 	}
 
 	// Traces exporter
@@ -42,6 +60,8 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 	metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(endpoint))
 	if !useTLS {
 		metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
+	} else if tlsConfig != nil {
+		metricOpts = append(metricOpts, otlpmetrichttp.WithTLSClientConfig(tlsConfig))
 	}
 
 	// Metrics exporter

@@ -19,7 +19,7 @@ spec:
         role: storage-node
       containers:
       - name: qdrant
-        image: registry.hierocracy.home:5000/qdrant/qdrant:v1.17.0
+        image: registry.container-registry.svc.cluster.local:5000/qdrant/qdrant:v1.17.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6333

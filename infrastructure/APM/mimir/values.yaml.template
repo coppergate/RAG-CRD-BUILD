@@ -153,6 +153,12 @@ memcached:
 gateway:
   nodeSelector:
     role: storage-node
+  service:
+    port: 443
+    targetPort: 8443
+  tls:
+    enabled: true
+    secretName: mimir-gateway-tls
 
 nginx:
   nodeSelector:

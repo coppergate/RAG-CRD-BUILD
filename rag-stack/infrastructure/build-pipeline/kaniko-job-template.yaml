@@ -8,7 +8,7 @@ spec:
     spec:
       initContainers:
       - name: fetch-context
-        image: registry.hierocracy.home:5000/busybox:1.37.0
+        image: registry.container-registry.svc.cluster.local:5000/busybox:1.37.0
         command: ["sh", "-c"]
         args: ["wget -O /workspace/context.tar.gz \"${SOURCE_URL}\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz"]
         securityContext:
@@ -27,7 +27,7 @@ spec:
           subPath: ca.crt
       containers:
       - name: kaniko
-        image: registry.hierocracy.home:5000/martizih/kaniko:v1.27.0
+        image: registry.container-registry.svc.cluster.local:5000/martizih/kaniko:v1.27.0
         args:
         - "--dockerfile=${DOCKERFILE_PATH}"
         - "--context=dir:///workspace"

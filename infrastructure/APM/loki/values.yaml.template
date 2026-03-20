@@ -75,6 +75,12 @@ gateway:
   enabled: true
   nodeSelector:
     role: storage-node
+  service:
+    port: 443
+    targetPort: 8443
+  tls:
+    enabled: true
+    secretName: loki-gateway-tls
 
 read:
   replicas: 0

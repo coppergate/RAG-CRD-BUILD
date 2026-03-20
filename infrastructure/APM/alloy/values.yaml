@@ -40,7 +40,10 @@ alloy:
 
       prometheus.remote_write "mimir" {
         endpoint {
-          url = "http://mimir-gateway.monitoring.svc.cluster.local/api/v1/push"
+          url = "https://mimir-gateway.monitoring.svc.cluster.local/api/v1/push"
+          tls_config {
+            ca_file = "/etc/ssl/certs/ca.crt"
+          }
         }
       }
 
@@ -76,10 +79,21 @@ alloy:
 
       loki.write "loki" {
         endpoint {
-          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+          url = "https://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+          tls_config {
+            ca_file = "/etc/ssl/certs/ca.crt"
+          }
         }
       }
 
 controller:
   type: daemonset
   replicas: 1
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt

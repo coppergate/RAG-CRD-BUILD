@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: orchestrator
-        image: registry.hierocracy.home:5000/build-orchestrator:latest
+        image: registry.container-registry.svc.cluster.local:5000/build-orchestrator:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -38,7 +38,7 @@ spec:
         - name: INTERNAL_REGISTRY_ADDR
           value: "registry.container-registry.svc.cluster.local:5000"
         - name: EXTERNAL_REGISTRY_NAME
-          value: "registry.hierocracy.home:5000"
+          value: "registry.container-registry.svc.cluster.local:5000"
         - name: PULSAR_URL
           value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: BUILD_TOPIC

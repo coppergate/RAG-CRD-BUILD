@@ -9,7 +9,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: tester
-        image: registry.hierocracy.home:5000/rag-test-runner:__VERSION__
+        image: registry.container-registry.svc.cluster.local:5000/rag-test-runner:__VERSION__
         imagePullPolicy: Always
         resources:
           requests:

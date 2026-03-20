@@ -18,14 +18,16 @@ spec:
       enableServiceLinks: false
       containers:
       - name: ingestor
-        image: registry.hierocracy.home:5000/rag-ingestion:__VERSION__
+        image: registry.container-registry.svc.cluster.local:5000/rag-ingestion:1.5.8
         imagePullPolicy: Always
+        command: ["python", "service.py"]
         ports:
         - containerPort: 8000
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
+            scheme: HTTPS
           initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 3
@@ -34,6 +36,7 @@ spec:
           httpGet:
             path: /health
             port: 8000
+            scheme: HTTPS
           initialDelaySeconds: 45
           periodSeconds: 20
           timeoutSeconds: 3

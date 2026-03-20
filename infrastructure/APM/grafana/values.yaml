@@ -13,7 +13,7 @@ datasources:
       - name: Tempo
         type: tempo
         access: proxy
-        url: https://tempo-gateway.monitoring.svc.cluster.local
+        url: https://tempo.monitoring.svc.cluster.local
       - name: Mimir
         type: mimir
         access: proxy

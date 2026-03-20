@@ -8,7 +8,7 @@ REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
-REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
+REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
 ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-latest}"
 
 source "$REPO_DIR/../../../scripts/journal-helper.sh"

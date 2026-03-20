@@ -94,6 +94,15 @@ fi
 rm -f "$COMBINED_CA"
 mark_step_done "registry-ca-cm"
 
+if ! is_step_done "apm-gateways-tls"; then
+    echo "--- Applying APM Gateway TLS Certificates ---"
+    $KUBECTL apply -f "$REPO_DIR/common/apm-gateways-tls.yaml"
+    $KUBECTL wait --for=condition=Ready certificate/loki-gateway-cert -n $NAMESPACE --timeout=60s
+    $KUBECTL wait --for=condition=Ready certificate/tempo-cert -n $NAMESPACE --timeout=60s
+    $KUBECTL wait --for=condition=Ready certificate/mimir-gateway-cert -n $NAMESPACE --timeout=60s
+    mark_step_done "apm-gateways-tls"
+fi
+
 if ! is_step_done "s3-obc"; then
     echo "--- Provisioning S3 Buckets for APM ---"
     $KUBECTL apply -f "$REPO_DIR/common/s3-storage.yaml"
@@ -176,6 +185,10 @@ deploy_lgtm_component "tempo" "grafana/tempo" "https://grafana.github.io/helm-ch
 deploy_lgtm_component "mimir" "grafana/mimir-distributed" "https://grafana.github.io/helm-charts" "mimir-s3-bucket"
 
 if ! is_step_done "deploy-otel-collector"; then
+    echo "--- Applying OTEL Collector TLS ---"
+    $KUBECTL apply -f "$REPO_DIR/otel-collector/otel-tls.yaml"
+    $KUBECTL wait --for=condition=Ready certificate/otel-collector-cert -n $NAMESPACE --timeout=60s
+        
     echo "--- Deploying OpenTelemetry Collector ---"
     $KUBECTL apply -f "$REPO_DIR/otel-collector/otel-collector.yaml"
     mark_step_done "deploy-otel-collector"
@@ -183,7 +196,11 @@ fi
 
 if ! is_step_done "deploy-grafana"; then
     echo "--- Deploying Grafana Operator and Instance ---"
-    
+        
+    echo "Applying Grafana TLS..."
+    $KUBECTL apply -f "$REPO_DIR/grafana/grafana-tls.yaml"
+    $KUBECTL wait --for=condition=Ready certificate/grafana-cert -n $NAMESPACE --timeout=60s
+
     echo "Adding Grafana Operator repo..."
     helm repo add grafana https://grafana.github.io/helm-charts
     helm repo update
