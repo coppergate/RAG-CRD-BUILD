@@ -129,10 +129,10 @@ function deploy_lgtm_component() {
         # Cleanup potential leftovers from previous failed attempts
         if [[ "$name" == "tempo" ]]; then
             echo "Checking for legacy tempo resources..."
-            $KUBECTL delete statefulset tempo -n $NAMESPACE --ignore-not-found
-            $KUBECTL delete svc tempo -n $NAMESPACE --ignore-not-found
+            $KUBECTL delete statefulset tempo -n $NAMESPACE --ignore-not-found || true
+            $KUBECTL delete svc tempo -n $NAMESPACE --ignore-not-found || true
             # Also clean up any other resources with the old name to avoid conflicts with tempo-distributed
-            $KUBECTL delete all -n $NAMESPACE -l app.kubernetes.io/instance=tempo --ignore-not-found
+            $KUBECTL delete all -n $NAMESPACE -l app.kubernetes.io/instance=tempo --ignore-not-found || true
         fi
 
         # Extract S3 credentials

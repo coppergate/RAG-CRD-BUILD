@@ -1,14 +1,7 @@
 # values.yaml.template - For unified grafana/tempo chart (Single Binary mode)
-# Compatible with grafana/tempo chart >= 1.2.0
+# Compatible with grafana/tempo chart 1.24.4
 
 tempo:
-  extraVolumes:
-    - name: registry-ca
-      configMap:
-        name: registry-ca-cm
-    - name: service-tls
-      secret:
-        secretName: tempo-tls
   extraVolumeMounts:
     - name: registry-ca
       mountPath: /etc/ssl/certs/ca.crt
@@ -19,39 +12,50 @@ tempo:
     - name: service-tls
       mountPath: /etc/ssl/certs/tls.key
       subPath: tls.key
-  structuredConfig:
-    storage:
-      trace:
-        backend: s3
-        s3:
-          bucket: ${BUCKET_NAME}
-          endpoint: ${S3_ENDPOINT}
-          access_key: ${AWS_ACCESS_KEY_ID}
-          secret_key: ${AWS_SECRET_ACCESS_KEY}
-          insecure: false
-          http_config:
-            ca_file: /etc/ssl/certs/ca.crt
-    
-    # Retention and other settings
-    overrides:
-      defaults:
-        retention: 24h
 
-    # Enable OTLP receivers
-    distributor:
-      receivers:
-        otlp:
-          protocols:
-            grpc:
-              endpoint: 0.0.0.0:4317
-              tls:
-                cert_file: /etc/ssl/certs/tls.crt
-                key_file: /etc/ssl/certs/tls.key
-            http:
-              endpoint: 0.0.0.0:4318
-              tls:
-                cert_file: /etc/ssl/certs/tls.crt
-                key_file: /etc/ssl/certs/tls.key
+  # Config sections directly mapped to tempo config
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: ${BUCKET_NAME}
+        endpoint: ${S3_ENDPOINT}
+        access_key: ${AWS_ACCESS_KEY_ID}
+        secret_key: ${AWS_SECRET_ACCESS_KEY}
+        insecure: false
+        forcepathstyle: true
+  
+  # Enable OTLP receivers
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+          tls:
+            cert_file: /etc/ssl/certs/tls.crt
+            key_file: /etc/ssl/certs/tls.key
+        http:
+          endpoint: 0.0.0.0:4318
+          tls:
+            cert_file: /etc/ssl/certs/tls.crt
+            key_file: /etc/ssl/certs/tls.key
+
+  retention: 24h
+  # Additional overrides if needed
+  overrides: {}
+
+# Root level items
+extraEnv:
+  - name: SSL_CERT_FILE
+    value: /etc/ssl/certs/ca.crt
+
+extraVolumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+  - name: service-tls
+    secret:
+      secretName: tempo-tls
 
 # Scaling for small environment
 replicas: 1
