@@ -33,7 +33,5 @@ spec:
     shared_preload_libraries:
       - timescaledb
   certificates:
-    issuerRef:
-      name: hierocracy-ca-issuer
-      kind: ClusterIssuer
-      group: cert-manager.io
+    serverCASecret: timescaledb-server-tls
+    serverTLSSecret: timescaledb-server-tls

@@ -1,0 +1,37 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: timescaledb-server-cert
+  namespace: timescaledb
+spec:
+  secretName: timescaledb-server-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: timescaledb-rw.timescaledb.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - timescaledb-rw
+    - timescaledb-rw.timescaledb
+    - timescaledb-rw.timescaledb.svc
+    - timescaledb-rw.timescaledb.svc.cluster.local
+    - timescaledb-ro
+    - timescaledb-ro.timescaledb
+    - timescaledb-ro.timescaledb.svc
+    - timescaledb-r
+    - timescaledb-r.timescaledb
+    - timescaledb-r.timescaledb.svc
+    - timescaledb.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
