@@ -7,7 +7,7 @@ This document provides instructions for executing the RAG stack installation usi
 To perform a complete, from-scratch installation of the basic infrastructure, build pipeline, and RAG services:
 
 ```bash
-ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+ssh -i ~/.ssh/id_hierophant_access -o BatchMode=yes -o StrictHostKeyChecking=no junie@hierophant \
 "cd /mnt/hegemon-share/share/code/complete-build && \
 FRESH_INSTALL=true VERSION=1.5.8 ./setup-complete.sh"
 ```
@@ -32,7 +32,7 @@ The `setup-complete.sh` script supports several environment variables to control
 The installation process is **resumable**. If a step fails, you can investigate the logs on `hierophant`, fix the issue, and then run the command **without** `FRESH_INSTALL=true` to pick up exactly where it left off:
 
 ```bash
-ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+ssh -i ~/.ssh/id_hierophant_access -o BatchMode=yes -o StrictHostKeyChecking=no junie@hierophant \
 "cd /mnt/hegemon-share/share/code/complete-build && \
 VERSION=1.5.8 ./setup-complete.sh"
 ```

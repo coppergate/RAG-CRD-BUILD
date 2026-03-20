@@ -86,14 +86,17 @@ alloy:
         }
       }
 
+  mounts:
+    extra:
+      - name: registry-ca
+        mountPath: /etc/ssl/certs/ca.crt
+        subPath: ca.crt
+
 controller:
   type: daemonset
   replicas: 1
-  extraVolumes:
-    - name: registry-ca
-      configMap:
-        name: registry-ca-cm
-  extraVolumeMounts:
-    - name: registry-ca
-      mountPath: /etc/ssl/certs/ca.crt
-      subPath: ca.crt
+  volumes:
+    extra:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
