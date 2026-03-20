@@ -76,28 +76,28 @@ check_resource() {
   fi
 }
 
-check_dashboard_required() {
-  local ns="kubernetes-dashboard"
+check_headlamp_required() {
+  local ns="headlamp"
   local helm_ok=0
   local deploy_ok=0
 
-  if helm -n "$ns" status kubernetes-dashboard >/dev/null 2>&1; then
+  if helm -n "$ns" status headlamp >/dev/null 2>&1; then
     helm_ok=1
   fi
-  if "$KUBECTL" -n "$ns" get deployment kubernetes-dashboard >/dev/null 2>&1; then
+  if "$KUBECTL" -n "$ns" get deployment headlamp >/dev/null 2>&1; then
     deploy_ok=1
   fi
 
   if [[ "$helm_ok" -eq 1 || "$deploy_ok" -eq 1 ]]; then
-    pass "kubernetes-dashboard application deployed (helm release and/or deployment exists)"
+    pass "headlamp application deployed (helm release and/or deployment exists)"
   else
-    fail "kubernetes-dashboard application missing (no helm release and no deployment/kubernetes-dashboard)"
+    fail "headlamp application missing (no helm release and no deployment/headlamp)"
     rc=1
   fi
 
-  check_resource "$ns" "service" "kubernetes-dashboard-lb" "kubernetes-dashboard load balancer service"
-  check_resource "$ns" "serviceaccount" "admin-user" "kubernetes-dashboard admin serviceaccount"
-  check_resource "$ns" "secret" "admin-user-token" "kubernetes-dashboard admin token secret"
+  check_resource "$ns" "service" "headlamp-lb" "headlamp load balancer service"
+  check_resource "$ns" "serviceaccount" "headlamp-admin" "headlamp admin serviceaccount"
+  check_resource "$ns" "secret" "headlamp-admin-token" "headlamp admin token secret"
 }
 
 check_namespace() {
@@ -138,7 +138,7 @@ fi
 section "Namespace Checks"
 for ns in \
   rook-ceph monitoring container-registry apache-pulsar build-pipeline \
-  rag-system llms-ollama timescaledb gpu-operator kubernetes-dashboard purelb cert-manager
+  rag-system llms-ollama timescaledb gpu-operator headlamp purelb cert-manager
 do
   check_namespace "$ns"
 done
@@ -195,8 +195,8 @@ check_helm_release "gpu-operator" "gpu-operator"
 check_helm_release "llms-ollama" "ollama-llama3"
 check_helm_release "llms-ollama" "ollama-granite31-8b"
 
-section "Required Dashboard Checks"
-check_dashboard_required
+section "Required Headlamp Checks"
+check_headlamp_required
 
 section "Custom Resource Health Checks"
 if "$BASE_DIR/scripts/validate-configured-crs.sh"; then
@@ -210,7 +210,7 @@ if [[ "$SHOW_INVENTORY" == "true" ]]; then
   section "Full Namespace Inventory"
   for ns in \
     rook-ceph monitoring container-registry apache-pulsar build-pipeline \
-    rag-system llms-ollama timescaledb gpu-operator kubernetes-dashboard purelb cert-manager
+    rag-system llms-ollama timescaledb gpu-operator headlamp purelb cert-manager
   do
     dump_namespace_inventory "$ns"
   done

@@ -146,15 +146,20 @@ STEP_TS_END=$(date +%s)
 log_step_timing "basic" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "kubernetes-dashboard"; then
+if ! is_step_done "headlamp"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.1: Kubernetes Dashboard Setup"
+echo "Step 1.1: Headlamp Setup (Replacing Kubernetes Dashboard)"
 echo "----------------------------------------------------"
-bash $BASE_DIR/infrastructure/kubernetes-dashboard/dashboard.sh
+if [[ -d "$BASE_DIR/infrastructure/kubernetes-dashboard" ]]; then
+    # Try to uninstall if the directory still exists
+    bash $BASE_DIR/infrastructure/headlamp/uninstall-old-dashboard.sh || true
+fi
+bash $BASE_DIR/infrastructure/headlamp/headlamp.sh
+mark_step_done "headlamp"
 mark_step_done "kubernetes-dashboard"
 STEP_TS_END=$(date +%s)
-log_step_timing "kubernetes-dashboard" "$STEP_TS_START" "$STEP_TS_END" "ok"
+log_step_timing "headlamp" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 # Step 1.5 moved to setup-01-basic.sh

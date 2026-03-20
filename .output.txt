@@ -1,0 +1,814 @@
+
+====================================================
+Cluster Access
+====================================================
+[PASS] kubectl access OK
+====================================================
+Namespace Checks
+====================================================
+[PASS] namespace exists: rook-ceph
+[PASS] namespace exists: monitoring
+[PASS] namespace exists: container-registry
+[PASS] namespace exists: apache-pulsar
+[PASS] namespace exists: build-pipeline
+[PASS] namespace exists: rag-system
+[PASS] namespace exists: llms-ollama
+[PASS] namespace exists: timescaledb
+[PASS] namespace exists: gpu-operator
+[PASS] namespace exists: headlamp
+[PASS] namespace exists: purelb
+[PASS] namespace exists: cert-manager
+====================================================
+Manifest Resource Presence Checks
+====================================================
+[PASS] container registry resources present (/mnt/hegemon-share/share/code/complete-build/infrastructure/registry/registry.yaml)
+[PASS] rook ceph cluster CR present (/mnt/hegemon-share/share/code/complete-build/infrastructure/rook-ceph/cluster.yaml)
+[PASS] rook ceph filesystem CR present (/mnt/hegemon-share/share/code/complete-build/infrastructure/rook-ceph/filesystem.yaml)
+[PASS] rook ceph object-store CR present (/mnt/hegemon-share/share/code/complete-build/infrastructure/rook-ceph/object.yaml)
+[PASS] rook ceph blockpool CR present (/mnt/hegemon-share/share/code/complete-build/infrastructure/rook-ceph/pool.yaml)
+[PASS] rook ceph storage classes present (/mnt/hegemon-share/share/code/complete-build/infrastructure/rook-ceph/storageclass.yaml)
+[PASS] APM OBC resources present (/mnt/hegemon-share/share/code/complete-build/infrastructure/APM/common/s3-storage.yaml)
+[PASS] otel collector resources present (/mnt/hegemon-share/share/code/complete-build/infrastructure/APM/otel-collector/otel-collector.yaml)
+[PASS] grafana operator manifests present (/mnt/hegemon-share/share/code/complete-build/infrastructure/APM/grafana/operator-manifests.yaml)
+[PASS] cnpg operator resources present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/timescaledb/cnpg-1.25.0.yaml)
+[PASS] timescaledb cluster CR present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/timescaledb/cluster.yaml)
+[PASS] timescaledb lb service present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/timescaledb/timescaledb-lb-service.yaml)
+[PASS] rag codebase OBC present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/obc.yaml)
+[PASS] qdrant pvc present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/qdrant/qdrant-pvc.yaml)
+[PASS] qdrant deployment present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/qdrant/qdrant-deploy.yaml)
+[PASS] qdrant service present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/qdrant/qdrant-service.yaml)
+[PASS] rag ingestion job/configmap present (/mnt/hegemon-share/share/code/complete-build/rag-stack/ingestion/ingest-job-s3.yaml)
+[PASS] build-pipeline OBC present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/build-pipeline/s3-build-storage.yaml)
+[PASS] build-orchestrator deployment present (/mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/build-pipeline/orchestrator-deployment.yaml)
+[PASS] llm-gateway deployment present (/mnt/hegemon-share/share/code/complete-build/rag-stack/services/llm-gateway/k8s/deployment.yaml, VERSION=1.5.8)
+[PASS] rag-worker deployment present (/mnt/hegemon-share/share/code/complete-build/rag-stack/services/rag-worker/k8s/deployment.yaml, VERSION=1.5.8)
+[PASS] rag-web-ui deployment present (/mnt/hegemon-share/share/code/complete-build/rag-stack/services/rag-web-ui/ui-deployment.yaml, VERSION=1.5.8)
+[PASS] db-adapter deployment present (/mnt/hegemon-share/share/code/complete-build/rag-stack/services/db-adapter/k8s/deployment.yaml, VERSION=1.5.8)
+[PASS] qdrant-adapter deployment present (/mnt/hegemon-share/share/code/complete-build/rag-stack/services/qdrant-adapter/k8s/deployment.yaml, VERSION=1.5.8)
+[PASS] rag-ingestion deployment/service present (/mnt/hegemon-share/share/code/complete-build/rag-stack/services/rag-ingestion/k8s/deployment.yaml, VERSION=1.5.8)
+[PASS] object-store-mgr job present (/mnt/hegemon-share/share/code/complete-build/rag-stack/services/object-store-mgr/mgr-job.yaml, VERSION=1.5.8)
+====================================================
+Helm Release Checks
+====================================================
+[PASS] helm release k8tz in namespace default
+[PASS] helm release purelb in namespace purelb
+[PASS] helm release kube-state-metrics in namespace kube-system
+[PASS] helm release loki in namespace monitoring
+[PASS] helm release tempo in namespace monitoring
+[PASS] helm release mimir in namespace monitoring
+[PASS] helm release grafana-operator in namespace monitoring
+[PASS] helm release alloy in namespace monitoring
+[PASS] helm release gpu-operator in namespace gpu-operator
+[PASS] helm release ollama-llama3 in namespace llms-ollama
+[PASS] helm release ollama-granite31-8b in namespace llms-ollama
+====================================================
+Required Headlamp Checks
+====================================================
+[PASS] headlamp application deployed (helm release and/or deployment exists)
+[PASS] headlamp load balancer service present (service/headlamp-lb in headlamp)
+[PASS] headlamp admin serviceaccount present (serviceaccount/headlamp-admin in headlamp)
+[PASS] headlamp admin token secret present (secret/headlamp-admin-token in headlamp)
+====================================================
+Custom Resource Health Checks
+====================================================
+====================================================
+Validate Configured CRs
+====================================================
+[INFO] KUBECTL=/home/k8s/kube/kubectl
+[INFO] KUBECONFIG=/home/k8s/kube/config/kubeconfig
+[PASS] kubectl access OK
+=== CRD checks ===
+[PASS] CRD exists: cephclusters.ceph.rook.io
+[PASS] CRD exists: cephblockpools.ceph.rook.io
+[PASS] CRD exists: cephfilesystems.ceph.rook.io
+[PASS] CRD exists: cephobjectstores.ceph.rook.io
+[PASS] CRD exists: objectbucketclaims.objectbucket.io
+[PASS] CRD exists: clusters.postgresql.cnpg.io
+=== Rook/Ceph CRs ===
+[PASS] CephCluster/rook-ceph phase=Ready
+[PASS] CephBlockPool/ceph-replica-pool phase=Ready
+[PASS] CephFilesystem/ceph-filesystem phase=Ready
+[PASS] CephObjectStore/ceph-object-store phase=Ready
+=== ObjectBucketClaims ===
+[PASS] OBC/build-pipeline-bucket phase=Bound
+[PASS] OBC/rag-codebase-bucket phase=Bound
+[PASS] OBC/loki-s3-bucket phase=Bound
+[PASS] OBC/tempo-s3-bucket phase=Bound
+[PASS] OBC/mimir-s3-bucket phase=Bound
+[PASS] OBC/mimir-ruler-s3-bucket phase=Bound
+[PASS] OBC/mimir-alertmanager-s3-bucket phase=Bound
+=== CNPG/TimescaleDB CR ===
+[PASS] CNPG Cluster/timescaledb Ready=True
+=== Summary ===
+[PASS] All configured CR checks passed
+[PASS] configured CR health checks passed
+====================================================
+Full Namespace Inventory
+====================================================
+--- Namespace Inventory: rook-ceph ---
+NAME                                                            READY   STATUS             RESTARTS       AGE
+pod/ceph-csi-controller-manager-5f7f76bbb4-fvnxh                1/1     Running            0              43h
+pod/rook-ceph-crashcollector-worker-0-78b944697f-8wspw          1/1     Running            0              43h
+pod/rook-ceph-crashcollector-worker-1-575548dd5b-wvzll          1/1     Running            0              43h
+pod/rook-ceph-crashcollector-worker-2-66f5fb9b8f-rgwx8          1/1     Running            0              43h
+pod/rook-ceph-crashcollector-worker-3-d64588bf8-kwqth           1/1     Running            0              43h
+pod/rook-ceph-exporter-worker-0-7d5bc49f5f-fnk7h                1/1     Running            0              43h
+pod/rook-ceph-exporter-worker-1-657b7bd46d-4n5j9                1/1     Running            0              43h
+pod/rook-ceph-exporter-worker-2-7d5d4857-4blhg                  1/1     Running            0              43h
+pod/rook-ceph-exporter-worker-3-6959c85f98-txztt                1/1     Running            0              43h
+pod/rook-ceph-mds-ceph-filesystem-a-7fb88cb8-sp4v6              2/2     Running            0              43h
+pod/rook-ceph-mds-ceph-filesystem-b-7d56c97975-7wlx2            2/2     Running            0              43h
+pod/rook-ceph-mds-ceph-filesystem-c-745d98f7c4-xdtr8            2/2     Running            0              43h
+pod/rook-ceph-mds-ceph-filesystem-d-86b6758c56-7g5sv            2/2     Running            0              43h
+pod/rook-ceph-mgr-a-6c74f5f89-472dx                             3/3     Running            0              43h
+pod/rook-ceph-mgr-b-7c8557f794-2x65s                            3/3     Running            0              43h
+pod/rook-ceph-mon-a-84d68995bf-7jfvc                            2/2     Running            0              43h
+pod/rook-ceph-mon-b-5957fd77f9-qrbnv                            2/2     Running            0              43h
+pod/rook-ceph-mon-c-f69d96f5b-bs59j                             2/2     Running            0              43h
+pod/rook-ceph-operator-798885c75d-h6tp6                         1/1     Running            0              43h
+pod/rook-ceph-osd-0-7fcbf78dc7-f45qk                            1/2     CrashLoopBackOff   36 (24s ago)   43h
+pod/rook-ceph-osd-1-5c8b458cfb-sgwkc                            2/2     Running            0              43h
+pod/rook-ceph-osd-2-6596b54d58-pljr2                            2/2     Running            0              43h
+pod/rook-ceph-osd-3-5ffddc6b4c-95lg2                            1/2     CrashLoopBackOff   36 (82s ago)   43h
+pod/rook-ceph-osd-prepare-worker-0-h4cfj                        0/1     Completed          0              164m
+pod/rook-ceph-osd-prepare-worker-1-lgq9v                        0/1     Completed          0              164m
+pod/rook-ceph-osd-prepare-worker-2-cr64n                        0/1     Completed          0              164m
+pod/rook-ceph-osd-prepare-worker-3-wc8qk                        0/1     Completed          0              164m
+pod/rook-ceph-rgw-ceph-object-store-a-5c8cc949fb-fndg2          2/2     Running            0              43h
+pod/rook-ceph.cephfs.csi.ceph.com-ctrlplugin-66d49b78b4-nw7lp   5/5     Running            0              43h
+pod/rook-ceph.cephfs.csi.ceph.com-ctrlplugin-66d49b78b4-rxp6z   5/5     Running            0              43h
+pod/rook-ceph.cephfs.csi.ceph.com-nodeplugin-9854q              2/2     Running            0              43h
+pod/rook-ceph.cephfs.csi.ceph.com-nodeplugin-f6rkz              2/2     Running            0              43h
+pod/rook-ceph.cephfs.csi.ceph.com-nodeplugin-f9gpj              2/2     Running            0              43h
+pod/rook-ceph.cephfs.csi.ceph.com-nodeplugin-j9m44              2/2     Running            0              43h
+pod/rook-ceph.cephfs.csi.ceph.com-nodeplugin-z5fkn              2/2     Running            0              43h
+pod/rook-ceph.cephfs.csi.ceph.com-nodeplugin-zr4qp              2/2     Running            0              43h
+pod/rook-ceph.rbd.csi.ceph.com-ctrlplugin-54bccffcd4-6g7sk      5/5     Running            0              43h
+pod/rook-ceph.rbd.csi.ceph.com-ctrlplugin-54bccffcd4-7tlb6      5/5     Running            0              43h
+pod/rook-ceph.rbd.csi.ceph.com-nodeplugin-2wtmd                 2/2     Running            0              43h
+pod/rook-ceph.rbd.csi.ceph.com-nodeplugin-62wxh                 2/2     Running            0              43h
+pod/rook-ceph.rbd.csi.ceph.com-nodeplugin-cmljx                 2/2     Running            0              43h
+pod/rook-ceph.rbd.csi.ceph.com-nodeplugin-lp8zp                 2/2     Running            0              43h
+pod/rook-ceph.rbd.csi.ceph.com-nodeplugin-vhdwk                 2/2     Running            0              43h
+pod/rook-ceph.rbd.csi.ceph.com-nodeplugin-xvhfd                 2/2     Running            0              43h
+pod/rook-discover-2k8gf                                         1/1     Running            0              43h
+pod/rook-discover-6r2sl                                         1/1     Running            0              43h
+pod/rook-discover-7kj2g                                         1/1     Running            0              43h
+pod/rook-discover-m74j4                                         1/1     Running            0              43h
+pod/rook-discover-pnhkc                                         1/1     Running            0              43h
+pod/rook-discover-wpgv2                                         1/1     Running            0              43h
+NAME                                      TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+service/rook-ceph-exporter                ClusterIP   10.110.232.93    <none>        9926/TCP            43h
+service/rook-ceph-mgr                     ClusterIP   10.105.145.206   <none>        9283/TCP            43h
+service/rook-ceph-mgr-dashboard           ClusterIP   10.111.229.249   <none>        8443/TCP            43h
+service/rook-ceph-mon-a                   ClusterIP   10.97.220.127    <none>        6789/TCP,3300/TCP   43h
+service/rook-ceph-mon-b                   ClusterIP   10.110.237.186   <none>        6789/TCP,3300/TCP   43h
+service/rook-ceph-mon-c                   ClusterIP   10.99.244.34     <none>        6789/TCP,3300/TCP   43h
+service/rook-ceph-rgw-ceph-object-store   ClusterIP   10.104.22.239    <none>        80/TCP,443/TCP      43h
+NAME                                                      DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
+daemonset.apps/rook-ceph.cephfs.csi.ceph.com-nodeplugin   6         6         6       6            6           <none>          43h
+daemonset.apps/rook-ceph.rbd.csi.ceph.com-nodeplugin      6         6         6       6            6           <none>          43h
+daemonset.apps/rook-discover                              6         6         6       6            6           <none>          43h
+NAME                                                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/ceph-csi-controller-manager                1/1     1            1           43h
+deployment.apps/rook-ceph-crashcollector-worker-0          1/1     1            1           43h
+deployment.apps/rook-ceph-crashcollector-worker-1          1/1     1            1           43h
+deployment.apps/rook-ceph-crashcollector-worker-2          1/1     1            1           43h
+deployment.apps/rook-ceph-crashcollector-worker-3          1/1     1            1           43h
+deployment.apps/rook-ceph-exporter-worker-0                1/1     1            1           43h
+deployment.apps/rook-ceph-exporter-worker-1                1/1     1            1           43h
+deployment.apps/rook-ceph-exporter-worker-2                1/1     1            1           43h
+deployment.apps/rook-ceph-exporter-worker-3                1/1     1            1           43h
+deployment.apps/rook-ceph-mds-ceph-filesystem-a            1/1     1            1           43h
+deployment.apps/rook-ceph-mds-ceph-filesystem-b            1/1     1            1           43h
+deployment.apps/rook-ceph-mds-ceph-filesystem-c            1/1     1            1           43h
+deployment.apps/rook-ceph-mds-ceph-filesystem-d            1/1     1            1           43h
+deployment.apps/rook-ceph-mgr-a                            1/1     1            1           43h
+deployment.apps/rook-ceph-mgr-b                            1/1     1            1           43h
+deployment.apps/rook-ceph-mon-a                            1/1     1            1           43h
+deployment.apps/rook-ceph-mon-b                            1/1     1            1           43h
+deployment.apps/rook-ceph-mon-c                            1/1     1            1           43h
+deployment.apps/rook-ceph-operator                         1/1     1            1           43h
+deployment.apps/rook-ceph-osd-0                            0/1     1            0           43h
+deployment.apps/rook-ceph-osd-1                            1/1     1            1           43h
+deployment.apps/rook-ceph-osd-2                            1/1     1            1           43h
+deployment.apps/rook-ceph-osd-3                            0/1     1            0           43h
+deployment.apps/rook-ceph-rgw-ceph-object-store-a          1/1     1            1           43h
+deployment.apps/rook-ceph.cephfs.csi.ceph.com-ctrlplugin   2/2     2            2           43h
+deployment.apps/rook-ceph.rbd.csi.ceph.com-ctrlplugin      2/2     2            2           43h
+NAME                                                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/ceph-csi-controller-manager-5f7f76bbb4                1         1         1       43h
+replicaset.apps/rook-ceph-crashcollector-worker-0-78b944697f          1         1         1       43h
+replicaset.apps/rook-ceph-crashcollector-worker-1-575548dd5b          1         1         1       43h
+replicaset.apps/rook-ceph-crashcollector-worker-2-66f5fb9b8f          1         1         1       43h
+replicaset.apps/rook-ceph-crashcollector-worker-3-d64588bf8           1         1         1       43h
+replicaset.apps/rook-ceph-exporter-worker-0-7d5bc49f5f                1         1         1       43h
+replicaset.apps/rook-ceph-exporter-worker-1-657b7bd46d                1         1         1       43h
+replicaset.apps/rook-ceph-exporter-worker-2-7d5d4857                  1         1         1       43h
+replicaset.apps/rook-ceph-exporter-worker-3-6959c85f98                1         1         1       43h
+replicaset.apps/rook-ceph-mds-ceph-filesystem-a-7fb88cb8              1         1         1       43h
+replicaset.apps/rook-ceph-mds-ceph-filesystem-b-7d56c97975            1         1         1       43h
+replicaset.apps/rook-ceph-mds-ceph-filesystem-c-745d98f7c4            1         1         1       43h
+replicaset.apps/rook-ceph-mds-ceph-filesystem-d-86b6758c56            1         1         1       43h
+replicaset.apps/rook-ceph-mgr-a-6c74f5f89                             1         1         1       43h
+replicaset.apps/rook-ceph-mgr-b-7c8557f794                            1         1         1       43h
+replicaset.apps/rook-ceph-mon-a-84d68995bf                            1         1         1       43h
+replicaset.apps/rook-ceph-mon-b-5957fd77f9                            1         1         1       43h
+replicaset.apps/rook-ceph-mon-c-f69d96f5b                             1         1         1       43h
+replicaset.apps/rook-ceph-operator-798885c75d                         1         1         1       43h
+replicaset.apps/rook-ceph-osd-0-7fcbf78dc7                            1         1         0       43h
+replicaset.apps/rook-ceph-osd-1-5c8b458cfb                            1         1         1       43h
+replicaset.apps/rook-ceph-osd-2-6596b54d58                            1         1         1       43h
+replicaset.apps/rook-ceph-osd-3-5ffddc6b4c                            1         1         0       43h
+replicaset.apps/rook-ceph-rgw-ceph-object-store-a-5c8cc949fb          1         1         1       43h
+replicaset.apps/rook-ceph.cephfs.csi.ceph.com-ctrlplugin-66d49b78b4   2         2         2       43h
+replicaset.apps/rook-ceph.rbd.csi.ceph.com-ctrlplugin-54bccffcd4      2         2         2       43h
+NAME                                       STATUS     COMPLETIONS   DURATION   AGE
+job.batch/rook-ceph-osd-prepare-worker-0   Complete   1/1           12s        164m
+job.batch/rook-ceph-osd-prepare-worker-1   Complete   1/1           12s        164m
+job.batch/rook-ceph-osd-prepare-worker-2   Complete   1/1           13s        164m
+job.batch/rook-ceph-osd-prepare-worker-3   Complete   1/1           12s        164m
+NAME                                         DATA   AGE
+ceph-csi-config                              1      43h
+kube-root-ca.crt                             1      43h
+local-device-inference-0                     1      43h
+local-device-inference-1                     1      43h
+local-device-worker-0                        1      43h
+local-device-worker-1                        1      43h
+local-device-worker-2                        1      43h
+local-device-worker-3                        1      43h
+rook-ceph-csi-mapping-config                 1      43h
+rook-ceph-mon-endpoints                      6      43h
+rook-ceph-operator-config                    44     43h
+rook-ceph-pdbstatemap                        3      43h
+rook-ceph-rgw-ceph-object-store-mime-types   1      43h
+rook-config-override                         1      43h
+rook-csi-operator-image-set-configmap        7      43h
+NAME                                        TYPE                 DATA   AGE
+cluster-peer-token-rook-ceph                kubernetes.io/rook   2      43h
+rook-ceph-admin-keyring                     kubernetes.io/rook   1      43h
+rook-ceph-config                            kubernetes.io/rook   2      43h
+rook-ceph-crash-collector-keyring           kubernetes.io/rook   1      43h
+rook-ceph-dashboard-password                kubernetes.io/rook   1      43h
+rook-ceph-exporter-keyring                  kubernetes.io/rook   1      43h
+rook-ceph-mds-ceph-filesystem-a-keyring     kubernetes.io/rook   1      43h
+rook-ceph-mds-ceph-filesystem-b-keyring     kubernetes.io/rook   1      43h
+rook-ceph-mds-ceph-filesystem-c-keyring     kubernetes.io/rook   1      43h
+rook-ceph-mds-ceph-filesystem-d-keyring     kubernetes.io/rook   1      43h
+rook-ceph-mgr-a-keyring                     kubernetes.io/rook   1      43h
+rook-ceph-mgr-b-keyring                     kubernetes.io/rook   1      43h
+rook-ceph-mon                               kubernetes.io/rook   4      43h
+rook-ceph-mons-keyring                      kubernetes.io/rook   1      43h
+rook-ceph-rgw-ceph-object-store-a-keyring   kubernetes.io/rook   1      43h
+rook-ceph-rgw-tls                           kubernetes.io/tls    3      43h
+rook-csi-cephfs-node                        kubernetes.io/rook   2      43h
+rook-csi-cephfs-provisioner                 kubernetes.io/rook   2      43h
+rook-csi-rbd-node                           kubernetes.io/rook   2      43h
+rook-csi-rbd-provisioner                    kubernetes.io/rook   2      43h
+NAME                                 DATADIRHOSTPATH   MONCOUNT   AGE   PHASE   MESSAGE                        HEALTH       EXTERNAL   FSID
+cephcluster.ceph.rook.io/rook-ceph   /var/lib/rook     3          43h   Ready   Cluster created successfully   HEALTH_ERR              4e9c2e84-69ed-45a8-82c4-65365476eb9c
+NAME                                           PHASE   TYPE         FAILUREDOMAIN   AGE
+cephblockpool.ceph.rook.io/ceph-replica-pool   Ready   Replicated   host            43h
+NAME                                          ACTIVEMDS   AGE   PHASE
+cephfilesystem.ceph.rook.io/ceph-filesystem   2           43h   Ready
+NAME                                             PHASE   ENDPOINT                                                  SECUREENDPOINT                                              AGE
+cephobjectstore.ceph.rook.io/ceph-object-store   Ready   http://rook-ceph-rgw-ceph-object-store.rook-ceph.svc:80   https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc:443   43h
+--- Namespace Inventory: monitoring ---
+NAME                                              READY   STATUS    RESTARTS        AGE
+pod/alloy-fkkbg                                   2/2     Running   0               43h
+pod/alloy-jjdll                                   2/2     Running   0               43h
+pod/alloy-mctpc                                   2/2     Running   0               43h
+pod/alloy-q96jk                                   2/2     Running   0               43h
+pod/alloy-t85kv                                   2/2     Running   0               43h
+pod/alloy-wf4ft                                   2/2     Running   0               43h
+pod/central-grafana-deployment-7c87d7f748-js2sj   1/1     Running   0               43h
+pod/grafana-operator-6d588dc9c7-lkcz9             1/1     Running   0               43h
+pod/loki-0                                        2/2     Running   0               43h
+pod/loki-1                                        2/2     Running   0               43h
+pod/loki-2                                        2/2     Running   0               43h
+pod/loki-canary-7tkl9                             1/1     Running   0               4h48m
+pod/loki-canary-8hghk                             1/1     Running   0               4h49m
+pod/loki-canary-ftxjv                             1/1     Running   0               4h46m
+pod/loki-canary-mwbzs                             1/1     Running   0               4h47m
+pod/loki-canary-vnz5f                             1/1     Running   0               4h48m
+pod/loki-canary-zj99d                             1/1     Running   0               4h46m
+pod/loki-chunks-cache-0                           2/2     Running   0               43h
+pod/loki-gateway-776bdd9d7c-9wjrv                 1/1     Running   0               43h
+pod/loki-results-cache-0                          2/2     Running   0               43h
+pod/mimir-alertmanager-0                          1/1     Running   0               4h41m
+pod/mimir-compactor-0                             1/1     Running   0               4h41m
+pod/mimir-distributor-5949489955-rffxl            1/1     Running   0               4h41m
+pod/mimir-gateway-5dcd8f98fc-l78h9                1/1     Running   0               4h41m
+pod/mimir-ingester-0                              1/1     Running   0               4h38m
+pod/mimir-ingester-1                              1/1     Running   0               4h39m
+pod/mimir-ingester-2                              1/1     Running   0               4h41m
+pod/mimir-overrides-exporter-b457b849b-57kw2      1/1     Running   0               4h41m
+pod/mimir-querier-69c45458d-92wqt                 1/1     Running   0               4h40m
+pod/mimir-querier-69c45458d-zvq8l                 1/1     Running   0               4h41m
+pod/mimir-query-frontend-6d6986bf44-9fjmn         1/1     Running   0               4h41m
+pod/mimir-query-scheduler-694868bdf-52gnc         1/1     Running   0               4h41m
+pod/mimir-query-scheduler-694868bdf-zstvm         1/1     Running   0               4h40m
+pod/mimir-rollout-operator-554995cbd4-kq5gw       1/1     Running   0               43h
+pod/mimir-ruler-77655f5c68-cfqxk                  1/1     Running   0               4h41m
+pod/mimir-store-gateway-0                         1/1     Running   0               4h41m
+pod/otel-collector-56b5b5cd44-vpzjb               1/1     Running   5 (4h43m ago)   5h3m
+pod/tempo-0                                       2/2     Running   0               174m
+NAME                                       TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                                                                                                                       AGE
+service/alloy                              ClusterIP   10.99.39.75      <none>        12345/TCP                                                                                                                     43h
+service/central-grafana-alerting           ClusterIP   None             <none>        9094/TCP                                                                                                                      43h
+service/central-grafana-service            ClusterIP   10.98.132.18     <none>        3000/TCP                                                                                                                      43h
+service/grafana-operator-metrics-service   ClusterIP   10.108.83.182    <none>        9090/TCP,8888/TCP                                                                                                             43h
+service/loki                               ClusterIP   10.107.175.242   <none>        3100/TCP,9095/TCP                                                                                                             43h
+service/loki-canary                        ClusterIP   10.107.136.6     <none>        3500/TCP                                                                                                                      43h
+service/loki-chunks-cache                  ClusterIP   None             <none>        11211/TCP,9150/TCP                                                                                                            43h
+service/loki-gateway                       ClusterIP   10.98.250.227    <none>        443/TCP                                                                                                                       43h
+service/loki-headless                      ClusterIP   None             <none>        3100/TCP                                                                                                                      43h
+service/loki-memberlist                    ClusterIP   None             <none>        7946/TCP                                                                                                                      43h
+service/loki-results-cache                 ClusterIP   None             <none>        11211/TCP,9150/TCP                                                                                                            43h
+service/mimir-alertmanager                 ClusterIP   10.106.109.214   <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-alertmanager-headless        ClusterIP   None             <none>        8080/TCP,9095/TCP,9094/TCP                                                                                                    43h
+service/mimir-compactor                    ClusterIP   10.109.129.250   <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-distributor                  ClusterIP   10.106.117.31    <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-distributor-headless         ClusterIP   None             <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-gateway                      ClusterIP   10.105.106.204   <none>        443/TCP,8080/TCP                                                                                                              43h
+service/mimir-gossip-ring                  ClusterIP   None             <none>        7946/TCP                                                                                                                      43h
+service/mimir-ingester                     ClusterIP   10.105.31.173    <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-ingester-headless            ClusterIP   None             <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-overrides-exporter           ClusterIP   10.105.94.211    <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-querier                      ClusterIP   10.98.166.244    <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-query-frontend               ClusterIP   10.104.19.57     <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-query-scheduler              ClusterIP   10.97.225.230    <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-query-scheduler-headless     ClusterIP   None             <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-rollout-operator             ClusterIP   10.109.64.178    <none>        443/TCP                                                                                                                       43h
+service/mimir-ruler                        ClusterIP   10.100.26.77     <none>        8080/TCP                                                                                                                      43h
+service/mimir-store-gateway                ClusterIP   10.108.116.140   <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/mimir-store-gateway-headless       ClusterIP   None             <none>        8080/TCP,9095/TCP                                                                                                             43h
+service/otel-collector                     ClusterIP   10.99.202.75     <none>        4317/TCP,4318/TCP                                                                                                             43h
+service/tempo                              ClusterIP   10.101.217.232   <none>        6831/UDP,6832/UDP,3200/TCP,16687/TCP,16686/TCP,14268/TCP,14250/TCP,9411/TCP,55680/TCP,55681/TCP,4317/TCP,4318/TCP,55678/TCP   174m
+NAME                         DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
+daemonset.apps/alloy         6         6         6       6            6           <none>          43h
+daemonset.apps/loki-canary   6         6         6       6            6           <none>          43h
+NAME                                         READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/central-grafana-deployment   1/1     1            1           43h
+deployment.apps/grafana-operator             1/1     1            1           43h
+deployment.apps/loki-gateway                 1/1     1            1           43h
+deployment.apps/mimir-distributor            1/1     1            1           43h
+deployment.apps/mimir-gateway                1/1     1            1           43h
+deployment.apps/mimir-overrides-exporter     1/1     1            1           43h
+deployment.apps/mimir-querier                2/2     2            2           43h
+deployment.apps/mimir-query-frontend         1/1     1            1           43h
+deployment.apps/mimir-query-scheduler        2/2     2            2           43h
+deployment.apps/mimir-rollout-operator       1/1     1            1           43h
+deployment.apps/mimir-ruler                  1/1     1            1           43h
+deployment.apps/otel-collector               1/1     1            1           43h
+NAME                                                    DESIRED   CURRENT   READY   AGE
+replicaset.apps/central-grafana-deployment-7c87d7f748   1         1         1       43h
+replicaset.apps/grafana-operator-6d588dc9c7             1         1         1       43h
+replicaset.apps/loki-gateway-776bdd9d7c                 1         1         1       43h
+replicaset.apps/mimir-distributor-56d5978fd             0         0         0       43h
+replicaset.apps/mimir-distributor-5949489955            1         1         1       4h41m
+replicaset.apps/mimir-gateway-5dcd8f98fc                1         1         1       4h41m
+replicaset.apps/mimir-gateway-79f77d6b5                 0         0         0       43h
+replicaset.apps/mimir-overrides-exporter-8496469987     0         0         0       43h
+replicaset.apps/mimir-overrides-exporter-b457b849b      1         1         1       4h41m
+replicaset.apps/mimir-querier-69c45458d                 2         2         2       4h41m
+replicaset.apps/mimir-querier-8568d6f465                0         0         0       43h
+replicaset.apps/mimir-query-frontend-6d6986bf44         1         1         1       4h41m
+replicaset.apps/mimir-query-frontend-74c4477dc          0         0         0       43h
+replicaset.apps/mimir-query-scheduler-694868bdf         2         2         2       4h41m
+replicaset.apps/mimir-query-scheduler-84cc6c7766        0         0         0       43h
+replicaset.apps/mimir-rollout-operator-554995cbd4       1         1         1       43h
+replicaset.apps/mimir-ruler-559b56c64c                  0         0         0       43h
+replicaset.apps/mimir-ruler-77655f5c68                  1         1         1       4h41m
+replicaset.apps/otel-collector-56b5b5cd44               1         1         1       43h
+NAME                                   READY   AGE
+statefulset.apps/loki                  3/3     43h
+statefulset.apps/loki-chunks-cache     1/1     43h
+statefulset.apps/loki-results-cache    1/1     43h
+statefulset.apps/mimir-alertmanager    1/1     43h
+statefulset.apps/mimir-compactor       1/1     43h
+statefulset.apps/mimir-ingester        3/3     43h
+statefulset.apps/mimir-store-gateway   1/1     43h
+statefulset.apps/tempo                 1/1     174m
+NAME                            STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS      VOLUMEATTRIBUTESCLASS   AGE
+central-grafana-pvc             Bound    pvc-ed2a68ea-12c9-4f44-921a-7721df2bdc8f   5Gi        RWO            rook-ceph-block   <unset>                 43h
+storage-loki-0                  Bound    pvc-fdf2231f-b911-4988-9c9b-fb671c7d1b7c   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-loki-1                  Bound    pvc-2911f6e9-1bf5-408b-a51c-326ccd60784c   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-loki-2                  Bound    pvc-a8b8d16e-994e-4523-a1ec-6a83bdb1d156   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-mimir-alertmanager-0    Bound    pvc-b33993d9-29f3-4e78-b0be-d1b200b1e294   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-mimir-compactor-0       Bound    pvc-d9ab1a25-329f-47f8-8dce-daa6c974d756   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-mimir-ingester-0        Bound    pvc-d731f6cf-dc7c-46e9-85b6-51da2f1b9a0e   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-mimir-ingester-1        Bound    pvc-0bff090f-919c-4c18-adc5-c94843c7e999   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-mimir-ingester-2        Bound    pvc-223c79c3-cf8d-4d37-8e58-85ff46423159   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-mimir-store-gateway-0   Bound    pvc-b0f9dff0-6aa4-49cd-9f2a-ff907aaf92a4   10Gi       RWO            rook-ceph-block   <unset>                 43h
+storage-tempo-0                 Bound    pvc-56cf25dd-7bad-44a4-a9b2-b119604c4c0e   10Gi       RWO            rook-ceph-block   <unset>                 43h
+NAME                                 DATA   AGE
+alloy                                1      43h
+central-grafana-ini                  1      43h
+central-grafana-plugins              0      43h
+kube-root-ca.crt                     1      43h
+loki                                 1      43h
+loki-dashboards-1                    5      43h
+loki-dashboards-2                    5      43h
+loki-gateway                         1      43h
+loki-runtime                         1      43h
+loki-s3-bucket                       5      43h
+mimir-alertmanager-fallback-config   1      43h
+mimir-alertmanager-s3-bucket         5      43h
+mimir-config                         1      43h
+mimir-gateway-nginx                  1      43h
+mimir-ruler-s3-bucket                5      43h
+mimir-runtime                        1      43h
+mimir-s3-bucket                      5      43h
+otel-collector-conf                  1      43h
+registry-ca                          1      43h
+registry-ca-cm                       1      43h
+tempo                                2      43h
+tempo-query                          1      43h
+tempo-s3-bucket                      5      43h
+NAME                                     TYPE                 DATA   AGE
+central-grafana-admin-credentials        Opaque               2      43h
+certificate                              Opaque               3      43h
+loki-gateway-tls                         kubernetes.io/tls    3      4h49m
+loki-s3-bucket                           Opaque               2      43h
+mimir-alertmanager-s3-bucket             Opaque               2      43h
+mimir-gateway-tls                        kubernetes.io/tls    3      4h49m
+mimir-ruler-s3-bucket                    Opaque               2      43h
+mimir-s3-bucket                          Opaque               2      43h
+otel-collector-tls                       kubernetes.io/tls    3      4h45m
+sh.helm.release.v1.alloy.v1              helm.sh/release.v1   1      43h
+sh.helm.release.v1.grafana-operator.v1   helm.sh/release.v1   1      43h
+sh.helm.release.v1.loki.v1               helm.sh/release.v1   1      43h
+sh.helm.release.v1.loki.v2               helm.sh/release.v1   1      4h49m
+sh.helm.release.v1.loki.v3               helm.sh/release.v1   1      174m
+sh.helm.release.v1.mimir.v1              helm.sh/release.v1   1      43h
+sh.helm.release.v1.mimir.v2              helm.sh/release.v1   1      4h41m
+sh.helm.release.v1.tempo.v1              helm.sh/release.v1   1      43h
+sh.helm.release.v1.tempo.v2              helm.sh/release.v1   1      4h42m
+sh.helm.release.v1.tempo.v3              helm.sh/release.v1   1      174m
+tempo-s3-bucket                          Opaque               2      43h
+tempo-tls                                kubernetes.io/tls    3      4h49m
+NAME                      CLASS     HOSTS                         ADDRESS       PORTS   AGE
+central-grafana-ingress   traefik   grafana.rag.hierocracy.home   172.20.1.16   80      43h
+NAME                           AGE
+loki-s3-bucket                 43h
+mimir-alertmanager-s3-bucket   43h
+mimir-ruler-s3-bucket          43h
+mimir-s3-bucket                43h
+tempo-s3-bucket                43h
+--- Namespace Inventory: container-registry ---
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/registry-84b6d6c647-f57b6   1/1     Running   0          43h
+NAME               TYPE           CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+service/registry   LoadBalancer   10.97.178.41   172.20.1.26   5000:31588/TCP   43h
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/registry   1/1     1            1           43h
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/registry-84b6d6c647   1         1         1       43h
+NAME           STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS      VOLUMEATTRIBUTESCLASS   AGE
+registry-pvc   Bound    pvc-4ca2b3b7-d34e-43ef-9dbc-22debb49a4d1   50Gi       RWO            rook-ceph-block   <unset>                 43h
+NAME               DATA   AGE
+kube-root-ca.crt   1      43h
+NAME                      TYPE                DATA   AGE
+in-cluster-registry-tls   kubernetes.io/tls   3      43h
+--- Namespace Inventory: apache-pulsar ---
+NAME                          READY   STATUS    RESTARTS   AGE
+pod/pulsar-bookie-0           1/1     Running   0          43h
+pod/pulsar-bookie-1           1/1     Running   0          43h
+pod/pulsar-bookie-2           1/1     Running   0          43h
+pod/pulsar-bookie-3           1/1     Running   0          43h
+pod/pulsar-broker-0           1/1     Running   0          43h
+pod/pulsar-broker-1           1/1     Running   0          43h
+pod/pulsar-broker-2           1/1     Running   0          43h
+pod/pulsar-proxy-0            1/1     Running   0          42h
+pod/pulsar-proxy-1            1/1     Running   0          42h
+pod/pulsar-proxy-2            1/1     Running   0          42h
+pod/pulsar-pulsar-manager-0   1/1     Running   0          43h
+pod/pulsar-recovery-0         1/1     Running   0          43h
+pod/pulsar-toolset-0          1/1     Running   0          43h
+pod/pulsar-zookeeper-0        1/1     Running   0          43h
+pod/pulsar-zookeeper-1        1/1     Running   0          43h
+pod/pulsar-zookeeper-2        1/1     Running   0          43h
+NAME                                  TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)                                        AGE
+service/pulsar-bookie                 ClusterIP      None            <none>        3181/TCP,8000/TCP                              43h
+service/pulsar-broker                 ClusterIP      None            <none>        8080/TCP,8443/TCP,6651/TCP                     43h
+service/pulsar-manager-lb             LoadBalancer   10.105.130.47   172.20.1.19   8080:30701/TCP                                 42h
+service/pulsar-proxy                  LoadBalancer   10.99.252.244   172.20.1.18   443:32432/TCP,6651:30845/TCP                   43h
+service/pulsar-pulsar-manager         ClusterIP      10.101.39.73    <none>        9527/TCP                                       43h
+service/pulsar-pulsar-manager-admin   ClusterIP      10.108.107.8    <none>        7750/TCP                                       43h
+service/pulsar-recovery               ClusterIP      None            <none>        8000/TCP                                       43h
+service/pulsar-toolset                ClusterIP      None            <none>        <none>                                         43h
+service/pulsar-zookeeper              ClusterIP      None            <none>        8000/TCP,2888/TCP,3888/TCP,2181/TCP,2281/TCP   43h
+NAME                                     READY   AGE
+statefulset.apps/pulsar-bookie           4/4     43h
+statefulset.apps/pulsar-broker           3/3     43h
+statefulset.apps/pulsar-proxy            3/3     42h
+statefulset.apps/pulsar-pulsar-manager   1/1     43h
+statefulset.apps/pulsar-recovery         1/1     43h
+statefulset.apps/pulsar-toolset          1/1     43h
+statefulset.apps/pulsar-zookeeper        3/3     43h
+NAME                                   STATUS     COMPLETIONS   DURATION   AGE
+job.batch/pulsar-bookie-init           Complete   1/1           64s        43h
+job.batch/pulsar-pulsar-init           Complete   1/1           82s        43h
+job.batch/pulsar-pulsar-manager-init   Complete   1/1           2m13s      43h
+NAME                                                 STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS      VOLUMEATTRIBUTESCLASS   AGE
+pulsar-bookie-journal-pulsar-bookie-0                Bound    pvc-fc8bf95c-37de-4353-813b-1e055b0abb7e   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-bookie-journal-pulsar-bookie-1                Bound    pvc-d1609099-4757-4724-b556-470f48469749   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-bookie-journal-pulsar-bookie-2                Bound    pvc-bced61a2-22f0-47c3-bca1-118b6520ef27   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-bookie-journal-pulsar-bookie-3                Bound    pvc-5b140e0f-3009-4a4c-9d50-d4a281ed4cbf   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-bookie-ledgers-pulsar-bookie-0                Bound    pvc-be82c3c5-12df-467d-b6c8-b7e3ee16731f   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-bookie-ledgers-pulsar-bookie-1                Bound    pvc-2e3057e8-4346-4f59-9fd8-651f94f926c0   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-bookie-ledgers-pulsar-bookie-2                Bound    pvc-258a2ef5-4dcd-4ef4-b883-e0bb89a9a08a   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-bookie-ledgers-pulsar-bookie-3                Bound    pvc-cabf2fc3-3a82-4cfe-bff8-5f81cb742126   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-pulsar-manager-data-pulsar-pulsar-manager-0   Bound    pvc-d0729183-15ea-4e15-b91d-b182d20456c9   128Mi      RWO            rook-ceph-block   <unset>                 43h
+pulsar-zookeeper-data-pulsar-zookeeper-0             Bound    pvc-22418842-d678-4dac-ad70-a21d628b2a14   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-zookeeper-data-pulsar-zookeeper-1             Bound    pvc-c86a208a-d18d-41cd-8a1e-be8818214683   10Gi       RWO            rook-ceph-block   <unset>                 43h
+pulsar-zookeeper-data-pulsar-zookeeper-2             Bound    pvc-e8337001-5e0a-4a6c-84c4-3c9172a0a734   10Gi       RWO            rook-ceph-block   <unset>                 43h
+NAME                       DATA   AGE
+kube-root-ca.crt           1      43h
+pulsar-bookie              29     43h
+pulsar-broker              55     43h
+pulsar-keytool-configmap   1      43h
+pulsar-proxy               17     43h
+pulsar-pulsar-manager      8      43h
+pulsar-recovery            8      43h
+pulsar-toolset             14     43h
+pulsar-zookeeper           7      43h
+registry-ca                1      43h
+registry-ca-cm             1      43h
+NAME                           TYPE                 DATA   AGE
+pulsar-ca-tls                  kubernetes.io/tls    3      43h
+pulsar-pulsar-manager-secret   Opaque               4      43h
+pulsar-tls-bookie              kubernetes.io/tls    3      43h
+pulsar-tls-broker              kubernetes.io/tls    3      43h
+pulsar-tls-proxy               kubernetes.io/tls    3      43h
+pulsar-tls-recovery            kubernetes.io/tls    3      43h
+pulsar-tls-toolset             kubernetes.io/tls    3      43h
+pulsar-tls-zookeeper           kubernetes.io/tls    3      43h
+sh.helm.release.v1.pulsar.v1   helm.sh/release.v1   1      43h
+sh.helm.release.v1.pulsar.v2   helm.sh/release.v1   1      42h
+sh.helm.release.v1.pulsar.v3   helm.sh/release.v1   1      5h5m
+--- Namespace Inventory: build-pipeline ---
+NAME                                      READY   STATUS    RESTARTS   AGE
+pod/build-orchestrator-7fb656b785-78pph   1/1     Running   0          29h
+NAME                         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/build-orchestrator   ClusterIP   10.109.174.91   <none>        8080/TCP   42h
+NAME                                 READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/build-orchestrator   1/1     1            1           42h
+NAME                                            DESIRED   CURRENT   READY   AGE
+replicaset.apps/build-orchestrator-7fb656b785   1         1         1       29h
+NAME                                                   STATUS     COMPLETIONS   DURATION   AGE
+job.batch/kaniko-build-db-adapter-1-5-8-13-3-0         Complete   1/1           74s        23h
+job.batch/kaniko-build-db-adapter-1-5-8-9-2-0          Complete   1/1           2m57s      29h
+job.batch/kaniko-build-llm-gateway-1-5-8-13-0-0        Complete   1/1           73s        23h
+job.batch/kaniko-build-llm-gateway-1-5-8-9-1-0         Complete   1/1           2m57s      29h
+job.batch/kaniko-build-object-store-mgr-1-5-8-13-2-0   Complete   1/1           61s        23h
+job.batch/kaniko-build-object-store-mgr-1-5-8-9-3-0    Complete   1/1           104s       29h
+job.batch/kaniko-build-qdrant-adapter-1-5-8-13-1-0     Complete   1/1           73s        23h
+job.batch/kaniko-build-qdrant-adapter-1-5-8-9-0-0      Complete   1/1           2m54s      29h
+job.batch/kaniko-build-rag-ingestion-1-5-8-13-5-0      Complete   1/1           45s        23h
+job.batch/kaniko-build-rag-ingestion-1-5-8-9-5-0       Complete   1/1           104s       29h
+job.batch/kaniko-build-rag-web-ui-1-5-8-13-4-0         Complete   1/1           82s        23h
+job.batch/kaniko-build-rag-web-ui-1-5-8-9-4-0          Failed     0/1           29h        29h
+job.batch/kaniko-build-rag-worker-1-5-8-13-6-0         Complete   1/1           77s        23h
+job.batch/kaniko-build-rag-worker-1-5-8-9-6-0          Complete   1/1           114s       29h
+NAME                    DATA   AGE
+build-pipeline-bucket   5      42h
+kube-root-ca.crt        1      42h
+registry-ca             1      42h
+registry-ca-cm          1      42h
+NAME                    TYPE     DATA   AGE
+build-pipeline-bucket   Opaque   2      42h
+NAME                    AGE
+build-pipeline-bucket   42h
+--- Namespace Inventory: rag-system ---
+NAME                                         READY   STATUS    RESTARTS   AGE
+pod/db-adapter-5fddcb7fc6-c5llg              1/1     Running   0          5h4m
+pod/llm-gateway-6cfb4c67d5-86c8m             1/1     Running   0          176m
+pod/qdrant-69fffdf6cf-4bflr                  1/1     Running   0          5h3m
+pod/qdrant-adapter-784b8bd69b-2kd24          1/1     Running   0          5h4m
+pod/rag-ingestion-service-59ffb7fbd4-w74jp   1/1     Running   0          169m
+pod/rag-web-ui-679fbc5d7d-pb25w              1/1     Running   0          176m
+pod/rag-worker-69dcbdc646-7rfh6              1/1     Running   0          5h4m
+NAME                            TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)                         AGE
+service/llm-gateway             ClusterIP      10.100.229.0    <none>        443/TCP                         5h4m
+service/qdrant                  LoadBalancer   10.105.23.121   172.20.1.23   6333:31169/TCP,6334:31045/TCP   5h5m
+service/rag-ingestion-service   ClusterIP      10.111.253.72   <none>        443/TCP                         5h4m
+service/rag-web-ui              LoadBalancer   10.98.136.134   172.20.1.24   443:30496/TCP                   5h4m
+NAME                                    READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/db-adapter              1/1     1            1           5h4m
+deployment.apps/llm-gateway             1/1     1            1           5h4m
+deployment.apps/qdrant                  1/1     1            1           5h5m
+deployment.apps/qdrant-adapter          1/1     1            1           5h4m
+deployment.apps/rag-ingestion-service   1/1     1            1           5h4m
+deployment.apps/rag-web-ui              1/1     1            1           5h4m
+deployment.apps/rag-worker              1/1     1            1           5h4m
+NAME                                               DESIRED   CURRENT   READY   AGE
+replicaset.apps/db-adapter-5fddcb7fc6              1         1         1       5h4m
+replicaset.apps/llm-gateway-57d8d95987             0         0         0       4h45m
+replicaset.apps/llm-gateway-5cd9997847             0         0         0       4h43m
+replicaset.apps/llm-gateway-6cfb4c67d5             1         1         1       176m
+replicaset.apps/llm-gateway-79b9795d8c             0         0         0       5h4m
+replicaset.apps/qdrant-69fffdf6cf                  1         1         1       5h5m
+replicaset.apps/qdrant-adapter-784b8bd69b          1         1         1       5h4m
+replicaset.apps/rag-ingestion-service-546b85586f   0         0         0       4h43m
+replicaset.apps/rag-ingestion-service-5489b4dc97   0         0         0       4h45m
+replicaset.apps/rag-ingestion-service-59ffb7fbd4   1         1         1       169m
+replicaset.apps/rag-ingestion-service-6666648f9f   0         0         0       176m
+replicaset.apps/rag-ingestion-service-f655c9589    0         0         0       5h4m
+replicaset.apps/rag-web-ui-56dbc68899              0         0         0       5h4m
+replicaset.apps/rag-web-ui-679fbc5d7d              1         1         1       176m
+replicaset.apps/rag-web-ui-85bc494746              0         0         0       4h43m
+replicaset.apps/rag-web-ui-d5dcc574b               0         0         0       4h45m
+replicaset.apps/rag-worker-69dcbdc646              1         1         1       5h4m
+NAME                           STATUS     COMPLETIONS   DURATION   AGE
+job.batch/ingest-codebase-s3   Failed     0/1           5h4m       5h4m
+job.batch/object-store-list    Complete   1/1           6s         5h4m
+NAME         STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS      VOLUMEATTRIBUTESCLASS   AGE
+qdrant-pvc   Bound    pvc-e15414a0-f3c1-4ff5-80af-8af3dd4f92ce   50Gi       RWO            rook-ceph-block   <unset>                 5h5m
+NAME                  DATA   AGE
+apm-config            1      5h5m
+ingest-s3-script      1      5h4m
+kube-root-ca.crt      1      23h
+llm-gateway-config    6      5h4m
+qdrant-config         1      4h59m
+rag-codebase-bucket   5      5h5m
+registry-ca           1      23h
+registry-ca-cm        1      23h
+NAME                  TYPE                DATA   AGE
+llm-gateway-tls       kubernetes.io/tls   3      4h59m
+qdrant-tls            kubernetes.io/tls   3      4h59m
+rag-codebase-bucket   Opaque              2      5h5m
+rag-ingestion-tls     kubernetes.io/tls   3      4h59m
+rag-web-ui-tls        kubernetes.io/tls   3      4h59m
+timescaledb-secret    Opaque              1      5h4m
+NAME          CLASS     HOSTS               ADDRESS       PORTS     AGE
+llm-gateway   traefik   gateway.rag.local   172.20.1.16   80, 443   5h4m
+NAME                  AGE
+rag-codebase-bucket   5h5m
+--- Namespace Inventory: llms-ollama ---
+NAME                                       READY   STATUS    RESTARTS   AGE
+pod/ollama-granite31-8b-855677758f-m2d6n   1/1     Running   0          23h
+pod/ollama-llama3-7d96468d9-krbwr          1/1     Running   0          23h
+NAME                          TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)           AGE
+service/ollama                LoadBalancer   10.97.19.78      172.20.1.20   11434:30526/TCP   23h
+service/ollama-code           LoadBalancer   10.110.46.107    172.20.1.21   11434:31830/TCP   23h
+service/ollama-granite31-8b   ClusterIP      10.97.60.150     <none>        11434/TCP         23h
+service/ollama-llama3         ClusterIP      10.102.221.149   <none>        11434/TCP         23h
+NAME                                  READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/ollama-granite31-8b   1/1     1            1           23h
+deployment.apps/ollama-llama3         1/1     1            1           23h
+NAME                                             DESIRED   CURRENT   READY   AGE
+replicaset.apps/ollama-granite31-8b-855677758f   1         1         1       23h
+replicaset.apps/ollama-llama3-7d96468d9          1         1         1       23h
+NAME                  STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+ollama-granite31-8b   Bound    pvc-0cfaa938-bd0a-452b-8234-b96a2b5499bd   100Gi      RWX            rook-cephfs    <unset>                 23h
+ollama-llama3         Bound    pvc-e1b5ff96-01ee-4bc7-b927-e382b3560074   100Gi      RWX            rook-cephfs    <unset>                 23h
+NAME               DATA   AGE
+kube-root-ca.crt   1      23h
+registry-ca        1      23h
+registry-ca-cm     1      23h
+NAME                                        TYPE                 DATA   AGE
+sh.helm.release.v1.ollama-granite31-8b.v1   helm.sh/release.v1   1      23h
+sh.helm.release.v1.ollama-llama3.v1         helm.sh/release.v1   1      23h
+--- Namespace Inventory: timescaledb ---
+NAME                READY   STATUS    RESTARTS   AGE
+pod/timescaledb-1   1/1     Running   0          5h7m
+NAME                           TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+service/timescaledb-external   LoadBalancer   10.108.136.82    172.20.1.22   5432:31904/TCP   5h5m
+service/timescaledb-r          ClusterIP      10.96.59.178     <none>        5432/TCP         5h8m
+service/timescaledb-ro         ClusterIP      10.106.154.158   <none>        5432/TCP         5h8m
+service/timescaledb-rw         ClusterIP      10.107.68.90     <none>        5432/TCP         5h8m
+NAME            STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS      VOLUMEATTRIBUTESCLASS   AGE
+timescaledb-1   Bound    pvc-e0f9fbf6-ace4-4519-b1db-282dc0c24fe3   50Gi       RWO            rook-ceph-block   <unset>                 5h8m
+NAME                      DATA   AGE
+cnpg-default-monitoring   1      5h8m
+kube-root-ca.crt          1      23h
+NAME                      TYPE                       DATA   AGE
+timescaledb-app           kubernetes.io/basic-auth   9      5h8m
+timescaledb-ca            Opaque                     2      5h8m
+timescaledb-replication   kubernetes.io/tls          2      5h8m
+timescaledb-server-tls    kubernetes.io/tls          3      5h8m
+NAME          AGE    INSTANCES   READY   STATUS                     PRIMARY
+timescaledb   5h8m   1           1       Cluster in healthy state   timescaledb-1
+--- Namespace Inventory: gpu-operator ---
+NAME                                                              READY   STATUS    RESTARTS      AGE
+pod/gpu-feature-discovery-bp9lm                                   2/2     Running   0             44h
+pod/gpu-feature-discovery-xx8s9                                   2/2     Running   0             44h
+pod/gpu-operator-9d6d5dc4c-4k658                                  1/1     Running   2 (11h ago)   43h
+pod/gpu-operator-node-feature-discovery-gc-797c77fd98-klb5s       1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-master-5c64b6c596-92lws   1/1     Running   2 (11h ago)   44h
+pod/gpu-operator-node-feature-discovery-worker-65h7v              1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-worker-7sr86              1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-worker-9pt27              1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-worker-cxddk              1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-worker-gz99q              1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-worker-lhscc              1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-worker-pcn2f              1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-worker-xmbhn              1/1     Running   0             44h
+pod/gpu-operator-node-feature-discovery-worker-zngcz              1/1     Running   0             44h
+pod/nvidia-dcgm-exporter-jdmjg                                    1/1     Running   0             44h
+pod/nvidia-dcgm-exporter-ptvsl                                    1/1     Running   0             44h
+pod/nvidia-device-plugin-daemonset-4mhhw                          2/2     Running   0             44h
+pod/nvidia-device-plugin-daemonset-jr2kp                          2/2     Running   0             44h
+pod/nvidia-operator-validator-b8j52                               1/1     Running   0             44h
+pod/nvidia-operator-validator-zhzr5                               1/1     Running   0             44h
+pod/nvidia-talos-validation-fix-s5g4b                             1/1     Running   0             43h
+pod/nvidia-talos-validation-fix-skmsp                             1/1     Running   0             43h
+NAME                           TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/gpu-operator           ClusterIP   10.104.221.96   <none>        8080/TCP   44h
+service/nvidia-dcgm-exporter   ClusterIP   10.99.48.25     <none>        9400/TCP   44h
+NAME                                                        DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR                                                          AGE
+daemonset.apps/gpu-feature-discovery                        2         2         2       2            2           nvidia.com/gpu.deploy.gpu-feature-discovery=true                       44h
+daemonset.apps/gpu-operator-node-feature-discovery-worker   9         9         9       9            9           <none>                                                                 44h
+daemonset.apps/nvidia-dcgm-exporter                         2         2         2       2            2           nvidia.com/gpu.deploy.dcgm-exporter=true                               44h
+daemonset.apps/nvidia-device-plugin-daemonset               2         2         2       2            2           nvidia.com/gpu.deploy.device-plugin=true                               44h
+daemonset.apps/nvidia-device-plugin-mps-control-daemon      0         0         0       0            0           nvidia.com/gpu.deploy.device-plugin=true,nvidia.com/mps.capable=true   44h
+daemonset.apps/nvidia-mig-manager                           0         0         0       0            0           nvidia.com/gpu.deploy.mig-manager=true                                 44h
+daemonset.apps/nvidia-operator-validator                    2         2         2       2            2           nvidia.com/gpu.deploy.operator-validator=true                          44h
+daemonset.apps/nvidia-talos-validation-fix                  2         2         2       2            2           nvidia.com/gpu.present=true                                            44h
+NAME                                                         READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/gpu-operator                                 1/1     1            1           44h
+deployment.apps/gpu-operator-node-feature-discovery-gc       1/1     1            1           44h
+deployment.apps/gpu-operator-node-feature-discovery-master   1/1     1            1           44h
+NAME                                                                    DESIRED   CURRENT   READY   AGE
+replicaset.apps/gpu-operator-9d6d5dc4c                                  1         1         1       43h
+replicaset.apps/gpu-operator-node-feature-discovery-gc-797c77fd98       1         1         1       44h
+replicaset.apps/gpu-operator-node-feature-discovery-master-5c64b6c596   1         1         1       44h
+NAME                                              DATA   AGE
+default-gpu-clients                               1      44h
+default-mig-parted-config                         1      44h
+gpu-operator-node-feature-discovery-master-conf   1      44h
+gpu-operator-node-feature-discovery-worker-conf   1      44h
+kube-root-ca.crt                                  1      44h
+nvidia-device-plugin-config                       1      44h
+nvidia-device-plugin-entrypoint                   1      44h
+nvidia-mig-manager-entrypoint                     1      44h
+NAME                                 TYPE                 DATA   AGE
+sh.helm.release.v1.gpu-operator.v1   helm.sh/release.v1   1      44h
+sh.helm.release.v1.gpu-operator.v2   helm.sh/release.v1   1      43h
+--- Namespace Inventory: headlamp ---
+NAME                            READY   STATUS             RESTARTS      AGE
+pod/headlamp-7b4c9bc46d-g4bs2   0/1     CrashLoopBackOff   3 (42s ago)   103s
+NAME                  TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+service/headlamp      ClusterIP      10.99.180.3     <none>        80/TCP         103s
+service/headlamp-lb   LoadBalancer   10.101.99.127   172.20.1.17   80:30179/TCP   26s
+NAME                       READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/headlamp   0/1     1            0           103s
+NAME                                  DESIRED   CURRENT   READY   AGE
+replicaset.apps/headlamp-7b4c9bc46d   1         1         0       103s
+NAME               DATA   AGE
+kube-root-ca.crt   1      5m36s
+NAME                             TYPE                                  DATA   AGE
+headlamp-admin-token             kubernetes.io/service-account-token   3      26s
+oidc                             Opaque                                0      103s
+sh.helm.release.v1.headlamp.v1   helm.sh/release.v1                    1      103s
+sh.helm.release.v1.headlamp.v2   helm.sh/release.v1                    1      27s
+NAME       CLASS     HOSTS                       ADDRESS       PORTS   AGE
+headlamp   traefik   dashboard.hierocracy.home   172.20.1.16   80      27s
+--- Namespace Inventory: purelb ---
+NAME                             READY   STATUS    RESTARTS   AGE
+pod/allocator-78d77d559b-rc84n   1/1     Running   0          43h
+pod/lbnodeagent-2tv54            1/1     Running   0          43h
+pod/lbnodeagent-8pqjn            1/1     Running   0          43h
+pod/lbnodeagent-jgcmm            1/1     Running   0          43h
+pod/lbnodeagent-jrn8d            1/1     Running   0          43h
+pod/lbnodeagent-lnrrm            1/1     Running   0          43h
+pod/lbnodeagent-n9xzb            1/1     Running   0          43h
+NAME                         DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+daemonset.apps/lbnodeagent   6         6         6       6            6           kubernetes.io/os=linux   43h
+NAME                        READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/allocator   1/1     1            1           43h
+NAME                                   DESIRED   CURRENT   READY   AGE
+replicaset.apps/allocator-78d77d559b   1         1         1       43h
+NAME               DATA   AGE
+kube-root-ca.crt   1      43h
+NAME                           TYPE                 DATA   AGE
+sh.helm.release.v1.purelb.v1   helm.sh/release.v1   1      43h
+sh.helm.release.v1.purelb.v2   helm.sh/release.v1   1      163m
+--- Namespace Inventory: cert-manager ---
+NAME                                          READY   STATUS    RESTARTS   AGE
+pod/cert-manager-74bc887f69-d5mqw             1/1     Running   0          43h
+pod/cert-manager-cainjector-7c77f67dd-rxkgk   1/1     Running   0          43h
+pod/cert-manager-webhook-685b75c55f-qfhrf     1/1     Running   0          43h
+NAME                              TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)            AGE
+service/cert-manager              ClusterIP   10.100.241.63    <none>        9402/TCP           43h
+service/cert-manager-cainjector   ClusterIP   10.97.80.255     <none>        9402/TCP           43h
+service/cert-manager-webhook      ClusterIP   10.111.254.157   <none>        443/TCP,9402/TCP   43h
+NAME                                      READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/cert-manager              1/1     1            1           43h
+deployment.apps/cert-manager-cainjector   1/1     1            1           43h
+deployment.apps/cert-manager-webhook      1/1     1            1           43h
+NAME                                                DESIRED   CURRENT   READY   AGE
+replicaset.apps/cert-manager-74bc887f69             1         1         1       43h
+replicaset.apps/cert-manager-cainjector-7c77f67dd   1         1         1       43h
+replicaset.apps/cert-manager-webhook-685b75c55f     1         1         1       43h
+NAME               DATA   AGE
+kube-root-ca.crt   1      43h
+NAME                        TYPE                DATA   AGE
+cert-manager-webhook-ca     Opaque              3      43h
+hierocracy-root-ca-secret   kubernetes.io/tls   2      43h
+====================================================
+Summary
+====================================================
+[PASS] All configured entities validated

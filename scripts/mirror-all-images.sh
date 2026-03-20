@@ -259,19 +259,23 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
 
   # Skip all work if target image:tag is already present in local registry.
   if skopeo inspect --tls-verify="$tls_verify_dest" "docker://$dst" >/dev/null 2>&1; then
+    echo "[SKIP] $src (already in registry)"
     status="skip"
     cache_status="registry-hit"
     err_msg="already_present"
   else
     if [[ -f "$cache_dir/.cached" ]]; then
+      echo "[CACHE-HIT] $src"
       cache_status="hit"
     else
+      echo "[CACHE-MISS] $src (mirroring to cache...)"
       cache_status="update"
       # Populate/refresh source cache with exact image:tag first.
       tmp_cache_dir="${cache_dir}.tmp.$$"
       rm -rf "$tmp_cache_dir"
       mkdir -p "$tmp_cache_dir"
       if ! skopeo copy --all --src-tls-verify="$tls_verify_src" "docker://$src" "dir:$tmp_cache_dir"; then
+        echo "[ERROR] Failed to mirror $src to cache"
         status="fail"
         err_msg="cache_fill_failed"
         rm -rf "$tmp_cache_dir"
@@ -285,9 +289,13 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
   fi
 
   # Push to local registry from cache artifact (avoids re-downloading source image).
-  if [[ "$status" == "ok" ]] && ! skopeo copy --all --dest-tls-verify="$tls_verify_dest" "dir:$cache_dir" "docker://$dst"; then
-    status="fail"
-    err_msg="copy_to_registry_failed"
+  if [[ "$status" == "ok" ]]; then
+    echo "[PUSH] $src -> $dst"
+    if ! skopeo copy --all --dest-tls-verify="$tls_verify_dest" "dir:$cache_dir" "docker://$dst"; then
+      echo "[ERROR] Failed to push $src to registry"
+      status="fail"
+      err_msg="copy_to_registry_failed"
+    fi
   fi
 
   end_epoch="$(date +%s)"
