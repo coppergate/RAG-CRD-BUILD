@@ -26,6 +26,16 @@ $KUBECTL apply -f "$REPO_DIR/namespace.yaml"
 mark_step_done "namespace"
 fi
 
+if ! is_step_done "rag-system-tls"; then
+echo "--- 1.1 Applying RAG System TLS Certificates ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/rag-system-tls.yaml"
+echo "Waiting for RAG System certificates to be issued..."
+$KUBECTL wait --for=condition=Ready certificate/llm-gateway-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/rag-ingestion-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/rag-web-ui-cert -n $NAMESPACE --timeout=60s
+mark_step_done "rag-system-tls"
+fi
+
 # Inject Registry & Pulsar CA ConfigMap into rag-system
 echo "--- Injecting Combined Registry & Pulsar CA into $NAMESPACE ---"
 mkdir -p "$SAFE_TMP_DIR"
@@ -152,8 +162,12 @@ fi
 
 if ! is_step_done "qdrant"; then
 echo "--- 4. Deploying Vector Database: Qdrant ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-tls.yaml"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-config.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-pvc.yaml"
-$KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-deploy.yaml"
+echo "Waiting for Qdrant certificate..."
+$KUBECTL wait --for=condition=Ready certificate/qdrant-cert -n $NAMESPACE --timeout=60s
+apply_manifest "$REPO_DIR/infrastructure/qdrant/qdrant-deploy.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-service.yaml"
 mark_step_done "qdrant"
 fi
