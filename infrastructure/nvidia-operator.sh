@@ -89,7 +89,7 @@ spec:
       - operator: Exists
       containers:
       - name: validation-fix
-        image: 172.20.1.26:5000/busybox:1.36
+        image: registry.hierocracy.home:5000/busybox:1.36
         command:
         - sh
         - -c
@@ -98,8 +98,9 @@ spec:
             mkdir -p /run/nvidia/validations /run/nvidia/driver/usr
             # On Talos, /usr/local is accessible from the host.
             # This pod needs to create symlinks in /run/nvidia so the validator thinks the driver is ready.
-            ln -sfn /usr/local/bin /run/nvidia/driver/usr/bin
-            ln -sfn /usr/local/glibc/usr/lib /run/nvidia/driver/usr/lib64
+            # We use absolute paths that point to /host since the validator and device plugin mount the host root at /host.
+            ln -sfn /host/usr/local/bin /run/nvidia/driver/usr/bin
+            ln -sfn /host/usr/local/glibc/usr/lib /run/nvidia/driver/usr/lib64
             touch /run/nvidia/validations/driver-ready
             touch /run/nvidia/validations/toolkit-ready
             touch /run/nvidia/validations/cuda-ready
@@ -110,11 +111,17 @@ spec:
         volumeMounts:
         - name: run-nvidia
           mountPath: /run/nvidia
+        - name: host-root
+          mountPath: /host
+          readOnly: true
       volumes:
       - name: run-nvidia
         hostPath:
           path: /run/nvidia
           type: DirectoryOrCreate
+      - name: host-root
+        hostPath:
+          path: /
 EOF
   mark_step_done "nvidia-talos-config"
 fi
