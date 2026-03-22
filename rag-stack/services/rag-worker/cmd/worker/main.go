@@ -388,7 +388,7 @@ Query: %s`, prompt)
 
 	w.sendStatus(ctx, id, sessionID, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
 
-	collection := "codebase"
+	collection := "vectors"
 	var tags []string
 	if tagsVal, ok := data["tags"].([]interface{}); ok {
 		for _, v := range tagsVal {
@@ -414,10 +414,20 @@ Query: %s`, prompt)
 			continue
 		}
 		vs := len(vector)
+		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, query='%s'", id, collection, vs, tags, sq)
 		contexts, err := w.searchQdrant(ctx, collection, vs, vector, tags)
 		if err != nil {
 			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", id, sq, vs, err)
 			continue
+		}
+		log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", id, len(contexts), sq)
+		for i, c := range contexts {
+			// Truncate long context for logging
+			snippet := c
+			if len(snippet) > 100 {
+				snippet = snippet[:100] + "..."
+			}
+			log.Printf("[%s]   Context %d: %s", id, i, snippet)
 		}
 		allContexts = append(allContexts, contexts...)
 	}

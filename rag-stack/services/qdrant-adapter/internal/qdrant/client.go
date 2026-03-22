@@ -41,7 +41,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 
 	effectiveColl := collection
 	if vs > 0 {
-		effectiveColl = fmt.Sprintf("%s_%d", collection, vs)
+		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
 	}
 
 	scheme := "http"
@@ -58,7 +58,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 
 	if len(tags) > 0 {
 		query["filter"] = map[string]interface{}{
-			"should": []map[string]interface{}{
+			"must": []map[string]interface{}{
 				{
 					"key": "tags",
 					"match": map[string]interface{}{
@@ -120,7 +120,7 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 
 	effectiveColl := collection
 	if vs > 0 {
-		effectiveColl = fmt.Sprintf("%s_%d", collection, vs)
+		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
 	}
 
 	scheme := "http"

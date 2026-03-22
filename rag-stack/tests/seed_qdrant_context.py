@@ -9,7 +9,7 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "4096"))
-COLLECTION_NAME = f"codebase_{VECTOR_SIZE}"
+COLLECTION_NAME = f"vectors-{VECTOR_SIZE}"
 
 TEST_DATA = [
     {

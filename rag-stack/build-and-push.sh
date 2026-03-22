@@ -145,58 +145,20 @@ else
   echo "SKIP: rag-test-runner unchanged and already pushed for $VERSION"
 fi
 
+echo "--- Processing Services in Parallel ---"
+PIDS=()
 for service in "${SERVICES[@]}"; do
   service_should_run "$service" || { echo "SKIP (filter): $service"; continue; }
-  echo "--- Processing $service ---"
+  
+  (
+    build_service "$service"
+  ) &
+  PIDS+=($!)
+done
 
-  if [ -d "$BUILD_DIR/$service" ]; then
-    echo "--- Building from shadow build directory: $BUILD_DIR/$service ---"
-    cd "$BUILD_DIR/$service"
-  else
-    echo "--- Building from repo directory: $REPO_DIR/services/$service ---"
-    cd "$REPO_DIR/services/$service"
-  fi
-
-  local_hash=$(hash_context ".")
-  prev_hash=$(load_hash "$service" "$VERSION" || true)
-
-  # Determine whether to rebuild
-  do_build=false
-  if [[ "$FORCE_BUILD" == "true" ]]; then
-    do_build=true
-  elif [[ "$SKIP_UNCHANGED" == "true" && "$local_hash" == "$prev_hash" ]]; then
-    if is_pushed "$service" "$VERSION"; then
-    echo "SKIP: $service unchanged and already pushed for $VERSION"
-    continue
-    else
-      # unchanged but not pushed (previous run may have failed during push) — attempt push without rebuild
-      do_build=false
-    fi
-  else
-    do_build=true
-  fi
-
-  if [[ "$do_build" == "true" ]]; then
-    echo "--- Building $service:$VERSION ---"
-    BUILD_TAG="build-$(date +%s)"
-    
-    # Force rebuild without cache if requested
-    NO_CACHE=""
-    if [[ "$FORCE_BUILD" == "true" ]]; then
-      NO_CACHE="--no-cache"
-    fi
-
-    # All services now use the parent 'services' directory as context to include 'common/' 
-    # and consistent COPY paths in Dockerfiles.
-    podman build $NO_CACHE --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" -f "$REPO_DIR/services/$service/Dockerfile" "$REPO_DIR/services"
-  fi
-
-  echo "--- Pushing $service:$VERSION ---"
-  podman push "$REGISTRY/$service:$VERSION" --tls-verify="$TLS_VERIFY"
-  podman push "$REGISTRY/$service:latest"  --tls-verify="$TLS_VERIFY"
-
-  save_hash "$service" "$VERSION" "$local_hash"
-  mark_pushed "$service" "$VERSION"
+# Wait for all background builds to complete
+for pid in "${PIDS[@]}"; do
+  wait "$pid"
 done
 
 if [[ "${VERIFY_TAGS:-true}" == "true" ]]; then

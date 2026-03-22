@@ -83,6 +83,7 @@
 
 ## Operational Principles
 - **CONTEXT**: This document ensures consistency and security by defining the roles and responsibilities of different components.
+- **OPERATIONAL INSTRUCTIONS**: Maintain a document `OPERATIONS.md` in the project root to record basic tasks and procedures determined during development (e.g., build/push steps, test execution commands). Whenever project scanning is required to determine the correct procedure for a task, that task must be documented in `OPERATIONS.md` for future reference.
 - **TEMPORAL IMPORTANCE**: DO NOT ASSUME that all scripts or other resources described are current. ALWAYS ask before including a new script to make sure it is relevant to the current asks.
 - **SERVICE EXPOSURE**: All exposed services must use the `*.hierocracy.home` suffix (e.g., `grafana.rag.hierocracy.home`) for consistent internal routing.
 - **Corrections**: If the user indicates that some aspect of the reasoning or implementation needs to be done in a different way, add the requirement to this document.

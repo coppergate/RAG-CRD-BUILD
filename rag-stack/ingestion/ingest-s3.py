@@ -17,7 +17,7 @@ if "://" in _port_env:
     QDRANT_PORT = int(_port_env.split(":")[-1])
 else:
     QDRANT_PORT = int(_port_env)
-COLLECTION_NAME = "codebase"
+COLLECTION_NAME = "vectors"
 CHUNK_SIZE = 1000
 
 # S3 Configuration

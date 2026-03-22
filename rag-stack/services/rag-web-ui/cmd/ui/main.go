@@ -277,7 +277,7 @@ func askHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payload := map[string]interface{}{"model": llmModel, "session_id": sID, "messages": []map[string]string{{"role": "user", "content": req.Query}}}
+	payload := map[string]interface{}{"model": llmModel, "session_id": sID, "tags": req.Tags, "messages": []map[string]string{{"role": "user", "content": req.Query}}}
 	body, _ := json.Marshal(payload)
 	resp, err := http.Post(llmURL, "application/json", bytes.NewBuffer(body))
 	if err != nil {

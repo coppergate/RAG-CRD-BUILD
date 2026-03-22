@@ -49,7 +49,7 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
-COLLECTION_NAME = "codebase"
+COLLECTION_NAME = "vectors"
 CHUNK_SIZE = 1000
 S3_ENDPOINT = os.getenv("S3_ENDPOINT")
 if S3_ENDPOINT and not S3_ENDPOINT.startswith("http"):
@@ -161,7 +161,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                         "path": s3_key,
                         "chunk": i,
                         "text": chunk,
-                        "tags": tag_names,
+                        "tags": tag_ids,
                         "ingestion_id": ingestion_id
                     }
                     

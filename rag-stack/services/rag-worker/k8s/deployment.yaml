@@ -18,7 +18,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: worker
-        image: registry.container-registry.svc.cluster.local:5000/rag-worker:__VERSION__
+        image: registry.container-registry.svc.cluster.local:5000/rag-worker:1.5.10
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

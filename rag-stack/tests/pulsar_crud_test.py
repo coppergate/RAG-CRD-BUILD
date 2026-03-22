@@ -204,7 +204,7 @@ def test_pulsar_qdrant_ops():
     search_payload = {
         "id": op_id,
         "action": "search",
-        "collection": "codebase",
+        "collection": "vectors",
         "vector_size": vector_size,
         "vector": [0.1] * vector_size,
         "limit": 5

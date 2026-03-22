@@ -51,7 +51,7 @@ def verify_in_qdrant(tag_name, expected_text, vector_size, timeout=120):
     print(f"  - Verifying points in Qdrant for tag: {tag_name} (dims: {vector_size})...")
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, https=QDRANT_USE_TLS, prefer_grpc=False, timeout=30)
     
-    collection_name = f"codebase_{vector_size}"
+    collection_name = f"vectors-{vector_size}"
     
     start_time = time.time()
     while time.time() - start_time < timeout:
