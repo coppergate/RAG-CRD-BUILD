@@ -21,8 +21,34 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
+            echo "--- Preparing Certificates ---"
+            COMBINED_CA="/tmp/combined-ca.crt"
+            # Start with existing system certificates
+            if [ -f /etc/ssl/certs/ca-certificates.crt ]; then
+              cat /etc/ssl/certs/ca-certificates.crt > "$COMBINED_CA"
+            elif [ -f /etc/ssl/cert.pem ]; then
+              cat /etc/ssl/cert.pem > "$COMBINED_CA"
+            else
+              echo "WARNING: Could not find system CA bundle, starting fresh."
+              touch "$COMBINED_CA"
+            fi
+            
+            # Append internal CA
+            if [ -f /etc/ssl/internal/ca.crt ]; then
+              echo "Appending internal CA to bundle..."
+              cat /etc/ssl/internal/ca.crt >> "$COMBINED_CA"
+            fi
+            
+            export SSL_CERT_FILE="$COMBINED_CA"
+            export REQUESTS_CA_BUNDLE="$COMBINED_CA"
+            
+            # Update DB_CONN_STRING to use combined bundle
+            export DB_CONN_STRING=$(echo "$DB_CONN_STRING" | sed "s|/etc/ssl/certs/ca-certificates.crt|$COMBINED_CA|g")
+            
             echo "--- Running Integration Tests ---"
             python /tests/integration_test.py
+            echo "--- Running Isolated Ingestion Pipeline Test ---"
+            python /tests/ingestion_isolation.py
             echo "--- Running Recursive RAG Flow Tests ---"
             python /tests/recursive_rag_test.py
             echo "--- Running Pulsar CRUD Tests ---"
@@ -61,10 +87,12 @@ spec:
               key: AWS_SECRET_ACCESS_KEY
         - name: QDRANT_HOST
           value: "qdrant"
+        - name: QDRANT_USE_TLS
+          value: "true"
         - name: GATEWAY_URL
-          value: "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
+          value: "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
         - name: PULSAR_URL
-          value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: PULSAR_PROMPT_TOPIC
           value: "persistent://rag-pipeline/data/chat-prompts"
         - name: PULSAR_RESPONSE_TOPIC
@@ -88,9 +116,17 @@ spec:
         volumeMounts:
         - name: tests
           mountPath: /tests
+        - name: registry-ca
+          mountPath: /etc/ssl/internal
       volumes:
       - name: tests
         configMap:
           name: rag-integration-tests
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+          items:
+          - key: ca.crt
+            path: ca.crt
       restartPolicy: Never
   backoffLimit: 0

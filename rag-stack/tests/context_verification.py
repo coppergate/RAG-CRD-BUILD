@@ -42,7 +42,8 @@ CONTEXT_QUERIES = [
 
 def setup_test_data():
     print("[SETUP] Injecting fixed test context into S3...")
-    s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT)
+    ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
+    s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT, verify=ca_bundle)
     for path, content in TEST_CODEBASE.items():
         s3.put_object(Bucket=BUCKET_NAME, Key=path, Body=content)
         print(f"  - Uploaded {path}")

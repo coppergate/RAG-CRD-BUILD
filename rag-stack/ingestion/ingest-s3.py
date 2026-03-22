@@ -76,7 +76,8 @@ def chunk_text(text, size):
     return [text[i:i + size] for i in range(0, len(text), size)]
 
 def ingest():
-    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    qdrant_use_tls = os.getenv("QDRANT_USE_TLS", "false") == "true"
+    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, https=qdrant_use_tls, prefer_grpc=False)
     s3_client = get_s3_client()
     model = SentenceTransformer('all-MiniLM-L6-v2')
     

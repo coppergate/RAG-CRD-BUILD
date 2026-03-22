@@ -2,6 +2,7 @@ package qdrant
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,14 +16,39 @@ type QdrantClient struct {
 }
 
 func NewClient(cfg *config.Config) *QdrantClient {
+	transport := &http.Transport{}
+	if cfg.QdrantUseTLS {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 	return &QdrantClient{
-		cfg:        cfg,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		cfg: cfg,
+		httpClient: &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: transport,
+		},
 	}
 }
 
-func (q *QdrantClient) Search(collection string, vector []float32, limit int, tags []string) ([]string, error) {
-	url := fmt.Sprintf("http://%s:%s/collections/%s/points/search", q.cfg.QdrantHost, q.cfg.QdrantPort, collection)
+func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []string) ([]string, error) {
+	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, true)
+}
+
+func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []string, retry bool) ([]string, error) {
+	vs := vectorSize
+	if vs <= 0 {
+		vs = q.cfg.DefaultVectorSize
+	}
+
+	effectiveColl := collection
+	if vs > 0 {
+		effectiveColl = fmt.Sprintf("%s_%d", collection, vs)
+	}
+
+	scheme := "http"
+	if q.cfg.QdrantUseTLS {
+		scheme = "https"
+	}
+	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/search", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
 	
 	query := map[string]interface{}{
 		"vector": vector,
@@ -50,8 +76,16 @@ func (q *QdrantClient) Search(collection string, vector []float32, limit int, ta
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound && retry && vs > 0 {
+		fmt.Printf("Collection '%s' not found. Creating it with size %d...\n", effectiveColl, vs)
+		if err := q.CreateCollection(collection, vs); err != nil {
+			return nil, fmt.Errorf("failed to auto-create collection %s: %v", effectiveColl, err)
+		}
+		return q.searchWithRetry(collection, vectorSize, vector, limit, tags, false)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("qdrant returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("qdrant (coll: %s) returned status %d", effectiveColl, resp.StatusCode)
 	}
 
 	var result struct {
@@ -74,8 +108,26 @@ func (q *QdrantClient) Search(collection string, vector []float32, limit int, ta
 	return contexts, nil
 }
 
-func (q *QdrantClient) Upsert(collection string, points []interface{}) error {
-	url := fmt.Sprintf("http://%s:%s/collections/%s/points?wait=true", q.cfg.QdrantHost, q.cfg.QdrantPort, collection)
+func (q *QdrantClient) Upsert(collection string, vectorSize int, points []interface{}) error {
+	return q.upsertWithRetry(collection, vectorSize, points, true)
+}
+
+func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points []interface{}, retry bool) error {
+	vs := vectorSize
+	if vs <= 0 {
+		vs = q.cfg.DefaultVectorSize
+	}
+
+	effectiveColl := collection
+	if vs > 0 {
+		effectiveColl = fmt.Sprintf("%s_%d", collection, vs)
+	}
+
+	scheme := "http"
+	if q.cfg.QdrantUseTLS {
+		scheme = "https"
+	}
+	url := fmt.Sprintf("%s://%s:%s/collections/%s/points?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
 	
 	body, _ := json.Marshal(map[string]interface{}{
 		"points": points,
@@ -93,15 +145,32 @@ func (q *QdrantClient) Upsert(collection string, points []interface{}) error {
 	}
 	defer resp.Body.Close()
 	
+	if resp.StatusCode == http.StatusNotFound && retry && vs > 0 {
+		fmt.Printf("Collection '%s' not found. Creating it with size %d...\n", effectiveColl, vs)
+		if err := q.CreateCollection(collection, vs); err != nil {
+			return fmt.Errorf("failed to auto-create collection %s: %v", effectiveColl, err)
+		}
+		return q.upsertWithRetry(collection, vectorSize, points, false)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("qdrant returned status %d", resp.StatusCode)
+		return fmt.Errorf("qdrant (coll: %s) returned status %d", effectiveColl, resp.StatusCode)
 	}
 	
 	return nil
 }
 
 func (q *QdrantClient) CreateCollection(collection string, vectorSize int) error {
-	url := fmt.Sprintf("http://%s:%s/collections/%s", q.cfg.QdrantHost, q.cfg.QdrantPort, collection)
+	effectiveColl := collection
+	if vectorSize > 0 {
+		effectiveColl = fmt.Sprintf("%s_%d", collection, vectorSize)
+	}
+
+	scheme := "http"
+	if q.cfg.QdrantUseTLS {
+		scheme = "https"
+	}
+	url := fmt.Sprintf("%s://%s:%s/collections/%s", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
 	
 	body, _ := json.Marshal(map[string]interface{}{
 		"vectors": map[string]interface{}{

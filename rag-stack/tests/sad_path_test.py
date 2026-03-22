@@ -46,7 +46,7 @@ def test_sad_path_gateway():
     # 3. Test 400 Bad Request (Missing required fields - empty body)
     print("  - Testing 400 Bad Request (Empty JSON object)...")
     try:
-        resp = requests.post(f"{GATEWAY_URL}/v1/chat/completions", json={})
+        resp = requests.post(f"{GATEWAY_BASE_URL}/v1/chat/completions", json={})
         # Note: Depending on how the Go struct is unmarshaled, this might not fail immediately 
         # unless we have validation. But it should trigger some error if 'model' or 'messages' are missing.
         # Based on current code, it doesn't explicitly fail for missing fields, 
@@ -61,7 +61,13 @@ def test_sad_path_worker_invalid_payload():
     INGRESS_TOPIC = "persistent://rag-pipeline/stage/ingress"
     
     try:
-        client = Client(PULSAR_URL)
+        # Support TLS for Pulsar if pulsar+ssl is used
+        client_args = {}
+        ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
+        if PULSAR_URL.startswith("pulsar+ssl"):
+            client_args["tls_trust_certs_file_path"] = ca_bundle
+        
+        client = Client(PULSAR_URL, **client_args)
         producer = client.create_producer(INGRESS_TOPIC)
         
         # Send a completely invalid payload to ingress

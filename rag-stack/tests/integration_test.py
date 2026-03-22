@@ -64,15 +64,20 @@ def test_s3_ops():
 def test_qdrant_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing Qdrant Operations...")
     print(f"  - QDRANT_HOST={QDRANT_HOST}")
-    client = QdrantClient(host=QDRANT_HOST, port=6333, timeout=60)
-    collection_name = "test_collection"
+    qdrant_use_tls = os.getenv("QDRANT_USE_TLS", "false") == "true"
+    client = QdrantClient(host=QDRANT_HOST, port=6333, https=qdrant_use_tls, prefer_grpc=False, timeout=60)
+    
+    vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
+    collection_name = f"test_collection_{vector_size}"
     
     # Recreate collection
-    client.recreate_collection(
+    if client.collection_exists(collection_name):
+        client.delete_collection(collection_name)
+    client.create_collection(
         collection_name=collection_name,
-        vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE),
+        vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
     )
-    print(f"  - Created collection {collection_name}")
+    print(f"  - Created collection {collection_name} (size: {vector_size})")
     
     # Upsert dummy data
     client.upsert(
@@ -80,7 +85,7 @@ def test_qdrant_ops():
         points=[
             models.PointStruct(
                 id=1,
-                vector=[0.1] * 384,
+                vector=[0.1] * vector_size,
                 payload={"text": "Test vector search"}
             )
         ]
@@ -90,7 +95,7 @@ def test_qdrant_ops():
     # Search
     results = client.query_points(
         collection_name=collection_name,
-        query=[0.1] * 384,
+        query=[0.1] * vector_size,
         limit=1
     ).points
     assert len(results) > 0

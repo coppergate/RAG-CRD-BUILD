@@ -33,7 +33,7 @@ RESPONSE_TOPIC = os.getenv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/s
 DB_OPS_TOPIC = os.getenv("PULSAR_DB_OPS_TOPIC", "persistent://rag-pipeline/operations/db-ops")
 QDRANT_OPS_TOPIC = os.getenv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops")
 QDRANT_RESULTS_TOPIC = os.getenv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops-results")
-DB_CONN_STRING = os.getenv("DB_CONN_STRING", "postgres://app:app@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=disable")
+DB_CONN_STRING = os.getenv("DB_CONN_STRING", "postgres://app:OpduDLozLwSGzGgnisFUeLyuSt4Q59alo5AtH0V7pdjGOtul9zu5c4waC3hhuCeZ@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt")
 INGRESS_TOPIC = os.getenv("PULSAR_INGRESS_TOPIC", "persistent://rag-pipeline/stage/ingress")
 
 def test_pulsar_db_crud():
@@ -41,7 +41,11 @@ def test_pulsar_db_crud():
     
     # 1. Initialize Pulsar Client
     print(f"  - Connecting to Pulsar at {PULSAR_URL}")
-    client = Client(PULSAR_URL)
+    client_args = {}
+    ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
+    if PULSAR_URL.startswith("pulsar+ssl"):
+        client_args["tls_trust_certs_file_path"] = ca_bundle
+    client = Client(PULSAR_URL, **client_args)
     
     producer = client.create_producer(PROMPT_TOPIC)
     ops_producer = client.create_producer(DB_OPS_TOPIC)
@@ -185,18 +189,25 @@ def test_pulsar_db_crud():
 
 def test_pulsar_qdrant_ops():
     print("\n[TEST] Pulsar & Qdrant Search Interaction")
-    client = Client(PULSAR_URL)
+    # Support TLS for Pulsar if pulsar+ssl is used
+    client_args = {}
+    ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
+    if PULSAR_URL.startswith("pulsar+ssl"):
+        client_args["tls_trust_certs_file_path"] = ca_bundle
+    client = Client(PULSAR_URL, **client_args)
     
     q_ops_producer = client.create_producer(QDRANT_OPS_TOPIC)
     q_res_consumer = client.subscribe(QDRANT_RESULTS_TOPIC, "test-qdrant-sub-" + str(uuid.uuid4())[:8])
 
     op_id = str(uuid.uuid4())
+    vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
     search_payload = {
         "id": op_id,
         "action": "search",
         "collection": "codebase",
-        "vector": [0.1] * 384,
-        "limit": 1
+        "vector_size": vector_size,
+        "vector": [0.1] * vector_size,
+        "limit": 5
     }
 
     print(f"  - Sending Qdrant search op to Pulsar topic {QDRANT_OPS_TOPIC} (ID: {op_id})")

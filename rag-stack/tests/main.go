@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,17 +15,32 @@ import (
 	"time"
 )
 
-var baseURL = "http://172.20.1.23"
+var (
+	baseURL = "https://172.20.1.24" // rag-web-ui LoadBalancer
+	client  = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+		Timeout: 30 * time.Second,
+	}
+)
 
 func main() {
 	tagName := fmt.Sprintf("test-tag-%d", time.Now().Unix())
 	fmt.Printf("--- Starting E2E Test with tag: %s ---\n", tagName)
+
+	vectorSize := 4096 // Default for Llama 3.1
+	if vs := os.Getenv("VECTOR_SIZE"); vs != "" {
+		fmt.Sscanf(vs, "%d", &vectorSize)
+	}
+	fmt.Printf("Using vector_size: %d\n", vectorSize)
 
 	// 1. Create Tag
 	fmt.Println("[STEP 1] Creating tag...")
 	if err := createTag(tagName); err != nil {
 		logFatal("Failed to create tag: %v", err)
 	}
+	time.Sleep(1 * time.Second)
 
 	// 2. Get Tag ID
 	fmt.Println("[STEP 2] Getting tag ID...")
@@ -44,7 +60,7 @@ func main() {
 
 	// 4. Trigger Ingestion
 	fmt.Println("[STEP 4] Triggering ingestion...")
-	if err := triggerIngest(tagID); err != nil {
+	if err := triggerIngest(tagID, vectorSize); err != nil {
 		logFatal("Failed to trigger ingestion: %v", err)
 	}
 
@@ -101,7 +117,7 @@ func main() {
 }
 
 func getFiles() ([]string, error) {
-	resp, err := http.Get(baseURL + "/")
+	resp, err := client.Get(baseURL + "/")
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +143,7 @@ func getFiles() ([]string, error) {
 
 func createTag(name string) error {
 	formData := url.Values{"tag_name": {name}}
-	resp, err := http.PostForm(baseURL+"/create-tag", formData)
+	resp, err := client.PostForm(baseURL+"/create-tag", formData)
 	if err != nil {
 		return err
 	}
@@ -139,7 +155,7 @@ func createTag(name string) error {
 }
 
 func getTags() (map[string]string, error) {
-	resp, err := http.Get(baseURL + "/")
+	resp, err := client.Get(baseURL + "/")
 	if err != nil {
 		return nil, err
 	}
@@ -148,10 +164,11 @@ func getTags() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("DEBUG: HTML body: %s\n", string(body))
 
 	// Very simple regex to find tag IDs and names from the HTML checkboxes
 	// <input type="checkbox" name="tags" value="ID"> Name
-	re := regexp.MustCompile(`<input type="checkbox" name="tags" value="([^"]+)"> [^ ]+ ([^<]+)`)
+	re := regexp.MustCompile(`<input type="checkbox" name="tags" value="([^"]+)"> ([^<]+)`)
 	matches := re.FindAllStringSubmatch(string(body), -1)
 
 	tags := make(map[string]string)
@@ -191,7 +208,6 @@ func uploadFile(name, content string) error {
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
 
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -203,9 +219,12 @@ func uploadFile(name, content string) error {
 	return nil
 }
 
-func triggerIngest(tagID string) error {
-	formData := url.Values{"tags": {tagID}}
-	resp, err := http.PostForm(baseURL+"/trigger-ingest", formData)
+func triggerIngest(tagID string, vectorSize int) error {
+	formData := url.Values{
+		"tags": {tagID},
+		"vector_size": {fmt.Sprintf("%d", vectorSize)},
+	}
+	resp, err := client.PostForm(baseURL+"/trigger-ingest", formData)
 	if err != nil {
 		return err
 	}
@@ -222,7 +241,7 @@ func askRAG(query string, tags []string) (string, error) {
 		"tags":  tags,
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(baseURL+"/ask", "application/json", bytes.NewBuffer(body))
+	resp, err := client.Post(baseURL+"/ask", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
 	}
@@ -243,7 +262,7 @@ func askRAG(query string, tags []string) (string, error) {
 
 func deleteData(tagID string) error {
 	formData := url.Values{"tags": {tagID}}
-	resp, err := http.PostForm(baseURL+"/delete-data", formData)
+	resp, err := client.PostForm(baseURL+"/delete-data", formData)
 	if err != nil {
 		return err
 	}

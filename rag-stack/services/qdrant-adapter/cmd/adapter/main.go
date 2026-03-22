@@ -119,10 +119,15 @@ func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsa
 	opID, _ := data["id"].(string)
 	action, _ := data["action"].(string)
 	collection, _ := data["collection"].(string)
+	vs := 0
+	if s, ok := data["vector_size"].(float64); ok {
+		vs = int(s)
+	}
 
 	attrs := []attribute.KeyValue{
 		attribute.String("action", action),
 		attribute.String("collection", collection),
+		attribute.Int("vector_size", vs),
 	}
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
@@ -137,20 +142,24 @@ func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsa
 
 	switch action {
 	case "search":
-		vector := toFloat32Slice(data["vector"]) 
+		vector := toFloat32Slice(data["vector"])
 		limit := 5
-		if l, ok := data["limit"].(float64); ok { limit = int(l) }
-		tags := toStringSlice(data["tags"]) 
-		result, err = a.qdrant.Search(collection, vector, limit, tags)
+		if l, ok := data["limit"].(float64); ok {
+			limit = int(l)
+		}
+		tags := toStringSlice(data["tags"])
+		result, err = a.qdrant.Search(collection, vs, vector, limit, tags)
 	case "upsert":
 		points, _ := data["points"].([]interface{})
-		err = a.qdrant.Upsert(collection, points)
-		if err == nil { result = map[string]any{"ok": true, "count": len(points)} }
+		err = a.qdrant.Upsert(collection, vs, points)
+		if err == nil {
+			result = map[string]any{"ok": true, "count": len(points)}
+		}
 	case "create_collection":
-		vs := 0
-		if s, ok := data["vector_size"].(float64); ok { vs = int(s) }
 		err = a.qdrant.CreateCollection(collection, vs)
-		if err == nil { result = map[string]any{"ok": true} }
+		if err == nil {
+			result = map[string]any{"ok": true}
+		}
 	default:
 		err = fmt.Errorf("unsupported action: %s", action)
 	}

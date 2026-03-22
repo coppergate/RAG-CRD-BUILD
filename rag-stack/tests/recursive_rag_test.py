@@ -17,7 +17,11 @@ def test_recursive_rag_flow():
     
     # 1. Initialize Pulsar Client
     print(f"  - Connecting to Pulsar at {PULSAR_URL}")
-    client = Client(PULSAR_URL)
+    client_args = {}
+    ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
+    if PULSAR_URL.startswith("pulsar+ssl"):
+        client_args["tls_trust_certs_file_path"] = ca_bundle
+    client = Client(PULSAR_URL, **client_args)
     
     # Producer for Ingress
     ingress_producer = client.create_producer(INGRESS_TOPIC)

@@ -54,7 +54,11 @@ echo "[STEP] Refresh tests ConfigMap" | tee -a "${OUT_DIR}/job.log"
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/integration_test.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/context_verification.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/pulsar_crud_test.py \
-  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/test_contracts.py | tee -a "${OUT_DIR}/job.log"
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/test_contracts.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/recursive_rag_test.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/seed_qdrant_context.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/sad_path_test.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/ingestion_isolation.py | tee -a "${OUT_DIR}/job.log"
 
 # 2) Launch the test job
 echo "[STEP] Apply test job" | tee -a "${OUT_DIR}/job.log"
@@ -81,11 +85,16 @@ echo "[STEP] Stream job logs" | tee -a "${OUT_DIR}/job.log"
 # 4) Run Go E2E driver via Podman (optional)
 echo "[STEP] Run Go E2E driver via Podman" | tee -a "${OUT_DIR}/go-e2e-driver.log"
 if command -v podman >/dev/null 2>&1; then
+  # Mount internal CA to podman container and set SSL_CERT_FILE
+  # We assume combined-ca-inspect.crt in root is available as it was mentioned earlier.
+  # Better: mount the same one we use elsewhere if available.
   podman run --rm \
     -v /mnt/hegemon-share/share/code/complete-build/rag-stack/tests:/app:Z \
+    -v /mnt/hegemon-share/share/code/complete-build/combined-ca-inspect.crt:/etc/ssl/certs/internal-ca.crt:Z \
+    -e SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     -w /app \
     golang:1.25-alpine \
-    sh -c 'go run main.go' | tee -a "${OUT_DIR}/go-e2e-driver.log"
+    sh -c 'cat /etc/ssl/certs/internal-ca.crt >> /etc/ssl/certs/ca-certificates.crt && go run main.go' | tee -a "${OUT_DIR}/go-e2e-driver.log"
 else
   echo "[WARN] podman not found; skipping Go E2E driver" | tee -a "${OUT_DIR}/go-e2e-driver.log"
 fi

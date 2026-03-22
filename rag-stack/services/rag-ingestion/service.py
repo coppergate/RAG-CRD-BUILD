@@ -68,6 +68,7 @@ class IngestRequest(BaseModel):
     ingestion_id: str
     tag_names: List[str]
     tag_ids: List[str]
+    vector_size: Optional[int] = None
 
 def get_db_connection():
     return psycopg2.connect(DB_CONN_STRING)
@@ -92,27 +93,44 @@ def get_ollama_embeddings(text: str) -> List[float]:
     resp.raise_for_status()
     return resp.json()["embedding"]
 
+def get_model_dimensions(model_name: str) -> int:
+    try:
+        resp = requests.post(f"{OLLAMA_URL}/api/show", json={"name": model_name}, timeout=5)
+        if resp.status_code == 200:
+            info = resp.json()
+            # Try to find dimensions in the response
+            # Sometimes it's in model_info, sometimes in details
+            dims = info.get("model_info", {}).get("llama.embedding_length") or \
+                   info.get("details", {}).get("embedding_length")
+            if dims:
+                logger.info(f"Detected model {model_name} dimensions: {dims}")
+                return int(dims)
+    except Exception as e:
+        logger.warning(f"Could not probe model dimensions for {model_name}: {e}")
+    return 0
+
 def chunk_text(text, size):
     return [text[i:i + size] for i in range(0, len(text), size)]
 
-def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str]):
+def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], vector_size: Optional[int] = None):
     try:
-        logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {OLLAMA_MODEL}")
+        current_vs = vector_size
+        if not current_vs:
+            current_vs = get_model_dimensions(OLLAMA_MODEL)
+        
+        logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {OLLAMA_MODEL} (dims: {current_vs})")
         
         pulsar_client = pulsar.Client(PULSAR_URL)
         q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
         
         s3_client = get_s3_client()
         
-        # We assume collection management might be needed. 
-        # In this new async model, we'll just send a create_collection op.
-        # It's idempotent in our adapter (or at least it tries to be).
-        logger.info(f"Ensuring collection {COLLECTION_NAME} via Pulsar")
+        logger.info(f"Ensuring collection {COLLECTION_NAME} via Pulsar (vector_size: {current_vs})")
         q_prod.send(json.dumps({
             "id": f"create-{ingestion_id}",
             "action": "create_collection",
             "collection": COLLECTION_NAME,
-            "vector_size": 4096 # Llama 3.1
+            "vector_size": current_vs
         }).encode('utf-8'))
 
         # List files
@@ -170,6 +188,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str]):
                             "id": f"upsert-{uuid.uuid4()}",
                             "action": "upsert",
                             "collection": COLLECTION_NAME,
+                            "vector_size": current_vs,
                             "points": points
                         }).encode('utf-8'))
                         points = []
@@ -184,6 +203,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str]):
                 "id": f"upsert-{uuid.uuid4()}",
                 "action": "upsert",
                 "collection": COLLECTION_NAME,
+                "vector_size": current_vs,
                 "points": points
             }).encode('utf-8'))
             conn.commit()
@@ -197,8 +217,8 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str]):
 
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
-    logger.info(f"Received ingestion request for ID: {req.ingestion_id}")
-    background_tasks.add_task(run_ingestion, req.ingestion_id, req.tag_names, req.tag_ids)
+    logger.info(f"Received ingestion request for ID: {req.ingestion_id} (requested vector_size: {req.vector_size})")
+    background_tasks.add_task(run_ingestion, req.ingestion_id, req.tag_names, req.tag_ids, req.vector_size)
     return {"status": "accepted", "ingestion_id": req.ingestion_id}
 
 @app.get("/health")

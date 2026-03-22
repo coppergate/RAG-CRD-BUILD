@@ -173,11 +173,11 @@ $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-service.yaml"
 mark_step_done "qdrant"
 fi
 
-# APM ConfigMap for tests and services to export OTEL traces
-if ! is_step_done "apm-config"; then
-echo "--- 4.1 Creating/Updating APM ConfigMap for OTLP endpoint ---"
-APM_OTLP_ENDPOINT="${APM_OTLP_ENDPOINT:-http://alloy.observability.svc.cluster.local:4318}"
-cat <<EOF | $KUBECTL -n $NAMESPACE apply -f -
+  # APM ConfigMap for tests and services to export OTEL traces
+  if ! is_step_done "apm-config"; then
+  echo "--- 4.1 Creating/Updating APM ConfigMap for OTLP endpoint ---"
+  APM_OTLP_ENDPOINT="${APM_OTLP_ENDPOINT:-http://otel-collector.monitoring.svc.cluster.local:4318}"
+  cat <<EOF | $KUBECTL -n $NAMESPACE apply -f -
 apiVersion: v1
 kind: ConfigMap
 metadata:

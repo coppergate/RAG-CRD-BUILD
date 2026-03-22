@@ -60,6 +60,69 @@ load_hash() {
   if [[ -f "$JOURNAL_DIR/${svc}.${ver}.hash" ]]; then cat "$JOURNAL_DIR/${svc}.${ver}.hash"; fi
 }
 
+build_service() {
+  local service="$1"
+  echo "--- Processing $service ---"
+
+  if [ -d "$BUILD_DIR/$service" ]; then
+    echo "--- Building from shadow build directory: $BUILD_DIR/$service ---"
+    cd "$BUILD_DIR/$service"
+  else
+    echo "--- Building from repo directory: $REPO_DIR/services/$service ---"
+    cd "$REPO_DIR/services/$service"
+  fi
+
+  local_hash=$(hash_context ".")
+  prev_hash=$(load_hash "$service" "$VERSION" || true)
+
+  # Determine whether to rebuild
+  do_build=false
+  if [[ "$FORCE_BUILD" == "true" ]]; then
+    do_build=true
+  elif [[ "$SKIP_UNCHANGED" == "true" && "$local_hash" == "$prev_hash" ]]; then
+    if is_pushed "$service" "$VERSION"; then
+      echo "SKIP: $service unchanged and already pushed for $VERSION"
+      return 0
+    else
+      # unchanged but not pushed (previous run may have failed during push) — attempt push without rebuild
+      do_build=false
+    fi
+  else
+    do_build=true
+  fi
+
+  if [[ "$do_build" == "true" ]]; then
+    echo "--- Building $service:$VERSION ---"
+    BUILD_TAG="build-$(date +%s)"
+    
+    # Force rebuild without cache if requested
+    NO_CACHE=""
+    if [[ "$FORCE_BUILD" == "true" ]]; then
+      NO_CACHE="--no-cache"
+    fi
+
+    # All services now use the parent 'services' directory as context to include 'common/' 
+    # and consistent COPY paths in Dockerfiles.
+    podman build $NO_CACHE --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" -f "$REPO_DIR/services/$service/Dockerfile" "$REPO_DIR/services"
+  fi
+
+  echo "--- Pushing $service:$VERSION ---"
+  podman push "$REGISTRY/$service:$VERSION" --tls-verify="$TLS_VERIFY"
+  podman push "$REGISTRY/$service:latest"  --tls-verify="$TLS_VERIFY"
+
+  save_hash "$service" "$VERSION" "$local_hash"
+  mark_pushed "$service" "$VERSION"
+}
+
+# Check if we should build individual services
+if [[ -n "$ONLY" ]]; then
+  IFS=',' read -ra ADDR <<< "$ONLY"
+  for service in "${ADDR[@]}"; do
+    build_service "$service"
+  done
+  exit 0
+fi
+
 echo "--- Building and Pushing RAG Test Runner (resumable) ---"
 cd "$REPO_DIR/tests"
 TT_HASH=$(hash_context ".")
@@ -117,13 +180,15 @@ for service in "${SERVICES[@]}"; do
     echo "--- Building $service:$VERSION ---"
     BUILD_TAG="build-$(date +%s)"
     
-    # Handle context based on service requirements (Go services need 'common/')
-    if [[ "$service" == "rag-ingestion" ]]; then
-      podman build --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" .
-    else
-      # All other Go services use the parent 'services' directory as context to include 'common/'
-      podman build --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" -f "$REPO_DIR/services/$service/Dockerfile" "$REPO_DIR/services"
+    # Force rebuild without cache if requested
+    NO_CACHE=""
+    if [[ "$FORCE_BUILD" == "true" ]]; then
+      NO_CACHE="--no-cache"
     fi
+
+    # All services now use the parent 'services' directory as context to include 'common/' 
+    # and consistent COPY paths in Dockerfiles.
+    podman build $NO_CACHE --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" -f "$REPO_DIR/services/$service/Dockerfile" "$REPO_DIR/services"
   fi
 
   echo "--- Pushing $service:$VERSION ---"

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -242,11 +243,25 @@ func askHandler(w http.ResponseWriter, r *http.Request) {
 
 	sID := req.SessionID
 	if sID == "" {
-		sID = uuid.New().String()
-		if db != nil {
-			_, err := db.Exec("INSERT INTO sessions (session_id, name, description) VALUES ($1, $2, $3) ON CONFLICT (session_id) DO NOTHING", sID, req.SessionName, req.SessionDesc)
-			if err != nil {
-				log.Printf("Error creating session %s: %v", sID, err)
+		if db != nil && req.SessionName != "" {
+			// Try to find existing session by name if sID is not provided
+			err := db.QueryRow("SELECT session_id FROM sessions WHERE name = $1", req.SessionName).Scan(&sID)
+			if err != nil && err != sql.ErrNoRows {
+				log.Printf("Error checking for existing session by name %s: %v", req.SessionName, err)
+			}
+		}
+
+		if sID == "" {
+			sID = uuid.New().String()
+			if db != nil {
+				_, err := db.Exec("INSERT INTO sessions (session_id, name, description) VALUES ($1, $2, $3) ON CONFLICT (session_id) DO NOTHING", sID, req.SessionName, req.SessionDesc)
+				if err != nil {
+					log.Printf("Error creating session %s: %v", sID, err)
+					// If insert failed (likely name conflict), we should still try to proceed if we can get the ID
+					if req.SessionName != "" {
+						_ = db.QueryRow("SELECT session_id FROM sessions WHERE name = $1", req.SessionName).Scan(&sID)
+					}
+				}
 			}
 		}
 	}
@@ -309,6 +324,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	tags := r.Form["tags"]
+	vsStr := r.FormValue("vector_size")
 	if db != nil {
 		var ingestionID string
 		err := db.QueryRow("INSERT INTO code_ingestion (s3_bucket_id) VALUES ($1) RETURNING ingestion_id", bucketName).Scan(&ingestionID)
@@ -332,7 +348,17 @@ func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				tNames = append(tNames, n)
 			}
-			p, _ := json.Marshal(map[string]interface{}{"ingestion_id": ingestionID, "tag_names": tNames, "tag_ids": tags})
+			payload := map[string]interface{}{
+				"ingestion_id": ingestionID,
+				"tag_names":    tNames,
+				"tag_ids":      tags,
+			}
+			if vsStr != "" {
+				if vs, err := strconv.Atoi(vsStr); err == nil {
+					payload["vector_size"] = vs
+				}
+			}
+			p, _ := json.Marshal(payload)
 			resp, err := http.Post("https://rag-ingestion-service.rag-system.svc.cluster.local/ingest", "application/json", bytes.NewBuffer(p))
 			if err != nil {
 				log.Printf("Error triggering ingestion service: %v", err)

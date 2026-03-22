@@ -18,7 +18,7 @@ spec:
       enableServiceLinks: false
       containers:
         - name: qdrant-adapter
-          image: registry.container-registry.svc.cluster.local:5000/qdrant-adapter:__VERSION__
+          image: registry.container-registry.svc.cluster.local:5000/qdrant-adapter:1.5.8
           imagePullPolicy: Always
           startupProbe:
             httpGet:
@@ -53,6 +53,8 @@ spec:
               value: qdrant.rag-system.svc.cluster.local
             - name: QDRANT_PORT
               value: "6333"
+            - name: QDRANT_USE_TLS
+              value: "true"
             - name: SSL_CERT_FILE
               value: "/etc/ssl/certs/ca-certificates.crt"
             - name: OTEL_USE_TLS

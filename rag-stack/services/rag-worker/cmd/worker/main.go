@@ -152,6 +152,9 @@ func main() {
 				Error  string   `json:"error"`
 			}
 			if err := json.Unmarshal(msg.Payload(), &resp); err == nil {
+				if resp.Error != "" {
+					log.Printf("[%s] Qdrant search returned error: %s", resp.ID, resp.Error)
+				}
 				if ch, ok := worker.pending.Load(resp.ID); ok {
 					ch.(chan []string) <- resp.Result
 				}
@@ -215,19 +218,20 @@ func startHealthServer(addr string) {
 	}()
 }
 
-func (w *Worker) searchQdrant(ctx context.Context, collection string, vector []float32, tags []string) ([]string, error) {
+func (w *Worker) searchQdrant(ctx context.Context, collection string, vectorSize int, vector []float32, tags []string) ([]string, error) {
 	id := fmt.Sprintf("search-%d", time.Now().UnixNano())
 	resChan := make(chan []string, 1)
 	w.pending.Store(id, resChan)
 	defer w.pending.Delete(id)
 
 	op := map[string]interface{}{
-		"id":         id,
-		"action":     "search",
-		"collection": collection,
-		"vector":     vector,
-		"limit":      5,
-		"tags":       tags,
+		"id":          id,
+		"action":      "search",
+		"collection":  collection,
+		"vector_size": vectorSize,
+		"vector":      vector,
+		"limit":       5,
+		"tags":        tags,
 	}
 	payload, _ := json.Marshal(op)
 
@@ -341,7 +345,8 @@ func (w *Worker) handlePlan(ctx context.Context, id, sessionID string, data map[
 
 	// 1. Planning: Decompose into sub-tasks
 	planningPrompt := fmt.Sprintf(`You are a RAG Planner. Decompose the following user query into 1-3 specific search queries.
-Output ONLY a JSON array of strings.
+Output ONLY a JSON array of strings. Do not include any other text or markdown formatting.
+Example Output: ["query 1", "query 2"]
 Query: %s`, prompt)
 
 	messages := []map[string]string{
@@ -357,11 +362,20 @@ Query: %s`, prompt)
 	var subQueries []string
 	if err == nil {
 		// Try to parse JSON array from planner output
+		// We use a more robust approach to find the array if it's embedded in text
 		start := strings.Index(planResult, "[")
 		end := strings.LastIndex(planResult, "]")
 		if start != -1 && end != -1 && end > start {
-			if err := json.Unmarshal([]byte(planResult[start:end+1]), &subQueries); err != nil {
-				log.Printf("[%s] Failed to parse sub-queries from planner: %v. Output: %s", id, err, planResult)
+			jsonStr := planResult[start : end+1]
+			
+			// Clean common LLM JSON mistakes (trailing commas)
+			// Remove trailing commas before a closing bracket or brace
+			jsonStr = strings.ReplaceAll(jsonStr, ",]", "]")
+			jsonStr = strings.ReplaceAll(jsonStr, ", }", "}")
+			jsonStr = strings.ReplaceAll(jsonStr, ",}", "}")
+
+			if err := json.Unmarshal([]byte(jsonStr), &subQueries); err != nil {
+				log.Printf("[%s] Failed to parse sub-queries from planner JSON: %v. Output: %s", id, err, planResult)
 			}
 		} else {
 			log.Printf("[%s] Planner output did not contain a valid JSON array: %s", id, planResult)
@@ -384,9 +398,10 @@ Query: %s`, prompt)
 			log.Printf("[%s] Failed to get embeddings for sub-query '%s': %v", id, sq, err)
 			continue
 		}
-		contexts, err := w.searchQdrant(ctx, collection, vector, tags)
+		vs := len(vector)
+		contexts, err := w.searchQdrant(ctx, collection, vs, vector, tags)
 		if err != nil {
-			log.Printf("[%s] Qdrant search failed for sub-query '%s': %v", id, sq, err)
+			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", id, sq, vs, err)
 			continue
 		}
 		allContexts = append(allContexts, contexts...)
