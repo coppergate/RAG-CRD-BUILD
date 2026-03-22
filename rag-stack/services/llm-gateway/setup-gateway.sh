@@ -25,5 +25,5 @@ echo "--- 3. Deploying Gateway ---"
 $KUBECTL apply -f $BASE_DIR/k8s/deployment.yaml
 
 echo "--- Deployment Complete ---"
-echo "Gateway endpoint: http://gateway.rag.local/v1/chat/completions"
+echo "Gateway endpoint: http://gateway.hierocracy.home/v1/chat/completions"
 echo "Check pods: $KUBECTL get pods -n $NAMESPACE -l app=llm-gateway"

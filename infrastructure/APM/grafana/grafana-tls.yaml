@@ -10,7 +10,7 @@ spec:
   subject:
     organizations:
       - Hierocracy
-  commonName: grafana.rag.local
+  commonName: grafana.hierocracy.home
   isCA: false
   privateKey:
     algorithm: RSA
@@ -24,7 +24,7 @@ spec:
     - grafana.monitoring
     - grafana.monitoring.svc
     - grafana.monitoring.svc.cluster.local
-    - grafana.rag.local
+    - grafana.hierocracy.home
     - grafana.hierocracy.home
   issuerRef:
     name: hierocracy-ca-issuer

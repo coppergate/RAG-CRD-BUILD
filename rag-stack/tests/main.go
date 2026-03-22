@@ -71,7 +71,9 @@ func main() {
 	success := false
 	var lastAnswer string
 	for time.Since(start) < 5*time.Minute {
-		answer, askErr := askRAG("What is the secret code mentioned in the e2e-test-file?", []string{tagID})
+		// Use a very specific query to ensure we are testing the isolation and the file we just uploaded.
+		query := fmt.Sprintf("What is the secret code mentioned in the file %s? Answer with just the code.", fileName)
+		answer, askErr := askRAG(query, []string{tagID})
 		if askErr == nil {
 			lastAnswer = answer
 			if strings.Contains(strings.ToUpper(answer), "BLUE-ORCHID-2026") {

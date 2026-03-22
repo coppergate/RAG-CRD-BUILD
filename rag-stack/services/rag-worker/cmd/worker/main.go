@@ -389,7 +389,22 @@ Query: %s`, prompt)
 	w.sendStatus(ctx, id, sessionID, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
 
 	collection := "codebase"
-	var tags []string // Fetch tags if needed
+	var tags []string
+	if tagsVal, ok := data["tags"].([]interface{}); ok {
+		for _, v := range tagsVal {
+			if s, ok := v.(string); ok {
+				tags = append(tags, s)
+			}
+		}
+	} else if payload, ok := data["payload"].(map[string]interface{}); ok {
+		if tagsVal, ok := payload["tags"].([]interface{}); ok {
+			for _, v := range tagsVal {
+				if s, ok := v.(string); ok {
+					tags = append(tags, s)
+				}
+			}
+		}
+	}
 
 	var allContexts []string
 	for _, sq := range subQueries {
@@ -409,6 +424,7 @@ Query: %s`, prompt)
 
 	// Send to execution
 	data["contexts"] = allContexts
+	data["tags"] = tags // Propagate tags for recursion
 	if data["recursion_budget"] == nil {
 		data["recursion_budget"] = 2
 	}

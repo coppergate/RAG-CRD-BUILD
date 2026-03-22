@@ -28,8 +28,9 @@ type OpenAIHandler struct {
 }
 
 type ChatCompletionRequest struct {
-	Model     string `json:"model"`
-	SessionID string `json:"session_id,omitempty"` // Added for session tracking
+	Model     string   `json:"model"`
+	SessionID string   `json:"session_id,omitempty"` // Added for session tracking
+	Tags      []string `json:"tags,omitempty"`       // Added for RAG isolation
 	Messages  []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`

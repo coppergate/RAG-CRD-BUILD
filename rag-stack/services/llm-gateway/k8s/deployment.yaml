@@ -110,10 +110,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - gateway.rag.local
+    - gateway.hierocracy.home
     secretName: llm-gateway-tls
   rules:
-  - host: gateway.rag.local
+  - host: gateway.hierocracy.home
     http:
       paths:
       - path: /

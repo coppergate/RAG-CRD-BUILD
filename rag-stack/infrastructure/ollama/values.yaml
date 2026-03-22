@@ -191,7 +191,7 @@ ingress:
 
   # The list of hostnames to be covered with this ingress record.
   hosts:
-    - host: ollama.local
+    - host: ollama.hierocracy.home
       paths:
         - path: /
           pathType: Prefix

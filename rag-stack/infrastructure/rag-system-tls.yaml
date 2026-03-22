@@ -24,7 +24,7 @@ spec:
     - llm-gateway.rag-system
     - llm-gateway.rag-system.svc
     - llm-gateway.rag-system.svc.cluster.local
-    - gateway.rag.local
+    - gateway.hierocracy.home
     - gateway.hierocracy.home
   issuerRef:
     name: hierocracy-ca-issuer
@@ -88,7 +88,7 @@ spec:
     - rag-web-ui.rag-system
     - rag-web-ui.rag-system.svc
     - rag-web-ui.rag-system.svc.cluster.local
-    - ui.rag.local
+    - ui.hierocracy.home
     - ui.hierocracy.home
   issuerRef:
     name: hierocracy-ca-issuer
