@@ -120,7 +120,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
         
         logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {OLLAMA_MODEL} (dims: {current_vs})")
         
-        pulsar_client = pulsar.Client(PULSAR_URL)
+        pulsar_client = pulsar.Client(PULSAR_URL, tls_trust_certs_file_path=os.getenv("SSL_CERT_FILE"))
         q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
         
         s3_client = get_s3_client()

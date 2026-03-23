@@ -4,7 +4,7 @@
 
 set -Eeuo pipefail
 
-VERSION="${VERSION:-1.5.10}"
+VERSION="${VERSION:-2.0.0}"
 WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
 TRIGGER_PARALLELISM="${TRIGGER_PARALLELISM:-4}"
 if [[ "${1:-}" == "--wait" ]]; then
@@ -31,6 +31,7 @@ services=(
     "rag-worker"
     "rag-web-ui"
     "rag-ingestion"
+    "rag-test-runner"
 )
 job_names=()
 trigger_pids=()

@@ -5,7 +5,7 @@ This document tracks basic tasks and procedures determined during development to
 ## Parallel Build and Push (Cluster-Native)
 To build and push all RAG services in parallel using the cluster-native Kaniko pipeline:
 1.  **Access Hierophant**: Use `./run-on-hierophant.sh`.
-2.  **Versioning**: Set the `VERSION` environment variable (e.g., `1.6.1`).
+2.  **Versioning**: Set the `VERSION` environment variable (e.g., `X.Y.Z`).
 3.  **Command**: Run `rag-stack/build-all-on-cluster.sh`.
 4.  **Verification**: Monitor build jobs on the cluster.
     ```bash
@@ -13,7 +13,7 @@ To build and push all RAG services in parallel using the cluster-native Kaniko p
     ```
 5.  **Example Command**:
     ```bash
-    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=1.6.1 bash ./build-all-on-cluster.sh"
+    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=2.0.0 bash ./build-all-on-cluster.sh"
     ```
 
 ## Local/Bootstrap Build and Push (Host-Based)
@@ -24,7 +24,7 @@ Use this only for bootstrapping or when the cluster-native pipeline is unavailab
 3.  **Force Build**: Use `FORCE_BUILD=true` to ensure fresh builds when code is modified.
 4.  **Example Command**:
     ```bash
-    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=1.6.1 FORCE_BUILD=true JOURNAL_DIR=/tmp/.rag-build ./build-and-push.sh"
+    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=2.0.0 FORCE_BUILD=true JOURNAL_DIR=/tmp/.rag-build ./build-and-push.sh"
     ```
 
 ## Running End-to-End Tests
@@ -39,7 +39,7 @@ To execute the full RAG stack E2E test suite:
     -   Go E2E driver execution via Podman (local to hierophant).
 4.  **Example Command**:
     ```bash
-    ./run-on-hierophant.sh "export VERSION=1.6.1 && bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-e2e-on-hierophant.sh"
+    ./run-on-hierophant.sh "export VERSION=2.0.0 && bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-e2e-on-hierophant.sh"
     ```
 
 ## Journaling and Permissions
@@ -53,3 +53,9 @@ To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
 - **Dimension-Based Identification**: Collections are automatically identified by their vector dimensions using the format `vectors-<dim>` (e.g., `vectors-384`, `vectors-4096`).
 - **Isolation**: Tag-based filtering uses a strict `must` match to ensure context isolation.
 - **Tag Matching**: Filtering and storage must use UUID `tag_ids` for consistency. Human-readable `tag_names` are for display only.
+
+## TLS and Security
+1.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
+2.  **Trust Distribution**: The combined CA certificate is managed via the `registry-ca-cm` ConfigMap in target namespaces.
+3.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`) for CA trust.
+4.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.

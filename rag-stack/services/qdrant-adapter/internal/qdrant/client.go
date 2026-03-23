@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 	"app-builds/qdrant-adapter/internal/config"
@@ -67,6 +68,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 				},
 			},
 		}
+		log.Printf("DEBUG: Qdrant Search Filter (tags=%v): %+v", tags, query["filter"])
 	}
 	
 	body, _ := json.Marshal(query)
@@ -163,7 +165,7 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 func (q *QdrantClient) CreateCollection(collection string, vectorSize int) error {
 	effectiveColl := collection
 	if vectorSize > 0 {
-		effectiveColl = fmt.Sprintf("%s_%d", collection, vectorSize)
+		effectiveColl = fmt.Sprintf("%s-%d", collection, vectorSize)
 	}
 
 	scheme := "http"

@@ -6,7 +6,7 @@ CODE_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 TEST_DIR="${CODE_DIR}/tests"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-1.5.10}"
+VERSION="${VERSION:-1.5.11}"
 
 echo "--- Preparing RAG Integration Tests ---"
 

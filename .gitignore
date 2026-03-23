@@ -5,3 +5,4 @@
 /research/
 /scripts/revert-journal.sh
 /scripts/set-setup-complete-resume.sh
+**/*.crt
