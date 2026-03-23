@@ -69,6 +69,7 @@ def run_context_tests():
         payload = {
             "model": "llama3.1",
             "session_id": session_id,
+            "tags": ["test-tag"],
             "messages": [{"role": "user", "content": query['question']}],
             "temperature": 0.0 # Heat 0 for deterministic output
         }

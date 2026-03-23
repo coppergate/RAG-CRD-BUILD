@@ -40,7 +40,13 @@ def seed_data():
     client = QdrantClient(host=QDRANT_HOST, port=6333, https=qdrant_use_tls, prefer_grpc=False, timeout=30)
     
     print(f"[SEED] Ensuring collection '{COLLECTION_NAME}' (size: {VECTOR_SIZE})...")
-    if not client.collection_exists(COLLECTION_NAME):
+    try:
+        client.get_collection(COLLECTION_NAME)
+        collection_exists = True
+    except Exception:
+        collection_exists = False
+
+    if not collection_exists:
         client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=models.VectorParams(size=VECTOR_SIZE, distance=models.Distance.COSINE),

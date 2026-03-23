@@ -71,7 +71,13 @@ def test_qdrant_ops():
     collection_name = f"test_collection_{vector_size}"
     
     # Recreate collection
-    if client.collection_exists(collection_name):
+    try:
+        client.get_collection(collection_name)
+        collection_exists = True
+    except Exception:
+        collection_exists = False
+
+    if collection_exists:
         client.delete_collection(collection_name)
     client.create_collection(
         collection_name=collection_name,
@@ -93,11 +99,11 @@ def test_qdrant_ops():
     print("  - Upserted test point")
     
     # Search
-    results = client.query_points(
+    results = client.search(
         collection_name=collection_name,
-        query=[0.1] * vector_size,
+        query_vector=[0.1] * vector_size,
         limit=1
-    ).points
+    )
     assert len(results) > 0
     assert results[0].payload["text"] == "Test vector search"
     print("  - Verified search result")

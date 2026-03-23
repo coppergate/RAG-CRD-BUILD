@@ -19,7 +19,7 @@ CA_BUNDLE = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
 def create_tag(tag_name):
     print(f"  - Creating tag: {tag_name}")
     resp = requests.post(f"{BASE_URL}/create-tag", data={"tag_name": tag_name}, verify=False, timeout=10)
-    if resp.status_code not in [200, 302]:
+    if resp.status_code not in [200, 204, 302]:
         raise Exception(f"Failed to create tag: {resp.status_code} - {resp.text}")
 
 def get_tag_id(tag_name):
@@ -37,13 +37,13 @@ def upload_file(tag_id, filename, content):
     print(f"  - Uploading file: {filename} with tag ID: {tag_id}")
     files = {'file': (filename, content)}
     resp = requests.post(f"{BASE_URL}/upload", files=files, verify=False, timeout=10)
-    if resp.status_code not in [200, 302]:
+    if resp.status_code not in [200, 204, 302]:
         raise Exception(f"Failed to upload file: {resp.status_code} - {resp.text}")
 
 def trigger_ingest(tag_id):
     print(f"  - Triggering ingestion for tag ID: {tag_id}")
     resp = requests.post(f"{BASE_URL}/trigger-ingest", data={"tags": tag_id}, verify=False, timeout=10)
-    if resp.status_code not in [200, 302]:
+    if resp.status_code not in [200, 204, 302]:
         raise Exception(f"Failed to trigger ingest: {resp.status_code} - {resp.text}")
 
 # 2. Vector Store Verification
