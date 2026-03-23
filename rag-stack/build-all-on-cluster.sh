@@ -4,7 +4,7 @@
 
 set -Eeuo pipefail
 
-VERSION="${VERSION:-2.0.0}"
+VERSION="${VERSION:-2.0.1}"
 WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
 TRIGGER_PARALLELISM="${TRIGGER_PARALLELISM:-4}"
 if [[ "${1:-}" == "--wait" ]]; then

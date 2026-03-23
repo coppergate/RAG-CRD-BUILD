@@ -18,7 +18,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: ingestor
-        image: registry.container-registry.svc.cluster.local:5000/rag-ingestion:2.0.0
+        image: registry.container-registry.svc.cluster.local:5000/rag-ingestion:2.0.1
         imagePullPolicy: Always
         command: ["python", "service.py"]
         ports:

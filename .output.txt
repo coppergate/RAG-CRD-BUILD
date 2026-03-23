@@ -1,17 +1,22 @@
 [INFO] Preflight: Checking connectivity to hierophant and cluster...
 [OK] Connectivity verified.
-[INFO] Logs will be saved to: /mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/logs/e2e-20260323-133917
+[INFO] Logs will be saved to: /mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/logs/e2e-20260323-142516
 Client Version: v1.35.0
 Kustomize Version: v5.7.1
 [STEP] Refresh tests ConfigMap
 configmap "rag-integration-tests" deleted from rag-system namespace
 configmap/rag-integration-tests created
+[STEP] Apply cleanup job
+job.batch "rag-test-cleanup" deleted from rag-system namespace
+job.batch/rag-test-cleanup created
+[STEP] Wait for cleanup job to complete
+job.batch/rag-test-cleanup condition met
 [STEP] Apply test job
 job.batch "rag-integration-test" deleted from rag-system namespace
 job.batch/rag-integration-test created
 [STEP] Wait for test pod
-pod/rag-integration-test-czxjb condition met
-[INFO] Test pod: rag-integration-test-czxjb
+pod/rag-integration-test-zclqd condition met
+[INFO] Test pod: rag-integration-test-zclqd
 [STEP] Stream job logs
 Defaulted container "tester" out of: tester, k8tz (init)
 --- Preparing Certificates ---
@@ -27,17 +32,17 @@ Appending internal CA to bundle...
   "GATEWAY_URL": "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions",
   "OTEL_ENABLED": true
 }
-[2026-03-23T19:39:21.504228] [TEST] Testing S3 Operations...
+[2026-03-23T20:25:27.136580] [TEST] Testing S3 Operations...
   - S3_ENDPOINT=http://rook-ceph-rgw-ceph-object-store.rook-ceph.svc BUCKET_NAME=rag-codebase-b219207c-cf63-43cf-a95d-df088f0b5e7f
   - Uploaded test_file.txt
   - Verified content
   - Verified file in listing
-[2026-03-23T19:39:21.807574] [TEST] Testing Qdrant Operations...
+[2026-03-23T20:25:27.486087] [TEST] Testing Qdrant Operations...
   - QDRANT_HOST=qdrant
   - Created collection test_collection_4096 (size: 4096)
   - Upserted test point
   - Verified search result
-[2026-03-23T19:39:23.842430] [TEST] Testing RAG Retrieval via Gateway...
+[2026-03-23T20:25:29.817226] [TEST] Testing RAG Retrieval via Gateway...
   - GATEWAY_URL=https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions
   - Gateway status code: 200
   - Gateway responded successfully
@@ -56,68 +61,61 @@ Failed to export span batch code: 400, reason: Bad Request
   warnings.warn(
 /usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host '172.20.1.24'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
   warnings.warn(
---- Starting Isolated Ingestion Test [iso-test-49ba0bad] ---
-  - Creating tag: iso-test-49ba0bad
-  - Fetching tag ID for: iso-test-49ba0bad
-  - Uploading file: iso-file-49ba0bad.txt with tag ID: 8136e382-8b13-483c-8c1b-19902e06d81e
-  - Triggering ingestion for tag ID: 8136e382-8b13-483c-8c1b-19902e06d81e
-  - Verifying points in Qdrant for tag: iso-test-49ba0bad (dims: 4096)...
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host '172.20.1.24'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+--- Starting Isolated Ingestion Test [iso-test-b22f0ccf] ---
+  - Creating tag: iso-test-b22f0ccf
+  - Fetching tag ID for: iso-test-b22f0ccf
+  - Uploading file: iso-file-b22f0ccf.txt with tag ID: 1d84c6fb-a145-42ed-a60c-6d2e45f6a8b8
+  - Triggering ingestion for tag ID: 1d84c6fb-a145-42ed-a60c-6d2e45f6a8b8 (files: iso-file-b22f0ccf.txt)
+  - Fetching tag ID for: iso-test-b22f0ccf
+  - Verifying points in Qdrant for tag_id: 1d84c6fb-a145-42ed-a60c-6d2e45f6a8b8 (dims: 4096)...
     [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [WAIT] No points found yet for this tag.
-    [FAIL] Timed out waiting for points in Qdrant.
-[FAIL] Ingestion pipeline isolated verification: FAILED
+    [OK] Found 1 points in Qdrant.
+    [SUCCESS] Found expected content: 'SECRET-CODE-b22f0ccf'
+[PASS] Ingestion pipeline isolated verification: SUCCESS
 --- Running Recursive RAG Flow Tests ---
-2026-03-23 19:41:34.081 INFO  [140597407150848] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:34.096 INFO  [140597407150848] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:34.100 INFO  [140597381396160] ClientConnection:410 | [10.244.9.176:47104 -> 10.102.99.101:6651] Connected to broker
-2026-03-23 19:41:34.126 INFO  [140597381396160] HandlerBase:115 | [persistent://rag-pipeline/stage/ingress, ] Getting connection from pool
-2026-03-23 19:41:34.129 INFO  [140597381396160] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/ingress, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:47104 -> 10.102.99.101:6651]
-2026-03-23 19:41:34.129 INFO  [140597381396160] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:34.143 INFO  [140597381396160] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:34.148 INFO  [140597381396160] ClientConnection:412 | [10.244.9.176:47110 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
-2026-03-23 19:41:34.171 INFO  [140597381396160] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/stage/ingress, producerName: on [10.244.9.176:47110 -> 10.102.99.101:6651]
-2026-03-23 19:41:34.173 INFO  [140597381396160] ProducerImpl:220 | [persistent://rag-pipeline/stage/ingress, ] Created producer on broker [10.244.9.176:47110 -> 10.102.99.101:6651]
-2026-03-23 19:41:34.173 INFO  [140597381396160] HandlerBase:138 | Finished connecting to broker after 46 ms
-2026-03-23 19:41:34.174 INFO  [140597407150848] Client:86 | Subscribing on Topic :persistent://rag-pipeline/stage/results
-2026-03-23 19:41:34.175 INFO  [140597381396160] HandlerBase:115 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-19818a68, 0] Getting connection from pool
-2026-03-23 19:41:34.177 INFO  [140597381396160] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/results, lookup-broker-url pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:47104 -> 10.102.99.101:6651]
-2026-03-23 19:41:34.177 INFO  [140597381396160] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:34.190 INFO  [140597381396160] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:34.194 INFO  [140597381396160] ClientConnection:412 | [10.244.9.176:47126 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
-2026-03-23 19:41:34.238 INFO  [140597381396160] ConsumerImpl:311 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-19818a68, 0] Created consumer on broker [10.244.9.176:47126 -> 10.102.99.101:6651]
-2026-03-23 19:41:34.238 INFO  [140597381396160] HandlerBase:138 | Finished connecting to broker after 62 ms
-2026-03-23 19:41:34.238 INFO  [140597407150848] Client:86 | Subscribing on Topic :persistent://rag-pipeline/stage/status
-2026-03-23 19:41:34.240 INFO  [140597381396160] HandlerBase:115 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-5f2a23a0, 1] Getting connection from pool
-2026-03-23 19:41:34.241 INFO  [140597381396160] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/status, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:47104 -> 10.102.99.101:6651]
-2026-03-23 19:41:34.260 INFO  [140597381396160] ConsumerImpl:311 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-5f2a23a0, 1] Created consumer on broker [10.244.9.176:47110 -> 10.102.99.101:6651]
-2026-03-23 19:41:34.260 INFO  [140597381396160] HandlerBase:138 | Finished connecting to broker after 20 ms
-2026-03-23 19:41:38.319 INFO  [140597407150848] ClientImpl:665 | Closing Pulsar client with 1 producers and 2 consumers
-2026-03-23 19:41:38.320 INFO  [140597407150848] ProducerImpl:800 | [persistent://rag-pipeline/stage/ingress, pulsar-1-231] Closing producer for topic persistent://rag-pipeline/stage/ingress
-2026-03-23 19:41:38.320 INFO  [140597407150848] ConsumerImpl:1328 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-5f2a23a0, 1] Closing consumer for topic persistent://rag-pipeline/stage/status
-2026-03-23 19:41:38.320 INFO  [140597407150848] ConsumerImpl:1328 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-19818a68, 0] Closing consumer for topic persistent://rag-pipeline/stage/results
-2026-03-23 19:41:38.321 INFO  [140597381396160] ProducerImpl:764 | [persistent://rag-pipeline/stage/ingress, pulsar-1-231] Closed producer 0
-2026-03-23 19:41:38.322 INFO  [140597381396160] ConsumerImpl:1312 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-19818a68, 0] Closed consumer 0
-2026-03-23 19:41:38.325 INFO  [140597381396160] ConsumerImpl:1312 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-5f2a23a0, 1] Closed consumer 1
-2026-03-23 19:41:38.326 INFO  [140597281150656] ClientConnection:1336 | [10.244.9.176:47126 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:41:38.326 INFO  [140597281150656] ClientConnection:1336 | [10.244.9.176:47110 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:41:38.326 INFO  [140597281150656] ClientConnection:1336 | [10.244.9.176:47104 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:41:38.326 INFO  [140597281150656] ClientConnection:282 | [10.244.9.176:47104 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:38.328 INFO  [140597281150656] ClientConnection:282 | [10.244.9.176:47110 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:38.332 INFO  [140597281150656] ClientConnection:282 | [10.244.9.176:47126 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:38.334 INFO  [140597407150848] ProducerImpl:757 | Producer - [persistent://rag-pipeline/stage/ingress, pulsar-1-231] , [batching  = off]
-[2026-03-23T19:41:34.081014] [TEST] Recursive Multi-Model RAG Flow
+2026-03-23 20:25:56.810 INFO  [139680900829952] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:25:56.826 INFO  [139680900829952] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:25:56.833 INFO  [139680875075264] ClientConnection:410 | [10.244.9.191:38030 -> 10.102.99.101:6651] Connected to broker
+2026-03-23 20:25:56.858 INFO  [139680875075264] HandlerBase:115 | [persistent://rag-pipeline/stage/ingress, ] Getting connection from pool
+2026-03-23 20:25:56.859 INFO  [139680875075264] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/ingress, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:38030 -> 10.102.99.101:6651]
+2026-03-23 20:25:56.860 INFO  [139680875075264] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:25:56.874 INFO  [139680875075264] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:25:56.878 INFO  [139680875075264] ClientConnection:412 | [10.244.9.191:38036 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+2026-03-23 20:25:56.904 INFO  [139680875075264] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/stage/ingress, producerName: on [10.244.9.191:38036 -> 10.102.99.101:6651]
+2026-03-23 20:25:56.906 INFO  [139680875075264] ProducerImpl:220 | [persistent://rag-pipeline/stage/ingress, ] Created producer on broker [10.244.9.191:38036 -> 10.102.99.101:6651]
+2026-03-23 20:25:56.906 INFO  [139680875075264] HandlerBase:138 | Finished connecting to broker after 47 ms
+2026-03-23 20:25:56.906 INFO  [139680900829952] Client:86 | Subscribing on Topic :persistent://rag-pipeline/stage/results
+2026-03-23 20:25:56.908 INFO  [139680875075264] HandlerBase:115 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-6d13117f, 0] Getting connection from pool
+2026-03-23 20:25:56.910 INFO  [139680875075264] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/results, lookup-broker-url pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:38030 -> 10.102.99.101:6651]
+2026-03-23 20:25:56.910 INFO  [139680875075264] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:25:56.927 INFO  [139680875075264] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:25:56.931 INFO  [139680875075264] ClientConnection:412 | [10.244.9.191:38038 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+2026-03-23 20:25:56.973 INFO  [139680875075264] ConsumerImpl:311 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-6d13117f, 0] Created consumer on broker [10.244.9.191:38038 -> 10.102.99.101:6651]
+2026-03-23 20:25:56.973 INFO  [139680875075264] HandlerBase:138 | Finished connecting to broker after 65 ms
+2026-03-23 20:25:56.973 INFO  [139680900829952] Client:86 | Subscribing on Topic :persistent://rag-pipeline/stage/status
+2026-03-23 20:25:56.975 INFO  [139680875075264] HandlerBase:115 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-3d69148c, 1] Getting connection from pool
+2026-03-23 20:25:56.976 INFO  [139680875075264] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/status, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:38030 -> 10.102.99.101:6651]
+2026-03-23 20:25:56.994 INFO  [139680875075264] ConsumerImpl:311 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-3d69148c, 1] Created consumer on broker [10.244.9.191:38036 -> 10.102.99.101:6651]
+2026-03-23 20:25:56.995 INFO  [139680875075264] HandlerBase:138 | Finished connecting to broker after 19 ms
+2026-03-23 20:26:00.785 INFO  [139680900829952] ClientImpl:665 | Closing Pulsar client with 1 producers and 2 consumers
+2026-03-23 20:26:00.785 INFO  [139680900829952] ProducerImpl:800 | [persistent://rag-pipeline/stage/ingress, pulsar-1-267] Closing producer for topic persistent://rag-pipeline/stage/ingress
+2026-03-23 20:26:00.785 INFO  [139680900829952] ConsumerImpl:1328 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-3d69148c, 1] Closing consumer for topic persistent://rag-pipeline/stage/status
+2026-03-23 20:26:00.785 INFO  [139680900829952] ConsumerImpl:1328 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-6d13117f, 0] Closing consumer for topic persistent://rag-pipeline/stage/results
+2026-03-23 20:26:00.787 INFO  [139680875075264] ProducerImpl:764 | [persistent://rag-pipeline/stage/ingress, pulsar-1-267] Closed producer 0
+2026-03-23 20:26:00.787 INFO  [139680875075264] ConsumerImpl:1312 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-3d69148c, 1] Closed consumer 1
+2026-03-23 20:26:00.788 INFO  [139680875075264] ConsumerImpl:1312 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-6d13117f, 0] Closed consumer 0
+2026-03-23 20:26:00.788 INFO  [139680775395008] ClientConnection:1336 | [10.244.9.191:38038 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
+2026-03-23 20:26:00.788 INFO  [139680775395008] ClientConnection:1336 | [10.244.9.191:38036 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
+2026-03-23 20:26:00.788 INFO  [139680775395008] ClientConnection:1336 | [10.244.9.191:38030 -> 10.102.99.101:6651] Connection disconnected (refCnt: 2)
+2026-03-23 20:26:00.788 INFO  [139680775395008] ClientConnection:282 | [10.244.9.191:38030 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:00.790 INFO  [139680775395008] ClientConnection:282 | [10.244.9.191:38036 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:00.792 INFO  [139680775395008] ClientConnection:282 | [10.244.9.191:38038 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:00.798 INFO  [139680900829952] ProducerImpl:757 | Producer - [persistent://rag-pipeline/stage/ingress, pulsar-1-267] , [batching  = off]
+[2026-03-23T20:25:56.809525] [TEST] Recursive Multi-Model RAG Flow
   - Connecting to Pulsar at pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
-  - Sending request to Ingress topic persistent://rag-pipeline/stage/ingress (ID: df1c05a2-fb92-4b4d-9746-3f8ce1f2757c)
+  - Sending request to Ingress topic persistent://rag-pipeline/stage/ingress (ID: 923eb444-d2fb-42e6-8b7e-430a64302982)
   - Monitoring Status messages (Thinking Trace)...
     [STATUS] INGRESS_RECEIVED: Initial request received
     [STATUS] PLANNING_TASK: Decomposing prompt into sub-tasks
@@ -134,109 +132,109 @@ Failed to export span batch code: 400, reason: Bad Request
     [PASS] Final response received.
 [DONE] Recursive RAG Flow test finished.
 --- Running Pulsar CRUD Tests ---
-2026-03-23 19:41:38.742 INFO  [140523245298432] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:38.758 INFO  [140523245298432] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:38.762 INFO  [140523159045824] ClientConnection:410 | [10.244.9.176:47140 -> 10.102.99.101:6651] Connected to broker
-2026-03-23 19:41:38.786 INFO  [140523159045824] HandlerBase:115 | [persistent://rag-pipeline/data/chat-prompts, ] Getting connection from pool
-2026-03-23 19:41:38.788 INFO  [140523159045824] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/data/chat-prompts, lookup-broker-url pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:47140 -> 10.102.99.101:6651]
-2026-03-23 19:41:38.788 INFO  [140523159045824] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:38.805 INFO  [140523159045824] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:38.809 INFO  [140523159045824] ClientConnection:412 | [10.244.9.176:47154 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
-2026-03-23 19:41:38.836 INFO  [140523159045824] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/data/chat-prompts, producerName: on [10.244.9.176:47154 -> 10.102.99.101:6651]
-2026-03-23 19:41:38.840 INFO  [140523159045824] ProducerImpl:220 | [persistent://rag-pipeline/data/chat-prompts, ] Created producer on broker [10.244.9.176:47154 -> 10.102.99.101:6651]
-2026-03-23 19:41:38.840 INFO  [140523159045824] HandlerBase:138 | Finished connecting to broker after 53 ms
-2026-03-23 19:41:38.841 INFO  [140523159045824] HandlerBase:115 | [persistent://rag-pipeline/operations/db-ops, ] Getting connection from pool
-2026-03-23 19:41:38.843 INFO  [140523159045824] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/operations/db-ops, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:47140 -> 10.102.99.101:6651]
-2026-03-23 19:41:38.843 INFO  [140523159045824] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:38.861 INFO  [140523159045824] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:38.865 INFO  [140523159045824] ClientConnection:412 | [10.244.9.176:47156 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
-2026-03-23 19:41:38.894 INFO  [140523159045824] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/operations/db-ops, producerName: on [10.244.9.176:47156 -> 10.102.99.101:6651]
-2026-03-23 19:41:38.897 INFO  [140523159045824] ProducerImpl:220 | [persistent://rag-pipeline/operations/db-ops, ] Created producer on broker [10.244.9.176:47156 -> 10.102.99.101:6651]
-2026-03-23 19:41:38.898 INFO  [140523159045824] HandlerBase:138 | Finished connecting to broker after 56 ms
-2026-03-23 19:41:38.898 INFO  [140523245298432] Client:86 | Subscribing on Topic :persistent://rag-pipeline/stage/results
-2026-03-23 19:41:38.900 INFO  [140523159045824] HandlerBase:115 | [persistent://rag-pipeline/stage/results, test-crud-sub-1e9564d3, 0] Getting connection from pool
-2026-03-23 19:41:38.901 INFO  [140523159045824] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/results, lookup-broker-url pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:47140 -> 10.102.99.101:6651]
-2026-03-23 19:41:38.941 INFO  [140523159045824] ConsumerImpl:311 | [persistent://rag-pipeline/stage/results, test-crud-sub-1e9564d3, 0] Created consumer on broker [10.244.9.176:47154 -> 10.102.99.101:6651]
-2026-03-23 19:41:38.941 INFO  [140523159045824] HandlerBase:138 | Finished connecting to broker after 41 ms
-2026-03-23 19:41:41.033 INFO  [140523159045824] HandlerBase:115 | [persistent://rag-pipeline/stage/ingress, ] Getting connection from pool
-2026-03-23 19:41:41.034 INFO  [140523159045824] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/ingress, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:47140 -> 10.102.99.101:6651]
-2026-03-23 19:41:41.034 INFO  [140523159045824] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/stage/ingress, producerName: on [10.244.9.176:47156 -> 10.102.99.101:6651]
-2026-03-23 19:41:41.036 INFO  [140523159045824] ProducerImpl:220 | [persistent://rag-pipeline/stage/ingress, ] Created producer on broker [10.244.9.176:47156 -> 10.102.99.101:6651]
-2026-03-23 19:41:41.036 INFO  [140523159045824] HandlerBase:138 | Finished connecting to broker after 3 ms
-2026-03-23 19:41:51.911 INFO  [140523245298432] ClientImpl:665 | Closing Pulsar client with 3 producers and 1 consumers
-2026-03-23 19:41:51.911 INFO  [140523245298432] ProducerImpl:800 | [persistent://rag-pipeline/stage/ingress, pulsar-1-233] Closing producer for topic persistent://rag-pipeline/stage/ingress
-2026-03-23 19:41:51.912 INFO  [140523245298432] ProducerImpl:800 | [persistent://rag-pipeline/operations/db-ops, pulsar-1-232] Closing producer for topic persistent://rag-pipeline/operations/db-ops
-2026-03-23 19:41:51.912 INFO  [140523245298432] ProducerImpl:800 | [persistent://rag-pipeline/data/chat-prompts, pulsar-0-219] Closing producer for topic persistent://rag-pipeline/data/chat-prompts
-2026-03-23 19:41:51.912 INFO  [140523245298432] ConsumerImpl:1328 | [persistent://rag-pipeline/stage/results, test-crud-sub-1e9564d3, 0] Closing consumer for topic persistent://rag-pipeline/stage/results
-2026-03-23 19:41:51.914 INFO  [140523159045824] ProducerImpl:764 | [persistent://rag-pipeline/data/chat-prompts, pulsar-0-219] Closed producer 0
-2026-03-23 19:41:51.914 INFO  [140523159045824] ProducerImpl:764 | [persistent://rag-pipeline/stage/ingress, pulsar-1-233] Closed producer 2
-2026-03-23 19:41:51.914 INFO  [140523159045824] ConsumerImpl:1312 | [persistent://rag-pipeline/stage/results, test-crud-sub-1e9564d3, 0] Closed consumer 0
-2026-03-23 19:41:51.914 INFO  [140523159045824] ProducerImpl:764 | [persistent://rag-pipeline/operations/db-ops, pulsar-1-232] Closed producer 1
-2026-03-23 19:41:51.914 INFO  [140523058747072] ClientConnection:1336 | [10.244.9.176:47154 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:41:51.915 INFO  [140523058747072] ClientConnection:1336 | [10.244.9.176:47156 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:41:51.915 INFO  [140523058747072] ClientConnection:1336 | [10.244.9.176:47140 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:41:51.915 INFO  [140523058747072] ClientConnection:282 | [10.244.9.176:47140 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:51.916 INFO  [140523058747072] ClientConnection:282 | [10.244.9.176:47156 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:51.918 INFO  [140523058747072] ClientConnection:282 | [10.244.9.176:47154 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:51.924 INFO  [140523245298432] ProducerImpl:757 | Producer - [persistent://rag-pipeline/data/chat-prompts, pulsar-0-219] , [batching  = off]
-2026-03-23 19:41:51.925 INFO  [140523245298432] ProducerImpl:757 | Producer - [persistent://rag-pipeline/operations/db-ops, pulsar-1-232] , [batching  = off]
-2026-03-23 19:41:51.925 INFO  [140523245298432] ProducerImpl:757 | Producer - [persistent://rag-pipeline/stage/ingress, pulsar-1-233] , [batching  = off]
-2026-03-23 19:41:51.926 INFO  [140523245298432] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:51.937 INFO  [140523245298432] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:51.944 INFO  [140523058747072] ClientConnection:410 | [10.244.9.176:60496 -> 10.102.99.101:6651] Connected to broker
-2026-03-23 19:41:51.975 INFO  [140523058747072] HandlerBase:115 | [persistent://rag-pipeline/operations/qdrant-ops, ] Getting connection from pool
-2026-03-23 19:41:51.976 INFO  [140523058747072] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/operations/qdrant-ops, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:60496 -> 10.102.99.101:6651]
-2026-03-23 19:41:51.976 INFO  [140523058747072] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:51.991 INFO  [140523058747072] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:51.996 INFO  [140523058747072] ClientConnection:412 | [10.244.9.176:60504 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
-2026-03-23 19:41:52.019 INFO  [140523058747072] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/operations/qdrant-ops, producerName: on [10.244.9.176:60504 -> 10.102.99.101:6651]
-2026-03-23 19:41:52.021 INFO  [140523058747072] ProducerImpl:220 | [persistent://rag-pipeline/operations/qdrant-ops, ] Created producer on broker [10.244.9.176:60504 -> 10.102.99.101:6651]
-2026-03-23 19:41:52.021 INFO  [140523058747072] HandlerBase:138 | Finished connecting to broker after 46 ms
-2026-03-23 19:41:52.022 INFO  [140523245298432] Client:86 | Subscribing on Topic :persistent://rag-pipeline/operations/qdrant-ops-results
-2026-03-23 19:41:52.023 INFO  [140523058747072] HandlerBase:115 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-760554af, 0] Getting connection from pool
-2026-03-23 19:41:52.025 INFO  [140523058747072] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/operations/qdrant-ops-results, lookup-broker-url pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:60496 -> 10.102.99.101:6651]
-2026-03-23 19:41:52.025 INFO  [140523058747072] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:41:52.039 INFO  [140523058747072] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:52.044 INFO  [140523058747072] ClientConnection:412 | [10.244.9.176:60510 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
-2026-03-23 19:41:52.088 INFO  [140523058747072] ConsumerImpl:311 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-760554af, 0] Created consumer on broker [10.244.9.176:60510 -> 10.102.99.101:6651]
-2026-03-23 19:41:52.088 INFO  [140523058747072] HandlerBase:138 | Finished connecting to broker after 64 ms
-2026-03-23 19:41:52.190 INFO  [140523245298432] ClientImpl:665 | Closing Pulsar client with 1 producers and 1 consumers
-2026-03-23 19:41:52.190 INFO  [140523245298432] ProducerImpl:800 | [persistent://rag-pipeline/operations/qdrant-ops, pulsar-1-234] Closing producer for topic persistent://rag-pipeline/operations/qdrant-ops
-2026-03-23 19:41:52.190 INFO  [140523245298432] ConsumerImpl:1328 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-760554af, 0] Closing consumer for topic persistent://rag-pipeline/operations/qdrant-ops-results
-2026-03-23 19:41:52.191 INFO  [140523058747072] ProducerImpl:764 | [persistent://rag-pipeline/operations/qdrant-ops, pulsar-1-234] Closed producer 0
-2026-03-23 19:41:52.192 INFO  [140523058747072] ConsumerImpl:1312 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-760554af, 0] Closed consumer 0
-2026-03-23 19:41:52.192 INFO  [140523050354368] ClientConnection:1336 | [10.244.9.176:60504 -> 10.102.99.101:6651] Connection disconnected (refCnt: 2)
-2026-03-23 19:41:52.193 INFO  [140523050354368] ClientConnection:1336 | [10.244.9.176:60510 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:41:52.193 INFO  [140523050354368] ClientConnection:1336 | [10.244.9.176:60496 -> 10.102.99.101:6651] Connection disconnected (refCnt: 2)
-2026-03-23 19:41:52.193 INFO  [140523050354368] ClientConnection:282 | [10.244.9.176:60496 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:52.195 INFO  [140523050354368] ClientConnection:282 | [10.244.9.176:60510 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:52.196 INFO  [140523050354368] ClientConnection:282 | [10.244.9.176:60504 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:41:52.202 INFO  [140523245298432] ProducerImpl:757 | Producer - [persistent://rag-pipeline/operations/qdrant-ops, pulsar-1-234] , [batching  = off]
-[2026-03-23T19:41:38.742208] [TEST] Pulsar & Database CRUD Interaction
+2026-03-23 20:26:01.168 INFO  [140624582329088] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:26:01.182 INFO  [140624582329088] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:01.187 INFO  [140624496076480] ClientConnection:410 | [10.244.9.191:38044 -> 10.102.99.101:6651] Connected to broker
+2026-03-23 20:26:01.210 INFO  [140624496076480] HandlerBase:115 | [persistent://rag-pipeline/data/chat-prompts, ] Getting connection from pool
+2026-03-23 20:26:01.218 INFO  [140624496076480] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/data/chat-prompts, lookup-broker-url pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:38044 -> 10.102.99.101:6651]
+2026-03-23 20:26:01.218 INFO  [140624496076480] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:26:01.233 INFO  [140624496076480] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:01.238 INFO  [140624496076480] ClientConnection:412 | [10.244.9.191:38046 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+2026-03-23 20:26:01.264 INFO  [140624496076480] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/data/chat-prompts, producerName: on [10.244.9.191:38046 -> 10.102.99.101:6651]
+2026-03-23 20:26:01.266 INFO  [140624496076480] ProducerImpl:220 | [persistent://rag-pipeline/data/chat-prompts, ] Created producer on broker [10.244.9.191:38046 -> 10.102.99.101:6651]
+2026-03-23 20:26:01.266 INFO  [140624496076480] HandlerBase:138 | Finished connecting to broker after 55 ms
+2026-03-23 20:26:01.268 INFO  [140624496076480] HandlerBase:115 | [persistent://rag-pipeline/operations/db-ops, ] Getting connection from pool
+2026-03-23 20:26:01.269 INFO  [140624496076480] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/operations/db-ops, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:38044 -> 10.102.99.101:6651]
+2026-03-23 20:26:01.270 INFO  [140624496076480] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:26:01.283 INFO  [140624496076480] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:01.287 INFO  [140624496076480] ClientConnection:412 | [10.244.9.191:38054 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+2026-03-23 20:26:01.310 INFO  [140624496076480] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/operations/db-ops, producerName: on [10.244.9.191:38054 -> 10.102.99.101:6651]
+2026-03-23 20:26:01.312 INFO  [140624496076480] ProducerImpl:220 | [persistent://rag-pipeline/operations/db-ops, ] Created producer on broker [10.244.9.191:38054 -> 10.102.99.101:6651]
+2026-03-23 20:26:01.312 INFO  [140624496076480] HandlerBase:138 | Finished connecting to broker after 44 ms
+2026-03-23 20:26:01.312 INFO  [140624582329088] Client:86 | Subscribing on Topic :persistent://rag-pipeline/stage/results
+2026-03-23 20:26:01.314 INFO  [140624496076480] HandlerBase:115 | [persistent://rag-pipeline/stage/results, test-crud-sub-9fb73b46, 0] Getting connection from pool
+2026-03-23 20:26:01.318 INFO  [140624496076480] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/results, lookup-broker-url pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:38044 -> 10.102.99.101:6651]
+2026-03-23 20:26:01.433 INFO  [140624496076480] ConsumerImpl:311 | [persistent://rag-pipeline/stage/results, test-crud-sub-9fb73b46, 0] Created consumer on broker [10.244.9.191:38046 -> 10.102.99.101:6651]
+2026-03-23 20:26:01.433 INFO  [140624496076480] HandlerBase:138 | Finished connecting to broker after 118 ms
+2026-03-23 20:26:03.670 INFO  [140624496076480] HandlerBase:115 | [persistent://rag-pipeline/stage/ingress, ] Getting connection from pool
+2026-03-23 20:26:03.672 INFO  [140624496076480] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/ingress, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:38044 -> 10.102.99.101:6651]
+2026-03-23 20:26:03.672 INFO  [140624496076480] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/stage/ingress, producerName: on [10.244.9.191:38054 -> 10.102.99.101:6651]
+2026-03-23 20:26:03.674 INFO  [140624496076480] ProducerImpl:220 | [persistent://rag-pipeline/stage/ingress, ] Created producer on broker [10.244.9.191:38054 -> 10.102.99.101:6651]
+2026-03-23 20:26:03.674 INFO  [140624496076480] HandlerBase:138 | Finished connecting to broker after 3 ms
+2026-03-23 20:26:12.672 INFO  [140624582329088] ClientImpl:665 | Closing Pulsar client with 3 producers and 1 consumers
+2026-03-23 20:26:12.672 INFO  [140624582329088] ProducerImpl:800 | [persistent://rag-pipeline/stage/ingress, pulsar-1-269] Closing producer for topic persistent://rag-pipeline/stage/ingress
+2026-03-23 20:26:12.672 INFO  [140624582329088] ProducerImpl:800 | [persistent://rag-pipeline/operations/db-ops, pulsar-1-268] Closing producer for topic persistent://rag-pipeline/operations/db-ops
+2026-03-23 20:26:12.672 INFO  [140624582329088] ProducerImpl:800 | [persistent://rag-pipeline/data/chat-prompts, pulsar-0-246] Closing producer for topic persistent://rag-pipeline/data/chat-prompts
+2026-03-23 20:26:12.672 INFO  [140624582329088] ConsumerImpl:1328 | [persistent://rag-pipeline/stage/results, test-crud-sub-9fb73b46, 0] Closing consumer for topic persistent://rag-pipeline/stage/results
+2026-03-23 20:26:12.674 INFO  [140624496076480] ProducerImpl:764 | [persistent://rag-pipeline/data/chat-prompts, pulsar-0-246] Closed producer 0
+2026-03-23 20:26:12.674 INFO  [140624496076480] ConsumerImpl:1312 | [persistent://rag-pipeline/stage/results, test-crud-sub-9fb73b46, 0] Closed consumer 0
+2026-03-23 20:26:12.674 INFO  [140624496076480] ProducerImpl:764 | [persistent://rag-pipeline/stage/ingress, pulsar-1-269] Closed producer 2
+2026-03-23 20:26:12.674 INFO  [140624496076480] ProducerImpl:764 | [persistent://rag-pipeline/operations/db-ops, pulsar-1-268] Closed producer 1
+2026-03-23 20:26:12.675 INFO  [140624267306688] ClientConnection:1336 | [10.244.9.191:38046 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
+2026-03-23 20:26:12.675 INFO  [140624267306688] ClientConnection:1336 | [10.244.9.191:38054 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
+2026-03-23 20:26:12.675 INFO  [140624267306688] ClientConnection:1336 | [10.244.9.191:38044 -> 10.102.99.101:6651] Connection disconnected (refCnt: 2)
+2026-03-23 20:26:12.675 INFO  [140624267306688] ClientConnection:282 | [10.244.9.191:38054 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:12.675 INFO  [140624496076480] ClientConnection:282 | [10.244.9.191:38044 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:12.677 INFO  [140624267306688] ClientConnection:282 | [10.244.9.191:38046 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-0.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:12.681 INFO  [140624582329088] ProducerImpl:757 | Producer - [persistent://rag-pipeline/data/chat-prompts, pulsar-0-246] , [batching  = off]
+2026-03-23 20:26:12.681 INFO  [140624582329088] ProducerImpl:757 | Producer - [persistent://rag-pipeline/operations/db-ops, pulsar-1-268] , [batching  = off]
+2026-03-23 20:26:12.681 INFO  [140624582329088] ProducerImpl:757 | Producer - [persistent://rag-pipeline/stage/ingress, pulsar-1-269] , [batching  = off]
+2026-03-23 20:26:12.682 INFO  [140624582329088] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:26:12.693 INFO  [140624582329088] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:12.700 INFO  [140624496076480] ClientConnection:410 | [10.244.9.191:55066 -> 10.102.99.101:6651] Connected to broker
+2026-03-23 20:26:12.724 INFO  [140624496076480] HandlerBase:115 | [persistent://rag-pipeline/operations/qdrant-ops, ] Getting connection from pool
+2026-03-23 20:26:12.725 INFO  [140624496076480] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/operations/qdrant-ops, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:55066 -> 10.102.99.101:6651]
+2026-03-23 20:26:12.726 INFO  [140624496076480] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:26:12.736 INFO  [140624496076480] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:12.740 INFO  [140624496076480] ClientConnection:412 | [10.244.9.191:55080 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+2026-03-23 20:26:12.761 INFO  [140624496076480] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/operations/qdrant-ops, producerName: on [10.244.9.191:55080 -> 10.102.99.101:6651]
+2026-03-23 20:26:12.763 INFO  [140624496076480] ProducerImpl:220 | [persistent://rag-pipeline/operations/qdrant-ops, ] Created producer on broker [10.244.9.191:55080 -> 10.102.99.101:6651]
+2026-03-23 20:26:12.763 INFO  [140624496076480] HandlerBase:138 | Finished connecting to broker after 39 ms
+2026-03-23 20:26:12.764 INFO  [140624582329088] Client:86 | Subscribing on Topic :persistent://rag-pipeline/operations/qdrant-ops-results
+2026-03-23 20:26:12.766 INFO  [140624496076480] HandlerBase:115 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-111d1ae1, 0] Getting connection from pool
+2026-03-23 20:26:12.773 INFO  [140624496076480] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/operations/qdrant-ops-results, lookup-broker-url pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:55066 -> 10.102.99.101:6651]
+2026-03-23 20:26:12.773 INFO  [140624496076480] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:26:12.788 INFO  [140624496076480] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:12.792 INFO  [140624496076480] ClientConnection:412 | [10.244.9.191:55096 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+2026-03-23 20:26:12.985 INFO  [140624496076480] ConsumerImpl:311 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-111d1ae1, 0] Created consumer on broker [10.244.9.191:55096 -> 10.102.99.101:6651]
+2026-03-23 20:26:12.985 INFO  [140624496076480] HandlerBase:138 | Finished connecting to broker after 218 ms
+2026-03-23 20:26:13.263 INFO  [140624582329088] ClientImpl:665 | Closing Pulsar client with 1 producers and 1 consumers
+2026-03-23 20:26:13.263 INFO  [140624582329088] ProducerImpl:800 | [persistent://rag-pipeline/operations/qdrant-ops, pulsar-1-270] Closing producer for topic persistent://rag-pipeline/operations/qdrant-ops
+2026-03-23 20:26:13.263 INFO  [140624582329088] ConsumerImpl:1328 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-111d1ae1, 0] Closing consumer for topic persistent://rag-pipeline/operations/qdrant-ops-results
+2026-03-23 20:26:13.265 INFO  [140624496076480] ProducerImpl:764 | [persistent://rag-pipeline/operations/qdrant-ops, pulsar-1-270] Closed producer 0
+2026-03-23 20:26:13.266 INFO  [140624496076480] ConsumerImpl:1312 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-111d1ae1, 0] Closed consumer 0
+2026-03-23 20:26:13.267 INFO  [140624258913984] ClientConnection:1336 | [10.244.9.191:55080 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
+2026-03-23 20:26:13.267 INFO  [140624258913984] ClientConnection:1336 | [10.244.9.191:55096 -> 10.102.99.101:6651] Connection disconnected (refCnt: 2)
+2026-03-23 20:26:13.267 INFO  [140624258913984] ClientConnection:1336 | [10.244.9.191:55066 -> 10.102.99.101:6651] Connection disconnected (refCnt: 2)
+2026-03-23 20:26:13.267 INFO  [140624258913984] ClientConnection:282 | [10.244.9.191:55066 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:13.268 INFO  [140624258913984] ClientConnection:282 | [10.244.9.191:55096 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:13.269 INFO  [140624258913984] ClientConnection:282 | [10.244.9.191:55080 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:13.272 INFO  [140624582329088] ProducerImpl:757 | Producer - [persistent://rag-pipeline/operations/qdrant-ops, pulsar-1-270] , [batching  = off]
+[2026-03-23T20:26:01.167728] [TEST] Pulsar & Database CRUD Interaction
   - Connecting to Pulsar at pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
   - Connecting to TimescaleDB with conn string (redacted host):
     postgres://app:OpduDLozLwSGzGgnisFUeLyuSt4Q59alo5AtH0V7pdjGOtul9zu5c4waC3hhuCeZ@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=verify-full&sslrootcert=/tmp/combined-ca.crt
-  - Creating test session: 4f2cdac5-3900-4190-9ab7-baf18cadac74
-  - Sending prompt to Pulsar topic persistent://rag-pipeline/data/chat-prompts (ID: f453b92d-341f-45a6-9d76-e13051dffe7f)
+  - Creating test session: 5ad08207-970b-47b0-9d11-92f9dd76facb
+  - Sending prompt to Pulsar topic persistent://rag-pipeline/data/chat-prompts (ID: b40c76ef-5437-48dd-9407-8671173e3bcf)
   - Waiting for DB Adapter to insert prompt into TimescaleDB...
     [WAIT] Prompt not found yet (attempt 1/10)
     [OK] Prompt found in 'prompts' table.
   - Waiting for RAG Worker and DB Adapter to process response...
   - Sending task to Pulsar topic persistent://rag-pipeline/stage/ingress
   - Waiting for response on Pulsar topic persistent://rag-pipeline/stage/results...
-    [OK] Received response from Pulsar: I'm sorry for the confusion, but there is no infor...
+    [OK] Received response from Pulsar: I'm sorry, there is no information provided about ...
   - Verifying response in TimescaleDB 'responses' table...
     [WAIT] Response not found yet (attempt 1/10)
-    [OK] Response found in 'responses' table: I'm sorry for the confusion, but there is no infor...
-  - Sending delete session op via Pulsar for 4f2cdac5-3900-4190-9ab7-baf18cadac74...
+    [OK] Response found in 'responses' table: I'm sorry, there is no information provided about ...
+  - Sending delete session op via Pulsar for 5ad08207-970b-47b0-9d11-92f9dd76facb...
   - Verifying deletion in DB...
     [WAIT] Session still present (attempt 1/10)
     [OK] Session successfully deleted via Pulsar.
 [SUCCESS] Pulsar <-> DB CRUD Cycle Verified!
 [TEST] Pulsar & Qdrant Search Interaction
-  - Sending Qdrant search op to Pulsar topic persistent://rag-pipeline/operations/qdrant-ops (ID: 29399d76-52c2-4f2d-8629-76e1918d13db)
+  - Sending Qdrant search op to Pulsar topic persistent://rag-pipeline/operations/qdrant-ops (ID: 745202b8-5532-4db8-a658-8d7b8f5b1fd2)
   - Waiting for Qdrant result on Pulsar topic...
-    [OK] Received Qdrant result: {'action': 'search', 'collection': 'vectors', 'id': '29399d76-52c2-4f2d-8629-76e1918d13db', 'result': ["Project Alpha uses the 'Zeltron-9' protocol for inter-pod communication. The primary maintainer is 'Dr. Aris Thorne'.", 'The isolated test secret code is SECRET-CODE-c46512eb. Verify this in Qdrant.', 'The isolated test secret code is SECRET-CODE-c46512eb. Verify this in Qdrant.', 'The isolated test secret code is SECRET-CODE-c46512eb. Verify this in Qdrant.', 'The isolated test secret code is SECRET-CODE-c46512eb. Verify this in Qdrant.'], 'timestamp': '2026-03-23T19:41:52Z'}
+    [OK] Received Qdrant result: {'action': 'search', 'collection': 'vectors', 'id': '745202b8-5532-4db8-a658-8d7b8f5b1fd2', 'result': ["Project Alpha uses the 'Zeltron-9' protocol for inter-pod communication. The primary maintainer is 'Dr. Aris Thorne'.", 'The isolated test secret code is SECRET-CODE-b22f0ccf. Verify this in Qdrant.', 'This is a secret code: BLUE-ORCHID-2026. This file is for RAG testing.', 'This is a secret code: BLUE-ORCHID-2026. This file is for RAG testing.', 'The isolated test secret code is SECRET-CODE-05548a61. Verify this in Qdrant.'], 'timestamp': '2026-03-23T20:26:13Z'}
 [SUCCESS] Pulsar <-> Qdrant Search Flow Verified!
 --- Seeding Qdrant Context ---
 [SEED] Connecting to Qdrant at qdrant
@@ -255,26 +253,26 @@ Failed to export span batch code: 400, reason: Bad Request
     - Pass: True
 [SUMMARY] Context verification: SUCCESS
 --- Running Sad Path Tests ---
-2026-03-23 19:42:10.287 INFO  [140572435088128] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:42:10.306 INFO  [140572435088128] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:42:10.313 INFO  [140572391478976] ClientConnection:410 | [10.244.9.176:57504 -> 10.102.99.101:6651] Connected to broker
-2026-03-23 19:42:10.341 INFO  [140572391478976] HandlerBase:115 | [persistent://rag-pipeline/stage/ingress, ] Getting connection from pool
-2026-03-23 19:42:10.343 INFO  [140572391478976] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/ingress, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.176:57504 -> 10.102.99.101:6651]
-2026-03-23 19:42:10.344 INFO  [140572391478976] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
-2026-03-23 19:42:10.365 INFO  [140572391478976] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:42:10.369 INFO  [140572391478976] ClientConnection:412 | [10.244.9.176:57518 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
-2026-03-23 19:42:10.397 INFO  [140572391478976] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/stage/ingress, producerName: on [10.244.9.176:57518 -> 10.102.99.101:6651]
-2026-03-23 19:42:10.399 INFO  [140572391478976] ProducerImpl:220 | [persistent://rag-pipeline/stage/ingress, ] Created producer on broker [10.244.9.176:57518 -> 10.102.99.101:6651]
-2026-03-23 19:42:10.399 INFO  [140572391478976] HandlerBase:138 | Finished connecting to broker after 57 ms
-2026-03-23 19:42:10.567 INFO  [140572435088128] ClientImpl:665 | Closing Pulsar client with 1 producers and 0 consumers
-2026-03-23 19:42:10.567 INFO  [140572435088128] ProducerImpl:800 | [persistent://rag-pipeline/stage/ingress, pulsar-1-235] Closing producer for topic persistent://rag-pipeline/stage/ingress
-2026-03-23 19:42:10.568 INFO  [140572391478976] ProducerImpl:764 | [persistent://rag-pipeline/stage/ingress, pulsar-1-235] Closed producer 0
-2026-03-23 19:42:10.569 INFO  [140572374693568] ClientConnection:1336 | [10.244.9.176:57518 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:42:10.569 INFO  [140572374693568] ClientConnection:1336 | [10.244.9.176:57504 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
-2026-03-23 19:42:10.569 INFO  [140572374693568] ClientConnection:282 | [10.244.9.176:57504 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:42:10.571 INFO  [140572374693568] ClientConnection:282 | [10.244.9.176:57518 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
-2026-03-23 19:42:10.573 INFO  [140572435088128] ProducerImpl:757 | Producer - [persistent://rag-pipeline/stage/ingress, pulsar-1-235] , [batching  = off]
-[2026-03-23T19:42:10.076302] [TEST] Sad Path: LLM Gateway
+2026-03-23 20:26:31.313 INFO  [140626388689664] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:26:31.329 INFO  [140626388689664] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:31.335 INFO  [140626345080512] ClientConnection:410 | [10.244.9.191:56194 -> 10.102.99.101:6651] Connected to broker
+2026-03-23 20:26:31.359 INFO  [140626345080512] HandlerBase:115 | [persistent://rag-pipeline/stage/ingress, ] Getting connection from pool
+2026-03-23 20:26:31.360 INFO  [140626345080512] BinaryProtoLookupService:85 | Lookup response for persistent://rag-pipeline/stage/ingress, lookup-broker-url pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, from [10.244.9.191:56194 -> 10.102.99.101:6651]
+2026-03-23 20:26:31.361 INFO  [140626345080512] ClientConnection:193 | [<none> -> pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651] Create ClientConnection, timeout=10000
+2026-03-23 20:26:31.375 INFO  [140626345080512] ConnectionPool:124 | Created connection for pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:31.379 INFO  [140626345080512] ClientConnection:412 | [10.244.9.191:56196 -> 10.102.99.101:6651] Connected to broker through proxy. Logical broker: pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651, proxy: , physical address:pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+2026-03-23 20:26:31.401 INFO  [140626345080512] ProducerImpl:147 | Creating producer for topic:persistent://rag-pipeline/stage/ingress, producerName: on [10.244.9.191:56196 -> 10.102.99.101:6651]
+2026-03-23 20:26:31.403 INFO  [140626345080512] ProducerImpl:220 | [persistent://rag-pipeline/stage/ingress, ] Created producer on broker [10.244.9.191:56196 -> 10.102.99.101:6651]
+2026-03-23 20:26:31.403 INFO  [140626345080512] HandlerBase:138 | Finished connecting to broker after 44 ms
+2026-03-23 20:26:31.431 INFO  [140626388689664] ClientImpl:665 | Closing Pulsar client with 1 producers and 0 consumers
+2026-03-23 20:26:31.431 INFO  [140626388689664] ProducerImpl:800 | [persistent://rag-pipeline/stage/ingress, pulsar-1-271] Closing producer for topic persistent://rag-pipeline/stage/ingress
+2026-03-23 20:26:31.432 INFO  [140626345080512] ProducerImpl:764 | [persistent://rag-pipeline/stage/ingress, pulsar-1-271] Closed producer 0
+2026-03-23 20:26:31.432 INFO  [140626328295104] ClientConnection:1336 | [10.244.9.191:56196 -> 10.102.99.101:6651] Connection disconnected (refCnt: 1)
+2026-03-23 20:26:31.432 INFO  [140626328295104] ClientConnection:1336 | [10.244.9.191:56194 -> 10.102.99.101:6651] Connection disconnected (refCnt: 2)
+2026-03-23 20:26:31.433 INFO  [140626328295104] ClientConnection:282 | [10.244.9.191:56194 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:31.435 INFO  [140626328295104] ClientConnection:282 | [10.244.9.191:56196 -> 10.102.99.101:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-03-23 20:26:31.438 INFO  [140626388689664] ProducerImpl:757 | Producer - [persistent://rag-pipeline/stage/ingress, pulsar-1-271] , [batching  = off]
+[2026-03-23T20:26:31.117801] [TEST] Sad Path: LLM Gateway
   - Testing 405 Method Not Allowed (GET instead of POST) on https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions ...
     [PASS] Received 405 as expected.
   - Testing 400 Bad Request (Malformed JSON) on https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions ...
@@ -282,11 +280,11 @@ Failed to export span batch code: 400, reason: Bad Request
   - Testing 400 Bad Request (Empty JSON object)...
     [INFO] Result for empty JSON: 200
 ==================================================
-[2026-03-23T19:42:10.286891] [TEST] Sad Path: Worker Invalid Payload
+[2026-03-23T20:26:31.312992] [TEST] Sad Path: Worker Invalid Payload
   - Sending malformed payload to persistent://rag-pipeline/stage/ingress...
     [DONE] Malformed payload sent to worker.
 [STEP] Run Go E2E driver via Podman
---- Starting E2E Test with tag: test-tag-1774294942 ---
+--- Starting E2E Test with tag: test-tag-1774297603 ---
 Using vector_size: 4096
 [STEP 1] Creating tag...
 [STEP 2] Getting tag ID...
@@ -339,117 +337,17 @@ DEBUG: HTML body:
                                         <form action="/trigger-ingest" method="post">
                                                 <div class="multi-select">
 
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="f0fc9bad-c13e-4760-938f-128e278de5ce"> iso-test-08f00cc7</label>
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="856d174d-a29d-4c7c-a1b9-0f3f661a4db5"> iso-test-05548a61</label>
 
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="67444297-c737-4e01-9fab-d41d3b9dbe0f"> iso-test-09c8b289</label>
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="1d84c6fb-a145-42ed-a60c-6d2e45f6a8b8"> iso-test-b22f0ccf</label>
 
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="aa77b603-2b1b-41a9-80ab-5e128e8ddcf4"> iso-test-150cb4b3</label>
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="2d347bc4-28de-48a2-8053-b74d023b5252"> iso-test-b6630d90</label>
 
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="927e7475-3511-4f9d-b5de-fd746c895dd7"> iso-test-1b945f44</label>
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="db2652b7-6b86-4daf-a46d-ed9beb9f5fa3"> test-tag-1774297245</label>
 
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="00f69ebe-a28b-476e-8fbf-2409fb857af4"> iso-test-30ce7f60</label>
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="65e8ea12-84b1-491b-868f-168d3f087428"> test-tag-1774297489</label>
 
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="8136e382-8b13-483c-8c1b-19902e06d81e"> iso-test-49ba0bad</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="db672803-a780-4203-a32a-4fd8a1177cca"> iso-test-4f8a5b86</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="ca25ec0d-0398-4328-b4d7-42100263b5f8"> iso-test-6c40d57e</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="a2863c80-7ba7-4e34-9873-2f4cf3943cb7"> iso-test-6db7436f</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="55c8c38c-478d-4881-8125-73042f0bb5cf"> iso-test-73cb049c</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="d31d6380-60b6-45ed-ba4f-5e74068e6dfd"> iso-test-75be55f2</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="c4e8f2eb-a9d0-4f37-8a66-7ded4cc0bcf9"> iso-test-7782c20e</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="272c5138-5398-4a3a-bf57-5cf2c9d205a9"> iso-test-7ab90b35</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="19c19253-4e5d-49d4-81ce-d06f70694962"> iso-test-817477ad</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="6f8ae1ba-a4a0-49b5-9640-24b23a51604f"> iso-test-8e0d3a21</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="aa9f537e-3db1-4369-bb96-314547618e4c"> iso-test-98370d45</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="51ffced8-ca60-4d62-b864-b16ede71fb04"> iso-test-a1337b85</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="77c715ad-7b5f-4f16-8507-bd907125638c"> iso-test-ab1184f8</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="d60eac3b-2f53-4cba-8042-74ad815b4dc8"> iso-test-ae313a2c</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="b7ed1e73-0c6f-4c0f-be14-6afa3a7d385b"> iso-test-b4ba76c4</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="d535f5fe-61d1-4f86-8788-2644e08b38db"> iso-test-b8c3556e</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="74d35740-d8e7-4215-af91-dc0335f746f1"> iso-test-c46512eb</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="82419ca3-aff7-40b4-8e70-00e12c1bb4af"> iso-test-d4f53554</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="b145b3a9-8bee-4297-84eb-09585b7cef12"> iso-test-d6802fc1</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="fbdf4c27-717b-4170-bd3f-ee329335d817"> iso-test-fb2eee94</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="97a4c066-3e99-43f7-aab0-9be3b49c593a"> iso-test-fd6c510e</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="13eac3b9-46e5-48bd-9ebb-2ee812c3ef86"> iso-test-fe9646b0</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="2d89498f-b3e9-4ba3-a59a-0ccd1f2c00c5"> test-tag-1774134471</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="c22bd97a-2638-4bab-b666-5ac6527e7d77"> test-tag-1774187336</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="f9eb3a9c-3d14-4124-84f5-1988da85ab05"> test-tag-1774187679</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="3238acfa-7751-4e0d-a631-f0c8f41bff51"> test-tag-1774187997</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="13eaf145-b761-409f-9ead-05af21ca0d10"> test-tag-1774188350</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="f983f002-e215-4485-81d0-6279aa80ee55"> test-tag-1774188603</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="14f48c88-8ff5-4ed7-b1b3-e71c9be32d5d"> test-tag-1774188843</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="f7aaf687-b765-41da-90de-a7dd8d5c6b16"> test-tag-1774189104</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="f4068e21-1889-4be1-84d3-6372bb57f314"> test-tag-1774189426</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="cbdcbb96-29f0-4905-9334-3ba8449441f8"> test-tag-1774189976</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="f2d12b45-9d19-439f-afb4-769ac198c601"> test-tag-1774191581</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="75798497-6be1-4e30-90f1-77ae0e4e68c6"> test-tag-1774192392</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="460893ef-abc4-4ed2-ad09-b2ef3b5d02ef"> test-tag-1774193230</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="f8f5cc03-f2b1-414f-9127-7c214c772caa"> test-tag-1774196512</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="d579860b-ae00-4169-8551-cd3c571c30de"> test-tag-1774196859</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="85fc2328-f259-4d24-a9a0-8c932a270de3"> test-tag-1774198622</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="58476f98-640d-475a-a1b5-340900054eab"> test-tag-1774199355</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="51cacf93-c4b3-45c7-a993-f37420df2dac"> test-tag-1774201548</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="6437277d-efdd-479b-98c2-675621aca563"> test-tag-1774270077</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="96df61ce-06dd-4f5f-a24d-710767b8f261"> test-tag-1774270464</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="827fdb59-d739-4696-a98a-c8d3200a1c0e"> test-tag-1774284887</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="028cdcdb-ad4a-47a3-ad73-7544a1cd9625"> test-tag-1774287828</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="98a2de27-4a8d-4c58-9fcc-7e5116edb95c"> test-tag-1774291348</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="c43a33e6-ee92-49a5-9122-3f870976ec7b"> test-tag-1774292948</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="cfc410a3-ed04-49c4-b381-194831ab5bcd"> test-tag-1774293223</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="52240014-4a09-44ea-b625-21f0fc166cc5"> test-tag-1774293440</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="3be2b029-bfda-40de-bbd4-f66a4087fea6"> test-tag-1774294137</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="42a528f2-6dfd-43e2-92ab-e43930ee4641"> test-tag-1774294621</label>
-
-                                                                <label style="display:block;"><input type="checkbox" name="tags" value="834002f9-cb36-4b36-a1e6-3b13b995046c"> test-tag-1774294942</label>
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="7c1bc573-5cd9-497b-85d8-adfcda6d1937"> test-tag-1774297603</label>
 
                                                 </div>
                                                 <button type="submit" class="btn btn-success" style="margin-top:10px;">Start Ingestion</button>
@@ -496,16 +394,14 @@ DEBUG: HTML body:
                 </script>
         </body>
         </html>
-Tag ID: 834002f9-cb36-4b36-a1e6-3b13b995046c
+Tag ID: 7c1bc573-5cd9-497b-85d8-adfcda6d1937
 [STEP 3] Uploading test file...
 [STEP 4] Triggering ingestion...
 [STEP 5&6] Waiting for ingestion and verifying via RAG Query (up to 5m)...
-Waiting for ingestion... (elapsed: 6s, last answer: "12345ABC\n\n```python\nwith open(\"e2e-test-file.txt\", \"r\") as file:\n    content = file.read()\n    secret_code = content.strip().split(\"\\n\")[0]\n    print(secret_code)\n```")
-Waiting for ingestion... (elapsed: 27s, last answer: "SECRET-CODE-817477ad, SECRET-CODE-09c8b289, and SECRET-CODE-d6802fc1 are mentioned in the file e2e-test-file.txt. However, since there are multiple instances of some codes, I will provide all the distinct ones:\n\ne2e-test-file.txt secret codes:\n- SECRET-CODE-817477ad\n- SECRET-CODE-09c8b289\n- SECRET-CODE-d6802fc1")
-SUCCESS: Found secret code in answer after 45.435642152s!
-RAG Answer: The provided context does not mention a file named "e2e-test-file.txt". Therefore, I cannot determine the secret code from this file as per your request. The mentioned secret codes are SECRET-CODE-817477ad, BLUE-ORCHID-2026, SECRET-CODE-fe9646b0, SECRET-CODE-d6802fc1, and SECRET-CODE-30ce7f60.
+SUCCESS: Found secret code in answer after 4.458892003s!
+RAG Answer: BLUE-ORCHID-2026
 [STEP 7] Cleaning up data by tag...
 [STEP 8] Final Verification (Checking if file is gone from S3)...
 SUCCESS: Test file removed from S3.
 --- E2E Test Completed ---
-[DONE] E2E run complete. Logs saved to /mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/logs/e2e-20260323-133917
+[DONE] E2E run complete. Logs saved to /mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/logs/e2e-20260323-142516

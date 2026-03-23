@@ -69,6 +69,7 @@ class IngestRequest(BaseModel):
     tag_names: List[str]
     tag_ids: List[str]
     vector_size: Optional[int] = None
+    file_names: Optional[List[str]] = None
 
 def get_db_connection():
     return psycopg2.connect(DB_CONN_STRING)
@@ -112,7 +113,7 @@ def get_model_dimensions(model_name: str) -> int:
 def chunk_text(text, size):
     return [text[i:i + size] for i in range(0, len(text), size)]
 
-def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], vector_size: Optional[int] = None):
+def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], vector_size: Optional[int] = None, file_names: Optional[List[str]] = None):
     try:
         current_vs = vector_size
         if not current_vs:
@@ -135,12 +136,16 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
 
         # List files
         files = []
-        paginator = s3_client.get_paginator('list_objects_v2')
-        for page in paginator.paginate(Bucket=BUCKET_NAME):
-            if 'Contents' in page:
-                for obj in page['Contents']:
-                    if any(obj['Key'].endswith(ext) for ext in ALLOWED_EXTENSIONS):
-                        files.append(obj['Key'])
+        if file_names:
+            logger.info(f"Filtering ingestion to explicit file allowlist: {file_names}")
+            files = file_names
+        else:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=BUCKET_NAME):
+                if 'Contents' in page:
+                    for obj in page['Contents']:
+                        if any(obj['Key'].endswith(ext) for ext in ALLOWED_EXTENSIONS):
+                            files.append(obj['Key'])
 
         logger.info(f"Found {len(files)} files to process.")
         
@@ -217,8 +222,8 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
 
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
-    logger.info(f"Received ingestion request for ID: {req.ingestion_id} (requested vector_size: {req.vector_size})")
-    background_tasks.add_task(run_ingestion, req.ingestion_id, req.tag_names, req.tag_ids, req.vector_size)
+    logger.info(f"Received ingestion request for ID: {req.ingestion_id} (requested vector_size: {req.vector_size}, files: {req.file_names})")
+    background_tasks.add_task(run_ingestion, req.ingestion_id, req.tag_names, req.tag_ids, req.vector_size, req.file_names)
     return {"status": "accepted", "ingestion_id": req.ingestion_id}
 
 @app.get("/health")

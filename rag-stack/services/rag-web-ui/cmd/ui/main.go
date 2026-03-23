@@ -324,6 +324,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	tags := r.Form["tags"]
+	fileNames := r.Form["file_names"]
 	vsStr := r.FormValue("vector_size")
 	if db != nil {
 		var ingestionID string
@@ -352,6 +353,9 @@ func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 				"ingestion_id": ingestionID,
 				"tag_names":    tNames,
 				"tag_ids":      tags,
+			}
+			if len(fileNames) > 0 {
+				payload["file_names"] = fileNames
 			}
 			if vsStr != "" {
 				if vs, err := strconv.Atoi(vsStr); err == nil {

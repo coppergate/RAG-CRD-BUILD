@@ -14,7 +14,7 @@ mkdir -p "$OUT_DIR"
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-2.0.0}"
+VERSION="${VERSION:-2.0.1}"
 
 echo "[INFO] Preflight: Checking connectivity to hierophant and cluster..."
 # 1. Ping hierophant
@@ -58,9 +58,21 @@ echo "[STEP] Refresh tests ConfigMap" | tee -a "${OUT_DIR}/job.log"
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/recursive_rag_test.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/seed_qdrant_context.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/sad_path_test.py \
-  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/ingestion_isolation.py | tee -a "${OUT_DIR}/job.log"
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/ingestion_isolation.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/cleanup_test_data.py | tee -a "${OUT_DIR}/job.log"
 
-# 2) Launch the test job
+# 2) Run Cleanup Job
+echo "[STEP] Apply cleanup job" | tee -a "${OUT_DIR}/job.log"
+"$KUBECTL" -n "$NAMESPACE" delete job rag-test-cleanup --ignore-not-found | tee -a "${OUT_DIR}/job.log"
+RENDERED_CLEANUP="/tmp/rag-test-cleanup-${VERSION}.yaml"
+sed "s|:2.0.0|:${VERSION}|g" /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/cleanup-job.yaml > "$RENDERED_CLEANUP"
+"$KUBECTL" apply -f "$RENDERED_CLEANUP" | tee -a "${OUT_DIR}/job.log"
+rm -f "$RENDERED_CLEANUP"
+
+echo "[STEP] Wait for cleanup job to complete" | tee -a "${OUT_DIR}/job.log"
+"$KUBECTL" -n "$NAMESPACE" wait --for=condition=complete job/rag-test-cleanup --timeout=120s || echo "[WARN] Cleanup job timed out or failed." | tee -a "${OUT_DIR}/job.log"
+
+# 3) Launch the test job
 echo "[STEP] Apply test job" | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" delete job rag-integration-test --ignore-not-found | tee -a "${OUT_DIR}/job.log"
 RENDERED_JOB="/tmp/rag-integration-test-${VERSION}.yaml"

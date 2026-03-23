@@ -40,15 +40,17 @@ def upload_file(tag_id, filename, content):
     if resp.status_code not in [200, 204, 302]:
         raise Exception(f"Failed to upload file: {resp.status_code} - {resp.text}")
 
-def trigger_ingest(tag_id):
-    print(f"  - Triggering ingestion for tag ID: {tag_id}")
-    resp = requests.post(f"{BASE_URL}/trigger-ingest", data={"tags": tag_id}, verify=False, timeout=10)
+def trigger_ingest(tag_id, filename):
+    print(f"  - Triggering ingestion for tag ID: {tag_id} (files: {filename})")
+    resp = requests.post(f"{BASE_URL}/trigger-ingest", data={"tags": tag_id, "file_names": filename}, verify=False, timeout=10)
     if resp.status_code not in [200, 204, 302]:
         raise Exception(f"Failed to trigger ingest: {resp.status_code} - {resp.text}")
 
 # 2. Vector Store Verification
 def verify_in_qdrant(tag_name, expected_text, vector_size, timeout=120):
-    print(f"  - Verifying points in Qdrant for tag: {tag_name} (dims: {vector_size})...")
+    # Use tag_id for strict UUID filtering in Qdrant
+    tag_id = get_tag_id(tag_name)
+    print(f"  - Verifying points in Qdrant for tag_id: {tag_id} (dims: {vector_size})...")
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, https=QDRANT_USE_TLS, prefer_grpc=False, timeout=30)
     
     collection_name = f"vectors-{vector_size}"
@@ -62,7 +64,7 @@ def verify_in_qdrant(tag_name, expected_text, vector_size, timeout=120):
                     must=[
                         models.FieldCondition(
                             key="tags",
-                            match=models.MatchAny(any=[tag_name])
+                            match=models.MatchAny(any=[tag_id])
                         )
                     ]
                 ),
@@ -102,8 +104,9 @@ def run_isolation_test():
         create_tag(tag_name)
         tag_id = get_tag_id(tag_name)
         upload_file(tag_id, filename, content)
-        trigger_ingest(tag_id)
+        trigger_ingest(tag_id, filename)
         
+        # Pass tag_id to verification
         success = verify_in_qdrant(tag_name, secret_code, vector_size)
         if success:
             print(f"\n[PASS] Ingestion pipeline isolated verification: SUCCESS")

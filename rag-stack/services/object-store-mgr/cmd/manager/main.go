@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"app-builds/common/telemetry"
@@ -57,8 +58,18 @@ func main() {
 	} else {
 		fmt.Printf("Current objects in bucket %s:\n", bucket)
 		for _, item := range resp.Contents {
-			fmt.Printf("- %s (Size: %d)\n", *item.Key, item.Size)
+			fmt.Printf("- %s (Size: %d)\n", *item.Key, *item.Size)
 		}
+	}
+
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "OK")
+	})
+
+	fmt.Println("Health server starting on :8080")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatalf("Health server failed: %v", err)
 	}
 }
 

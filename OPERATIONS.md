@@ -13,7 +13,7 @@ To build and push all RAG services in parallel using the cluster-native Kaniko p
     ```
 5.  **Example Command**:
     ```bash
-    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=2.0.0 bash ./build-all-on-cluster.sh"
+    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z bash ./build-all-on-cluster.sh"
     ```
 
 ## Local/Bootstrap Build and Push (Host-Based)
@@ -24,7 +24,7 @@ Use this only for bootstrapping or when the cluster-native pipeline is unavailab
 3.  **Force Build**: Use `FORCE_BUILD=true` to ensure fresh builds when code is modified.
 4.  **Example Command**:
     ```bash
-    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=2.0.0 FORCE_BUILD=true JOURNAL_DIR=/tmp/.rag-build ./build-and-push.sh"
+    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z FORCE_BUILD=true JOURNAL_DIR=/tmp/.rag-build ./build-and-push.sh"
     ```
 
 ## Running End-to-End Tests
@@ -39,7 +39,7 @@ To execute the full RAG stack E2E test suite:
     -   Go E2E driver execution via Podman (local to hierophant).
 4.  **Example Command**:
     ```bash
-    ./run-on-hierophant.sh "export VERSION=2.0.0 && bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-e2e-on-hierophant.sh"
+    ./run-on-hierophant.sh "export VERSION=X.Y.Z && bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-e2e-on-hierophant.sh"
     ```
 
 ## Journaling and Permissions

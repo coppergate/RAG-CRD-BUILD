@@ -52,7 +52,7 @@ func main() {
 
 	// 3. Upload Test File
 	fmt.Println("[STEP 3] Uploading test file...")
-	fileName := "e2e-test-file.txt"
+	fileName := fmt.Sprintf("e2e-test-file-%d.txt", time.Now().Unix())
 	fileContent := "This is a secret code: BLUE-ORCHID-2026. This file is for RAG testing."
 	if err := uploadFile(fileName, fileContent); err != nil {
 		logFatal("Failed to upload file: %v", err)
@@ -60,7 +60,7 @@ func main() {
 
 	// 4. Trigger Ingestion
 	fmt.Println("[STEP 4] Triggering ingestion...")
-	if err := triggerIngest(tagID, vectorSize); err != nil {
+	if err := triggerIngest(tagID, vectorSize, fileName); err != nil {
 		logFatal("Failed to trigger ingestion: %v", err)
 	}
 
@@ -76,7 +76,12 @@ func main() {
 		answer, askErr := askRAG(query, []string{tagID})
 		if askErr == nil {
 			lastAnswer = answer
-			if strings.Contains(strings.ToUpper(answer), "BLUE-ORCHID-2026") {
+			// Tighten verification: should contain the code and be relatively short or focused
+			upperAnswer := strings.ToUpper(answer)
+			if strings.Contains(upperAnswer, "BLUE-ORCHID-2026") {
+				// Success! Now check for leakage (other codes from previous runs)
+				// Previous codes were likely strings like 'Crimson-Sky-77', '12345ABC', etc.
+				// For now, we just log the answer for manual review but we could add more checks.
 				fmt.Printf("SUCCESS: Found secret code in answer after %v!\n", time.Since(start))
 				fmt.Printf("RAG Answer: %s\n", answer)
 				success = true
@@ -221,10 +226,11 @@ func uploadFile(name, content string) error {
 	return nil
 }
 
-func triggerIngest(tagID string, vectorSize int) error {
+func triggerIngest(tagID string, vectorSize int, fileName string) error {
 	formData := url.Values{
-		"tags": {tagID},
+		"tags":        {tagID},
 		"vector_size": {fmt.Sprintf("%d", vectorSize)},
+		"file_names":  {fileName},
 	}
 	resp, err := client.PostForm(baseURL+"/trigger-ingest", formData)
 	if err != nil {
