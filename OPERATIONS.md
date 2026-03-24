@@ -20,11 +20,12 @@ To build and push all RAG services in parallel using the cluster-native Kaniko p
 Use this only for bootstrapping or when the cluster-native pipeline is unavailable.
 1.  **Script**: `rag-stack/build-and-push.sh`.
 2.  **Journaling**: Use a local directory for journaling to avoid shared mount permission issues.
-    -   Example: `JOURNAL_DIR=/tmp/.rag-build`
+    -   Default: `/home/junie/rag-build-journals`
+    -   Override: `JOURNAL_DIR=/tmp/.rag-build`
 3.  **Force Build**: Use `FORCE_BUILD=true` to ensure fresh builds when code is modified.
 4.  **Example Command**:
     ```bash
-    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z FORCE_BUILD=true JOURNAL_DIR=/tmp/.rag-build ./build-and-push.sh"
+    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z FORCE_BUILD=true ./build-and-push.sh"
     ```
 
 ## Running End-to-End Tests
@@ -41,6 +42,15 @@ To execute the full RAG stack E2E test suite:
     ```bash
     ./run-on-hierophant.sh "export VERSION=X.Y.Z && bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-e2e-on-hierophant.sh"
     ```
+
+## Cross-Model Verification (Automated)
+To verify multiple LLM model combinations (e.g., Scenario A: Llama+Granite, Scenario B: Granite+Llama):
+1.  **Script**: `rag-stack/tests/run-cross-model-tests.sh`.
+2.  **Execution**: Run on **hierophant**.
+    ```bash
+    ./run-on-hierophant.sh "export VERSION=X.Y.Z && cd /mnt/hegemon-share/share/code/complete-build/rag-stack/tests && bash ./run-cross-model-tests.sh"
+    ```
+3.  **Mechanism**: This script automatically updates the `rag-worker` deployment's environment variables (`PLANNER_MODEL`, `EXECUTOR_MODEL`), waits for rollout, and runs the standard integration tests for each scenario.
 
 ## Journaling and Permissions
 To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
@@ -59,3 +69,25 @@ To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
 2.  **Trust Distribution**: The combined CA certificate is managed via the `registry-ca-cm` ConfigMap in target namespaces.
 3.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`) for CA trust.
 4.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.
+
+## Adding Support for New LLMs (Rag-Worker)
+The `rag-worker` service is refactored for multi-model modularity.
+1.  **Define Implementation**: Create a new package under `rag-stack/services/rag-worker/internal/models/` (e.g., `internal/models/newmodel`).
+2.  **Implement Interfaces**: Implement the `Planner` and `Executor` interfaces defined in `internal/models/interfaces.go`.
+3.  **Factory Integration**: Update the factory logic in `rag-stack/services/rag-worker/cmd/worker/main.go` to instantiate the new model based on the `PLANNER_MODEL` or `EXECUTOR_MODEL` environment variables.
+4.  **Configuration**: Set the respective environment variables in the Kubernetes deployment or via `setup-complete.sh`.
+
+## Running Tests
+1.  **Unit Tests**: In `rag-stack/services/rag-worker`, run `go test ./...`.
+2.  **Integration Tests**:
+    - Build and push images using `VERSION=x.y.z ./build-and-push.sh` in `rag-stack/`.
+    - Run on **hierophant**: `cd rag-stack/tests && VERSION=x.y.z bash ./run-tests.sh`.
+3.  **Cross-Model Verification**:
+    -   Use the automated script: `bash ./run-cross-model-tests.sh` (as documented above).
+    -   Supported models: `llama3.1`, `granite3.1-dense:8b`.
+
+## Change Logs
+- **Location**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json`
+- **Frequency**: Update at the conclusion of each prompting session when changes are made.
+- **Format**: Structured JSON with datetime stamp and brief description (most recent at the top).
+- **Git Policy**: The changelog does NOT need to be committed to git.
