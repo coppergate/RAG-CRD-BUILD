@@ -106,7 +106,7 @@ spec:
         env:
         - name: KUBECONFIG
           value: ""
-        image: ghcr.io/headlamp-k8s/headlamp:v0.25.0
+        image: ghcr.io/headlamp-k8s/headlamp:v0.41.0
         imagePullPolicy: IfNotPresent
         name: headlamp
         ports:
