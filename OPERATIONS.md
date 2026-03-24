@@ -91,3 +91,12 @@ The `rag-worker` service is refactored for multi-model modularity.
 - **Frequency**: Update at the conclusion of each prompting session when changes are made.
 - **Format**: Structured JSON with datetime stamp and brief description (most recent at the top).
 - **Git Policy**: The changelog does NOT need to be committed to git.
+
+## Headlamp Access
+To get the login token for Headlamp:
+1.  **Command**: Run the following on **hierophant**:
+    ```bash
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && /home/k8s/kube/kubectl get secret headlamp-admin-token -n headlamp -o jsonpath='{.data.token}' | base64 -d"
+    ```
+2.  **Usage**: Copy the decrypted token and paste it into the Headlamp login page.
+3.  **Role**: This token belongs to the `headlamp-admin` ServiceAccount and has `cluster-admin` privileges.
