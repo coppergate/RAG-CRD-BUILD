@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -12,8 +11,12 @@ import (
 	"time"
 
 	"app-builds/db-adapter/internal/config"
+	"app-builds/db-adapter/internal/ent"
+	"app-builds/db-adapter/internal/ent/prompt"
+	"app-builds/db-adapter/internal/ent/session"
 	"app-builds/common/telemetry"
 	"github.com/apache/pulsar-client-go/pulsar"
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -42,11 +45,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db, err := sql.Open("postgres", cfg.DBConnString)
+	entClient, err := ent.Open("postgres", cfg.DBConnString)
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %v", err)
 	}
-	defer db.Close()
+	defer entClient.Close()
 
 	client, err := pulsar.NewClient(pulsar.ClientOptions{
 		URL: cfg.PulsarURL,
@@ -122,7 +125,9 @@ func main() {
 					log.Printf("Error unmarshaling DB op payload: %v. Raw: %s", err, string(msg.Payload()))
 				} else {
 					if payload.Op == "delete_session" {
-						_, err := db.Exec("DELETE FROM sessions WHERE session_id = $1", payload.ID)
+						_, err := entClient.Session.Delete().
+							Where(session.ID(uuid.MustParse(payload.ID))).
+							Exec(ctx)
 						if err != nil {
 							log.Printf("Failed to delete session %s: %v", payload.ID, err)
 						} else {
@@ -161,10 +166,11 @@ func main() {
 			if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 				log.Printf("Error unmarshaling prompt payload: %v. Raw: %s", err, string(msg.Payload()))
 			} else {
-				_, err := db.Exec(`
-					INSERT INTO prompts (prompt_id, session_id, content) 
-					VALUES ($1, $2, $3)`,
-					payload.ID, payload.SessionID, payload.Content)
+				_, err := entClient.Prompt.Create().
+					SetPromptID(uuid.MustParse(payload.ID)).
+					SetSessionID(uuid.MustParse(payload.SessionID)).
+					SetContent(payload.Content).
+					Save(ctx)
 				if err != nil {
 					log.Printf("Failed to insert prompt %s for session %s: %v", payload.ID, payload.SessionID, err)
 				} else {
@@ -204,36 +210,38 @@ func main() {
 				log.Printf("Error unmarshaling response payload: %v. Raw: %s", err, string(msg.Payload()))
 			} else {
 				log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)
-				// Handle empty model name to avoid UUID syntax error if it's treated as one
-				var modelName interface{}
-				if payload.Model != "" {
-					modelName = payload.Model
-				} else {
-					modelName = nil
-				}
 
-				// Handle potentially empty SessionID
-				var sessionID interface{}
-				if payload.SessionID != "" {
-					sessionID = payload.SessionID
-				} else {
-					// Try to find session_id from prompts if missing
-					sessionID = nil // We'll see if the SQL can handle this or if we need a subselect
-				}
-
-				// Map UUID prompt_id to the BIGINT primary key of prompts via subselect
-				_, err := db.Exec(`
-					INSERT INTO responses (prompt_id, session_id, content, sequence_number, model_name)
-					VALUES (
-						(SELECT id FROM prompts WHERE prompt_id = $1 ORDER BY created_at DESC LIMIT 1), 
-						COALESCE($2, (SELECT session_id FROM prompts WHERE prompt_id = $1 ORDER BY created_at DESC LIMIT 1)), 
-						$3, $4, $5
-					)`,
-					payload.ID, sessionID, payload.Result, payload.SequenceNumber, modelName)
+				p, err := entClient.Prompt.Query().
+					Where(prompt.PromptID(uuid.MustParse(payload.ID))).
+					Order(ent.Desc(prompt.FieldCreatedAt)).
+					First(ctx)
 				if err != nil {
-					log.Printf("Failed to insert response for prompt %s (session %v): %v", payload.ID, sessionID, err)
+					log.Printf("Failed to find prompt for response (ID %s): %v", payload.ID, err)
 				} else {
-					log.Printf("Inserted response for prompt %s (seq %d)", payload.ID, payload.SequenceNumber)
+					var sessID uuid.UUID
+					if payload.SessionID != "" {
+						sessID = uuid.MustParse(payload.SessionID)
+					} else {
+						sessID = p.SessionID
+					}
+
+					var modelName *string
+					if payload.Model != "" {
+						modelName = &payload.Model
+					}
+
+					_, err = entClient.Response.Create().
+						SetPromptID(p.ID).
+						SetSessionID(sessID).
+						SetContent(payload.Result).
+						SetSequenceNumber(payload.SequenceNumber).
+						SetNillableModelName(modelName).
+						Save(ctx)
+					if err != nil {
+						log.Printf("Failed to insert response for prompt %s (session %v): %v", payload.ID, sessID, err)
+					} else {
+						log.Printf("Inserted response for prompt %s (seq %d)", payload.ID, payload.SequenceNumber)
+					}
 				}
 			}
 			span.End()
