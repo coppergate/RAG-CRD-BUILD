@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"app-builds/db-adapter/internal/config"
-	"app-builds/db-adapter/internal/ent"
-	"app-builds/db-adapter/internal/ent/prompt"
-	"app-builds/db-adapter/internal/ent/session"
+	"app-builds/common/ent"
+	"app-builds/common/ent/prompt"
+	"app-builds/common/ent/session"
 	"app-builds/common/telemetry"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/google/uuid"

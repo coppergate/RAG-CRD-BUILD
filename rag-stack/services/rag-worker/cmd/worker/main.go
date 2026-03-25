@@ -11,9 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"database/sql"
-	_ "github.com/lib/pq"
-
 	"github.com/apache/pulsar-client-go/pulsar"
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/ollama"
@@ -40,7 +37,6 @@ type Worker struct {
 	cfg        *config.Config
 	pulsar     pulsar.Client
 	registry   *models.ModelRegistry
-	db         *sql.DB
 	producer   pulsar.Producer // Results producer
 	statusProd pulsar.Producer
 	planProd   pulsar.Producer
@@ -58,13 +54,6 @@ func main() {
 		log.Printf("Warning: failed to initialize tracer: %v", err)
 	} else {
 		defer shutdown(context.Background())
-	}
-
-	db, err := sql.Open("postgres", os.Getenv("DB_CONN_STRING"))
-	if err != nil {
-		log.Printf("Warning: Could not connect to database: %v", err)
-	} else {
-		defer db.Close()
 	}
 
 	client, err := pulsar.NewClient(pulsar.ClientOptions{
@@ -152,7 +141,6 @@ func main() {
 		cfg:        cfg,
 		pulsar:     client,
 		registry:   registry,
-		db:         db,
 		producer:   producer,
 		statusProd: statusProd,
 		planProd:   planProd,

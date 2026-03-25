@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	app-builds/common v0.0.0
-	entgo.io/ent v0.14.6
 	github.com/apache/pulsar-client-go v0.14.0
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
@@ -16,6 +15,7 @@ replace app-builds/common => ../common
 
 require (
 	ariga.io/atlas v0.36.2-0.20250730182955-2c6300d0a3e1 // indirect
+	entgo.io/ent v0.14.6 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.1 // indirect
 	github.com/AthenZ/athenz v1.10.39 // indirect

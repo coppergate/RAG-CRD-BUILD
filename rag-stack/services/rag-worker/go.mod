@@ -5,7 +5,6 @@ go 1.25.0
 require (
 	app-builds/common v0.0.0
 	github.com/apache/pulsar-client-go v0.14.0
-	github.com/lib/pq v1.10.9
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/metric v1.42.0
 )

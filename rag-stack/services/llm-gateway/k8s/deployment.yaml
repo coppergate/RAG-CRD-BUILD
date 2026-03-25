@@ -18,7 +18,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: gateway
-        image: registry.container-registry.svc.cluster.local:5000/llm-gateway:2.0.1
+        image: registry.container-registry.svc.cluster.local:5000/llm-gateway:__VERSION__
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
