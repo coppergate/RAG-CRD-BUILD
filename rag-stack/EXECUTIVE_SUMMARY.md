@@ -34,3 +34,11 @@ The system utilizes a modular Go-first micro-services approach, with specialized
 #### 4. Conclusion
 
 The RAG stack has transitioned from a document retriever to an **Intelligent Knowledge Management System**. By integrating contextual memory and a robust asynchronous message bus, we have established a framework that provides high-quality, consistent AI interactions in a secure, local-first environment.
+
+Updated `db-adapter` to v2.1.0 using Ent.
+
+### Enhanced Test Coverage (Iteration 7)
+The E2E test suite has been expanded to ensure all service functionalities are covered:
+- **Contract Verification**: Added Memory schemas (Write, Retrieve, Pack) to automated JSON schema validation in `test_contracts.py`.
+- **Database Side-Effects**: The `pulsar_crud_test.py` now explicitly verifies that `llm-gateway` creates or updates a session in the database for every chat completion request.
+- **RAG Retrieval**: Verified successful secret code retrieval (`BLUE-ORCHID-2026`) through the full ingestion -> indexing -> retrieval -> inference pipeline.

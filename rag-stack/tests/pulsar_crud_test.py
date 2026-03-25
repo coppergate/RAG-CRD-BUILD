@@ -35,6 +35,54 @@ QDRANT_OPS_TOPIC = os.getenv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeli
 QDRANT_RESULTS_TOPIC = os.getenv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops-results")
 DB_CONN_STRING = os.getenv("DB_CONN_STRING", "postgres://app:OpduDLozLwSGzGgnisFUeLyuSt4Q59alo5AtH0V7pdjGOtul9zu5c4waC3hhuCeZ@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt")
 INGRESS_TOPIC = os.getenv("PULSAR_INGRESS_TOPIC", "persistent://rag-pipeline/stage/ingress")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+
+import requests
+
+def test_gateway_session_upsert():
+    print(f"[{datetime.utcnow().isoformat()}] [TEST] LLM Gateway Session Upsert Side-Effect")
+    
+    # 1. Setup Test Session ID
+    session_id = str(uuid.uuid4())
+    print(f"  - Using new session ID: {session_id}")
+    
+    # 2. Call LLM Gateway
+    print(f"  - Calling LLM Gateway at {GATEWAY_URL}")
+    payload = {
+        "model": "llama3.1",
+        "session_id": session_id,
+        "messages": [{"role": "user", "content": "Hello, this is a session test."}]
+    }
+    
+    # We ignore TLS verification as we are in-cluster using service names
+    resp = requests.post(GATEWAY_URL, json=payload, verify=False, timeout=30)
+    print(f"  - Gateway status: {resp.status_code}")
+    assert resp.status_code == 200
+    
+    # 3. Verify in DB
+    print(f"  - Verifying session {session_id} exists in TimescaleDB...")
+    conn = psycopg2.connect(DB_CONN_STRING)
+    cur = conn.cursor()
+    
+    found = False
+    for i in range(5):
+        cur.execute("SELECT session_id, last_active_at FROM sessions WHERE session_id = %s", (session_id,))
+        row = cur.fetchone()
+        if row:
+            print(f"    [OK] Session found in DB. Last Active: {row[1]}")
+            found = True
+            break
+        print(f"    [WAIT] Session not found yet (attempt {i+1}/5)")
+        time.sleep(2)
+    
+    cur.close()
+    conn.close()
+    
+    if not found:
+        raise Exception(f"Side-effect failed: Session {session_id} was not created in DB by Gateway")
+    
+    print("[SUCCESS] Gateway Session Upsert Verified!")
+
 
 def test_pulsar_db_crud():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Pulsar & Database CRUD Interaction")
@@ -229,6 +277,7 @@ def test_pulsar_qdrant_ops():
 
 if __name__ == "__main__":
     try:
+        test_gateway_session_upsert()
         test_pulsar_db_crud()
         test_pulsar_qdrant_ops()
     except Exception as e:

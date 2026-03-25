@@ -1,6 +1,7 @@
 package handlers
-
+ 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -47,6 +48,30 @@ type GenericChatRequest struct {
 	Tags      []string `json:"tags"`
 }
 
+func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID string) (string, error) {
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
+
+	builder := h.Ent.Session.Create().
+		SetName(sessionID).
+		SetLastActiveAt(time.Now())
+
+	var upserter *ent.SessionUpsertOne
+	if u, err := uuid.Parse(sessionID); err == nil {
+		builder.SetID(u)
+		upserter = builder.OnConflictColumns(session.FieldID).UpdateLastActiveAt()
+	} else {
+		upserter = builder.OnConflictColumns(session.FieldName).UpdateLastActiveAt()
+	}
+
+	id, err := upserter.ID(ctx)
+	if err != nil {
+		return sessionID, err
+	}
+	return id.String(), nil
+}
+
 func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ctx := r.Context()
@@ -80,24 +105,9 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	// 1. Session tracking
-	sessionID := req.SessionID
-	if sessionID == "" {
-		sessionID = uuid.New().String()
-	}
-
-	// Ensure session exists and update last_active_at
-	// Using shared Ent client from common
-	s, err := h.Ent.Session.Create().
-		SetName(sessionID).
-		SetLastActiveAt(time.Now()).
-		OnConflictColumns(session.FieldName).
-		UpdateLastActiveAt().
-		ID(ctx)
+	sessionID, err := h.ensureSession(ctx, req.SessionID)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
-	} else {
-		// Update sessionID to the actual UUID if it was a name
-		sessionID = s.String()
 	}
 
 	correlationID := uuid.New().String()
@@ -191,24 +201,10 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	sessionID := req.SessionID
-	if sessionID == "" {
-		sessionID = uuid.New().String()
-	}
-
-	// Ensure session exists and update last_active_at
-	// Using shared Ent client from common
-	s, err := h.Ent.Session.Create().
-		SetName(sessionID).
-		SetLastActiveAt(time.Now()).
-		OnConflictColumns(session.FieldName).
-		UpdateLastActiveAt().
-		ID(ctx)
+	// 1. Session tracking
+	sessionID, err := h.ensureSession(ctx, req.SessionID)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
-	} else {
-		// Update sessionID to the actual UUID if it was a name
-		sessionID = s.String()
 	}
 
 	correlationID := uuid.New().String()
