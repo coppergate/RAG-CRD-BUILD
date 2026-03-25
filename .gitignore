@@ -6,16 +6,18 @@
 /scripts/revert-journal.sh
 /scripts/set-setup-complete-resume.sh
 **/*.crt
+# Binary files (if they match the directory name, we must avoid broad masks)
+/rag-stack/services/db-adapter/db-adapter
+/rag-stack/services/llm-gateway/llm-gateway
+/rag-stack/services/qdrant-adapter/qdrant-adapter
+/rag-stack/services/build-orchestrator/build-orchestrator
+/rag-stack/services/object-store-mgr/object-store-mgr
+/rag-stack/services/rag-test-runner/rag-test-runner
+/rag-stack/services/rag-web-ui/rag-web-ui
+/rag-stack/services/rag-ingestion/rag-ingestion
+/rag-stack/services/rag-worker/rag-worker
+# Standard build artifacts
 **/main
-**/db-adapter
-**/llm-gateway
-**/qdrant-adapter
-**/common
-**/build-orchestrator
-**/object-store-mgr
-**/rag-test-runner
-**/rag-web-ui
-**/rag-ingestion
 *.exe
 *.test
 __pycache__/
