@@ -17,7 +17,13 @@ type PulsarClient struct {
 	client         pulsar.Client
 	producer       pulsar.Producer
 	promptProducer pulsar.Producer
-	pending        sync.Map // correlationID -> chan string
+	pending        sync.Map // correlationID -> chan response
+}
+
+type response struct {
+	ID     string `json:"id"`
+	Result string `json:"result"`
+	Error  string `json:"error"`
 }
 
 func NewPulsarClient(cfg *config.Config) (*PulsarClient, error) {
@@ -75,13 +81,10 @@ func (pc *PulsarClient) consumeResults(topic string) {
 			continue
 		}
 
-		var resp struct {
-			ID     string `json:"id"`
-			Result string `json:"result"`
-		}
+		var resp response
 		if err := json.Unmarshal(msg.Payload(), &resp); err == nil {
 			if ch, ok := pc.pending.Load(resp.ID); ok {
-				ch.(chan string) <- resp.Result
+				ch.(chan response) <- resp
 			}
 		}
 
@@ -94,7 +97,7 @@ func (pc *PulsarClient) SendRequest(ctx context.Context, id string, payload inte
 	ctx, span := tracer.Start(ctx, "SendRequest")
 	defer span.End()
 
-	resChan := make(chan string, 1)
+	resChan := make(chan response, 1)
 	pc.pending.Store(id, resChan)
 	defer pc.pending.Delete(id)
 
@@ -120,7 +123,10 @@ func (pc *PulsarClient) SendRequest(ctx context.Context, id string, payload inte
 
 	select {
 	case res := <-resChan:
-		return res, nil
+		if res.Error != "" {
+			return "", fmt.Errorf("worker error: %s", res.Error)
+		}
+		return res.Result, nil
 	case <-ctx.Done():
 		return "", ctx.Err()
 	case <-time.After(120 * time.Second):

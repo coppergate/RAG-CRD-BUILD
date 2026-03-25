@@ -1,6 +1,6 @@
 Based on the current implementation of the RAG stack (Iteration 6 planning + Iteration 5 runtime), here is a refreshed architecture representation of components, build flow, and asynchronous interconnections.
 
-#### 1. Architecture & Message Interconnections (Mermaid Diagram)
+#### 1. Architecture & Message Interconnections - Mermaid Diagram -
 
 ```mermaid
 graph TD
@@ -9,7 +9,7 @@ graph TD
         DevDB[Dev Database Tools]
     end
 
-    subgraph "Kubernetes: rag-system namespace"
+    subgraph "Kubernetes: rag-system namespace: TLS-SSL"
         UI[rag-web-ui]
         Gateway[llm-gateway]
         Worker[rag-worker]
@@ -17,10 +17,10 @@ graph TD
         Ingestor[rag-ingestion-service]
         QAdapter[qdrant-adapter]
         OSMgr[object-store-mgr]
-        MemCtl[memory-controller]
+        Qdrant[Qdrant Vector DB]
     end
 
-    subgraph "Kubernetes: monitoring namespace (APM)"
+    subgraph "Kubernetes: monitoring namespace: APM"
         Alloy[Grafana Alloy]
         OTel[OTel Collector]
         Loki[Loki - Logs]
@@ -32,89 +32,85 @@ graph TD
     subgraph "Kubernetes: build-pipeline namespace"
         Orch[Build Orchestrator]
         Kaniko[Kaniko Builder]
-        BuildS3[(Build S3/OBC)]
+        BuildS3[Build S3-OBC]
     end
 
-    subgraph "Pulsar Message Bus (rag-pipeline namespace)"
+    subgraph "Kubernetes: llms-ollama namespace"
+        Ollama[Ollama - Planner]
+        OllamaCode[Ollama - Executor]
+    end
+
+    subgraph "Pulsar Message Bus: rag-pipeline: TLS-SSL"
         direction LR
-        Tasks[data/llm-tasks]
-        Results[data/llm-results]
+        Ingress[stage/ingress]
+        Plan[stage/plan]
+        Exec[stage/exec]
+        Results[stage/results]
         Prompts[data/chat-prompts]
         Responses[data/chat-responses]
         Ops[operations/db-ops]
         QOps[operations/qdrant-ops]
         QRes[operations/qdrant-ops-results]
         BuildTopic[operations/builds]
-        MWrite[operations/memory-write]
-        MRetrieve[operations/memory-retrieve]
-        MPack[operations/memory-pack]
-        MAudit[operations/memory-audit]
     end
 
-    subgraph "Storage & Infrastructure"
-        S3[(Rook-Ceph S3)]
-        Qdrant[(Qdrant Vector DB)]
-        TDB[(TimescaleDB)]
-        Ollama[Ollama LLM Service]
+    subgraph "Storage & Infrastructure: TLS-SSL"
+        S3[Rook-Ceph S3]
+        TDB[TimescaleDB]
         Reg[Local Registry]
     end
 
-    %% Interaction Flows
-    Browser <-->|HTTP/80| UI
-    Browser -->|HTTP/80| Gateway
+    %% Interaction Flows: HTTPS
+    Browser <-->|HTTPS/443| UI
+    Browser -->|HTTPS/443| Gateway
 
     %% Registry Flow
-    UI & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr & MemCtl -.->|Pull| Reg
-    S3 & Qdrant & TDB & Ollama -.->|Pull| Reg
+    UI & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
+    S3 & Qdrant & TDB & Ollama & OllamaCode -.->|Pull TLS| Reg
 
     %% Ingestion Flow
-    UI -->|Upload| S3
-    UI -->|Trigger| Ingestor
-    Ingestor -->|Store Metadata| TDB
-    Ingestor -.->|1. Publish| QOps
-    QAdapter -.->|2. Consume| QOps
-    QAdapter -->|3. Upsert| Qdrant
-    Ingestor -->|Read Files| S3
-    Ingestor -->|Embeddings| Ollama
+    UI -->|Upload: S3 API| S3
+    UI -->|Trigger: HTTPS| Ingestor
+    Ingestor -->|Store Metadata: TLS| TDB
+    Ingestor -.->|1- Publish: Pulsar+SSL| QOps
+    QAdapter -.->|2- Consume: Pulsar+SSL| QOps
+    QAdapter -->|3- Upsert: GRPC+TLS| Qdrant
+    Ingestor -->|Read Files: S3 API| S3
+    Ingestor -->|Embeddings: HTTP| Ollama
 
-    %% Chat Flow (Asynchronous)
-    Gateway -.->|1. Publish| Prompts
-    Gateway -.->|2. Publish| Tasks
+    %% Chat Flow: Asynchronous Pulsar+SSL
+    Gateway -.->|1- Publish| Prompts
+    Gateway -.->|2- Publish| Ingress
 
-    Tasks -.->|3. Consume| Worker
-    Worker -.->|4. Search Op| QOps
-    QOps -.->|5. Consume| QAdapter
-    QAdapter -->|6. HTTP| Qdrant
-    QAdapter -.->|7. Publish| QRes
-    QRes -.->|8. Consume| Worker
+    Ingress -.->|3- Consume| Worker
+    Worker -.->|4- Search Op| QOps
+    QOps -.->|5- Consume| QAdapter
+    QAdapter -->|6- GRPC+TLS| Qdrant
+    QAdapter -.->|7- Publish| QRes
+    QRes -.->|8- Consume| Worker
 
-    %% Memory Flow (Iteration 6)
-    Worker -.->|A. Publish| MRetrieve
-    MRetrieve -.->|B. Consume| MemCtl
-    MemCtl -->|C. Read/Rank| TDB
-    MemCtl -.->|D. Optional semantic recall| QOps
-    MemCtl -.->|E. Publish| MPack
-    MPack -.->|F. Consume| Worker
-    Worker -.->|G. Publish| MWrite
-    MWrite -.->|H. Consume| MemCtl
-    MemCtl -->|I. Persist memory state| TDB
-    MemCtl -.->|J. Publish audit| MAudit
+    %% Worker transitions
+    Worker -.->|9- Publish| Plan
+    Plan -.->|10- Consume| Worker
+    Worker -.->|11- Publish| Exec
+    Exec -.->|12- Consume| Worker
 
-    Worker -->|9. Inference| Ollama
-    Worker -.->|10. Publish| Responses
-    Worker -.->|10. Publish| Results
+    Worker -->|13- Inference: Planner| Ollama
+    Worker -->|14- Inference: Executor| OllamaCode
+    Worker -.->|15- Publish| Responses
+    Worker -.->|15- Publish| Results
 
-    Results -.->|11. Consume| Gateway
-    Gateway -->|12. HTTP Response| Browser
+    Results -.->|16- Consume| Gateway
+    Gateway -->|17- HTTPS Response| Browser
 
-    %% Persistent Flow (DB Adapter)
+    %% Persistent Flow: DB Adapter
     Prompts -.->|Consume| DBAdapter
     Responses -.->|Consume| DBAdapter
     Ops -.->|Consume| DBAdapter
-    DBAdapter -->|Persist| TDB
+    DBAdapter -->|Persist: TLS| TDB
 
-    %% Observability Flow
-    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr & MemCtl -->|Metrics/Traces| OTel
+    %% Observability Flow: OTLP over HTTPS-GRPC
+    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|Metrics/Traces| OTel
     Alloy -->|Kubernetes Logs| Loki
     OTel --> Mimir
     OTel --> Tempo
@@ -124,61 +120,64 @@ graph TD
     Orch -.->|Listen| BuildTopic
     Orch -->|Trigger Job| Kaniko
     Kaniko -->|Download Source| BuildS3
-    Kaniko -->|Push Image| Registry[Local Registry]
+    Kaniko -->|Push Image: TLS| Reg
 ```
 
 #### 2. Component Descriptions
 
-- `rag-web-ui`: Front-end for data ingestion and interactive chat.
-- `llm-gateway`: OpenAI-compatible entry point; publishes prompts/tasks and returns final async response.
-- `rag-worker`: Core orchestration engine for retrieval + generation, now requesting/synthesizing memory packs.
-- `memory-controller`: New Iteration 6 service for memory write/retrieve orchestration, ranking, retention updates, and audit events.
-- `qdrant-adapter`: Centralized vector DB adapter consuming `qdrant-ops` and returning `qdrant-ops-results`.
-- `db-adapter`: Persists prompts/responses and db operations into TimescaleDB.
-- `object-store-mgr`: S3 metadata and object lifecycle manager.
-- `build-orchestrator`: Cluster-native Kaniko build dispatcher.
-- `common/telemetry`: Shared OTLP/tracing initialization package used by Go services.
-- Pulsar bus: Segregated `data` and `operations` topics, extended with memory topics.
-- TimescaleDB: Session/chat state plus Iteration 6 memory model (`memory_items`, `memory_links`, `memory_events`).
-- APM stack: Loki, Mimir, Tempo, Grafana, and Alloy.
+- `rag-web-ui`: Front-end for data ingestion and interactive chat; secured via Traefik HTTPS.
+- `llm-gateway`: OpenAI-compatible entry point; manages session lifecycle and asynchronous task delegation.
+- `rag-worker`: Core orchestration engine with modular LLM support (Llama/Granite); integrates multi-stage RAG logic (ingress/plan/exec).
+- `qdrant-adapter`: Centralized vector DB adapter ensuring consistent tag-filtered search and upsert logic.
+- `db-adapter`: Async persistence layer for audit logs, session state, and chat history.
+- `rag-ingestion-service`: Persistent Python service for multi-source data ingestion and embedding generation.
+- `common/telemetry`: Shared OTLP package for distributed tracing and Prometheus metrics.
+- `TLS/Security`: end-to-end encryption using `cert-manager` and internal Root CA; all inter-service traffic uses HTTPS, GRPC+TLS, or Pulsar+SSL.
 
-#### 3. Build & Deployment Flow (Hierophant Bootstrapped)
+#### 3. Contextual Memory Model - Miras/Titans-Inspired -
+
+- **Short-Term Memory**: Recency-weighted session context for immediate turn-to-turn coherence.
+- **Long-Term Memory**: Semantic recall of past sessions and ingested data using vector similarity.
+- **Persistent Memory**: Durable storage of user profiles, specialized constraints, and verified facts.
+- **Salience Scoring**: Context-aware ranking that prioritizes information based on novelty and query relevance. (Note: implementation in progress).
+- **Token Budgeting**: Strict management of prompt context windows using prioritized "Memory Packs".
+
+#### 3. Build & Deployment Flow - Hierophant Bootstrapped -
 
 ```mermaid
 flowchart TD
-    subgraph "Phase 0: Infrastructure Bootstrap (Hierophant)"
+    subgraph "Phase 0 - Infrastructure Bootstrap - Hierophant"
         Talos[Talos Registry Trust Patch] --> Labels[Label storage-nodes]
-        Labels --> Basic[setup-01-basic.sh: Rook-Ceph/Traefik]
+        Labels --> Basic[setup-01-basic-sh - Rook-Ceph - Traefik]
         Basic --> Reg[Registry Install]
         Reg --> Prefetch[Image Prefetch to Local Registry]
     end
 
-    subgraph "Phase 1: RAG Build Pipeline Bootstrap"
-        Prefetch --> S3_1[(Build S3/OBC)]
+    subgraph "Phase 1 - RAG Build Pipeline Bootstrap"
+        Prefetch --> S3_1[Build S3-OBC]
         S3_1 --> BootstrapJob[Kaniko Bootstrap Job]
-        BootstrapJob --> Registry[Local Registry: registry.hierocracy.home:5000]
-        Registry --> OrchDeploy[Deploy Build Orchestrator]
+        BootstrapJob --> RegistryNode[Local Registry - registry-hierocracy-home:5000]
+        RegistryNode --> OrchDeploy[Deploy Build Orchestrator]
     end
 
-    subgraph "Phase 2: RAG Service Builds (Cluster-Native)"
-        Trigger[trigger-build.sh] --> S3_2[(Build S3/OBC)]
+    subgraph "Phase 2 - RAG Service Builds - Cluster-Native"
+        Trigger[trigger-build-sh] --> S3_2[Build S3-OBC]
         Trigger -.->|Pulsar Msg| Orch[Build Orchestrator]
         Orch --> Kaniko[Kaniko K8s Job]
         S3_2 --> Kaniko
-        Kaniko --> Registry
+        Kaniko --> RegistryNode
     end
 
-    subgraph "Phase 3: RAG Stack Deployment"
-        Registry --> Deploy[Deploy RAG Services]
-        Deploy --> Migrate[Apply TimescaleDB memory migration]
-        Migrate --> MemDeploy[Deploy memory-controller]
-        MemDeploy --> TopicInit[Create memory topics]
+    subgraph "Phase 3 - RAG Stack Deployment"
+        RegistryNode --> Deploy[Deploy RAG Services]
+        Deploy --> Migrate[Apply TimescaleDB schema updates]
+        Migrate --> TopicInit[Create Pulsar topics]
     end
 
-    Registry --> K8s[Kubernetes Cluster]
+    RegistryNode --> K8s[Kubernetes Cluster]
 
     subgraph "Orchestration"
-        Setup[setup-complete.sh]
+        Setup[setup-complete-sh]
     end
 
     Setup --> Phase0

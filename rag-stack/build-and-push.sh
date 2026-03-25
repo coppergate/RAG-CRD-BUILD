@@ -10,7 +10,7 @@ TLS_VERIFY="${TLS_VERIFY:-false}"
 
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 BUILD_DIR="${BUILD_DIR:-$HOME/build}"
-JOURNAL_DIR="${JOURNAL_DIR:-$HOME/.rag-build}"
+JOURNAL_DIR="${JOURNAL_DIR:-/home/junie/rag-build-journals}"
 ONLY="${ONLY:-}"
 START_FROM="${START_FROM:-}"
 FORCE_BUILD="${FORCE_BUILD:-false}"
@@ -103,7 +103,7 @@ build_service() {
 
     # All services now use the parent 'services' directory as context to include 'common/' 
     # and consistent COPY paths in Dockerfiles.
-    podman build $NO_CACHE --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" -f "$REPO_DIR/services/$service/Dockerfile" "$REPO_DIR/services"
+    podman build --tls-verify="$TLS_VERIFY" $NO_CACHE --tag "$BUILD_TAG" -t "$REGISTRY/$service:$VERSION" -t "$REGISTRY/$service:latest" -f "$REPO_DIR/services/$service/Dockerfile" "$REPO_DIR/services"
   fi
 
   echo "--- Pushing $service:$VERSION ---"
@@ -136,7 +136,7 @@ elif ! is_pushed "rag-test-runner" "$VERSION"; then
   NEED_BUILD_TEST_RUNNER=true
 fi
 if [[ "$NEED_BUILD_TEST_RUNNER" == "true" ]]; then
-  podman build -t "$REGISTRY/rag-test-runner:$VERSION" -t "$REGISTRY/rag-test-runner:latest" -f "$REPO_DIR/tests/Dockerfile.test-runner" "$REPO_DIR/tests"
+  podman build --tls-verify="$TLS_VERIFY" -t "$REGISTRY/rag-test-runner:$VERSION" -t "$REGISTRY/rag-test-runner:latest" -f "$REPO_DIR/tests/Dockerfile.test-runner" "$REPO_DIR/tests"
   podman push "$REGISTRY/rag-test-runner:$VERSION" --tls-verify="$TLS_VERIFY"
   podman push "$REGISTRY/rag-test-runner:latest"  --tls-verify="$TLS_VERIFY"
   save_hash "rag-test-runner" "$VERSION" "$TT_HASH"

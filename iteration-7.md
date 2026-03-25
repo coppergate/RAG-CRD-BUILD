@@ -1,4 +1,4 @@
-## Iteration 6: Local Prompt Memory + Recall (Miras/Titans-Inspired)
+## Iteration 7: Local Prompt Memory + Recall (Miras/Titans-Inspired)
 
 ### Objective
 Implement a local-first memory and recall pipeline that improves long-session consistency, recall accuracy, and context efficiency without requiring immediate model retraining.
@@ -8,7 +8,7 @@ Implement a local-first memory and recall pipeline that improves long-session co
 - Implement surprise/salience scoring, retention/decay, and multi-memory retrieval composition.
 - Keep inference model-agnostic (Ollama-compatible) while preparing an optional path for future test-time memory adaptation.
 
-### Non-Goals (Iteration 6)
+### Non-Goals (Iteration 7
 - Full custom model training for Titans/Miras architectures.
 - Replacing the current core LLM inference runtime.
 - Cross-cluster federation of memory state.
@@ -29,7 +29,7 @@ Implement a local-first memory and recall pipeline that improves long-session co
 
 ### Phase 1A: Exact Files to Implement First
 1. Create SQL migration file:
-   - `rag-stack/infrastructure/timescaledb/iteration-6-phase1-memory.sql`
+   - `rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql`
    - Includes:
      - `memory_items` table (scope, salience, retention, decay, status, pinning, ttl fields)
      - `memory_links` table (provenance + correction linkage)
@@ -47,7 +47,7 @@ Implement a local-first memory and recall pipeline that improves long-session co
 ### Phase 1B: Integration Sequence (first implementation pass)
 1. Apply base schema then phase-1 memory migration:
    - `rag-stack/infrastructure/timescaledb/schema.sql`
-   - `rag-stack/infrastructure/timescaledb/iteration-6-phase1-memory.sql`
+   - `rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql`
 2. Wire `db-adapter` to consume `MemoryWriteRequest` and persist:
    - upsert `memory_items`
    - insert `memory_links`

@@ -17,7 +17,11 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/ollama"
+	"app-builds/rag-worker/internal/models"
+	"app-builds/rag-worker/internal/models/llama3"
+	"app-builds/rag-worker/internal/models/granite31"
 	"app-builds/common/telemetry"
+	"app-builds/common/contracts"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -33,12 +37,11 @@ var (
 )
 
 type Worker struct {
-	cfg      *config.Config
-	pulsar   pulsar.Client
-	planner  *ollama.OllamaClient
-	executor *ollama.OllamaClient
-	db       *sql.DB
-	producer pulsar.Producer // Results producer
+	cfg        *config.Config
+	pulsar     pulsar.Client
+	registry   *models.ModelRegistry
+	db         *sql.DB
+	producer   pulsar.Producer // Results producer
 	statusProd pulsar.Producer
 	planProd   pulsar.Producer
 	execProd   pulsar.Producer
@@ -112,11 +115,43 @@ func main() {
 	}
 	defer qOpsProd.Close()
 
+	// Model Registry setup
+	registry := models.NewModelRegistry()
+	registry.RegisterBackend("ollama", func(endpoint, modelName string) models.ChatClient {
+		return ollama.NewClient(endpoint, modelName)
+	})
+	registry.RegisterPromptType("llama3", llama3.NewPlanner, llama3.NewExecutor)
+	registry.RegisterPromptType("granite31", granite31.NewPlanner, granite31.NewExecutor)
+
+	// Add default models from config
+	pPromptType := "llama3"
+	if strings.Contains(cfg.PlannerModel, "granite") {
+		pPromptType = "granite31"
+	}
+	registry.RegisterModel(models.ModelSpec{
+		ID:         cfg.PlannerModel,
+		Name:       cfg.PlannerModel,
+		Endpoint:   cfg.PlannerURL,
+		Backend:    "ollama",
+		PromptType: pPromptType,
+	})
+
+	ePromptType := "llama3"
+	if strings.Contains(cfg.ExecutorModel, "granite") {
+		ePromptType = "granite31"
+	}
+	registry.RegisterModel(models.ModelSpec{
+		ID:         cfg.ExecutorModel,
+		Name:       cfg.ExecutorModel,
+		Endpoint:   cfg.ExecutorURL,
+		Backend:    "ollama",
+		PromptType: ePromptType,
+	})
+
 	worker := &Worker{
 		cfg:        cfg,
 		pulsar:     client,
-		planner:    ollama.NewClient(cfg.PlannerURL, cfg.PlannerModel),
-		executor:   ollama.NewClient(cfg.ExecutorURL, cfg.ExecutorModel),
+		registry:   registry,
 		db:         db,
 		producer:   producer,
 		statusProd: statusProd,
@@ -267,22 +302,19 @@ func (w *Worker) handleStageMessage(ctx context.Context, stage string, msg pulsa
 	}()
 	taskCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
+	var req contracts.InternalRequest
+	if err := json.Unmarshal(msg.Payload(), &req); err != nil {
 		log.Printf("Error unmarshaling payload: %v. Raw: %s", err, string(msg.Payload()))
 		return
 	}
 
-	correlationID, _ := data["id"].(string)
-	sessionID, _ := data["session_id"].(string)
-
 	switch stage {
 	case "ingress":
-		w.handleIngress(ctx, correlationID, sessionID, data)
+		w.handleIngress(ctx, &req)
 	case "plan":
-		w.handlePlan(ctx, correlationID, sessionID, data)
+		w.handlePlan(ctx, &req)
 	case "exec":
-		w.handleExec(ctx, correlationID, sessionID, data)
+		w.handleExec(ctx, &req)
 	default:
 		log.Printf("Unknown stage: %s", stage)
 	}
@@ -307,216 +339,157 @@ func (w *Worker) sendStatus(ctx context.Context, id, sessionID, state, details s
 	}
 }
 
-func (w *Worker) handleIngress(ctx context.Context, id, sessionID string, data map[string]interface{}) {
-	w.sendStatus(ctx, id, sessionID, "INGRESS_RECEIVED", "Initial request received")
+func (w *Worker) handleIngress(ctx context.Context, req *contracts.InternalRequest) {
+	w.sendStatus(ctx, req.ID, req.SessionID, "INGRESS_RECEIVED", "Initial request received")
 
 	// Move to planning stage
-	payload, err := json.Marshal(data)
+	payload, err := json.Marshal(req)
 	if err != nil {
-		log.Printf("[%s] Failed to marshal ingress data: %v", id, err)
-		w.sendError(ctx, id, "Internal serialization error")
+		log.Printf("[%s] Failed to marshal ingress data: %v", req.ID, err)
+		w.sendError(ctx, req.ID, "Internal serialization error")
 		return
 	}
 	if _, err := w.planProd.Send(ctx, &pulsar.ProducerMessage{
 		Payload: payload,
 	}); err != nil {
-		log.Printf("[%s] Failed to send to plan topic: %v", id, err)
-		w.sendError(ctx, id, "Internal messaging error")
+		log.Printf("[%s] Failed to send to plan topic: %v", req.ID, err)
+		w.sendError(ctx, req.ID, "Internal messaging error")
 	}
 }
 
-func (w *Worker) handlePlan(ctx context.Context, id, sessionID string, data map[string]interface{}) {
-	w.sendStatus(ctx, id, sessionID, "PLANNING_TASK", "Decomposing prompt into sub-tasks")
+func (w *Worker) handlePlan(ctx context.Context, req *contracts.InternalRequest) {
+	w.sendStatus(ctx, req.ID, req.SessionID, "PLANNING_TASK", "Decomposing prompt into sub-tasks")
 
-	// Extract prompt
-	var prompt string
-	if payload, ok := data["payload"].(map[string]interface{}); ok {
-		if messages, ok := payload["messages"].([]interface{}); ok && len(messages) > 0 {
-			if lastMsg, ok := messages[len(messages)-1].(map[string]interface{}); ok {
-				prompt, _ = lastMsg["content"].(string)
-			}
-		}
+	modelID := req.PlannerModel
+	if modelID == "" {
+		modelID = w.cfg.PlannerModel
 	}
 
-	if prompt == "" {
-		w.sendError(ctx, id, "No prompt found")
+	planner, err := w.registry.GetPlanner(modelID)
+	if err != nil {
+		log.Printf("[%s] Planner resolution error: %v", req.ID, err)
+		w.sendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model: %s", modelID))
 		return
 	}
 
 	// 1. Planning: Decompose into sub-tasks
-	planningPrompt := fmt.Sprintf(`You are a RAG Planner. Decompose the following user query into 1-3 specific search queries.
-Output ONLY a JSON array of strings. Do not include any other text or markdown formatting.
-Example Output: ["query 1", "query 2"]
-Query: %s`, prompt)
-
-	messages := []map[string]string{
-		{"role": "user", "content": planningPrompt},
-	}
-
-	planResult, err := w.planner.Chat(messages)
+	subQueries, err := planner.Plan(ctx, req.Prompt)
 	if err != nil {
-		log.Printf("[%s] Planning Chat failed: %v", id, err)
-		w.sendError(ctx, id, "Planning failed to communicate with model")
+		log.Printf("[%s] Planning failed: %v", req.ID, err)
+		w.sendError(ctx, req.ID, "Planning failed")
 		return
-	}
-	var subQueries []string
-	if err == nil {
-		// Try to parse JSON array from planner output
-		// We use a more robust approach to find the array if it's embedded in text
-		start := strings.Index(planResult, "[")
-		end := strings.LastIndex(planResult, "]")
-		if start != -1 && end != -1 && end > start {
-			jsonStr := planResult[start : end+1]
-			
-			// Clean common LLM JSON mistakes (trailing commas)
-			// Remove trailing commas before a closing bracket or brace
-			jsonStr = strings.ReplaceAll(jsonStr, ",]", "]")
-			jsonStr = strings.ReplaceAll(jsonStr, ", }", "}")
-			jsonStr = strings.ReplaceAll(jsonStr, ",}", "}")
-
-			if err := json.Unmarshal([]byte(jsonStr), &subQueries); err != nil {
-				log.Printf("[%s] Failed to parse sub-queries from planner JSON: %v. Output: %s", id, err, planResult)
-			}
-		} else {
-			log.Printf("[%s] Planner output did not contain a valid JSON array: %s", id, planResult)
-		}
 	}
 
 	if len(subQueries) == 0 {
-		subQueries = []string{prompt}
+		subQueries = []string{req.Prompt}
 	}
 
-	w.sendStatus(ctx, id, sessionID, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
+	w.sendStatus(ctx, req.ID, req.SessionID, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
 
 	collection := "vectors"
-	var tags []string
-	if tagsVal, ok := data["tags"].([]interface{}); ok {
-		for _, v := range tagsVal {
-			if s, ok := v.(string); ok {
-				tags = append(tags, s)
-			}
-		}
-	} else if payload, ok := data["payload"].(map[string]interface{}); ok {
-		if tagsVal, ok := payload["tags"].([]interface{}); ok {
-			for _, v := range tagsVal {
-				if s, ok := v.(string); ok {
-					tags = append(tags, s)
-				}
-			}
-		}
-	}
+	tags := req.Tags
 
 	var allContexts []string
 	for _, sq := range subQueries {
-		vector, err := w.planner.GetEmbeddings(sq)
+		vector, err := planner.GetEmbeddings(ctx, sq)
 		if err != nil {
-			log.Printf("[%s] Failed to get embeddings for sub-query '%s': %v", id, sq, err)
+			log.Printf("[%s] Failed to get embeddings for sub-query '%s': %v", req.ID, sq, err)
 			continue
 		}
 		vs := len(vector)
-		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, query='%s'", id, collection, vs, tags, sq)
+		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, query='%s'", req.ID, collection, vs, tags, sq)
 		contexts, err := w.searchQdrant(ctx, collection, vs, vector, tags)
 		if err != nil {
-			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", id, sq, vs, err)
+			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.ID, sq, vs, err)
 			continue
 		}
-		log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", id, len(contexts), sq)
-		for i, c := range contexts {
-			// Truncate long context for logging
-			snippet := c
-			if len(snippet) > 100 {
-				snippet = snippet[:100] + "..."
-			}
-			log.Printf("[%s]   Context %d: %s", id, i, snippet)
-		}
+		log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", req.ID, len(contexts), sq)
 		allContexts = append(allContexts, contexts...)
 	}
 
 	// Send to execution
-	data["contexts"] = allContexts
-	data["tags"] = tags // Propagate tags for recursion
-	if data["recursion_budget"] == nil {
-		data["recursion_budget"] = 2
+	if req.Metadata == nil {
+		req.Metadata = make(map[string]interface{})
 	}
-	payload, err := json.Marshal(data)
+	req.Metadata["contexts"] = allContexts
+	if req.Metadata["recursion_budget"] == nil {
+		req.Metadata["recursion_budget"] = 2.0
+	}
+
+	payload, err := json.Marshal(req)
 	if err != nil {
-		log.Printf("[%s] Failed to marshal plan data: %v", id, err)
-		w.sendError(ctx, id, "Internal serialization error")
+		log.Printf("[%s] Failed to marshal plan data: %v", req.ID, err)
+		w.sendError(ctx, req.ID, "Internal serialization error")
 		return
 	}
 	if _, err := w.execProd.Send(ctx, &pulsar.ProducerMessage{
 		Payload: payload,
 	}); err != nil {
-		log.Printf("[%s] Failed to send to exec topic: %v", id, err)
-		w.sendError(ctx, id, "Internal messaging error")
+		log.Printf("[%s] Failed to send to exec topic: %v", req.ID, err)
+		w.sendError(ctx, req.ID, "Internal messaging error")
 	}
 }
 
-func (w *Worker) handleExec(ctx context.Context, id, sessionID string, data map[string]interface{}) {
-	w.sendStatus(ctx, id, sessionID, "EXECUTING_TASK", "Generating response with specialized model")
+func (w *Worker) handleExec(ctx context.Context, req *contracts.InternalRequest) {
+	w.sendStatus(ctx, req.ID, req.SessionID, "EXECUTING_TASK", "Generating response with specialized model")
 
-	contexts, _ := data["contexts"].([]interface{})
-	var prompt string
-	if payload, ok := data["payload"].(map[string]interface{}); ok {
-		if messages, ok := payload["messages"].([]interface{}); ok && len(messages) > 0 {
-			if lastMsg, ok := messages[len(messages)-1].(map[string]interface{}); ok {
-				prompt, _ = lastMsg["content"].(string)
-			}
-		}
+	var contexts []interface{}
+	if c, ok := req.Metadata["contexts"].([]interface{}); ok {
+		contexts = c
 	}
 
-	// Augmented Prompt
-	augmentedPrompt := "Context:\n"
-	for _, c := range contexts {
-		augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
-	}
-	augmentedPrompt += "\nQuery: " + prompt + "\nAnswer: "
-
-	messages := []map[string]string{
-		{"role": "user", "content": augmentedPrompt},
+	modelID := req.ExecutorModel
+	if modelID == "" {
+		modelID = w.cfg.ExecutorModel
 	}
 
-	result, err := w.executor.Chat(messages)
+	executor, err := w.registry.GetExecutor(modelID)
 	if err != nil {
-		log.Printf("[%s] Execution Chat failed: %v", id, err)
-		w.sendError(ctx, id, "Execution failed to communicate with model")
+		log.Printf("[%s] Executor resolution error: %v", req.ID, err)
+		w.sendError(ctx, req.ID, fmt.Sprintf("Unsupported executor model: %s", modelID))
+		return
+	}
+
+	result, err := executor.Execute(ctx, req.Prompt, contexts)
+	if err != nil {
+		log.Printf("[%s] Execution failed: %v", req.ID, err)
+		w.sendError(ctx, req.ID, "Execution failed")
 		return
 	}
 
 	// Grounding Guard / Recursion Check
-	if strings.Contains(result, "\"insufficient_context\": true") || strings.Contains(result, "insufficient context") {
-		budget, _ := data["recursion_budget"].(float64)
+	if executor.IsInsufficientContext(result) {
+		budget, _ := req.Metadata["recursion_budget"].(float64)
 		if budget > 0 {
-			w.sendStatus(ctx, id, sessionID, "REFINING_PLAN", "Context insufficient, triggering recursion")
-			data["recursion_budget"] = budget - 1
-			// TODO: Extract missing details and feed back to planning
-			payload, err := json.Marshal(data)
+			w.sendStatus(ctx, req.ID, req.SessionID, "REFINING_PLAN", "Context insufficient, triggering recursion")
+			req.Metadata["recursion_budget"] = budget - 1
+			payload, err := json.Marshal(req)
 			if err != nil {
-				log.Printf("[%s] Failed to marshal recursion data: %v", id, err)
-				w.sendError(ctx, id, "Internal serialization error during recursion")
+				log.Printf("[%s] Failed to marshal recursion data: %v", req.ID, err)
+				w.sendError(ctx, req.ID, "Internal serialization error during recursion")
 				return
 			}
 			if _, err := w.planProd.Send(ctx, &pulsar.ProducerMessage{
 				Payload: payload,
 			}); err != nil {
-				log.Printf("[%s] Failed to send recursion to plan topic: %v", id, err)
-				w.sendError(ctx, id, "Internal messaging error during recursion")
+				log.Printf("[%s] Failed to send recursion to plan topic: %v", req.ID, err)
+				w.sendError(ctx, req.ID, "Internal messaging error during recursion")
 			}
 			return
 		}
 	}
 
-	w.sendStatus(ctx, id, sessionID, "COMPLETED", "Response generated")
-	w.sendResult(ctx, id, sessionID, result)
+	w.sendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
+	w.sendResult(ctx, req.ID, req.SessionID, result, modelID)
 }
 
-func (w *Worker) sendResult(ctx context.Context, id, sessionID, result string) {
+func (w *Worker) sendResult(ctx context.Context, id, sessionID, result, model string) {
 	payload, err := json.Marshal(map[string]interface{}{
 		"id":              id,
 		"session_id":      sessionID,
 		"result":          result,
 		"sequence_number": 1, // Simplified for now, can be incremented if we support streaming/multiple chunks
-		"model":           w.cfg.ExecutorModel,
+		"model":           model,
 	})
 	if err != nil {
 		log.Printf("[%s] Failed to marshal result: %v", id, err)

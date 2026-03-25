@@ -345,10 +345,7 @@ $KUBECTL get deployment -n registry
 
 if ! is_step_done "metrics-server"; then
 echo "installing the metrics API"
-$KUBECTL apply -f "$config_source_dir/infrastructure/vendor/metrics-server-components.yaml"
-
-echo "waiting for 1 minute"
-sleep 1m;
+bash "$config_source_dir/infrastructure/metrics-server/metrics-server.sh"
 mark_step_done "metrics-server"
 fi
 

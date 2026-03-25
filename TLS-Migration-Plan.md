@@ -46,7 +46,7 @@ Audit and remove the following flags/configurations:
 | **Kaniko** | `rag-stack/infrastructure/build-pipeline/*` | Remove `--insecure`, `--insecure-pull`, and `--insecure-registry`. |
 | **Orchestrator** | `rag-stack/services/build-orchestrator/cmd/orchestrator/main.go` | Remove hardcoded `--insecure` flags from the job template generator. |
 | **Ollama** | `rag-stack/infrastructure/ollama/values.yaml` | Set `insecure: false`. |
-| **Metrics Server**| `infrastructure/vendor/metrics-server-components.yaml` | Remove `--kubelet-insecure-tls`. |
+| **Metrics Server**| `infrastructure/metrics-server/metrics-server.yaml` | Remove `--kubelet-insecure-tls`. |
 | **Rook-Ceph** | `infrastructure/rook-ceph/crds.yaml` | Audit for internal insecure calls. |
 
 ## Phase 6: Post-Migration Verification

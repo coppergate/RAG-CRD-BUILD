@@ -1,19 +1,21 @@
 package handlers
 
 import (
-    "database/sql"
-    "encoding/json"
-    "log"
-    "net/http"
-    "time"
+	"encoding/json"
+	"log"
+	"net/http"
+	"time"
 
-   	"app-builds/llm-gateway/internal/pulsar"
-   	"app-builds/common/telemetry"
-   	"github.com/google/uuid"
-   	"go.opentelemetry.io/otel"
-   	"go.opentelemetry.io/otel/attribute"
-   	"go.opentelemetry.io/otel/metric"
-   )
+	"app-builds/common/contracts"
+	"app-builds/common/ent"
+	"app-builds/common/ent/session"
+	"app-builds/common/telemetry"
+	"app-builds/llm-gateway/internal/pulsar"
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+)
 
    var (
    	meter          = telemetry.Meter("llm-gateway")
@@ -24,7 +26,7 @@ import (
 
 type OpenAIHandler struct {
 	Pulsar *pulsar.PulsarClient
-	DB     *sql.DB
+	Ent    *ent.Client
 }
 
 type ChatCompletionRequest struct {
@@ -35,6 +37,14 @@ type ChatCompletionRequest struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"messages"`
+}
+
+type GenericChatRequest struct {
+	SessionID string   `json:"session_id"`
+	Prompt    string   `json:"prompt"`
+	Planner   string   `json:"planner"`
+	Executor  string   `json:"executor"`
+	Tags      []string `json:"tags"`
 }
 
 func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -76,21 +86,18 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	// Ensure session exists and update last_active_at
-	// (Session management might be moved to a dedicated service, but keeping for now)
-	_, err := h.DB.Exec(`
-		INSERT INTO sessions (name, last_active_at) 
-		VALUES ($1, now()) 
-		ON CONFLICT (name) DO UPDATE SET last_active_at = now()`,
-		sessionID)
+	// Using shared Ent client from common
+	s, err := h.Ent.Session.Create().
+		SetName(sessionID).
+		SetLastActiveAt(time.Now()).
+		OnConflictColumns(session.FieldName).
+		UpdateLastActiveAt().
+		ID(ctx)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
-	}
-
-	// Get the actual UUID for the session
-	var actualSessionID string
-	err = h.DB.QueryRow("SELECT session_id FROM sessions WHERE name = $1 LIMIT 1", sessionID).Scan(&actualSessionID)
-	if err == nil {
-		sessionID = actualSessionID
+	} else {
+		// Update sessionID to the actual UUID if it was a name
+		sessionID = s.String()
 	}
 
 	correlationID := uuid.New().String()
@@ -103,16 +110,26 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Wrap the request for Pulsar
-	pulsarPayload := map[string]interface{}{
-		"id":         correlationID,
-		"session_id": sessionID,
-		"type":       "chat_completion",
-		"payload":    req,
-		"timestamp":  time.Now().Format(time.RFC3339),
+	// Map to InternalRequest for Pulsar
+	var prompt string
+	if len(req.Messages) > 0 {
+		prompt = req.Messages[len(req.Messages)-1].Content
 	}
 
-	result, err := h.Pulsar.SendRequest(ctx, correlationID, pulsarPayload)
+	internalReq := contracts.InternalRequest{
+		ID:            correlationID,
+		SessionID:     sessionID,
+		Prompt:        prompt,
+		PlannerModel:  req.Model,
+		ExecutorModel: req.Model,
+		Tags:          req.Tags,
+		Timestamp:     time.Now().Format(time.RFC3339),
+		Metadata: map[string]interface{}{
+			"source": "openai-api",
+		},
+	}
+
+	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)
 	if err != nil {
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "pulsar_send")))
 		log.Printf("[%s] Pulsar request failed for session %s: %v", correlationID, sessionID, err)
@@ -140,6 +157,88 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 				"finish_reason": "stop",
 			},
 		},
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	ctx := r.Context()
+	tracer := otel.Tracer("llm-gateway")
+	ctx, span := tracer.Start(ctx, "HandleGenericChat")
+	defer span.End()
+
+	attrs := []attribute.KeyValue{
+		attribute.String("method", r.Method),
+		attribute.String("path", "/v1/rag/chat"),
+	}
+
+	defer func() {
+		duration := float64(time.Since(start).Milliseconds())
+		latencyHist.Record(ctx, duration, metric.WithAttributes(attrs...))
+	}()
+
+	requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req GenericChatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	sessionID := req.SessionID
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
+
+	// Ensure session exists and update last_active_at
+	// Using shared Ent client from common
+	s, err := h.Ent.Session.Create().
+		SetName(sessionID).
+		SetLastActiveAt(time.Now()).
+		OnConflictColumns(session.FieldName).
+		UpdateLastActiveAt().
+		ID(ctx)
+	if err != nil {
+		log.Printf("Failed to ensure session exists: %v", err)
+	} else {
+		// Update sessionID to the actual UUID if it was a name
+		sessionID = s.String()
+	}
+
+	correlationID := uuid.New().String()
+
+	// Direct mapping to InternalRequest
+	internalReq := contracts.InternalRequest{
+		ID:            correlationID,
+		SessionID:     sessionID,
+		Prompt:        req.Prompt,
+		PlannerModel:  req.Planner,
+		ExecutorModel: req.Executor,
+		Tags:          req.Tags,
+		Timestamp:     time.Now().Format(time.RFC3339),
+		Metadata: map[string]interface{}{
+			"source": "generic-api",
+		},
+	}
+
+	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)
+	if err != nil {
+		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "pulsar_send")))
+		http.Error(w, "Service unavailable: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"id":         correlationID,
+		"session_id": sessionID,
+		"result":     result,
 	}
 	json.NewEncoder(w).Encode(response)
 }

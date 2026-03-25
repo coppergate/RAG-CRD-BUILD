@@ -10,9 +10,9 @@ import (
 	"app-builds/llm-gateway/internal/config"
 	"app-builds/llm-gateway/internal/handlers"
 	"app-builds/llm-gateway/internal/pulsar"
+	"app-builds/common/ent"
 	"app-builds/common/telemetry"
 	"context"
-	"database/sql"
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -31,15 +31,11 @@ func main() {
 	log.Printf("Pulsar URL: %s", cfg.PulsarURL)
 	log.Printf("Request Topic: %s", cfg.RequestTopic)
 
-	db, err := sql.Open("postgres", cfg.DBConnString)
+	entClient, err := ent.Open("postgres", cfg.DBConnString)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
-
-	if err := db.Ping(); err != nil {
-		log.Printf("Warning: Database not reachable yet: %v", err)
-	}
+	defer entClient.Close()
 
 	pc, err := pulsar.NewPulsarClient(cfg)
 	if err != nil {
@@ -49,11 +45,12 @@ func main() {
 
 	openAIHandler := &handlers.OpenAIHandler{
 		Pulsar: pc,
-		DB:     db,
+		Ent:    entClient,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", openAIHandler.HandleChatCompletions)
+	mux.HandleFunc("/v1/rag/chat", openAIHandler.HandleGenericChat)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))

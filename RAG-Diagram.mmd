@@ -4,7 +4,7 @@ graph TD
         DevDB[Dev Database Tools]
     end
 
-    subgraph "Kubernetes: rag-system namespace"
+    subgraph "Kubernetes: rag-system namespace: TLS-SSL"
         UI[rag-web-ui]
         Gateway[llm-gateway]
         Worker[rag-worker]
@@ -12,10 +12,10 @@ graph TD
         Ingestor[rag-ingestion-service]
         QAdapter[qdrant-adapter]
         OSMgr[object-store-mgr]
-        MemCtl[memory-controller]
+        Qdrant[Qdrant Vector DB]
     end
 
-    subgraph "Kubernetes: monitoring namespace (APM)"
+    subgraph "Kubernetes: monitoring namespace: APM"
         Alloy[Grafana Alloy]
         OTel[OTel Collector]
         Loki[Loki - Logs]
@@ -24,86 +24,95 @@ graph TD
         Grafana[Grafana Dashboards]
     end
 
-    subgraph "Pulsar Message Bus (rag-pipeline namespace)"
+    subgraph "Kubernetes: build-pipeline namespace"
+        Orch[Build Orchestrator]
+        Kaniko[Kaniko Builder]
+        BuildS3[Build S3-OBC]
+    end
+
+    subgraph "Kubernetes: llms-ollama namespace"
+        Ollama[Ollama - Planner]
+        OllamaCode[Ollama - Executor]
+    end
+
+    subgraph "Pulsar Message Bus: rag-pipeline: TLS-SSL"
         direction LR
-        Tasks[data/llm-tasks]
-        Results[data/llm-results]
+        Ingress[stage/ingress]
+        Plan[stage/plan]
+        Exec[stage/exec]
+        Results[stage/results]
         Prompts[data/chat-prompts]
         Responses[data/chat-responses]
         Ops[operations/db-ops]
         QOps[operations/qdrant-ops]
         QRes[operations/qdrant-ops-results]
-        MWrite[operations/memory-write]
-        MRetrieve[operations/memory-retrieve]
-        MPack[operations/memory-pack]
-        MAudit[operations/memory-audit]
+        BuildTopic[operations/builds]
     end
 
-    subgraph "Storage & Infrastructure"
-        S3[(Rook-Ceph S3)]
-        Qdrant[(Qdrant Vector DB)]
-        TDB[(TimescaleDB)]
-        Ollama[Ollama LLM Service]
+    subgraph "Storage & Infrastructure: TLS-SSL"
+        S3[Rook-Ceph S3]
+        TDB[TimescaleDB]
         Reg[Local Registry]
     end
 
-    %% Interaction Flows
-    Browser <-->|HTTP/80| UI
-    Browser -->|HTTP/80| Gateway
+    %% Interaction Flows: HTTPS
+    Browser <-->|HTTPS/443| UI
+    Browser -->|HTTPS/443| Gateway
 
     %% Registry Flow
-    K8s -.->|Pull| Reg
-    S3 & Qdrant & TDB & Ollama -.->|Pull| Reg
+    UI & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
+    S3 & Qdrant & TDB & Ollama & OllamaCode -.->|Pull TLS| Reg
 
     %% Ingestion Flow
-    UI -->|Upload| S3
-    UI -->|Trigger| Ingestor
-    Ingestor -->|Store Metadata| TDB
-    Ingestor -.->|1. Publish| QOps
-    QAdapter -.->|2. Consume| QOps
-    QAdapter -->|3. Upsert| Qdrant
-    Ingestor -->|Read Files| S3
-    Ingestor -->|Embeddings| Ollama
+    UI -->|Upload: S3 API| S3
+    UI -->|Trigger: HTTPS| Ingestor
+    Ingestor -->|Store Metadata: TLS| TDB
+    Ingestor -.->|1- Publish: Pulsar+SSL| QOps
+    QAdapter -.->|2- Consume: Pulsar+SSL| QOps
+    QAdapter -->|3- Upsert: GRPC+TLS| Qdrant
+    Ingestor -->|Read Files: S3 API| S3
+    Ingestor -->|Embeddings: HTTP| Ollama
 
-    %% Chat Flow (Asynchronous)
-    Gateway -.->|1. Publish| Prompts
-    Gateway -.->|2. Publish| Tasks
+    %% Chat Flow: Asynchronous Pulsar+SSL
+    Gateway -.->|1- Publish| Prompts
+    Gateway -.->|2- Publish| Ingress
 
-    Tasks -.->|3. Consume| Worker
-    Worker -.->|4. Search Op| QOps
-    QOps -.->|5. Consume| QAdapter
-    QAdapter -->|6. HTTP| Qdrant
-    QAdapter -.->|7. Publish| QRes
-    QRes -.->|8. Consume| Worker
+    Ingress -.->|3- Consume| Worker
+    Worker -.->|4- Search Op| QOps
+    QOps -.->|5- Consume| QAdapter
+    QAdapter -->|6- GRPC+TLS| Qdrant
+    QAdapter -.->|7- Publish| QRes
+    QRes -.->|8- Consume| Worker
 
-    %% Memory Flow (Iteration 6)
-    Worker -.->|A. Publish| MRetrieve
-    MRetrieve -.->|B. Consume| MemCtl
-    MemCtl -->|C. Read/Rank| TDB
-    MemCtl -.->|D. Optional semantic recall| QOps
-    MemCtl -.->|E. Publish| MPack
-    MPack -.->|F. Consume| Worker
-    Worker -.->|G. Publish| MWrite
-    MWrite -.->|H. Consume| MemCtl
-    MemCtl -->|I. Persist memory state| TDB
-    MemCtl -.->|J. Publish audit| MAudit
+    %% Worker transitions
+    Worker -.->|9- Publish| Plan
+    Plan -.->|10- Consume| Worker
+    Worker -.->|11- Publish| Exec
+    Exec -.->|12- Consume| Worker
 
-    Worker -->|9. Inference| Ollama
-    Worker -.->|10. Publish| Responses
-    Worker -.->|10. Publish| Results
+    Worker -->|13- Inference: Planner| Ollama
+    Worker -->|14- Inference: Executor| OllamaCode
+    Worker -.->|15- Publish| Responses
+    Worker -.->|15- Publish| Results
 
-    Results -.->|11. Consume| Gateway
-    Gateway -->|12. HTTP Response| Browser
+    Results -.->|16- Consume| Gateway
+    Gateway -->|17- HTTPS Response| Browser
 
-    %% Persistent Flow (DB Adapter)
+    %% Persistent Flow: DB Adapter
     Prompts -.->|Consume| DBAdapter
     Responses -.->|Consume| DBAdapter
     Ops -.->|Consume| DBAdapter
-    DBAdapter -->|Persist| TDB
+    DBAdapter -->|Persist: TLS| TDB
 
-    %% Observability Flow
-    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr & MemCtl -->|Metrics/Traces| OTel
+    %% Observability Flow: OTLP over HTTPS-GRPC
+    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|Metrics/Traces| OTel
     Alloy -->|Kubernetes Logs| Loki
     OTel --> Mimir
     OTel --> Tempo
     Mimir & Loki & Tempo --> Grafana
+
+    %% Build Pipeline Flow
+    Orch -.->|Listen| BuildTopic
+    Orch -->|Trigger Job| Kaniko
+    Kaniko -->|Download Source| BuildS3
+    Kaniko -->|Push Image: TLS| Reg

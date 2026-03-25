@@ -92,6 +92,16 @@ The `rag-worker` service is refactored for multi-model modularity.
 - **Format**: Structured JSON with datetime stamp and brief description (most recent at the top).
 - **Git Policy**: The changelog does NOT need to be committed to git.
 
+## Ent ORM Management (db-adapter)
+The `db-adapter` service uses the **Ent ORM** for type-safe database access.
+1.  **Schema Definition**: Schemas are located in `rag-stack/services/db-adapter/internal/ent/schema/`.
+2.  **Code Generation**: If schemas are modified, regenerate the Ent client:
+    -   **Command**: 
+        ```bash
+        cd rag-stack/services/db-adapter && go run -mod=mod entgo.io/ent/cmd/ent generate ./internal/ent/schema
+        ```
+3.  **Database Migration**: The service relies on the existing TimescaleDB schema. Ensure that Ent schemas match the database structure defined in `rag-stack/infrastructure/timescaledb/`.
+
 ## Headlamp Access
 To get the login token for Headlamp:
 1.  **Command**: Run the following on **hierophant**:
