@@ -6,3 +6,17 @@
 /scripts/revert-journal.sh
 /scripts/set-setup-complete-resume.sh
 **/*.crt
+**/main
+**/db-adapter
+**/llm-gateway
+**/qdrant-adapter
+**/common
+**/build-orchestrator
+**/object-store-mgr
+**/rag-test-runner
+**/rag-web-ui
+**/rag-ingestion
+*.exe
+*.test
+__pycache__/
+*.pyc
