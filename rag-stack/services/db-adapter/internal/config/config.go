@@ -1,18 +1,17 @@
 package config
 
 import (
-	"os"
-
+	"app-builds/common/envutil"
 	"app-builds/common/tlsutil"
 )
 
 type Config struct {
-	PulsarURL    string
-	PromptTopic  string
+	PulsarURL     string
+	PromptTopic   string
 	ResponseTopic string
-	DBConnString string
-	Subscription string
-	DBOpsTopic   string
+	DBConnString  string
+	Subscription  string
+	DBOpsTopic    string
 }
 
 func Load() *Config {
@@ -26,18 +25,11 @@ func Load() *Config {
 	}
 
 	return &Config{
-		PulsarURL:     getEnv("PULSAR_URL", pulsarDefault),
-		PromptTopic:   getEnv("PULSAR_PROMPT_TOPIC", "persistent://rag-pipeline/data/chat-prompts"),
-		ResponseTopic: getEnv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/data/chat-responses"),
-		DBConnString:  getEnv("DB_CONN_STRING", dbDefault),
-		Subscription:  getEnv("PULSAR_SUBSCRIPTION", "db-adapter-sub"),
-		DBOpsTopic:    getEnv("PULSAR_DB_OPS_TOPIC", "persistent://rag-pipeline/operations/db-ops"),
+		PulsarURL:     envutil.GetEnv("PULSAR_URL", pulsarDefault),
+		PromptTopic:   envutil.GetEnv("PULSAR_PROMPT_TOPIC", "persistent://rag-pipeline/data/chat-prompts"),
+		ResponseTopic: envutil.GetEnv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/data/chat-responses"),
+		DBConnString:  envutil.GetEnv("DB_CONN_STRING", dbDefault),
+		Subscription:  envutil.GetEnv("PULSAR_SUBSCRIPTION", "db-adapter-sub"),
+		DBOpsTopic:    envutil.GetEnv("PULSAR_DB_OPS_TOPIC", "persistent://rag-pipeline/operations/db-ops"),
 	}
-}
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
-	}
-	return fallback
 }

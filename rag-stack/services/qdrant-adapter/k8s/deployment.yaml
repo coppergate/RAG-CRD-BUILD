@@ -22,13 +22,13 @@ spec:
           imagePullPolicy: Always
           startupProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: 8080
             periodSeconds: 5
             failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
@@ -36,7 +36,7 @@ spec:
             failureThreshold: 6
           livenessProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: 8080
             initialDelaySeconds: 30
             periodSeconds: 20

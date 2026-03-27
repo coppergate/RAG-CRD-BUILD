@@ -1,8 +1,9 @@
 package config
 
 import (
-	"os"
+	"time"
 
+	"app-builds/common/envutil"
 	"app-builds/common/tlsutil"
 )
 
@@ -14,6 +15,9 @@ type Config struct {
 	PulsarNamespace string
 	DBConnString    string
 	PromptTopic     string
+
+	// Configurable values (previously hardcoded)
+	RequestTimeout time.Duration
 }
 
 func Load() *Config {
@@ -27,19 +31,14 @@ func Load() *Config {
 	}
 
 	return &Config{
-		PulsarURL:       getEnv("PULSAR_URL", pulsarDefault),
-		RequestTopic:    getEnv("PULSAR_REQUEST_TOPIC", "persistent://rag-pipeline/stage/ingress"),
-		ResponseTopic:   getEnv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/stage/results"),
-		ListenAddr:      getEnv("LISTEN_ADDR", ":8080"),
-		PulsarNamespace: getEnv("PULSAR_NAMESPACE", "apache-pulsar"),
-		DBConnString:    getEnv("DB_CONN_STRING", dbDefault),
-		PromptTopic:     getEnv("PULSAR_PROMPT_TOPIC", "persistent://rag-pipeline/data/chat-prompts"),
-	}
-}
+		PulsarURL:       envutil.GetEnv("PULSAR_URL", pulsarDefault),
+		RequestTopic:    envutil.GetEnv("PULSAR_REQUEST_TOPIC", "persistent://rag-pipeline/stage/ingress"),
+		ResponseTopic:   envutil.GetEnv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/stage/results"),
+		ListenAddr:      envutil.GetEnv("LISTEN_ADDR", ":8080"),
+		PulsarNamespace: envutil.GetEnv("PULSAR_NAMESPACE", "apache-pulsar"),
+		DBConnString:    envutil.GetEnv("DB_CONN_STRING", dbDefault),
+		PromptTopic:     envutil.GetEnv("PULSAR_PROMPT_TOPIC", "persistent://rag-pipeline/data/chat-prompts"),
 
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
+		RequestTimeout: envutil.GetEnvDuration("REQUEST_TIMEOUT", 120*time.Second),
 	}
-	return fallback
 }

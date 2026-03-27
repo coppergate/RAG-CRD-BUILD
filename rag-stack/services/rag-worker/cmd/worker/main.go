@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,48 +12,28 @@ import (
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
-	"app-builds/common/contracts"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
 	"app-builds/common/dlq"
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
-	"app-builds/common/tlsutil"
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/models"
 	"app-builds/rag-worker/internal/models/granite31"
 	"app-builds/rag-worker/internal/models/llama3"
 	"app-builds/rag-worker/internal/ollama"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/propagation"
+	"app-builds/rag-worker/pkg/messaging"
+	"app-builds/rag-worker/pkg/pipeline"
+	"app-builds/rag-worker/pkg/search"
 )
-
-var (
-	meter            = telemetry.Meter("rag-worker")
-	taskCounter, _   = meter.Int64Counter("worker_tasks_total")
-	errorCounter, _  = meter.Int64Counter("worker_errors_total")
-	taskLatency, _   = meter.Float64Histogram("worker_task_duration_ms", metric.WithUnit("ms"))
-	llmLatency, _    = meter.Float64Histogram("worker_llm_duration_ms", metric.WithUnit("ms"))
-)
-
-const shutdownTimeout = 30 * time.Second
-
-type Worker struct {
-	cfg        *config.Config
-	pulsar     pulsar.Client
-	registry   *models.ModelRegistry
-	producer   pulsar.Producer // Results producer
-	statusProd pulsar.Producer
-	planProd   pulsar.Producer
-	execProd   pulsar.Producer
-	qOpsProd   pulsar.Producer
-	pending    sync.Map // correlationID -> chan []string
-	wg         sync.WaitGroup
-	dlqHandler *dlq.Handler
-}
 
 func main() {
 	cfg := config.LoadConfig()
-	startHealthServer(":8080")
+
+	// Health server with deep readiness checks
+	healthSrv := health.NewServer()
+	healthSrv.Start(":8080")
 
 	shutdown, err := telemetry.InitTracer("rag-worker")
 	if err != nil {
@@ -64,60 +42,14 @@ func main() {
 		defer shutdown(context.Background())
 	}
 
-	pulsarOpts := pulsar.ClientOptions{
-		URL: cfg.PulsarURL,
-	}
-	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
-		pulsarOpts.TLSTrustCertsFilePath = certPath
-	}
-
-	client, err := pulsar.NewClient(pulsarOpts)
+	// Messaging (Pulsar client + producers)
+	msgClient, err := messaging.NewClient(cfg)
 	if err != nil {
-		log.Fatalf("Could not instantiate Pulsar client: %v", err)
+		log.Fatalf("Could not initialize messaging: %v", err)
 	}
-	defer client.Close()
+	defer msgClient.Close()
 
-	producer, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: cfg.PulsarResultsTopic,
-	})
-	if err != nil {
-		log.Fatalf("Could not create Results producer: %v", err)
-	}
-	defer producer.Close()
-
-	statusProd, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: cfg.PulsarStatusTopic,
-	})
-	if err != nil {
-		log.Fatalf("Could not create Status producer: %v", err)
-	}
-	defer statusProd.Close()
-
-	planProd, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: cfg.PulsarPlanTopic,
-	})
-	if err != nil {
-		log.Fatalf("Could not create Plan producer: %v", err)
-	}
-	defer planProd.Close()
-
-	execProd, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: cfg.PulsarExecTopic,
-	})
-	if err != nil {
-		log.Fatalf("Could not create Exec producer: %v", err)
-	}
-	defer execProd.Close()
-
-	qOpsProd, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: cfg.QdrantOpsTopic,
-	})
-	if err != nil {
-		log.Fatalf("Could not create Qdrant ops producer: %v", err)
-	}
-	defer qOpsProd.Close()
-
-	// Model Registry setup
+	// Model Registry setup (config-driven prompt types)
 	registry := models.NewModelRegistry()
 	registry.RegisterBackend("ollama", func(endpoint, modelName string) models.ChatClient {
 		return ollama.NewClient(endpoint, modelName)
@@ -125,52 +57,34 @@ func main() {
 	registry.RegisterPromptType("llama3", llama3.NewPlanner, llama3.NewExecutor)
 	registry.RegisterPromptType("granite31", granite31.NewPlanner, granite31.NewExecutor)
 
-	// Add default models from config
-	pPromptType := "llama3"
-	if strings.Contains(cfg.PlannerModel, "granite") {
-		pPromptType = "granite31"
-	}
 	registry.RegisterModel(models.ModelSpec{
 		ID:         cfg.PlannerModel,
 		Name:       cfg.PlannerModel,
 		Endpoint:   cfg.PlannerURL,
 		Backend:    "ollama",
-		PromptType: pPromptType,
+		PromptType: cfg.PlannerPromptType,
 	})
-
-	ePromptType := "llama3"
-	if strings.Contains(cfg.ExecutorModel, "granite") {
-		ePromptType = "granite31"
-	}
 	registry.RegisterModel(models.ModelSpec{
 		ID:         cfg.ExecutorModel,
 		Name:       cfg.ExecutorModel,
 		Endpoint:   cfg.ExecutorURL,
 		Backend:    "ollama",
-		PromptType: ePromptType,
+		PromptType: cfg.ExecutorPromptType,
 	})
 
-	dlqHandler, err := dlq.NewHandler(client, "rag-worker")
+	// DLQ handler
+	dlqHandler, err := dlq.NewHandler(msgClient.PulsarClient(), "rag-worker")
 	if err != nil {
 		log.Fatalf("Could not create DLQ handler: %v", err)
 	}
 	defer dlqHandler.Close()
 
-	worker := &Worker{
-		cfg:        cfg,
-		pulsar:     client,
-		registry:   registry,
-		producer:   producer,
-		statusProd: statusProd,
-		planProd:   planProd,
-		execProd:   execProd,
-		qOpsProd:   qOpsProd,
-		dlqHandler: dlqHandler,
-	}
+	// Qdrant search via Pulsar
+	searcher := search.NewQdrantSearcher(cfg, msgClient.Producers.QdrantOps)
 
-	// Consumer for Qdrant Results (Search results)
+	// Subscribe to Qdrant results
 	qResultsSub := fmt.Sprintf("rag-worker-q-res-%s", os.Getenv("HOSTNAME"))
-	qResConsumer, err := client.Subscribe(pulsar.ConsumerOptions{
+	qResConsumer, err := msgClient.PulsarClient().Subscribe(pulsar.ConsumerOptions{
 		Topic:            cfg.QdrantResultsTopic,
 		SubscriptionName: qResultsSub,
 		Type:             pulsar.Exclusive,
@@ -179,34 +93,10 @@ func main() {
 		log.Fatalf("Could not subscribe to Qdrant results: %v", err)
 	}
 	defer qResConsumer.Close()
+	searcher.StartResultConsumer(qResConsumer)
 
-	go func() {
-		for {
-			msg, err := qResConsumer.Receive(context.Background())
-			if err != nil {
-				log.Printf("Error receiving Qdrant result: %v", err)
-				continue
-			}
-			qResConsumer.Ack(msg)
-
-			var resp struct {
-				ID     string   `json:"id"`
-				Result []string `json:"result"`
-				Error  string   `json:"error"`
-			}
-			if err := json.Unmarshal(msg.Payload(), &resp); err == nil {
-				if resp.Error != "" {
-					log.Printf("[%s] Qdrant search returned error: %s", resp.ID, resp.Error)
-				}
-				if ch, ok := worker.pending.Load(resp.ID); ok {
-					ch.(chan []string) <- resp.Result
-				}
-			}
-		}
-	}()
-
-	// Consumer for RAG Stages
-	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
+	// Subscribe to RAG stage topics
+	consumer, err := msgClient.PulsarClient().Subscribe(pulsar.ConsumerOptions{
 		Topics: []string{
 			cfg.PulsarIngressTopic,
 			cfg.PulsarPlanTopic,
@@ -220,6 +110,15 @@ func main() {
 	}
 	defer consumer.Close()
 
+	// Register readiness checks
+	healthSrv.RegisterCheck("pulsar", func() error {
+		// Consumer is connected if we got this far without fatal
+		return nil
+	})
+
+	// Pipeline handler
+	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher)
+
 	log.Printf("RAG Worker started, listening on multiple stages")
 
 	// Graceful shutdown setup
@@ -227,23 +126,24 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
+	var wg sync.WaitGroup
 	go func() {
 		<-stop
 		log.Println("Shutdown signal received, stopping message consumption...")
 		cancel()
 	}()
 
+	// Message consumption loop
 	for {
 		msg, err := consumer.Receive(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
-				break // Shutdown requested
+				break
 			}
 			log.Printf("Error receiving message: %v", err)
 			continue
 		}
 
-		// Determine stage based on topic
 		topic := msg.Topic()
 		var stage string
 		if strings.HasSuffix(topic, "ingress") {
@@ -254,14 +154,13 @@ func main() {
 			stage = "exec"
 		}
 
-		// Extract tracing context from Pulsar message properties
 		msgCtx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.MapCarrier(msg.Properties()))
 
-		worker.wg.Add(1)
+		wg.Add(1)
 		go func() {
-			defer worker.wg.Done()
-			worker.dlqHandler.HandleMessage(msgCtx, msg, consumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
-				return worker.handleStageMessageWithResult(mCtx, stage, m)
+			defer wg.Done()
+			dlqHandler.HandleMessage(msgCtx, msg, consumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
+				return handler.HandleStageMessage(mCtx, stage, m)
 			})
 		}()
 	}
@@ -270,305 +169,16 @@ func main() {
 	log.Println("Waiting for in-flight tasks to complete...")
 	done := make(chan struct{})
 	go func() {
-		worker.wg.Wait()
+		wg.Wait()
 		close(done)
 	}()
 
 	select {
 	case <-done:
 		log.Println("All in-flight tasks completed")
-	case <-time.After(shutdownTimeout):
-		log.Printf("Shutdown timeout (%s) reached, some tasks may not have completed", shutdownTimeout)
+	case <-time.After(cfg.ShutdownTimeout):
+		log.Printf("Shutdown timeout (%s) reached, some tasks may not have completed", cfg.ShutdownTimeout)
 	}
 
 	log.Println("RAG Worker shutdown complete")
-}
-
-func startHealthServer(addr string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
-
-	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Printf("Health server stopped: %v", err)
-		}
-	}()
-}
-
-func (w *Worker) searchQdrant(ctx context.Context, collection string, vectorSize int, vector []float32, tags []string) ([]string, error) {
-	id := fmt.Sprintf("search-%d", time.Now().UnixNano())
-	resChan := make(chan []string, 1)
-	w.pending.Store(id, resChan)
-	defer w.pending.Delete(id)
-
-	op := map[string]interface{}{
-		"id":          id,
-		"action":      "search",
-		"collection":  collection,
-		"vector_size": vectorSize,
-		"vector":      vector,
-		"limit":       5,
-		"tags":        tags,
-	}
-	payload, _ := json.Marshal(op)
-
-	_, err := w.qOpsProd.Send(ctx, &pulsar.ProducerMessage{
-		Payload: payload,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	select {
-	case res := <-resChan:
-		return res, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-time.After(30 * time.Second):
-		return nil, fmt.Errorf("qdrant search timed out")
-	}
-}
-
-func (w *Worker) handleStageMessageWithResult(ctx context.Context, stage string, msg pulsar.Message) (dlq.ProcessResult, error) {
-	start := time.Now()
-
-	tracer := otel.Tracer("rag-worker")
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("handleStage:%s", stage))
-	defer span.End()
-
-	attrs := []attribute.KeyValue{attribute.String("stage", stage)}
-	defer func() {
-		duration := float64(time.Since(start).Milliseconds())
-		taskLatency.Record(ctx, duration, metric.WithAttributes(attrs...))
-	}()
-	taskCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
-
-	var req contracts.InternalRequest
-	if err := json.Unmarshal(msg.Payload(), &req); err != nil {
-		return dlq.PermanentFailure, fmt.Errorf("unmarshal payload for stage %s: %w", stage, err)
-	}
-
-	switch stage {
-	case "ingress":
-		w.handleIngress(ctx, &req)
-	case "plan":
-		w.handlePlan(ctx, &req)
-	case "exec":
-		w.handleExec(ctx, &req)
-	default:
-		return dlq.PermanentFailure, fmt.Errorf("unknown stage: %s", stage)
-	}
-
-	return dlq.Success, nil
-}
-
-func (w *Worker) sendStatus(ctx context.Context, id, sessionID, state, details string) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"id":         id,
-		"session_id": sessionID,
-		"state":      state,
-		"details":    details,
-		"timestamp":  time.Now().Format(time.RFC3339),
-	})
-	if err != nil {
-		log.Printf("[%s] Failed to marshal status: %v", id, err)
-		return
-	}
-	if _, err := w.statusProd.Send(ctx, &pulsar.ProducerMessage{
-		Payload: payload,
-	}); err != nil {
-		log.Printf("[%s] Failed to send status message: %v", id, err)
-	}
-}
-
-func (w *Worker) handleIngress(ctx context.Context, req *contracts.InternalRequest) {
-	w.sendStatus(ctx, req.ID, req.SessionID, "INGRESS_RECEIVED", "Initial request received")
-
-	// Move to planning stage
-	payload, err := json.Marshal(req)
-	if err != nil {
-		log.Printf("[%s] Failed to marshal ingress data: %v", req.ID, err)
-		w.sendError(ctx, req.ID, "Internal serialization error")
-		return
-	}
-	if _, err := w.planProd.Send(ctx, &pulsar.ProducerMessage{
-		Payload: payload,
-	}); err != nil {
-		log.Printf("[%s] Failed to send to plan topic: %v", req.ID, err)
-		w.sendError(ctx, req.ID, "Internal messaging error")
-	}
-}
-
-func (w *Worker) handlePlan(ctx context.Context, req *contracts.InternalRequest) {
-	w.sendStatus(ctx, req.ID, req.SessionID, "PLANNING_TASK", "Decomposing prompt into sub-tasks")
-
-	modelID := req.PlannerModel
-	if modelID == "" {
-		modelID = w.cfg.PlannerModel
-	}
-
-	planner, err := w.registry.GetPlanner(modelID)
-	if err != nil {
-		log.Printf("[%s] Planner resolution error: %v", req.ID, err)
-		w.sendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model: %s", modelID))
-		return
-	}
-
-	// 1. Planning: Decompose into sub-tasks
-	subQueries, err := planner.Plan(ctx, req.Prompt)
-	if err != nil {
-		log.Printf("[%s] Planning failed: %v", req.ID, err)
-		w.sendError(ctx, req.ID, "Planning failed")
-		return
-	}
-
-	if len(subQueries) == 0 {
-		subQueries = []string{req.Prompt}
-	}
-
-	w.sendStatus(ctx, req.ID, req.SessionID, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
-
-	collection := "vectors"
-	tags := req.Tags
-
-	var allContexts []string
-	for _, sq := range subQueries {
-		vector, err := planner.GetEmbeddings(ctx, sq)
-		if err != nil {
-			log.Printf("[%s] Failed to get embeddings for sub-query '%s': %v", req.ID, sq, err)
-			continue
-		}
-		vs := len(vector)
-		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, query='%s'", req.ID, collection, vs, tags, sq)
-		contexts, err := w.searchQdrant(ctx, collection, vs, vector, tags)
-		if err != nil {
-			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.ID, sq, vs, err)
-			continue
-		}
-		log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", req.ID, len(contexts), sq)
-		allContexts = append(allContexts, contexts...)
-	}
-
-	// Send to execution
-	if req.Metadata == nil {
-		req.Metadata = make(map[string]interface{})
-	}
-	req.Metadata["contexts"] = allContexts
-	if req.Metadata["recursion_budget"] == nil {
-		req.Metadata["recursion_budget"] = 2.0
-	}
-
-	payload, err := json.Marshal(req)
-	if err != nil {
-		log.Printf("[%s] Failed to marshal plan data: %v", req.ID, err)
-		w.sendError(ctx, req.ID, "Internal serialization error")
-		return
-	}
-	if _, err := w.execProd.Send(ctx, &pulsar.ProducerMessage{
-		Payload: payload,
-	}); err != nil {
-		log.Printf("[%s] Failed to send to exec topic: %v", req.ID, err)
-		w.sendError(ctx, req.ID, "Internal messaging error")
-	}
-}
-
-func (w *Worker) handleExec(ctx context.Context, req *contracts.InternalRequest) {
-	w.sendStatus(ctx, req.ID, req.SessionID, "EXECUTING_TASK", "Generating response with specialized model")
-
-	var contexts []interface{}
-	if c, ok := req.Metadata["contexts"].([]interface{}); ok {
-		contexts = c
-	}
-
-	modelID := req.ExecutorModel
-	if modelID == "" {
-		modelID = w.cfg.ExecutorModel
-	}
-
-	executor, err := w.registry.GetExecutor(modelID)
-	if err != nil {
-		log.Printf("[%s] Executor resolution error: %v", req.ID, err)
-		w.sendError(ctx, req.ID, fmt.Sprintf("Unsupported executor model: %s", modelID))
-		return
-	}
-
-	result, err := executor.Execute(ctx, req.Prompt, contexts)
-	if err != nil {
-		log.Printf("[%s] Execution failed: %v", req.ID, err)
-		w.sendError(ctx, req.ID, "Execution failed")
-		return
-	}
-
-	// Grounding Guard / Recursion Check
-	if executor.IsInsufficientContext(result) {
-		budget, _ := req.Metadata["recursion_budget"].(float64)
-		if budget > 0 {
-			w.sendStatus(ctx, req.ID, req.SessionID, "REFINING_PLAN", "Context insufficient, triggering recursion")
-			req.Metadata["recursion_budget"] = budget - 1
-			payload, err := json.Marshal(req)
-			if err != nil {
-				log.Printf("[%s] Failed to marshal recursion data: %v", req.ID, err)
-				w.sendError(ctx, req.ID, "Internal serialization error during recursion")
-				return
-			}
-			if _, err := w.planProd.Send(ctx, &pulsar.ProducerMessage{
-				Payload: payload,
-			}); err != nil {
-				log.Printf("[%s] Failed to send recursion to plan topic: %v", req.ID, err)
-				w.sendError(ctx, req.ID, "Internal messaging error during recursion")
-			}
-			return
-		}
-	}
-
-	w.sendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
-	w.sendResult(ctx, req.ID, req.SessionID, result, modelID)
-}
-
-func (w *Worker) sendResult(ctx context.Context, id, sessionID, result, model string) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"id":              id,
-		"session_id":      sessionID,
-		"result":          result,
-		"sequence_number": 1, // Simplified for now, can be incremented if we support streaming/multiple chunks
-		"model":           model,
-	})
-	if err != nil {
-		log.Printf("[%s] Failed to marshal result: %v", id, err)
-		return
-	}
-
-	msg := &pulsar.ProducerMessage{
-		Payload: payload,
-	}
-	// Inject tracing context
-	if msg.Properties == nil {
-		msg.Properties = make(map[string]string)
-	}
-	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Properties))
-
-	if _, err := w.producer.Send(ctx, msg); err != nil {
-		log.Printf("[%s] Failed to send result to topic: %v", id, err)
-	} else {
-		log.Printf("[%s] Result sent", id)
-	}
-}
-
-func (w *Worker) sendError(ctx context.Context, id, errMsg string) {
-	payload, err := json.Marshal(map[string]string{
-		"id":    id,
-		"error": errMsg,
-	})
-	if err != nil {
-		log.Printf("[%s] Failed to marshal error: %v", id, err)
-		return
-	}
-	if _, err := w.producer.Send(ctx, &pulsar.ProducerMessage{
-		Payload: payload,
-	}); err != nil {
-		log.Printf("[%s] Failed to send error to topic: %v", id, err)
-	}
 }

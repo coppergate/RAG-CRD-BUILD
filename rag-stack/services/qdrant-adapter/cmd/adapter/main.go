@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -15,6 +14,7 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 
 	"app-builds/common/dlq"
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
 	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
@@ -26,11 +26,27 @@ import (
 )
 
 var (
-	meter           = telemetry.Meter("qdrant-adapter")
-	opCounter, _    = meter.Int64Counter("qdrant_ops_total")
-	errorCounter, _ = meter.Int64Counter("qdrant_errors_total")
-	opLatency, _    = meter.Float64Histogram("qdrant_op_duration_ms", metric.WithUnit("ms"))
+	meter        = telemetry.Meter("qdrant-adapter")
+	opCounter    metric.Int64Counter
+	errorCounter metric.Int64Counter
+	opLatency    metric.Float64Histogram
 )
+
+func init() {
+	var err error
+	opCounter, err = meter.Int64Counter("qdrant_ops_total")
+	if err != nil {
+		log.Printf("Warning: failed to create op counter metric: %v", err)
+	}
+	errorCounter, err = meter.Int64Counter("qdrant_errors_total")
+	if err != nil {
+		log.Printf("Warning: failed to create error counter metric: %v", err)
+	}
+	opLatency, err = meter.Float64Histogram("qdrant_op_duration_ms", metric.WithUnit("ms"))
+	if err != nil {
+		log.Printf("Warning: failed to create op latency metric: %v", err)
+	}
+}
 
 const shutdownTimeout = 30 * time.Second
 
@@ -45,7 +61,7 @@ type Adapter struct {
 
 func main() {
 	cfg := config.LoadConfig()
-	startHealthServer(":8080")
+	healthSrv := health.NewServer()
 
 	shutdown, err := telemetry.InitTracer("qdrant-adapter")
 	if err != nil {
@@ -97,6 +113,8 @@ func main() {
 		log.Fatalf("could not subscribe to qdrant ops: %v", err)
 	}
 	defer consumer.Close()
+
+	healthSrv.Start(":8080")
 
 	log.Printf("Qdrant Adapter started. Listening on %s, publishing to %s", cfg.QdrantOpsTopic, cfg.QdrantResultsTopic)
 
@@ -151,19 +169,6 @@ func main() {
 	log.Println("Qdrant Adapter shutdown complete")
 }
 
-func startHealthServer(addr string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
-
-	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Printf("Health server stopped: %v", err)
-		}
-	}()
-}
 
 func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	start := time.Now()

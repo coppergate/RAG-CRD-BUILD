@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"app-builds/common/ent"
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
 	"app-builds/llm-gateway/internal/config"
 	"app-builds/llm-gateway/internal/handlers"
@@ -18,10 +19,11 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-const shutdownTimeout = 30 * time.Second
-
 func main() {
 	cfg := config.Load()
+
+	// Health server with deep readiness checks
+	healthSrv := health.NewServer()
 
 	shutdown, err := telemetry.InitTracer("llm-gateway")
 	if err != nil {
@@ -51,13 +53,17 @@ func main() {
 		Ent:    entClient,
 	}
 
+	// Register readiness checks
+	healthSrv.RegisterCheck("database", func() error {
+		// Use a lightweight ent query to verify DB connectivity
+		_, err := entClient.Session.Query().Limit(1).Count(context.Background())
+		return err
+	})
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", openAIHandler.HandleChatCompletions)
 	mux.HandleFunc("/v1/rag/chat", openAIHandler.HandleGenericChat)
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
+	healthSrv.RegisterRoutes(mux)
 
 	otelHandler := otelhttp.NewHandler(mux, "llm-gateway")
 
@@ -90,7 +96,7 @@ func main() {
 	log.Println("Shutting down gateway...")
 
 	// 1. Stop accepting new HTTP requests, drain in-flight requests
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {

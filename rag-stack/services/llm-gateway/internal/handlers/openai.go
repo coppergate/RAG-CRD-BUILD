@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -18,12 +19,28 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-   var (
-   	meter          = telemetry.Meter("llm-gateway")
-   	requestCounter, _ = meter.Int64Counter("gateway_requests_total")
-   	errorCounter, _   = meter.Int64Counter("gateway_errors_total")
-   	latencyHist, _    = meter.Float64Histogram("gateway_request_duration_ms", metric.WithUnit("ms"))
-   )
+var (
+	meter          = telemetry.Meter("llm-gateway")
+	requestCounter metric.Int64Counter
+	errorCounter   metric.Int64Counter
+	latencyHist    metric.Float64Histogram
+)
+
+func init() {
+	var err error
+	requestCounter, err = meter.Int64Counter("gateway_requests_total")
+	if err != nil {
+		log.Printf("Warning: failed to create request counter metric: %v", err)
+	}
+	errorCounter, err = meter.Int64Counter("gateway_errors_total")
+	if err != nil {
+		log.Printf("Warning: failed to create error counter metric: %v", err)
+	}
+	latencyHist, err = meter.Float64Histogram("gateway_request_duration_ms", metric.WithUnit("ms"))
+	if err != nil {
+		log.Printf("Warning: failed to create latency histogram metric: %v", err)
+	}
+}
 
 type OpenAIHandler struct {
 	Pulsar *pulsar.PulsarClient
@@ -108,6 +125,9 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	sessionID, err := h.ensureSession(ctx, req.SessionID)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
+		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
+		http.Error(w, fmt.Sprintf("Failed to ensure session: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	correlationID := uuid.New().String()
@@ -147,10 +167,8 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// For simplicity, we assume 'result' is already the raw content or a JSON we can proxy
 	w.Header().Set("Content-Type", "application/json")
 
-	// Minimal OpenAI-like response
 	response := map[string]interface{}{
 		"id":         "chatcmpl-" + correlationID,
 		"object":     "chat.completion",
@@ -168,7 +186,9 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 			},
 		},
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("[%s] Failed to encode response: %v", correlationID, err)
+	}
 }
 
 func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +225,9 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	sessionID, err := h.ensureSession(ctx, req.SessionID)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
+		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
+		http.Error(w, fmt.Sprintf("Failed to ensure session: %v", err), http.StatusInternalServerError)
+		return
 	}
 
 	correlationID := uuid.New().String()
@@ -236,5 +259,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		"session_id": sessionID,
 		"result":     result,
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("[%s] Failed to encode response: %v", correlationID, err)
+	}
 }

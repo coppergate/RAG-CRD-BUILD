@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,6 +14,7 @@ import (
 	"app-builds/common/ent"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/session"
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
 	"app-builds/common/tlsutil"
 	"app-builds/db-adapter/internal/config"
@@ -28,15 +28,31 @@ import (
 )
 
 var (
-	meter           = telemetry.Meter("db-adapter")
-	queryCounter, _ = meter.Int64Counter("db_queries_total")
-	errorCounter, _ = meter.Int64Counter("db_errors_total")
-	queryLatency, _ = meter.Float64Histogram("db_query_duration_ms", metric.WithUnit("ms"))
+	meter        = telemetry.Meter("db-adapter")
+	queryCounter metric.Int64Counter
+	errorCounter metric.Int64Counter
+	queryLatency metric.Float64Histogram
 )
+
+func init() {
+	var err error
+	queryCounter, err = meter.Int64Counter("db_queries_total")
+	if err != nil {
+		log.Printf("Warning: failed to create query counter metric: %v", err)
+	}
+	errorCounter, err = meter.Int64Counter("db_errors_total")
+	if err != nil {
+		log.Printf("Warning: failed to create error counter metric: %v", err)
+	}
+	queryLatency, err = meter.Float64Histogram("db_query_duration_ms", metric.WithUnit("ms"))
+	if err != nil {
+		log.Printf("Warning: failed to create query latency metric: %v", err)
+	}
+}
 
 func main() {
 	cfg := config.Load()
-	startHealthServer(":8080")
+	healthSrv := health.NewServer()
 
 	shutdown, err := telemetry.InitTracer("db-adapter")
 	if err != nil {
@@ -95,6 +111,13 @@ func main() {
 		log.Fatalf("Could not subscribe to responses: %v", err)
 	}
 	defer responseConsumer.Close()
+
+	// Register readiness checks and start health server
+	healthSrv.RegisterCheck("database", func() error {
+		_, err := entClient.Session.Query().Limit(1).Count(context.Background())
+		return err
+	})
+	healthSrv.Start(":8080")
 
 	log.Printf("DB Adapter started, listening on topics: %s, %s, %s", cfg.PromptTopic, cfg.ResponseTopic, cfg.DBOpsTopic)
 
@@ -313,16 +336,3 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
 	return dlq.Success, nil
 }
 
-func startHealthServer(addr string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
-
-	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Printf("Health server stopped: %v", err)
-		}
-	}()
-}

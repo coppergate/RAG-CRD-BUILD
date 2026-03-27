@@ -1,0 +1,153 @@
+# Default deny all ingress in rag-system namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: rag-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+# Allow Traefik ingress to llm-gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-gateway
+  namespace: rag-system
+spec:
+  podSelector:
+    matchLabels:
+      app: llm-gateway
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+# Allow intra-namespace communication for RAG services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rag-internal
+  namespace: rag-system
+spec:
+  podSelector:
+    matchLabels: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+---
+# Allow rag-system pods to reach Pulsar brokers
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-pulsar-from-rag
+  namespace: apache-pulsar
+spec:
+  podSelector:
+    matchLabels:
+      component: proxy
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: rag-system
+    ports:
+    - protocol: TCP
+      port: 6651
+---
+# Allow rag-system pods to reach TimescaleDB
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-db-from-rag
+  namespace: timescaledb
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: timescaledb
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: rag-system
+    ports:
+    - protocol: TCP
+      port: 5432
+---
+# Allow rag-system pods to reach Qdrant
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-qdrant-from-rag
+  namespace: rag-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: qdrant
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 6333
+    - protocol: TCP
+      port: 6334
+---
+# Allow rag-system pods to reach Ollama
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ollama-from-rag
+  namespace: llms-ollama
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: rag-system
+    ports:
+    - protocol: TCP
+      port: 11434
+---
+# Allow APM/monitoring to scrape metrics
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: rag-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: apm
+    ports:
+    - protocol: TCP
+      port: 8080

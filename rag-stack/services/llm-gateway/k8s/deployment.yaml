@@ -24,7 +24,7 @@ spec:
         - containerPort: 8080
         readinessProbe:
           httpGet:
-            path: /health
+            path: /readyz
             port: 8080
             scheme: HTTPS
           initialDelaySeconds: 10
@@ -33,7 +33,7 @@ spec:
           failureThreshold: 6
         livenessProbe:
           httpGet:
-            path: /health
+            path: /healthz
             port: 8080
             scheme: HTTPS
           initialDelaySeconds: 30

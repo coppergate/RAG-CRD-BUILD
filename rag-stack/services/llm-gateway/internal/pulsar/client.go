@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ type PulsarClient struct {
 	promptProducer pulsar.Producer
 	consumer       pulsar.Consumer
 	pending        sync.Map // correlationID -> chan response
+	requestTimeout time.Duration
 }
 
 type response struct {
@@ -76,6 +78,7 @@ func NewPulsarClient(cfg *config.Config) (*PulsarClient, error) {
 		producer:       producer,
 		promptProducer: promptProducer,
 		consumer:       consumer,
+		requestTimeout: cfg.RequestTimeout,
 	}
 
 	go pc.consumeResults()
@@ -138,8 +141,8 @@ func (pc *PulsarClient) SendRequest(ctx context.Context, id string, payload inte
 		return res.Result, nil
 	case <-ctx.Done():
 		return "", ctx.Err()
-	case <-time.After(120 * time.Second):
-		return "", fmt.Errorf("request timed out")
+	case <-time.After(pc.requestTimeout):
+		return "", fmt.Errorf("request timed out after %s", pc.requestTimeout)
 	}
 }
 
@@ -149,8 +152,12 @@ func (pc *PulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, cont
 		"session_id": sessionID,
 		"content":    content,
 	}
-	data, _ := json.Marshal(payload)
-	_, err := pc.promptProducer.Send(ctx, &pulsar.ProducerMessage{
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[%s] Failed to marshal prompt event: %v", id, err)
+		return fmt.Errorf("marshal prompt event: %w", err)
+	}
+	_, err = pc.promptProducer.Send(ctx, &pulsar.ProducerMessage{
 		Payload: data,
 	})
 	return err

@@ -1,0 +1,54 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: llm-gateway-pdb
+  namespace: rag-system
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: llm-gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rag-worker-pdb
+  namespace: rag-system
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: rag-worker
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: db-adapter-pdb
+  namespace: rag-system
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: db-adapter
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: qdrant-adapter-pdb
+  namespace: rag-system
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: qdrant-adapter
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rag-ingestion-pdb
+  namespace: rag-system
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: rag-ingestion-service
