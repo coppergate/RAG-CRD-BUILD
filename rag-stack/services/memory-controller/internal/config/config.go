@@ -8,6 +8,8 @@ import (
 type Config struct {
 	ListenAddr   string
 	DBConnString string
+	TLSCert      string
+	TLSKey       string
 }
 
 func Load() *Config {
@@ -20,5 +22,7 @@ func Load() *Config {
 	return &Config{
 		ListenAddr:   envutil.GetEnv("LISTEN_ADDR", ":8080"),
 		DBConnString: envutil.GetEnv("DB_CONN_STRING", dbDefault),
+		TLSCert:      envutil.GetEnv("TLS_CERT", ""),
+		TLSKey:       envutil.GetEnv("TLS_KEY", ""),
 	}
 }

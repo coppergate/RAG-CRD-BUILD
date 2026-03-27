@@ -114,12 +114,11 @@ func main() {
 	}
 	defer responseConsumer.Close()
 
-	// Register readiness checks and start health server
+	// Register readiness checks
 	healthSrv.RegisterCheck("database", func() error {
 		_, err := entClient.Session.Query().Limit(1).Count(context.Background())
 		return err
 	})
-	healthSrv.Start(":8080")
 
 	log.Printf("DB Adapter started, listening on topics: %s, %s, %s", cfg.PromptTopic, cfg.ResponseTopic, cfg.DBOpsTopic)
 
@@ -212,10 +211,22 @@ func main() {
 
 	otelHandler := otelhttp.NewHandler(mux, "db-adapter")
 
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: otelHandler,
+	}
+
 	go func() {
-		log.Printf("Starting DB Adapter REST API on :8080")
-		if err := http.ListenAndServe(":8080", otelHandler); err != nil {
-			log.Fatalf("REST server failed: %v", err)
+		if cfg.TLSCert != "" && cfg.TLSKey != "" {
+			log.Printf("Starting DB Adapter REST API with TLS on :8080")
+			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("REST server failed: %v", err)
+			}
+		} else {
+			log.Printf("Starting DB Adapter REST API on :8080")
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("REST server failed: %v", err)
+			}
 		}
 	}()
 

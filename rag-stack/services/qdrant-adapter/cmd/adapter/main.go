@@ -122,7 +122,7 @@ func main() {
 	healthSrv.RegisterRoutes(mux)
 
 	mux.HandleFunc("/api/qdrant/collections", func(w http.ResponseWriter, r *http.Request) {
-		res, err := qClient.ListCollections()
+		res, err := adapter.qdrant.ListCollections()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -132,7 +132,7 @@ func main() {
 
 	mux.HandleFunc("/api/qdrant/collections/", func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/api/qdrant/collections/")
-		res, err := qClient.GetCollection(name)
+		res, err := adapter.qdrant.GetCollection(name)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -140,12 +140,30 @@ func main() {
 		json.NewEncoder(w).Encode(res)
 	})
 
+	// Register readiness checks
+	healthSrv.RegisterCheck("qdrant", func() error {
+		_, err := adapter.qdrant.ListCollections()
+		return err
+	})
+
 	otelHandler := otelhttp.NewHandler(mux, "qdrant-adapter")
 
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: otelHandler,
+	}
+
 	go func() {
-		log.Printf("Starting Qdrant Adapter REST API on :8080")
-		if err := http.ListenAndServe(":8080", otelHandler); err != nil {
-			log.Fatalf("REST server failed: %v", err)
+		if cfg.TLSCert != "" && cfg.TLSKey != "" {
+			log.Printf("Starting Qdrant Adapter REST API with TLS on :8080")
+			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("REST server failed: %v", err)
+			}
+		} else {
+			log.Printf("Starting Qdrant Adapter REST API on :8080")
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("REST server failed: %v", err)
+			}
 		}
 	}()
 

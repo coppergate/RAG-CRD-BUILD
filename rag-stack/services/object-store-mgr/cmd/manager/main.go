@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -19,6 +20,8 @@ import (
 )
 
 func main() {
+	healthSrv := health.NewServer()
+
 	shutdown, err := telemetry.InitTracer("object-store-mgr")
 	if err != nil {
 		log.Printf("Warning: failed to initialize tracer: %v", err)
@@ -54,8 +57,15 @@ func main() {
 		o.UsePathStyle = true
 	})
 
-	mux := http.NewServeMux()
+	healthSrv.RegisterCheck("s3", func() error {
+		_, err := client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+		return err
+	})
 
+	mux := http.NewServeMux()
+	
+	healthSrv.RegisterRoutes(mux)
+	
 	mux.HandleFunc("/api/s3/buckets", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -118,16 +128,27 @@ func main() {
 		}
 	})
 
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "OK")
-	})
-
 	otelHandler := otelhttp.NewHandler(mux, "object-store-mgr")
 
-	fmt.Println("Server starting on :8080")
-	if err := http.ListenAndServe(":8080", otelHandler); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	tlsCert := os.Getenv("TLS_CERT")
+	tlsKey := os.Getenv("TLS_KEY")
+	listenAddr := ":8080"
+
+	server := &http.Server{
+		Addr:    listenAddr,
+		Handler: otelHandler,
+	}
+
+	if tlsCert != "" && tlsKey != "" {
+		fmt.Printf("Server starting with TLS on %s\n", listenAddr)
+		if err := server.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
+			log.Fatalf("Server failed: %v", err)
+		}
+	} else {
+		fmt.Printf("Server starting on %s\n", listenAddr)
+		if err := server.ListenAndServe(); err != nil {
+			log.Fatalf("Server failed: %v", err)
+		}
 	}
 }
 

@@ -9,7 +9,9 @@ import (
 	"syscall"
 	"time"
 
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
+	"app-builds/common/tlsutil"
 	"app-builds/rag-admin-api/internal/config"
 	"app-builds/rag-admin-api/internal/handlers"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -17,6 +19,8 @@ import (
 
 func main() {
 	cfg := config.Load()
+
+	healthSrv := health.NewServer()
 
 	shutdown, err := telemetry.InitTracer("rag-admin-api")
 	if err != nil {
@@ -27,7 +31,10 @@ func main() {
 
 	h := &handlers.AdminHandler{Cfg: cfg}
 
+	// Health Aggregation
 	mux := http.NewServeMux()
+	
+	healthSrv.RegisterRoutes(mux)
 	
 	// S3 Object Browser Proxy
 	mux.HandleFunc("/api/s3/", h.ProxyTo(cfg.S3ManagerURL))
@@ -43,12 +50,6 @@ func main() {
 	
 	// Health Aggregation
 	mux.HandleFunc("/api/health/all", h.HandleHealthAggregation)
-	
-	// Own health
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
 
 	otelHandler := otelhttp.NewHandler(mux, "rag-admin-api")
 
@@ -58,9 +59,16 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Starting RAG Admin API on %s", cfg.ListenAddr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Listen error: %v", err)
+		if cfg.TLSCert != "" && cfg.TLSKey != "" {
+			log.Printf("Starting RAG Admin API with TLS on %s", cfg.ListenAddr)
+			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
+		} else {
+			log.Printf("Starting RAG Admin API on %s", cfg.ListenAddr)
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
 		}
 	}()
 

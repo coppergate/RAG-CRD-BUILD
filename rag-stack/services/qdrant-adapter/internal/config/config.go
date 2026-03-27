@@ -18,6 +18,8 @@ type Config struct {
 	OllamaModel         string
 	QdrantOpsTopic      string
 	QdrantResultsTopic  string
+	TLSCert             string
+	TLSKey              string
 }
 
 func LoadConfig() *Config {
@@ -45,5 +47,7 @@ func LoadConfig() *Config {
 		OllamaModel:         envutil.GetEnv("OLLAMA_MODEL", "llama3.1"),
 		QdrantOpsTopic:      envutil.GetEnv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops"),
 		QdrantResultsTopic:  envutil.GetEnv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops-results"),
+		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
+		TLSKey:              envutil.GetEnv("TLS_KEY", ""),
 	}
 }

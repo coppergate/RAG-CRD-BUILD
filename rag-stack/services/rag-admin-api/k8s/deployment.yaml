@@ -20,17 +20,54 @@ spec:
         image: registry.container-registry.svc.cluster.local:5000/rag-admin-api:__VERSION__
         ports:
         - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 15
+          periodSeconds: 10
         env:
         - name: DB_ADAPTER_URL
-          value: "http://db-adapter.rag-system.svc.cluster.local:8080"
+          value: "https://db-adapter.rag-system.svc.cluster.local:8080"
         - name: S3_MANAGER_URL
-          value: "http://object-store-mgr.rag-system.svc.cluster.local:8080"
+          value: "https://object-store-mgr.rag-system.svc.cluster.local:8080"
         - name: QDRANT_ADAPTER_URL
-          value: "http://qdrant-adapter.rag-system.svc.cluster.local:8080"
+          value: "https://qdrant-adapter.rag-system.svc.cluster.local:8080"
         - name: LLM_GATEWAY_URL
-          value: "http://llm-gateway.rag-system.svc.cluster.local:8080"
+          value: "https://llm-gateway.rag-system.svc.cluster.local:8080"
         - name: MEMORY_CONTROLLER_URL
-          value: "http://memory-controller.rag-system.svc.cluster.local:8080"
+          value: "https://memory-controller.rag-system.svc.cluster.local:8080"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: rag-admin-api-tls
 ---
 apiVersion: v1
 kind: Service
@@ -41,9 +78,9 @@ spec:
   selector:
     app: rag-admin-api
   ports:
-  - port: 80
+  - port: 443
     targetPort: 8080
-    name: http
+    name: https
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -68,4 +105,4 @@ spec:
           service:
             name: rag-admin-api
             port:
-              name: http
+              name: https

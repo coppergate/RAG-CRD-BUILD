@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"app-builds/common/ent"
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
 	"app-builds/memory-controller/internal/config"
 	_ "github.com/lib/pq"
@@ -17,6 +18,7 @@ import (
 
 func main() {
 	cfg := config.Load()
+	healthSrv := health.NewServer()
 
 	shutdown, err := telemetry.InitTracer("memory-controller")
 	if err != nil {
@@ -31,17 +33,20 @@ func main() {
 	}
 	defer entClient.Close()
 
+	healthSrv.RegisterCheck("database", func() error {
+		// Verify DB connectivity
+		_, err := entClient.Session.Query().Limit(1).Count(context.Background())
+		return err
+	})
+
 	mux := http.NewServeMux()
+	
+	healthSrv.RegisterRoutes(mux)
 	
 	mux.HandleFunc("/api/memory/items", func(w http.ResponseWriter, r *http.Request) {
 		// Mock implementation for now, should query db-adapter or use entClient
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`[]`))
-	})
-
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
 	})
 
 	server := &http.Server{
@@ -50,9 +55,16 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Starting Memory Controller on %s", cfg.ListenAddr)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Listen error: %v", err)
+		if cfg.TLSCert != "" && cfg.TLSKey != "" {
+			log.Printf("Starting Memory Controller with TLS on %s", cfg.ListenAddr)
+			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
+		} else {
+			log.Printf("Starting Memory Controller on %s", cfg.ListenAddr)
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
 		}
 	}()
 

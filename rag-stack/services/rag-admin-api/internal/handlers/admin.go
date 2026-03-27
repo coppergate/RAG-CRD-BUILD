@@ -7,6 +7,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"app-builds/rag-admin-api/internal/config"
+	"app-builds/common/tlsutil"
+	"time"
 )
 
 type AdminHandler struct {
@@ -23,18 +25,44 @@ func (h *AdminHandler) ProxyTo(targetURL string) http.HandlerFunc {
 
 func (h *AdminHandler) HandleHealthAggregation(w http.ResponseWriter, r *http.Request) {
 	services := map[string]string{
-		"db-adapter":        h.Cfg.DBAdapterURL + "/health",
-		"object-store-mgr":  h.Cfg.S3ManagerURL + "/health",
-		"qdrant-adapter":    h.Cfg.QdrantAdapterURL + "/health",
-		"llm-gateway":       h.Cfg.LLMGatewayURL + "/health",
-		"memory-controller": h.Cfg.MemoryControllerURL + "/health",
+		"db-adapter":        h.Cfg.DBAdapterURL,
+		"object-store-mgr":  h.Cfg.S3ManagerURL,
+		"qdrant-adapter":    h.Cfg.QdrantAdapterURL,
+		"llm-gateway":       h.Cfg.LLMGatewayURL,
+		"memory-controller": h.Cfg.MemoryControllerURL,
+	}
+
+	client, err := tlsutil.NewHTTPClient(true, 5*time.Second)
+	if err != nil {
+		// Fallback to default if TLS fails to load (might be in dev)
+		client = &http.Client{Timeout: 5 * time.Second}
 	}
 
 	results := make(map[string]interface{})
-	for name, url := range services {
-		resp, err := http.Get(url)
-		if err != nil {
-			results[name] = map[string]string{"status": "DOWN", "error": err.Error()}
+	for name, baseURL := range services {
+		var resp *http.Response
+		var lastErr error
+
+		for _, endpoint := range []string{"/readyz", "/healthz", "/health"} {
+			healthURL := baseURL + endpoint
+			resp, lastErr = client.Get(healthURL)
+			if lastErr == nil {
+				if resp.StatusCode == http.StatusNotFound {
+					resp.Body.Close()
+					resp = nil
+					continue
+				}
+				break
+			}
+			resp = nil
+		}
+
+		if lastErr != nil {
+			results[name] = map[string]string{"status": "DOWN", "error": lastErr.Error()}
+			continue
+		}
+		if resp == nil {
+			results[name] = map[string]string{"status": "DOWN", "error": "No health endpoint found"}
 			continue
 		}
 		defer resp.Body.Close()

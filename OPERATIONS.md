@@ -150,6 +150,27 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 2.  **Trust Distribution**: The combined CA certificate is managed via the `registry-ca-cm` ConfigMap in target namespaces.
 3.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`) for CA trust.
 4.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.
+5.  **Service TLS**: All RAG services (adapters, gateway, admin-api) now use TLS for their REST APIs (port 8080 or 443).
+    -   Certificates and keys are mounted from secrets named `<service>-tls`.
+    -   Probes use `scheme: HTTPS`.
+
+## Standardized Health and Readiness Checks
+All RAG services now implement standardized endpoints for Kubernetes probes and management:
+-   `/healthz` (Liveness): Always returns `OK` (200) if the process is running.
+-   `/readyz` (Readiness): Returns JSON with `{"status": "ready"}` (200) only if all downstream dependencies are reachable.
+    -   `db-adapter`: Checks TimescaleDB connectivity.
+    -   `qdrant-adapter`: Checks Qdrant connectivity.
+    -   `object-store-mgr`: Checks S3/Ceph connectivity.
+    -   `memory-controller`: Checks database connectivity.
+-   `/api/health/all` (Admin API): Aggregates results from all services into a single JSON report.
+
+To manually verify health via `kubectl exec`:
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   /home/k8s/kube/kubectl exec -n rag-system deploy/rag-admin-api -- \
+   curl -sk https://localhost:8080/api/health/all"
+```
 
 ## Adding Support for New LLMs (Rag-Worker)
 The `rag-worker` service is refactored for multi-model modularity.
