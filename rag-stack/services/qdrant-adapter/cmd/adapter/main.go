@@ -6,30 +6,41 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
- "app-builds/qdrant-adapter/internal/config"
- "app-builds/qdrant-adapter/internal/qdrant"
-        "app-builds/common/telemetry"
-        "go.opentelemetry.io/otel"
-        "go.opentelemetry.io/otel/attribute"
-        "go.opentelemetry.io/otel/metric"
-        "go.opentelemetry.io/otel/propagation"
+
+	"app-builds/common/dlq"
+	"app-builds/common/telemetry"
+	"app-builds/common/tlsutil"
+	"app-builds/qdrant-adapter/internal/config"
+	"app-builds/qdrant-adapter/internal/qdrant"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 var (
-        meter         = telemetry.Meter("qdrant-adapter")
-        opCounter, _  = meter.Int64Counter("qdrant_ops_total")
-        errorCounter, _ = meter.Int64Counter("qdrant_errors_total")
-        opLatency, _  = meter.Float64Histogram("qdrant_op_duration_ms", metric.WithUnit("ms"))
+	meter           = telemetry.Meter("qdrant-adapter")
+	opCounter, _    = meter.Int64Counter("qdrant_ops_total")
+	errorCounter, _ = meter.Int64Counter("qdrant_errors_total")
+	opLatency, _    = meter.Float64Histogram("qdrant_op_duration_ms", metric.WithUnit("ms"))
 )
 
+const shutdownTimeout = 30 * time.Second
+
 type Adapter struct {
-	cfg     *config.Config
-	client  pulsar.Client
-	prod    pulsar.Producer
-	qdrant  *qdrant.QdrantClient
+	cfg        *config.Config
+	client     pulsar.Client
+	prod       pulsar.Producer
+	qdrant     *qdrant.QdrantClient
+	wg         sync.WaitGroup
+	dlqHandler *dlq.Handler
 }
 
 func main() {
@@ -43,7 +54,14 @@ func main() {
 		defer shutdown(context.Background())
 	}
 
-	client, err := pulsar.NewClient(pulsar.ClientOptions{URL: cfg.PulsarURL})
+	opts := pulsar.ClientOptions{
+		URL: cfg.PulsarURL,
+	}
+	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
+		opts.TLSTrustCertsFilePath = certPath
+	}
+
+	client, err := pulsar.NewClient(opts)
 	if err != nil {
 		log.Fatalf("could not create pulsar client: %v", err)
 	}
@@ -55,11 +73,18 @@ func main() {
 	}
 	defer producer.Close()
 
+	dlqHandler, err := dlq.NewHandler(client, "qdrant-adapter")
+	if err != nil {
+		log.Fatalf("Could not create DLQ handler: %v", err)
+	}
+	defer dlqHandler.Close()
+
 	adapter := &Adapter{
-		cfg:    cfg,
-		client: client,
-		prod:   producer,
-		qdrant: qdrant.NewClient(cfg),
+		cfg:        cfg,
+		client:     client,
+		prod:       producer,
+		qdrant:     qdrant.NewClient(cfg),
+		dlqHandler: dlqHandler,
 	}
 
 	// subscribe to qdrant ops
@@ -74,9 +99,24 @@ func main() {
 	defer consumer.Close()
 
 	log.Printf("Qdrant Adapter started. Listening on %s, publishing to %s", cfg.QdrantOpsTopic, cfg.QdrantResultsTopic)
+
+	// Graceful shutdown setup
+	ctx, cancel := context.WithCancel(context.Background())
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-stop
+		log.Println("Shutdown signal received, stopping message consumption...")
+		cancel()
+	}()
+
 	for {
-		msg, err := consumer.Receive(context.Background())
+		msg, err := consumer.Receive(ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				break
+			}
 			log.Printf("receive error: %v", err)
 			continue
 		}
@@ -84,8 +124,31 @@ func main() {
 		// Extract tracing context from Pulsar message properties
 		msgCtx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.MapCarrier(msg.Properties()))
 
-		go adapter.handle(msgCtx, msg, consumer)
+		adapter.wg.Add(1)
+		go func() {
+			defer adapter.wg.Done()
+			adapter.dlqHandler.HandleMessage(msgCtx, msg, consumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
+				return adapter.handleWithResult(mCtx, m)
+			})
+		}()
 	}
+
+	// Wait for in-flight ops
+	log.Println("Waiting for in-flight Qdrant operations to complete...")
+	done := make(chan struct{})
+	go func() {
+		adapter.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Println("All in-flight operations completed")
+	case <-time.After(shutdownTimeout):
+		log.Printf("Shutdown timeout (%s) reached", shutdownTimeout)
+	}
+
+	log.Println("Qdrant Adapter shutdown complete")
 }
 
 func startHealthServer(addr string) {
@@ -102,9 +165,8 @@ func startHealthServer(addr string) {
 	}()
 }
 
-func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsar.Consumer) {
+func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	start := time.Now()
-	defer consumer.Ack(msg)
 
 	tracer := otel.Tracer("qdrant-adapter")
 	ctx, span := tracer.Start(ctx, "HandleOp")
@@ -112,8 +174,7 @@ func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsa
 
 	var data map[string]interface{}
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
-		log.Printf("bad payload: %v. Raw: %s", err, string(msg.Payload()))
-		return
+		return dlq.PermanentFailure, fmt.Errorf("bad payload: %w", err)
 	}
 
 	opID, _ := data["id"].(string)
@@ -137,7 +198,7 @@ func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsa
 
 	var (
 		result interface{}
-		err    error
+		opErr  error
 	)
 
 	switch action {
@@ -148,45 +209,44 @@ func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsa
 			limit = int(l)
 		}
 		tags := toStringSlice(data["tags"])
-		result, err = a.qdrant.Search(collection, vs, vector, limit, tags)
+		result, opErr = a.qdrant.Search(collection, vs, vector, limit, tags)
 	case "upsert":
 		points, _ := data["points"].([]interface{})
-		err = a.qdrant.Upsert(collection, vs, points)
-		if err == nil {
+		opErr = a.qdrant.Upsert(collection, vs, points)
+		if opErr == nil {
 			result = map[string]any{"ok": true, "count": len(points)}
 		}
 	case "create_collection":
-		err = a.qdrant.CreateCollection(collection, vs)
-		if err == nil {
+		opErr = a.qdrant.CreateCollection(collection, vs)
+		if opErr == nil {
 			result = map[string]any{"ok": true}
 		}
 	default:
-		err = fmt.Errorf("unsupported action: %s", action)
+		return dlq.PermanentFailure, fmt.Errorf("unsupported action: %s", action)
 	}
 
+	// Always publish the result (success or error) to the results topic
 	resp := map[string]any{
-		"id":        opID,
-		"action":    action,
+		"id":         opID,
+		"action":     action,
 		"collection": collection,
-		"timestamp": time.Now().Format(time.RFC3339),
+		"timestamp":  time.Now().Format(time.RFC3339),
 	}
-	if err != nil {
-		resp["error"] = err.Error()
-		log.Printf("[%s] Qdrant action '%s' failed on collection '%s': %v", opID, action, collection, err)
+	if opErr != nil {
+		resp["error"] = opErr.Error()
+		log.Printf("[%s] Qdrant action '%s' failed on collection '%s': %v", opID, action, collection, opErr)
 	} else {
 		resp["result"] = result
 	}
 
 	payload, err := json.Marshal(resp)
 	if err != nil {
-		log.Printf("[%s] Failed to marshal Qdrant result: %v", opID, err)
-		return
+		return dlq.PermanentFailure, fmt.Errorf("marshal Qdrant result: %w", err)
 	}
 
 	msgOut := &pulsar.ProducerMessage{
 		Payload: payload,
 	}
-	// Inject tracing context
 	if msgOut.Properties == nil {
 		msgOut.Properties = make(map[string]string)
 	}
@@ -194,26 +254,39 @@ func (a *Adapter) handle(ctx context.Context, msg pulsar.Message, consumer pulsa
 
 	_, perr := a.prod.Send(ctx, msgOut)
 	if perr != nil {
-		log.Printf("failed to publish result: %v", perr)
+		return dlq.TransientFailure, fmt.Errorf("publish result: %w", perr)
 	}
+
+	if opErr != nil {
+		return dlq.TransientFailure, opErr
+	}
+	return dlq.Success, nil
 }
 
 func toFloat32Slice(v any) []float32 {
 	arr, ok := v.([]interface{})
-	if !ok { return nil }
+	if !ok {
+		return nil
+	}
 	res := make([]float32, 0, len(arr))
 	for _, it := range arr {
-		if f, ok := it.(float64); ok { res = append(res, float32(f)) }
+		if f, ok := it.(float64); ok {
+			res = append(res, float32(f))
+		}
 	}
 	return res
 }
 
 func toStringSlice(v any) []string {
 	arr, ok := v.([]interface{})
-	if !ok { return nil }
+	if !ok {
+		return nil
+	}
 	res := make([]string, 0, len(arr))
 	for _, it := range arr {
-		if s, ok := it.(string); ok { res = append(res, s) }
+		if s, ok := it.(string); ok {
+			res = append(res, s)
+		}
 	}
 	return res
 }

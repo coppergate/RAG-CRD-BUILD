@@ -233,7 +233,16 @@ func main() {
 		log.Fatalf("Error creating kubernetes client: %v", err)
 	}
 
-	client, err := pulsar.NewClient(pulsar.ClientOptions{URL: pulsarURL})
+	pulsarOpts := pulsar.ClientOptions{URL: pulsarURL}
+	if strings.HasPrefix(pulsarURL, "pulsar+ssl://") {
+		if caFile := os.Getenv("SSL_CERT_FILE"); caFile != "" {
+			pulsarOpts.TLSTrustCertsFilePath = caFile
+		} else {
+			log.Printf("WARNING: Pulsar URL uses TLS but SSL_CERT_FILE is not set")
+		}
+	}
+
+	client, err := pulsar.NewClient(pulsarOpts)
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}

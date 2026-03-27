@@ -1,15 +1,16 @@
 package telemetry
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"context"
 	"fmt"
+	"log"
 	"os"
 
+	"app-builds/common/tlsutil"
+
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -27,44 +28,31 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 	}
 
 	useTLS := os.Getenv("OTEL_USE_TLS") == "true"
-	var tlsConfig *tls.Config
-	if useTLS {
-		caFile := os.Getenv("SSL_CERT_FILE")
-		if caFile != "" {
-			caCert, err := os.ReadFile(caFile)
-			if err == nil {
-				caCertPool := x509.NewCertPool()
-				caCertPool.AppendCertsFromPEM(caCert)
-				tlsConfig = &tls.Config{
-					RootCAs: caCertPool,
-				}
-			}
-		}
-	}
 
 	var traceOpts []otlptracehttp.Option
 	traceOpts = append(traceOpts, otlptracehttp.WithEndpoint(endpoint))
+
+	var metricOpts []otlpmetrichttp.Option
+	metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(endpoint))
+
 	if !useTLS {
 		traceOpts = append(traceOpts, otlptracehttp.WithInsecure())
-	} else if tlsConfig != nil {
+		metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
+	} else {
+		tlsConfig, err := tlsutil.NewTLSConfig()
+		if err != nil {
+			return nil, fmt.Errorf("OTEL TLS initialization failed for %s: %w", serviceName, err)
+		}
+		log.Printf("OTEL: TLS enabled for %s using CA from SSL_CERT_FILE", serviceName)
 		traceOpts = append(traceOpts, otlptracehttp.WithTLSClientConfig(tlsConfig))
+		metricOpts = append(metricOpts, otlpmetrichttp.WithTLSClientConfig(tlsConfig))
 	}
 
-	// Traces exporter
 	traceExp, err := otlptracehttp.New(ctx, traceOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
 	}
 
-	var metricOpts []otlpmetrichttp.Option
-	metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(endpoint))
-	if !useTLS {
-		metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
-	} else if tlsConfig != nil {
-		metricOpts = append(metricOpts, otlpmetrichttp.WithTLSClientConfig(tlsConfig))
-	}
-
-	// Metrics exporter
 	metricExp, err := otlpmetrichttp.New(ctx, metricOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
@@ -108,7 +96,7 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 	}, nil
 }
 
-// Global Meter for convenience
+// Meter returns a global Meter for convenience
 func Meter(name string) metric.Meter {
 	return otel.GetMeterProvider().Meter(name)
 }

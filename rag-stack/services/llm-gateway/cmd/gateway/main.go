@@ -1,21 +1,24 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"app-builds/common/ent"
+	"app-builds/common/telemetry"
 	"app-builds/llm-gateway/internal/config"
 	"app-builds/llm-gateway/internal/handlers"
 	"app-builds/llm-gateway/internal/pulsar"
-	"app-builds/common/ent"
-	"app-builds/common/telemetry"
-	"context"
 	_ "github.com/lib/pq"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
+
+const shutdownTimeout = 30 * time.Second
 
 func main() {
 	cfg := config.Load()
@@ -53,7 +56,7 @@ func main() {
 	mux.HandleFunc("/v1/rag/chat", openAIHandler.HandleGenericChat)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	otelHandler := otelhttp.NewHandler(mux, "llm-gateway")
@@ -85,4 +88,24 @@ func main() {
 	<-stop
 
 	log.Println("Shutting down gateway...")
+
+	// 1. Stop accepting new HTTP requests, drain in-flight requests
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("HTTP server shutdown error: %v", err)
+	} else {
+		log.Println("HTTP server shut down gracefully")
+	}
+
+	// 2. Close Pulsar resources (consumer, producers, client)
+	pc.Close()
+	log.Println("Pulsar resources closed")
+
+	// 3. Close DB
+	entClient.Close()
+	log.Println("Database connection closed")
+
+	log.Println("Gateway shutdown complete")
 }

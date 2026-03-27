@@ -1,7 +1,9 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 import os
+import ssl
 import boto3
 import psycopg2
+import psycopg2.pool
 import json
 import uuid
 import logging
@@ -11,6 +13,8 @@ import pulsar
 from botocore.client import Config
 from pydantic import BaseModel
 from typing import List, Optional
+
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
@@ -23,6 +27,26 @@ from opentelemetry.instrumentation.requests import RequestsInstrumentor
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("rag-ingestor")
+
+# TLS Configuration
+SSL_CERT_FILE = os.getenv("SSL_CERT_FILE", "")
+ALLOW_INSECURE = os.getenv("ALLOW_INSECURE", "false").lower() == "true"
+
+
+def _build_requests_session() -> requests.Session:
+    """Build an HTTP session with proper CA verification."""
+    session = requests.Session()
+    if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
+        session.verify = SSL_CERT_FILE
+        logger.info(f"HTTP session using CA from SSL_CERT_FILE: {SSL_CERT_FILE}")
+    elif not ALLOW_INSECURE:
+        logger.warning("SSL_CERT_FILE is not set; using system default CA bundle")
+    else:
+        logger.warning("Running in INSECURE mode (ALLOW_INSECURE=true)")
+    return session
+
+
+http_session = _build_requests_session()
 
 # OpenTelemetry Setup
 resource = Resource(attributes={SERVICE_NAME: "rag-ingestion"})
@@ -44,13 +68,16 @@ RequestsInstrumentor().instrument()
 app = FastAPI(title="RAG Ingestion Service")
 FastAPIInstrumentor.instrument_app(app)
 
-# Configuration
+# Configuration — defaults are TLS-secure unless ALLOW_INSECURE is set
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434")
+
+_ollama_default = "https://ollama.llms-ollama.svc.cluster.local:11434" if not ALLOW_INSECURE else "http://ollama.llms-ollama.svc.cluster.local:11434"
+OLLAMA_URL = os.getenv("OLLAMA_URL", _ollama_default)
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 COLLECTION_NAME = "vectors"
-CHUNK_SIZE = 1000
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 S3_ENDPOINT = os.getenv("S3_ENDPOINT")
 if S3_ENDPOINT and not S3_ENDPOINT.startswith("http"):
     S3_ENDPOINT = f"http://{S3_ENDPOINT}"
@@ -61,8 +88,36 @@ BUCKET_NAME = os.getenv("BUCKET_NAME")
 DB_CONN_STRING = os.getenv("DB_CONN_STRING")
 ALLOWED_EXTENSIONS = os.getenv("ALLOWED_EXTENSIONS", ".md,.sh,.yaml,.yml,.py,.txt,.c,.h,.cpp,.hpp,.cs,.json").split(",")
 
-PULSAR_URL = os.getenv("PULSAR_URL", "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650")
+_pulsar_default = "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651" if not ALLOW_INSECURE else "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+PULSAR_URL = os.getenv("PULSAR_URL", _pulsar_default)
 PULSAR_QDRANT_OPS_TOPIC = os.getenv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops")
+
+# Retry configuration
+OLLAMA_MAX_RETRIES = int(os.getenv("OLLAMA_MAX_RETRIES", "3"))
+OLLAMA_RETRY_BACKOFF = float(os.getenv("OLLAMA_RETRY_BACKOFF", "2.0"))
+
+# Connection pool
+DB_POOL_MIN = int(os.getenv("DB_POOL_MIN", "2"))
+DB_POOL_MAX = int(os.getenv("DB_POOL_MAX", "10"))
+
+_db_pool = None
+
+def get_db_pool():
+    global _db_pool
+    if _db_pool is None and DB_CONN_STRING:
+        _db_pool = psycopg2.pool.ThreadedConnectionPool(
+            DB_POOL_MIN, DB_POOL_MAX, DB_CONN_STRING
+        )
+        logger.info(f"Database connection pool created (min={DB_POOL_MIN}, max={DB_POOL_MAX})")
+    return _db_pool
+
+# Text splitter — sentence/paragraph-aware chunking
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=CHUNK_SIZE,
+    chunk_overlap=CHUNK_OVERLAP,
+    length_function=len,
+    separators=["\n\n", "\n", ". ", " ", ""],
+)
 
 class IngestRequest(BaseModel):
     ingestion_id: str
@@ -70,9 +125,6 @@ class IngestRequest(BaseModel):
     tag_ids: List[str]
     vector_size: Optional[int] = None
     file_names: Optional[List[str]] = None
-
-def get_db_connection():
-    return psycopg2.connect(DB_CONN_STRING)
 
 def get_s3_client():
     return boto3.client(
@@ -84,23 +136,34 @@ def get_s3_client():
         region_name='us-east-1'
     )
 
-def get_ollama_embeddings(text: str) -> List[float]:
+def get_ollama_embeddings_with_retry(text: str) -> List[float]:
+    """Get embeddings from Ollama with exponential backoff retry."""
     url = f"{OLLAMA_URL}/api/embeddings"
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": text
     }
-    resp = requests.post(url, json=payload, timeout=60)
-    resp.raise_for_status()
-    return resp.json()["embedding"]
+    last_error = None
+    for attempt in range(OLLAMA_MAX_RETRIES):
+        try:
+            resp = http_session.post(url, json=payload, timeout=60)
+            resp.raise_for_status()
+            return resp.json()["embedding"]
+        except Exception as e:
+            last_error = e
+            if attempt < OLLAMA_MAX_RETRIES - 1:
+                wait = OLLAMA_RETRY_BACKOFF ** attempt
+                logger.warning(f"Ollama embedding failed (attempt {attempt + 1}/{OLLAMA_MAX_RETRIES}): {e}. Retrying in {wait:.1f}s...")
+                time.sleep(wait)
+            else:
+                logger.error(f"Ollama embedding failed after {OLLAMA_MAX_RETRIES} attempts: {e}")
+    raise last_error
 
 def get_model_dimensions(model_name: str) -> int:
     try:
-        resp = requests.post(f"{OLLAMA_URL}/api/show", json={"name": model_name}, timeout=5)
+        resp = http_session.post(f"{OLLAMA_URL}/api/show", json={"name": model_name}, timeout=5)
         if resp.status_code == 200:
             info = resp.json()
-            # Try to find dimensions in the response
-            # Sometimes it's in model_info, sometimes in details
             dims = info.get("model_info", {}).get("llama.embedding_length") or \
                    info.get("details", {}).get("embedding_length")
             if dims:
@@ -110,22 +173,35 @@ def get_model_dimensions(model_name: str) -> int:
         logger.warning(f"Could not probe model dimensions for {model_name}: {e}")
     return 0
 
-def chunk_text(text, size):
-    return [text[i:i + size] for i in range(0, len(text), size)]
+def _create_pulsar_client():
+    """Create a Pulsar client with proper TLS configuration."""
+    kwargs = {}
+    if PULSAR_URL.startswith("pulsar+ssl://"):
+        if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
+            kwargs["tls_trust_certs_file_path"] = SSL_CERT_FILE
+            logger.info(f"Pulsar client using TLS with CA from: {SSL_CERT_FILE}")
+        else:
+            logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
+    return pulsar.Client(PULSAR_URL, **kwargs)
 
 def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], vector_size: Optional[int] = None, file_names: Optional[List[str]] = None):
+    pool = get_db_pool()
+    conn = None
+    pulsar_client = None
+    failed_chunks = []
+
     try:
         current_vs = vector_size
         if not current_vs:
             current_vs = get_model_dimensions(OLLAMA_MODEL)
-        
+
         logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {OLLAMA_MODEL} (dims: {current_vs})")
-        
-        pulsar_client = pulsar.Client(PULSAR_URL, tls_trust_certs_file_path=os.getenv("SSL_CERT_FILE"))
+
+        pulsar_client = _create_pulsar_client()
         q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
-        
+
         s3_client = get_s3_client()
-        
+
         logger.info(f"Ensuring collection {COLLECTION_NAME} via Pulsar (vector_size: {current_vs})")
         q_prod.send(json.dumps({
             "id": f"create-{ingestion_id}",
@@ -148,8 +224,8 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                             files.append(obj['Key'])
 
         logger.info(f"Found {len(files)} files to process.")
-        
-        conn = get_db_connection()
+
+        conn = pool.getconn()
         points = []
         idx = 0
 
@@ -157,11 +233,18 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
             try:
                 response = s3_client.get_object(Bucket=BUCKET_NAME, Key=s3_key)
                 content = response['Body'].read().decode('utf-8')
-                chunks = chunk_text(content, CHUNK_SIZE)
-                
+
+                # Use langchain text splitter for sentence/paragraph-aware chunking
+                chunks = text_splitter.split_text(content)
+
                 for i, chunk in enumerate(chunks):
-                    vector = get_ollama_embeddings(chunk)
-                    
+                    try:
+                        vector = get_ollama_embeddings_with_retry(chunk)
+                    except Exception as e:
+                        logger.error(f"Skipping chunk {i} of {s3_key} after all retries failed: {e}")
+                        failed_chunks.append({"file": s3_key, "chunk": i, "error": str(e)})
+                        continue
+
                     payload = {
                         "path": s3_key,
                         "chunk": i,
@@ -169,14 +252,14 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                         "tags": tag_ids,
                         "ingestion_id": ingestion_id
                     }
-                    
+
                     point_id = str(uuid.uuid4())
                     points.append({
                         "id": point_id,
                         "vector": vector,
                         "payload": payload
                     })
-                    
+
                     # TimescaleDB Backup
                     with conn.cursor() as cur:
                         cur.execute(
@@ -186,9 +269,9 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                         emb_id = cur.fetchone()[0]
                         for t_id in tag_ids:
                             cur.execute("INSERT INTO code_embedding_tag (embedding_id, tag_id) VALUES (%s, %s)", (emb_id, t_id))
-                    
+
                     idx += 1
-                    if len(points) >= 20: # Smaller batch for Ollama as it might be slower per call
+                    if len(points) >= 20:
                         q_prod.send(json.dumps({
                             "id": f"upsert-{uuid.uuid4()}",
                             "action": "upsert",
@@ -212,13 +295,19 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                 "points": points
             }).encode('utf-8'))
             conn.commit()
-            
-        conn.close()
-        pulsar_client.close()
-        logger.info(f"Ingestion {ingestion_id} completed. Total chunks: {idx}")
+
+        if failed_chunks:
+            logger.warning(f"Ingestion {ingestion_id} completed with {len(failed_chunks)} failed chunks out of {idx + len(failed_chunks)} total")
+        else:
+            logger.info(f"Ingestion {ingestion_id} completed successfully. Total chunks: {idx}")
 
     except Exception as e:
         logger.error(f"Ingestion task failed: {e}")
+    finally:
+        if conn and pool:
+            pool.putconn(conn)
+        if pulsar_client:
+            pulsar_client.close()
 
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
@@ -229,6 +318,13 @@ async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _db_pool
+    if _db_pool:
+        _db_pool.closeall()
+        logger.info("Database connection pool closed")
 
 if __name__ == "__main__":
     import uvicorn

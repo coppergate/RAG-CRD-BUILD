@@ -7,18 +7,22 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
-	"app-builds/rag-worker/internal/config"
-	"app-builds/rag-worker/internal/ollama"
-	"app-builds/rag-worker/internal/models"
-	"app-builds/rag-worker/internal/models/llama3"
-	"app-builds/rag-worker/internal/models/granite31"
-	"app-builds/common/telemetry"
 	"app-builds/common/contracts"
+	"app-builds/common/dlq"
+	"app-builds/common/telemetry"
+	"app-builds/common/tlsutil"
+	"app-builds/rag-worker/internal/config"
+	"app-builds/rag-worker/internal/models"
+	"app-builds/rag-worker/internal/models/granite31"
+	"app-builds/rag-worker/internal/models/llama3"
+	"app-builds/rag-worker/internal/ollama"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -33,6 +37,8 @@ var (
 	llmLatency, _    = meter.Float64Histogram("worker_llm_duration_ms", metric.WithUnit("ms"))
 )
 
+const shutdownTimeout = 30 * time.Second
+
 type Worker struct {
 	cfg        *config.Config
 	pulsar     pulsar.Client
@@ -43,6 +49,8 @@ type Worker struct {
 	execProd   pulsar.Producer
 	qOpsProd   pulsar.Producer
 	pending    sync.Map // correlationID -> chan []string
+	wg         sync.WaitGroup
+	dlqHandler *dlq.Handler
 }
 
 func main() {
@@ -56,9 +64,14 @@ func main() {
 		defer shutdown(context.Background())
 	}
 
-	client, err := pulsar.NewClient(pulsar.ClientOptions{
+	pulsarOpts := pulsar.ClientOptions{
 		URL: cfg.PulsarURL,
-	})
+	}
+	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
+		pulsarOpts.TLSTrustCertsFilePath = certPath
+	}
+
+	client, err := pulsar.NewClient(pulsarOpts)
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
@@ -137,6 +150,12 @@ func main() {
 		PromptType: ePromptType,
 	})
 
+	dlqHandler, err := dlq.NewHandler(client, "rag-worker")
+	if err != nil {
+		log.Fatalf("Could not create DLQ handler: %v", err)
+	}
+	defer dlqHandler.Close()
+
 	worker := &Worker{
 		cfg:        cfg,
 		pulsar:     client,
@@ -146,6 +165,7 @@ func main() {
 		planProd:   planProd,
 		execProd:   execProd,
 		qOpsProd:   qOpsProd,
+		dlqHandler: dlqHandler,
 	}
 
 	// Consumer for Qdrant Results (Search results)
@@ -202,9 +222,23 @@ func main() {
 
 	log.Printf("RAG Worker started, listening on multiple stages")
 
+	// Graceful shutdown setup
+	ctx, cancel := context.WithCancel(context.Background())
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-stop
+		log.Println("Shutdown signal received, stopping message consumption...")
+		cancel()
+	}()
+
 	for {
-		msg, err := consumer.Receive(context.Background())
+		msg, err := consumer.Receive(ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				break // Shutdown requested
+			}
 			log.Printf("Error receiving message: %v", err)
 			continue
 		}
@@ -223,8 +257,31 @@ func main() {
 		// Extract tracing context from Pulsar message properties
 		msgCtx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.MapCarrier(msg.Properties()))
 
-		go worker.handleStageMessage(msgCtx, stage, msg, consumer)
+		worker.wg.Add(1)
+		go func() {
+			defer worker.wg.Done()
+			worker.dlqHandler.HandleMessage(msgCtx, msg, consumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
+				return worker.handleStageMessageWithResult(mCtx, stage, m)
+			})
+		}()
 	}
+
+	// Wait for in-flight goroutines with timeout
+	log.Println("Waiting for in-flight tasks to complete...")
+	done := make(chan struct{})
+	go func() {
+		worker.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Println("All in-flight tasks completed")
+	case <-time.After(shutdownTimeout):
+		log.Printf("Shutdown timeout (%s) reached, some tasks may not have completed", shutdownTimeout)
+	}
+
+	log.Println("RAG Worker shutdown complete")
 }
 
 func startHealthServer(addr string) {
@@ -275,9 +332,8 @@ func (w *Worker) searchQdrant(ctx context.Context, collection string, vectorSize
 	}
 }
 
-func (w *Worker) handleStageMessage(ctx context.Context, stage string, msg pulsar.Message, consumer pulsar.Consumer) {
+func (w *Worker) handleStageMessageWithResult(ctx context.Context, stage string, msg pulsar.Message) (dlq.ProcessResult, error) {
 	start := time.Now()
-	defer consumer.Ack(msg)
 
 	tracer := otel.Tracer("rag-worker")
 	ctx, span := tracer.Start(ctx, fmt.Sprintf("handleStage:%s", stage))
@@ -292,8 +348,7 @@ func (w *Worker) handleStageMessage(ctx context.Context, stage string, msg pulsa
 
 	var req contracts.InternalRequest
 	if err := json.Unmarshal(msg.Payload(), &req); err != nil {
-		log.Printf("Error unmarshaling payload: %v. Raw: %s", err, string(msg.Payload()))
-		return
+		return dlq.PermanentFailure, fmt.Errorf("unmarshal payload for stage %s: %w", stage, err)
 	}
 
 	switch stage {
@@ -304,8 +359,10 @@ func (w *Worker) handleStageMessage(ctx context.Context, stage string, msg pulsa
 	case "exec":
 		w.handleExec(ctx, &req)
 	default:
-		log.Printf("Unknown stage: %s", stage)
+		return dlq.PermanentFailure, fmt.Errorf("unknown stage: %s", stage)
 	}
+
+	return dlq.Success, nil
 }
 
 func (w *Worker) sendStatus(ctx context.Context, id, sessionID, state, details string) {

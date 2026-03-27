@@ -47,11 +47,17 @@ def seed_data():
         collection_exists = False
 
     if not collection_exists:
-        client.create_collection(
-            collection_name=COLLECTION_NAME,
-            vectors_config=models.VectorParams(size=VECTOR_SIZE, distance=models.Distance.COSINE),
-        )
-        print(f"  - Created collection {COLLECTION_NAME}")
+        try:
+            client.create_collection(
+                collection_name=COLLECTION_NAME,
+                vectors_config=models.VectorParams(size=VECTOR_SIZE, distance=models.Distance.COSINE),
+            )
+            print(f"  - Created collection {COLLECTION_NAME}")
+        except Exception as e:
+            if "already exists" in str(e):
+                print(f"  - Collection {COLLECTION_NAME} already exists (race condition), continuing.")
+            else:
+                raise
     
     points = []
     for item in TEST_DATA:

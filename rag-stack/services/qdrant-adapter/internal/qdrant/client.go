@@ -2,12 +2,13 @@ package qdrant
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
+
+	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
 )
 
@@ -17,16 +18,13 @@ type QdrantClient struct {
 }
 
 func NewClient(cfg *config.Config) *QdrantClient {
-	transport := &http.Transport{}
-	if cfg.QdrantUseTLS {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	httpClient, err := tlsutil.NewHTTPClient(cfg.QdrantUseTLS, 10*time.Second)
+	if err != nil {
+		log.Fatalf("Failed to create Qdrant HTTP client with TLS: %v", err)
 	}
 	return &QdrantClient{
-		cfg: cfg,
-		httpClient: &http.Client{
-			Timeout:   10 * time.Second,
-			Transport: transport,
-		},
+		cfg:        cfg,
+		httpClient: httpClient,
 	}
 }
 
@@ -45,15 +43,12 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
 	}
 
-	scheme := "http"
-	if q.cfg.QdrantUseTLS {
-		scheme = "https"
-	}
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/search", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
-	
+
 	query := map[string]interface{}{
-		"vector": vector,
-		"limit":  limit,
+		"vector":       vector,
+		"limit":        limit,
 		"with_payload": true,
 	}
 
@@ -70,8 +65,11 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		}
 		log.Printf("DEBUG: Qdrant Search Filter (tags=%v): %+v", tags, query["filter"])
 	}
-	
-	body, _ := json.Marshal(query)
+
+	body, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal search query: %w", err)
+	}
 	resp, err := q.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
@@ -125,28 +123,28 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
 	}
 
-	scheme := "http"
-	if q.cfg.QdrantUseTLS {
-		scheme = "https"
-	}
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
-	
-	body, _ := json.Marshal(map[string]interface{}{
+
+	body, err := json.Marshal(map[string]interface{}{
 		"points": points,
 	})
-	
+	if err != nil {
+		return fmt.Errorf("failed to marshal upsert payload: %w", err)
+	}
+
 	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := q.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode == http.StatusNotFound && retry && vs > 0 {
 		fmt.Printf("Collection '%s' not found. Creating it with size %d...\n", effectiveColl, vs)
 		if err := q.CreateCollection(collection, vs); err != nil {
@@ -158,7 +156,7 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("qdrant (coll: %s) returned status %d", effectiveColl, resp.StatusCode)
 	}
-	
+
 	return nil
 }
 
@@ -168,34 +166,34 @@ func (q *QdrantClient) CreateCollection(collection string, vectorSize int) error
 		effectiveColl = fmt.Sprintf("%s-%d", collection, vectorSize)
 	}
 
-	scheme := "http"
-	if q.cfg.QdrantUseTLS {
-		scheme = "https"
-	}
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
-	
-	body, _ := json.Marshal(map[string]interface{}{
+
+	body, err := json.Marshal(map[string]interface{}{
 		"vectors": map[string]interface{}{
 			"size":     vectorSize,
 			"distance": "Cosine",
 		},
 	})
-	
+	if err != nil {
+		return fmt.Errorf("failed to marshal collection config: %w", err)
+	}
+
 	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := q.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("qdrant returned status %d", resp.StatusCode)
 	}
-	
+
 	return nil
 }

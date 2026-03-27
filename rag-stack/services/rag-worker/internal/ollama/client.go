@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"strings"
 	"time"
+
+	"app-builds/common/tlsutil"
 )
 
 type OllamaClient struct {
@@ -15,23 +19,31 @@ type OllamaClient struct {
 }
 
 func NewClient(url, model string) *OllamaClient {
+	useTLS := strings.HasPrefix(url, "https://")
+	httpClient, err := tlsutil.NewHTTPClient(useTLS, 60*time.Second)
+	if err != nil {
+		log.Fatalf("Failed to create Ollama HTTP client with TLS: %v", err)
+	}
 	return &OllamaClient{
-		url:   url,
-		model: model,
-		httpClient: &http.Client{Timeout: 60 * time.Second},
+		url:        url,
+		model:      model,
+		httpClient: httpClient,
 	}
 }
 
 func (o *OllamaClient) Chat(messages []map[string]string) (string, error) {
 	url := fmt.Sprintf("%s/v1/chat/completions", o.url)
-	
+
 	payload := map[string]interface{}{
 		"model":    o.model,
 		"messages": messages,
 		"stream":   false,
 	}
-	
-	body, _ := json.Marshal(payload)
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal chat payload: %w", err)
+	}
 	resp, err := o.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
@@ -62,27 +74,30 @@ func (o *OllamaClient) Chat(messages []map[string]string) (string, error) {
 }
 
 func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
-    url := fmt.Sprintf("%s/api/embeddings", o.url)
-    
-    payload := map[string]interface{}{
-        "model":  o.model,
-        "prompt": text,
-    }
-    
-    body, _ := json.Marshal(payload)
-    resp, err := o.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Body.Close()
+	url := fmt.Sprintf("%s/api/embeddings", o.url)
 
-    var result struct {
-        Embedding []float32 `json:"embedding"`
-    }
+	payload := map[string]interface{}{
+		"model":  o.model,
+		"prompt": text,
+	}
 
-    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-        return nil, err
-    }
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal embeddings payload: %w", err)
+	}
+	resp, err := o.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-    return result.Embedding, nil
+	var result struct {
+		Embedding []float32 `json:"embedding"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Embedding, nil
 }

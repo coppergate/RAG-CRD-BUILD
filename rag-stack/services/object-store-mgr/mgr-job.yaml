@@ -11,7 +11,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: manager
-        image: registry.container-registry.svc.cluster.local:5000/object-store-mgr:2.0.1
+        image: registry.container-registry.svc.cluster.local:5000/object-store-mgr:2.2.0
         imagePullPolicy: Always
         resources:
           requests:

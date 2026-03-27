@@ -199,9 +199,24 @@ done
 mark_step_done "s3-obc"
 fi
 
+if ! is_step_done "timescaledb-secret"; then
+echo "--- 5.5 Creating TimescaleDB connection secret (dynamic password) ---"
+# Fetch the real 'app' user password from the CloudNativePG-managed secret
+REAL_PW=$($KUBECTL get secret timescaledb-app -n timescaledb \
+  -o jsonpath='{.data.password}' | base64 -d)
+if [ -z "$REAL_PW" ]; then
+  echo "ERROR: Could not fetch timescaledb-app password from timescaledb namespace."
+  exit 1
+fi
+DB_URL="postgres://app:${REAL_PW}@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=require"
+$KUBECTL create secret generic timescaledb-secret -n $NAMESPACE \
+  --from-literal=url="${DB_URL}" \
+  --dry-run=client -o yaml | $KUBECTL apply -f -
+mark_step_done "timescaledb-secret"
+fi
+
 if ! is_step_done "llm-gateway"; then
 echo "--- 6. Deploying LLM Gateway (Go) ---"
-$KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-secret.yaml"
 $KUBECTL apply -f "$REPO_DIR/services/llm-gateway/k8s/configmap.yaml"
 apply_manifest "$REPO_DIR/services/llm-gateway/k8s/deployment.yaml"
 mark_step_done "llm-gateway"

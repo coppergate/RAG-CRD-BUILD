@@ -2,19 +2,52 @@
 
 This document tracks basic tasks and procedures determined during development to ensure efficiency and avoid redundant logic parsing. These instructions are designed for the **Junie** agent to follow directly.
 
-## Parallel Build and Push (Cluster-Native)
-To build and push all RAG services in parallel using the cluster-native Kaniko pipeline:
-1.  **Access Hierophant**: Use `./run-on-hierophant.sh`.
-2.  **Versioning**: Set the `VERSION` environment variable (e.g., `X.Y.Z`).
-3.  **Command**: Run `rag-stack/build-all-on-cluster.sh`.
-4.  **Verification**: Monitor build jobs on the cluster.
+## Building Service Images — ALWAYS Use the Cluster Pipeline
+
+**IMPORTANT**: All RAG service image builds MUST go through the in-cluster Kaniko build pipeline. Do NOT use `podman build` or `docker build` on the host to build service images. The host-based `build-and-push.sh` is only for bootstrapping when the cluster is not available.
+
+### How the Build Pipeline Works
+1. `build-all-on-cluster.sh` packages the `services/` directory into a tarball.
+2. The tarball is uploaded to the Ceph S3 object store via a temporary uploader pod.
+3. A pre-signed S3 URL is generated for each service.
+4. Build tasks (JSON messages with service name, version, dockerfile path, source URL) are published to the Pulsar `build-tasks` topic.
+5. The `build-orchestrator` (running in `build-pipeline` namespace) consumes these messages and launches Kaniko `Job` resources.
+6. Kaniko pulls the source tarball from S3, builds the Docker image, and pushes it directly to the in-cluster registry.
+
+### Triggering a Build
+1.  **Access Hierophant**: Use `./run-on-hierophant.sh` or SSH directly.
+2.  **Versioning**: Set the `VERSION` environment variable (e.g., `2.2.0`).
+3.  **Command**: Run `rag-stack/build-all-on-cluster.sh --wait` (the `--wait` flag polls the registry until all images are available).
+4.  **Example Command**:
     ```bash
-    ssh -i ~/.ssh/id_hierophant_access junie@hierophant "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && /home/k8s/kube/kubectl get jobs -n rag-system"
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && \
+       VERSION=2.2.0 bash ./build-all-on-cluster.sh --wait"
     ```
-5.  **Example Command**:
+
+### Monitoring Builds
+- **Jobs**: Check Kaniko job status in the `build-pipeline` namespace:
     ```bash
-    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z bash ./build-all-on-cluster.sh"
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+       /home/k8s/kube/kubectl get jobs -n build-pipeline"
     ```
+- **Build Orchestrator Logs**:
+    ```bash
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+       /home/k8s/kube/kubectl logs -n build-pipeline deploy/build-orchestrator --tail=100"
+    ```
+- **Build Status Dashboard**: The build-orchestrator exposes a web UI at its service endpoint (port 8080) with SSE-based live updates.
+
+### Verifying Images in Registry
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "for svc in rag-worker llm-gateway db-adapter qdrant-adapter \
+              rag-ingestion rag-web-ui object-store-mgr rag-test-runner; do \
+     echo \"\$svc: \$(curl -sk https://registry.hierocracy.home:5000/v2/\$svc/tags/list)\"; \
+   done"
+```
 
 ## Local/Bootstrap Build and Push (Host-Based)
 Use this only for bootstrapping or when the cluster-native pipeline is unavailable.
@@ -103,6 +136,41 @@ The RAG stack uses the **Ent ORM** for type-safe database access, centralized in
 3.  **Service Integration**:
     -   All services (e.g., `db-adapter`, `llm-gateway`) should import and use the client from `app-builds/common/ent`.
     -   Ensure `go mod tidy` is run in both `common` and the consuming service after changes.
+
+## Storage Layout on Hierophant
+- **Podman storage**: `/mnt/storage/containers/storage` — configured via `~/.config/containers/storage.conf`
+- **Registry data**: `/mnt/storage/registry-data` — Docker registry image layers and manifests
+- **VM disk images**: `/var/lib/libvirt/images/` — Talos ISOs (symlinked from shared mount)
+- **Talos/kubectl configs**: `/home/k8s/kube/` — kubeconfig, kubectl binary
+- **Registry TLS/config**: `/mnt/storage/registry-config/` — config.yml, tls.crt, tls.key
+- **Pre-pulled LLM models**: `/mnt/storage/ollama-models/` — Ollama model blobs and manifests
+- **DO NOT** store large data (container images, registry) on `/home` — it has limited capacity (~143G shared with system)
+
+## LLM Model Management
+
+### Pre-Pulling Models (Outside Install)
+Models should be downloaded and pushed to the local registry BEFORE running the cluster install.
+This avoids long postStart hangs and internet dependency during install.
+
+1. **Script**: `rag-stack/infrastructure/ollama/pre-pull-models.sh`
+2. **Storage**: Models are cached at `/mnt/storage/ollama-models/` on hierophant.
+3. **Registry**: Models are also pushed as OCI artifacts to the local registry.
+4. **Command**:
+    ```bash
+    cd /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/ollama
+    bash ./pre-pull-models.sh
+    ```
+
+### Model Seeding (During Install)
+During install, `ollama.sh` deploys Ollama pods WITHOUT model pulling, then calls `seed-models.sh`
+which creates temporary seeder pods that pull models from the local registry into the PVCs.
+This is automatic and requires no manual intervention if models are already in the registry.
+
+### TimescaleDB Secret
+The `timescaledb-secret` in rag-system is created dynamically during install by `setup-all.sh`.
+It fetches the real password from the CloudNativePG-managed `timescaledb-app` secret in the
+`timescaledb` namespace. **Do NOT use the hardcoded `timescaledb-secret.yaml` file** — it exists
+only as a template reference and its password will not match after a cluster rebuild.
 
 ## Headlamp Access
 To get the login token for Headlamp:

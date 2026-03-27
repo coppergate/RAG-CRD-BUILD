@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -10,11 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"app-builds/db-adapter/internal/config"
+	"app-builds/common/dlq"
 	"app-builds/common/ent"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/session"
 	"app-builds/common/telemetry"
+	"app-builds/common/tlsutil"
+	"app-builds/db-adapter/internal/config"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -25,7 +28,7 @@ import (
 )
 
 var (
-	meter          = telemetry.Meter("db-adapter")
+	meter           = telemetry.Meter("db-adapter")
 	queryCounter, _ = meter.Int64Counter("db_queries_total")
 	errorCounter, _ = meter.Int64Counter("db_errors_total")
 	queryLatency, _ = meter.Float64Histogram("db_query_duration_ms", metric.WithUnit("ms"))
@@ -51,13 +54,25 @@ func main() {
 	}
 	defer entClient.Close()
 
-	client, err := pulsar.NewClient(pulsar.ClientOptions{
+	opts := pulsar.ClientOptions{
 		URL: cfg.PulsarURL,
-	})
+	}
+	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
+		opts.TLSTrustCertsFilePath = certPath
+	}
+
+	client, err := pulsar.NewClient(opts)
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
 	defer client.Close()
+
+	// DLQ handler
+	dlqHandler, err := dlq.NewHandler(client, "db-adapter")
+	if err != nil {
+		log.Fatalf("Could not create DLQ handler: %v", err)
+	}
+	defer dlqHandler.Close()
 
 	// Consumer for Prompts
 	promptConsumer, err := client.Subscribe(pulsar.ConsumerOptions{
@@ -104,39 +119,9 @@ func main() {
 					continue
 				}
 
-				start := time.Now()
-				// Extract tracing context from Pulsar message properties
-				msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-				tracer := otel.Tracer("db-adapter")
-				msgCtx, span := tracer.Start(msgCtx, "HandleDBOp")
-
-				attrs := []attribute.KeyValue{attribute.String("op", "delete_session")}
-				defer func() {
-					duration := float64(time.Since(start).Milliseconds())
-					queryLatency.Record(msgCtx, duration, metric.WithAttributes(attrs...))
-				}()
-				queryCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
-
-				var payload struct {
-					Op string `json:"op"` // "delete_session"
-					ID string `json:"id"` // session_id
-				}
-				if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-					log.Printf("Error unmarshaling DB op payload: %v. Raw: %s", err, string(msg.Payload()))
-				} else {
-					if payload.Op == "delete_session" {
-						_, err := entClient.Session.Delete().
-							Where(session.ID(uuid.MustParse(payload.ID))).
-							Exec(ctx)
-						if err != nil {
-							log.Printf("Failed to delete session %s: %v", payload.ID, err)
-						} else {
-							log.Printf("Deleted session %s via Pulsar op", payload.ID)
-						}
-					}
-				}
-				span.End()
-				opsConsumer.Ack(msg)
+				dlqHandler.HandleMessage(ctx, msg, opsConsumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
+					return handleDBOp(mCtx, m, entClient)
+				})
 			}
 		}()
 	}
@@ -153,32 +138,9 @@ func main() {
 				continue
 			}
 
-			// Extract tracing context from Pulsar message properties
-			msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-			tracer := otel.Tracer("db-adapter")
-			_, span := tracer.Start(msgCtx, "HandlePrompt")
-
-			var payload struct {
-				ID        string `json:"id"`
-				SessionID string `json:"session_id"`
-				Content   string `json:"content"`
-			}
-			if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-				log.Printf("Error unmarshaling prompt payload: %v. Raw: %s", err, string(msg.Payload()))
-			} else {
-				_, err := entClient.Prompt.Create().
-					SetPromptID(uuid.MustParse(payload.ID)).
-					SetSessionID(uuid.MustParse(payload.SessionID)).
-					SetContent(payload.Content).
-					Save(ctx)
-				if err != nil {
-					log.Printf("Failed to insert prompt %s for session %s: %v", payload.ID, payload.SessionID, err)
-				} else {
-					log.Printf("Inserted prompt %s for session %s", payload.ID, payload.SessionID)
-				}
-			}
-			span.End()
-			promptConsumer.Ack(msg)
+			dlqHandler.HandleMessage(ctx, msg, promptConsumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
+				return handlePrompt(mCtx, m, entClient)
+			})
 		}
 	}()
 
@@ -194,58 +156,9 @@ func main() {
 				continue
 			}
 
-			// Extract tracing context from Pulsar message properties
-			msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-			tracer := otel.Tracer("db-adapter")
-			_, span := tracer.Start(msgCtx, "HandleResponse")
-
-			var payload struct {
-				ID             string `json:"id"` // This is the prompt_id (UUID)
-				SessionID      string `json:"session_id"`
-				Result         string `json:"result"`
-				SequenceNumber int    `json:"sequence_number"`
-				Model          string `json:"model"`
-			}
-			if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-				log.Printf("Error unmarshaling response payload: %v. Raw: %s", err, string(msg.Payload()))
-			} else {
-				log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)
-
-				p, err := entClient.Prompt.Query().
-					Where(prompt.PromptID(uuid.MustParse(payload.ID))).
-					Order(ent.Desc(prompt.FieldCreatedAt)).
-					First(ctx)
-				if err != nil {
-					log.Printf("Failed to find prompt for response (ID %s): %v", payload.ID, err)
-				} else {
-					var sessID uuid.UUID
-					if payload.SessionID != "" {
-						sessID = uuid.MustParse(payload.SessionID)
-					} else {
-						sessID = p.SessionID
-					}
-
-					var modelName *string
-					if payload.Model != "" {
-						modelName = &payload.Model
-					}
-
-					_, err = entClient.Response.Create().
-						SetPromptID(p.ID).
-						SetSessionID(sessID).
-						SetContent(payload.Result).
-						SetSequenceNumber(payload.SequenceNumber).
-						SetNillableModelName(modelName).
-						Save(ctx)
-					if err != nil {
-						log.Printf("Failed to insert response for prompt %s (session %v): %v", payload.ID, sessID, err)
-					} else {
-						log.Printf("Inserted response for prompt %s (seq %d)", payload.ID, payload.SequenceNumber)
-					}
-				}
-			}
-			span.End()
-			responseConsumer.Ack(msg)
+			dlqHandler.HandleMessage(ctx, msg, responseConsumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
+				return handleResponse(mCtx, m, entClient)
+			})
 		}
 	}()
 
@@ -253,6 +166,151 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Println("Shutting down DB Adapter...")
+	cancel()
+	time.Sleep(2 * time.Second)
+	log.Println("DB Adapter shutdown complete")
+}
+
+func handleDBOp(ctx context.Context, msg pulsar.Message, entClient *ent.Client) (dlq.ProcessResult, error) {
+	start := time.Now()
+	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
+	tracer := otel.Tracer("db-adapter")
+	msgCtx, span := tracer.Start(msgCtx, "HandleDBOp")
+	defer span.End()
+
+	attrs := []attribute.KeyValue{attribute.String("op", "delete_session")}
+	defer func() {
+		duration := float64(time.Since(start).Milliseconds())
+		queryLatency.Record(msgCtx, duration, metric.WithAttributes(attrs...))
+	}()
+	queryCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
+
+	var payload struct {
+		Op string `json:"op"`
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		return dlq.PermanentFailure, fmt.Errorf("unmarshal DB op payload: %w", err)
+	}
+
+	if payload.Op == "delete_session" {
+		sessID, parseErr := uuid.Parse(payload.ID)
+		if parseErr != nil {
+			errorCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
+			return dlq.PermanentFailure, fmt.Errorf("invalid UUID in delete_session: %q: %w", payload.ID, parseErr)
+		}
+		_, err := entClient.Session.Delete().
+			Where(session.ID(sessID)).
+			Exec(ctx)
+		if err != nil {
+			errorCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
+			return dlq.TransientFailure, fmt.Errorf("delete session %s: %w", payload.ID, err)
+		}
+		log.Printf("Deleted session %s via Pulsar op", payload.ID)
+	}
+
+	return dlq.Success, nil
+}
+
+func handlePrompt(ctx context.Context, msg pulsar.Message, entClient *ent.Client) (dlq.ProcessResult, error) {
+	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
+	tracer := otel.Tracer("db-adapter")
+	_, span := tracer.Start(msgCtx, "HandlePrompt")
+	defer span.End()
+
+	var payload struct {
+		ID        string `json:"id"`
+		SessionID string `json:"session_id"`
+		Content   string `json:"content"`
+	}
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		return dlq.PermanentFailure, fmt.Errorf("unmarshal prompt payload: %w", err)
+	}
+
+	promptID, parseErr := uuid.Parse(payload.ID)
+	if parseErr != nil {
+		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID: %q: %w", payload.ID, parseErr)
+	}
+	sessID, parseErr := uuid.Parse(payload.SessionID)
+	if parseErr != nil {
+		return dlq.PermanentFailure, fmt.Errorf("invalid session UUID: %q: %w", payload.SessionID, parseErr)
+	}
+
+	_, err := entClient.Prompt.Create().
+		SetPromptID(promptID).
+		SetSessionID(sessID).
+		SetContent(payload.Content).
+		Save(ctx)
+	if err != nil {
+		log.Printf("Failed to insert prompt %s for session %s: %v", payload.ID, payload.SessionID, err)
+		return dlq.TransientFailure, fmt.Errorf("insert prompt: %w", err)
+	}
+
+	log.Printf("Inserted prompt %s for session %s", payload.ID, payload.SessionID)
+	return dlq.Success, nil
+}
+
+func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Client) (dlq.ProcessResult, error) {
+	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
+	tracer := otel.Tracer("db-adapter")
+	_, span := tracer.Start(msgCtx, "HandleResponse")
+	defer span.End()
+
+	var payload struct {
+		ID             string `json:"id"`
+		SessionID      string `json:"session_id"`
+		Result         string `json:"result"`
+		SequenceNumber int    `json:"sequence_number"`
+		Model          string `json:"model"`
+	}
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
+	}
+
+	log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)
+
+	promptUUID, parseErr := uuid.Parse(payload.ID)
+	if parseErr != nil {
+		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID in response: %q: %w", payload.ID, parseErr)
+	}
+
+	p, err := entClient.Prompt.Query().
+		Where(prompt.PromptID(promptUUID)).
+		Order(ent.Desc(prompt.FieldCreatedAt)).
+		First(ctx)
+	if err != nil {
+		return dlq.TransientFailure, fmt.Errorf("find prompt for response (ID %s): %w", payload.ID, err)
+	}
+
+	var sessID uuid.UUID
+	if payload.SessionID != "" {
+		sessID, parseErr = uuid.Parse(payload.SessionID)
+		if parseErr != nil {
+			log.Printf("Invalid session UUID in response: %q, falling back to prompt session: %v", payload.SessionID, parseErr)
+			sessID = p.SessionID
+		}
+	} else {
+		sessID = p.SessionID
+	}
+
+	var modelName *string
+	if payload.Model != "" {
+		modelName = &payload.Model
+	}
+
+	_, err = entClient.Response.Create().
+		SetPromptID(p.ID).
+		SetSessionID(sessID).
+		SetContent(payload.Result).
+		SetSequenceNumber(payload.SequenceNumber).
+		SetNillableModelName(modelName).
+		Save(ctx)
+	if err != nil {
+		return dlq.TransientFailure, fmt.Errorf("insert response for prompt %s: %w", payload.ID, err)
+	}
+
+	log.Printf("Inserted response for prompt %s (seq %d)", payload.ID, payload.SequenceNumber)
+	return dlq.Success, nil
 }
 
 func startHealthServer(addr string) {

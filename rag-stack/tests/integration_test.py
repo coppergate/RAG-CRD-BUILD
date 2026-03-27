@@ -70,16 +70,8 @@ def test_qdrant_ops():
     vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
     collection_name = f"test_collection_{vector_size}"
     
-    # Recreate collection
-    try:
-        client.get_collection(collection_name)
-        collection_exists = True
-    except Exception:
-        collection_exists = False
-
-    if collection_exists:
-        client.delete_collection(collection_name)
-    client.create_collection(
+    # Recreate collection (handles existing collections gracefully)
+    client.recreate_collection(
         collection_name=collection_name,
         vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
     )

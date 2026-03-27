@@ -290,12 +290,15 @@ volumes:
   - name: registry-ca
     configMap:
       name: registry-ca-cm
+# NOTE: ollama-tls volume removed — Ollama does not honor OLLAMA_TLS_CERT/KEY env vars
+# TLS will be revisited when migrating to vLLM
 
 # -- Additional volumeMounts on the output Deployment definition.
 volumeMounts:
   - name: registry-ca
     mountPath: /etc/ssl/certs/ca-certificates.crt
     subPath: ca.crt
+# NOTE: ollama-tls mounts removed — Ollama does not honor OLLAMA_TLS_CERT/KEY env vars
 
 # -- Additional arguments on the output Deployment definition.
 extraArgs: [ ]
@@ -303,8 +306,14 @@ extraArgs: [ ]
 # -- Additional environments variables on the output Deployment definition.
 # For extra OLLAMA env, please refer to https://github.com/ollama/ollama/blob/main/envconfig/config.go
 extraEnv:
+  # Ollama runs HTTP internally — TLS cert/key env vars are NOT honored by current Ollama.
+  # Will be revisited when migrating to vLLM.
+  - name: OLLAMA_HOST
+    value: "0.0.0.0:11434"
   - name: OLLAMA_REGISTRY_INSECURE
     value: "0"
+  - name: SSL_CERT_FILE
+    value: "/etc/ssl/certs/ca-certificates.crt"
 #  - name: OLLAMA_DEBUG
 #    value: "1"
 

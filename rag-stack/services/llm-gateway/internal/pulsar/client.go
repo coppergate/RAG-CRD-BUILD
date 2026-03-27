@@ -1,22 +1,25 @@
 package pulsar
 
 import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "sync"
-    "time"
+	"context"
+	"encoding/json"
+	"fmt"
+	"sync"
+	"time"
 
-    "github.com/apache/pulsar-client-go/pulsar"
-    "go.opentelemetry.io/otel"
-    "go.opentelemetry.io/otel/propagation"
-    "app-builds/llm-gateway/internal/config"
+	"github.com/apache/pulsar-client-go/pulsar"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
+	"app-builds/common/tlsutil"
+	"app-builds/llm-gateway/internal/config"
 )
 
 type PulsarClient struct {
 	client         pulsar.Client
 	producer       pulsar.Producer
 	promptProducer pulsar.Producer
+	consumer       pulsar.Consumer
 	pending        sync.Map // correlationID -> chan response
 }
 
@@ -27,9 +30,14 @@ type response struct {
 }
 
 func NewPulsarClient(cfg *config.Config) (*PulsarClient, error) {
-	client, err := pulsar.NewClient(pulsar.ClientOptions{
+	opts := pulsar.ClientOptions{
 		URL: cfg.PulsarURL,
-	})
+	}
+	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
+		opts.TLSTrustCertsFilePath = certPath
+	}
+
+	client, err := pulsar.NewClient(opts)
 	if err != nil {
 		return nil, fmt.Errorf("could not create pulsar client: %w", err)
 	}
@@ -51,31 +59,33 @@ func NewPulsarClient(cfg *config.Config) (*PulsarClient, error) {
 		return nil, fmt.Errorf("could not create prompt producer: %w", err)
 	}
 
-	pc := &PulsarClient{
-		client:         client,
-		producer:       producer,
-		promptProducer: promptProducer,
-	}
-
-	go pc.consumeResults(cfg.ResponseTopic)
-
-	return pc, nil
-}
-
-func (pc *PulsarClient) consumeResults(topic string) {
-	consumer, err := pc.client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            topic,
+	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
+		Topic:            cfg.ResponseTopic,
 		SubscriptionName: "gateway-results-sub",
 		Type:             pulsar.Shared,
 	})
 	if err != nil {
-		fmt.Printf("Error subscribing to results: %v\n", err)
-		return
+		promptProducer.Close()
+		producer.Close()
+		client.Close()
+		return nil, fmt.Errorf("could not subscribe to results topic %s: %w", cfg.ResponseTopic, err)
 	}
-	defer consumer.Close()
 
+	pc := &PulsarClient{
+		client:         client,
+		producer:       producer,
+		promptProducer: promptProducer,
+		consumer:       consumer,
+	}
+
+	go pc.consumeResults()
+
+	return pc, nil
+}
+
+func (pc *PulsarClient) consumeResults() {
 	for {
-		msg, err := consumer.Receive(context.Background())
+		msg, err := pc.consumer.Receive(context.Background())
 		if err != nil {
 			fmt.Printf("Error receiving message: %v\n", err)
 			continue
@@ -87,8 +97,7 @@ func (pc *PulsarClient) consumeResults(topic string) {
 				ch.(chan response) <- resp
 			}
 		}
-
-		consumer.Ack(msg)
+		pc.consumer.Ack(msg)
 	}
 }
 
@@ -148,6 +157,7 @@ func (pc *PulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, cont
 }
 
 func (pc *PulsarClient) Close() {
+	pc.consumer.Close()
 	pc.producer.Close()
 	pc.promptProducer.Close()
 	pc.client.Close()

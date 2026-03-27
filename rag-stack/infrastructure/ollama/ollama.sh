@@ -59,16 +59,24 @@ $KUBECTL label nodes inference-1 role=inference-node llm-model=granite3.1-dense-
 # We revert image.repository to the base Ollama image and specify models to pull from the local registry.
 REGISTRY="registry.container-registry.svc.cluster.local:5000"
 
+# Deploy Ollama WITHOUT model pulling — models are seeded separately via seed-models.sh
+# This avoids long postStart hangs during install.
 $HELM upgrade --install ollama-llama3 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
   --set nodeSelector."llm-model"=llama3.1 \
   --set image.repository="${REGISTRY}/ollama/ollama" \
-  --set image.tag="0.15.6" \
-  --set ollama.models.pull="{llama3.1}"
-
+  --set image.tag="0.15.6"
 $HELM upgrade --install ollama-granite31-8b otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
   --set nodeSelector."llm-model"=granite3.1-dense-8b \
   --set image.repository="${REGISTRY}/ollama/ollama" \
-  --set image.tag="0.15.6" \
-  --set ollama.models.pull="{granite3.1-dense:8b}"
+  --set image.tag="0.15.6"
 $KUBECTL expose deployment ollama-llama3 --name=ollama --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
 $KUBECTL expose deployment ollama-granite31-8b --name=ollama-code --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
+
+# Wait for pods to be ready before seeding models
+echo "Waiting for Ollama pods to be ready..."
+$KUBECTL rollout status deploy/ollama-llama3 -n llms-ollama --timeout=120s || true
+$KUBECTL rollout status deploy/ollama-granite31-8b -n llms-ollama --timeout=120s || true
+
+# Seed models from local registry into PVCs
+echo "Seeding LLM models from local registry..."
+bash "$SCRIPT_DIR/seed-models.sh"
