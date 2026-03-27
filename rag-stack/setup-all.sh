@@ -288,6 +288,18 @@ $KUBECTL apply -f "$REPO_DIR/ingestion/ingest-job-s3.yaml"
 mark_step_done "ingestion-job"
 fi
 
+if ! is_step_done "k8s-resilience"; then
+echo "--- 13. Applying Kubernetes Resilience Primitives ---"
+RESILIENCE_DIR="$REPO_DIR/services/k8s-resilience"
+echo "  Applying PodDisruptionBudgets..."
+$KUBECTL apply -f "$RESILIENCE_DIR/pod-disruption-budgets.yaml"
+echo "  Applying HorizontalPodAutoscalers..."
+$KUBECTL apply -f "$RESILIENCE_DIR/horizontal-pod-autoscalers.yaml"
+echo "  Applying NetworkPolicies..."
+$KUBECTL apply -f "$RESILIENCE_DIR/network-policies.yaml"
+mark_step_done "k8s-resilience"
+fi
+
 clear_journal
 
 echo "--- All Components Deployed ---"

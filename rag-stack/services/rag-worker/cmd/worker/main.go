@@ -31,25 +31,63 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 
-	// Health server with deep readiness checks
 	healthSrv := health.NewServer()
 	healthSrv.Start(":8080")
 
+	shutdownTracer := initTracer()
+	if shutdownTracer != nil {
+		defer shutdownTracer(context.Background())
+	}
+
+	msgClient := initMessaging(cfg)
+	defer msgClient.Close()
+
+	registry := initModelRegistry(cfg)
+
+	dlqHandler := initDLQHandler(msgClient)
+	defer dlqHandler.Close()
+
+	searcher := initQdrantSearcher(cfg, msgClient)
+
+	consumer := subscribeToStageTopics(cfg, msgClient)
+	defer consumer.Close()
+
+	healthSrv.RegisterCheck("pulsar", func() error {
+		return nil
+	})
+
+	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher)
+
+	log.Printf("RAG Worker started, listening on multiple stages")
+
+	runMessageLoop(cfg, consumer, handler, dlqHandler)
+
+	log.Println("RAG Worker shutdown complete")
+}
+
+// initTracer initializes the OpenTelemetry tracer and returns its shutdown
+// function. Returns nil when initialization fails.
+func initTracer() func(context.Context) error {
 	shutdown, err := telemetry.InitTracer("rag-worker")
 	if err != nil {
 		log.Printf("Warning: failed to initialize tracer: %v", err)
-	} else {
-		defer shutdown(context.Background())
+		return nil
 	}
+	return shutdown
+}
 
-	// Messaging (Pulsar client + producers)
+// initMessaging creates the Pulsar messaging client with all producers.
+func initMessaging(cfg *config.Config) *messaging.Client {
 	msgClient, err := messaging.NewClient(cfg)
 	if err != nil {
 		log.Fatalf("Could not initialize messaging: %v", err)
 	}
-	defer msgClient.Close()
+	return msgClient
+}
 
-	// Model Registry setup (config-driven prompt types)
+// initModelRegistry configures the model registry with available backends,
+// prompt types, and the planner/executor model specifications from config.
+func initModelRegistry(cfg *config.Config) *models.ModelRegistry {
 	registry := models.NewModelRegistry()
 	registry.RegisterBackend("ollama", func(endpoint, modelName string) models.ChatClient {
 		return ollama.NewClient(endpoint, modelName)
@@ -72,17 +110,22 @@ func main() {
 		PromptType: cfg.ExecutorPromptType,
 	})
 
-	// DLQ handler
+	return registry
+}
+
+// initDLQHandler creates the dead-letter-queue handler for poison message routing.
+func initDLQHandler(msgClient *messaging.Client) *dlq.Handler {
 	dlqHandler, err := dlq.NewHandler(msgClient.PulsarClient(), "rag-worker")
 	if err != nil {
 		log.Fatalf("Could not create DLQ handler: %v", err)
 	}
-	defer dlqHandler.Close()
+	return dlqHandler
+}
 
-	// Qdrant search via Pulsar
+// initQdrantSearcher creates the Qdrant searcher and starts its result consumer.
+func initQdrantSearcher(cfg *config.Config, msgClient *messaging.Client) *search.QdrantSearcher {
 	searcher := search.NewQdrantSearcher(cfg, msgClient.Producers.QdrantOps)
 
-	// Subscribe to Qdrant results
 	qResultsSub := fmt.Sprintf("rag-worker-q-res-%s", os.Getenv("HOSTNAME"))
 	qResConsumer, err := msgClient.PulsarClient().Subscribe(pulsar.ConsumerOptions{
 		Topic:            cfg.QdrantResultsTopic,
@@ -92,10 +135,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not subscribe to Qdrant results: %v", err)
 	}
-	defer qResConsumer.Close()
 	searcher.StartResultConsumer(qResConsumer)
 
-	// Subscribe to RAG stage topics
+	return searcher
+}
+
+// subscribeToStageTopics creates a shared consumer for the RAG pipeline stage topics.
+func subscribeToStageTopics(cfg *config.Config, msgClient *messaging.Client) pulsar.Consumer {
 	consumer, err := msgClient.PulsarClient().Subscribe(pulsar.ConsumerOptions{
 		Topics: []string{
 			cfg.PulsarIngressTopic,
@@ -108,20 +154,25 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not create Pulsar consumer: %v", err)
 	}
-	defer consumer.Close()
+	return consumer
+}
 
-	// Register readiness checks
-	healthSrv.RegisterCheck("pulsar", func() error {
-		// Consumer is connected if we got this far without fatal
-		return nil
-	})
+// classifyStage determines the pipeline stage from the Pulsar topic name.
+func classifyStage(topic string) string {
+	switch {
+	case strings.HasSuffix(topic, "ingress"):
+		return "ingress"
+	case strings.HasSuffix(topic, "plan"):
+		return "plan"
+	case strings.HasSuffix(topic, "exec"):
+		return "exec"
+	default:
+		return ""
+	}
+}
 
-	// Pipeline handler
-	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher)
-
-	log.Printf("RAG Worker started, listening on multiple stages")
-
-	// Graceful shutdown setup
+// runMessageLoop handles the main receive-dispatch-shutdown cycle.
+func runMessageLoop(cfg *config.Config, consumer pulsar.Consumer, handler *pipeline.Handler, dlqHandler *dlq.Handler) {
 	ctx, cancel := context.WithCancel(context.Background())
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
@@ -133,7 +184,6 @@ func main() {
 		cancel()
 	}()
 
-	// Message consumption loop
 	for {
 		msg, err := consumer.Receive(ctx)
 		if err != nil {
@@ -144,17 +194,11 @@ func main() {
 			continue
 		}
 
-		topic := msg.Topic()
-		var stage string
-		if strings.HasSuffix(topic, "ingress") {
-			stage = "ingress"
-		} else if strings.HasSuffix(topic, "plan") {
-			stage = "plan"
-		} else if strings.HasSuffix(topic, "exec") {
-			stage = "exec"
-		}
-
-		msgCtx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.MapCarrier(msg.Properties()))
+		stage := classifyStage(msg.Topic())
+		msgCtx := otel.GetTextMapPropagator().Extract(
+			context.Background(),
+			propagation.MapCarrier(msg.Properties()),
+		)
 
 		wg.Add(1)
 		go func() {
@@ -165,7 +209,11 @@ func main() {
 		}()
 	}
 
-	// Wait for in-flight goroutines with timeout
+	awaitInFlight(&wg, cfg.ShutdownTimeout)
+}
+
+// awaitInFlight waits for all in-flight goroutines to finish, with a timeout.
+func awaitInFlight(wg *sync.WaitGroup, timeout time.Duration) {
 	log.Println("Waiting for in-flight tasks to complete...")
 	done := make(chan struct{})
 	go func() {
@@ -176,9 +224,7 @@ func main() {
 	select {
 	case <-done:
 		log.Println("All in-flight tasks completed")
-	case <-time.After(cfg.ShutdownTimeout):
-		log.Printf("Shutdown timeout (%s) reached, some tasks may not have completed", cfg.ShutdownTimeout)
+	case <-time.After(timeout):
+		log.Printf("Shutdown timeout (%s) reached, some tasks may not have completed", timeout)
 	}
-
-	log.Println("RAG Worker shutdown complete")
 }

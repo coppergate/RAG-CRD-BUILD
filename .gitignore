@@ -11,6 +11,7 @@
 /rag-stack/services/llm-gateway/llm-gateway
 /rag-stack/services/qdrant-adapter/qdrant-adapter
 /rag-stack/services/build-orchestrator/build-orchestrator
+/rag-stack/services/build-orchestrator/orchestrator
 /rag-stack/services/object-store-mgr/object-store-mgr
 /rag-stack/services/rag-test-runner/rag-test-runner
 /rag-stack/services/rag-web-ui/rag-web-ui
