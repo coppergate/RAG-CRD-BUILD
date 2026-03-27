@@ -211,6 +211,35 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 		return dlq.PermanentFailure, fmt.Errorf("executor resolution: %w", err)
 	}
 
+	if req.Stream {
+		stream, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts)
+		var fullResult string
+		seq := 0
+		for {
+			select {
+			case chunk, ok := <-stream:
+				if !ok {
+					// Stream closed, handle grounding/recursion check on fullResult if needed
+					// For now, just send completed status
+					h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
+					h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID)
+					return dlq.Success, nil
+				}
+				fullResult += chunk
+				h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID)
+				seq++
+			case err := <-errCh:
+				if err != nil {
+					log.Printf("[%s] Execution stream failed: %v", req.ID, err)
+					h.msg.SendError(ctx, req.ID, "Execution stream failed")
+					return dlq.TransientFailure, fmt.Errorf("execution stream: %w", err)
+				}
+			case <-ctx.Done():
+				return dlq.TransientFailure, ctx.Err()
+			}
+		}
+	}
+
 	result, err := executor.Execute(ctx, req.Prompt, contexts)
 	if err != nil {
 		log.Printf("[%s] Execution failed: %v", req.ID, err)

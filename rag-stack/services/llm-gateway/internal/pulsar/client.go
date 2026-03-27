@@ -22,13 +22,25 @@ type PulsarClient struct {
 	promptProducer pulsar.Producer
 	consumer       pulsar.Consumer
 	pending        sync.Map // correlationID -> chan response
+	streams        sync.Map // correlationID -> chan StreamChunk
 	requestTimeout time.Duration
 }
 
 type response struct {
-	ID     string `json:"id"`
-	Result string `json:"result"`
-	Error  string `json:"error"`
+	ID             string `json:"id"`
+	Result         string `json:"result"`
+	Error          string `json:"error"`
+	Chunk          string `json:"chunk"`
+	SequenceNumber int    `json:"sequence_number"`
+	IsLast         bool   `json:"is_last"`
+}
+
+type StreamChunk struct {
+	ID             string `json:"id"`
+	Chunk          string `json:"chunk"`
+	SequenceNumber int    `json:"sequence_number"`
+	IsLast         bool   `json:"is_last"`
+	Error          string `json:"error,omitempty"`
 }
 
 func NewPulsarClient(cfg *config.Config) (*PulsarClient, error) {
@@ -99,6 +111,15 @@ func (pc *PulsarClient) consumeResults() {
 			if ch, ok := pc.pending.Load(resp.ID); ok {
 				ch.(chan response) <- resp
 			}
+			if ch, ok := pc.streams.Load(resp.ID); ok {
+				ch.(chan StreamChunk) <- StreamChunk{
+					ID:             resp.ID,
+					Chunk:          resp.Chunk,
+					SequenceNumber: resp.SequenceNumber,
+					IsLast:         resp.IsLast,
+					Error:          resp.Error,
+				}
+			}
 		}
 		pc.consumer.Ack(msg)
 	}
@@ -160,6 +181,33 @@ func (pc *PulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, cont
 	_, err = pc.promptProducer.Send(ctx, &pulsar.ProducerMessage{
 		Payload: data,
 	})
+	return err
+}
+
+func (pc *PulsarClient) SubscribeStream(id string, ch chan StreamChunk) {
+	pc.streams.Store(id, ch)
+}
+
+func (pc *PulsarClient) UnsubscribeStream(id string) {
+	pc.streams.Delete(id)
+}
+
+func (pc *PulsarClient) SendRawRequest(ctx context.Context, payload interface{}) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	msg := &pulsar.ProducerMessage{
+		Payload: data,
+	}
+
+	if msg.Properties == nil {
+		msg.Properties = make(map[string]string)
+	}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Properties))
+
+	_, err = pc.producer.Send(ctx, msg)
 	return err
 }
 

@@ -73,6 +73,64 @@ func (o *OllamaClient) Chat(messages []map[string]string) (string, error) {
 	return "", fmt.Errorf("no response from ollama")
 }
 
+func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, <-chan error) {
+	out := make(chan string)
+	errCh := make(chan error, 1)
+
+	go func() {
+		defer close(out)
+		defer close(errCh)
+
+		url := fmt.Sprintf("%s/v1/chat/completions", o.url)
+		payload := map[string]interface{}{
+			"model":    o.model,
+			"messages": messages,
+			"stream":   true,
+		}
+
+		body, err := json.Marshal(payload)
+		if err != nil {
+			errCh <- fmt.Errorf("failed to marshal chat payload: %w", err)
+			return
+		}
+
+		resp, err := o.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
+		if err != nil {
+			errCh <- err
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			errCh <- fmt.Errorf("ollama returned status %d", resp.StatusCode)
+			return
+		}
+
+		decoder := json.NewDecoder(resp.Body)
+		for {
+			var chunk struct {
+				Choices []struct {
+					Delta struct {
+						Content string `json:"content"`
+					} `json:"delta"`
+				} `json:"choices"`
+			}
+			if err := decoder.Decode(&chunk); err != nil {
+				if err.Error() == "EOF" {
+					break
+				}
+				errCh <- err
+				return
+			}
+			if len(chunk.Choices) > 0 {
+				out <- chunk.Choices[0].Delta.Content
+			}
+		}
+	}()
+
+	return out, errCh
+}
+
 func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
 	url := fmt.Sprintf("%s/api/embeddings", o.url)
 

@@ -14,10 +14,17 @@ import (
 	"app-builds/common/telemetry"
 	"app-builds/llm-gateway/internal/pulsar"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Adjust as needed for security
+	},
+}
 
 var (
 	meter          = telemetry.Meter("llm-gateway")
@@ -188,6 +195,77 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("[%s] Failed to encode response: %v", correlationID, err)
+	}
+}
+
+func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("Failed to upgrade to WebSocket: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	ctx := r.Context()
+	var req GenericChatRequest
+	if err := conn.ReadJSON(&req); err != nil {
+		log.Printf("Failed to read JSON from WebSocket: %v", err)
+		return
+	}
+
+	sessionID, err := h.ensureSession(ctx, req.SessionID)
+	if err != nil {
+		log.Printf("Failed to ensure session: %v", err)
+		return
+	}
+
+	correlationID := uuid.New().String()
+	internalReq := contracts.InternalRequest{
+		ID:            correlationID,
+		SessionID:     sessionID,
+		Prompt:        req.Prompt,
+		PlannerModel:  req.Planner,
+		ExecutorModel: req.Executor,
+		Tags:          req.Tags,
+		Timestamp:     time.Now().Format(time.RFC3339),
+		Stream:        true,
+		Metadata: map[string]interface{}{
+			"source": "websocket-api",
+		},
+	}
+
+	// Channel to receive chunks from Pulsar
+	chunkChan := make(chan pulsar.StreamChunk, 10)
+	h.Pulsar.SubscribeStream(correlationID, chunkChan)
+	defer h.Pulsar.UnsubscribeStream(correlationID)
+
+	// Send initial request
+	if err := h.Pulsar.SendRawRequest(ctx, internalReq); err != nil {
+		log.Printf("Failed to send request to Pulsar: %v", err)
+		conn.WriteJSON(map[string]string{"error": "Failed to send request to backend"})
+		return
+	}
+
+	// Stream chunks to WebSocket
+	for {
+		select {
+		case chunk, ok := <-chunkChan:
+			if !ok {
+				return
+			}
+			if err := conn.WriteJSON(chunk); err != nil {
+				log.Printf("Failed to write to WebSocket: %v", err)
+				return
+			}
+			if chunk.IsLast {
+				return
+			}
+		case <-ctx.Done():
+			return
+		case <-time.After(60 * time.Second): // Timeout
+			log.Printf("[%s] WebSocket stream timed out", correlationID)
+			return
+		}
 	}
 }
 

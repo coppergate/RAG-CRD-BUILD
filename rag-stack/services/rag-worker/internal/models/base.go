@@ -54,6 +54,20 @@ func (m *GenericModel) Execute(ctx context.Context, prompt string, contexts []in
 	return result, nil
 }
 
+// ExecuteStream performs the augmented query with provided contexts and returns a stream of results
+func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, contexts []interface{}) (<-chan string, <-chan error) {
+	augmentedPrompt := m.Config.ExecutionHeader
+	for _, c := range contexts {
+		augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
+	}
+	augmentedPrompt += m.Config.ExecutionFooter + prompt + m.Config.ExecutionSuffix
+
+	messages := []map[string]string{
+		{"role": "user", "content": augmentedPrompt},
+	}
+	return m.Client.ChatStream(messages)
+}
+
 // IsInsufficientContext checks if the model result indicates missing information based on configured phrases
 func (m *GenericModel) IsInsufficientContext(result string) bool {
 	r := strings.ToLower(result)

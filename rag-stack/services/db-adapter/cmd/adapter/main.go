@@ -21,10 +21,12 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	"strings"
 )
 
 var (
@@ -182,6 +184,38 @@ func main() {
 			dlqHandler.HandleMessage(ctx, msg, responseConsumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
 				return handleResponse(mCtx, m, entClient)
 			})
+		}
+	}()
+
+	mux := http.NewServeMux()
+	healthSrv.RegisterRoutes(mux)
+
+	mux.HandleFunc("/api/db/sessions", func(w http.ResponseWriter, r *http.Request) {
+		sessions, err := entClient.Session.Query().All(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(sessions)
+	})
+
+	mux.HandleFunc("/api/db/stats", func(w http.ResponseWriter, r *http.Request) {
+		sessionCount, _ := entClient.Session.Query().Count(r.Context())
+		promptCount, _ := entClient.Prompt.Query().Count(r.Context())
+		responseCount, _ := entClient.Response.Query().Count(r.Context())
+		json.NewEncoder(w).Encode(map[string]int{
+			"sessions":  sessionCount,
+			"prompts":   promptCount,
+			"responses": responseCount,
+		})
+	})
+
+	otelHandler := otelhttp.NewHandler(mux, "db-adapter")
+
+	go func() {
+		log.Printf("Starting DB Adapter REST API on :8080")
+		if err := http.ListenAndServe(":8080", otelHandler); err != nil {
+			log.Fatalf("REST server failed: %v", err)
 		}
 	}()
 

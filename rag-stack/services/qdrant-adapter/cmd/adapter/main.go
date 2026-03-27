@@ -19,10 +19,14 @@ import (
 	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
 	"app-builds/qdrant-adapter/internal/qdrant"
+	"encoding/json"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	"net/http"
+	"strings"
 )
 
 var (
@@ -114,7 +118,36 @@ func main() {
 	}
 	defer consumer.Close()
 
-	healthSrv.Start(":8080")
+	mux := http.NewServeMux()
+	healthSrv.RegisterRoutes(mux)
+
+	mux.HandleFunc("/api/qdrant/collections", func(w http.ResponseWriter, r *http.Request) {
+		res, err := qClient.ListCollections()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(res)
+	})
+
+	mux.HandleFunc("/api/qdrant/collections/", func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/api/qdrant/collections/")
+		res, err := qClient.GetCollection(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(res)
+	})
+
+	otelHandler := otelhttp.NewHandler(mux, "qdrant-adapter")
+
+	go func() {
+		log.Printf("Starting Qdrant Adapter REST API on :8080")
+		if err := http.ListenAndServe(":8080", otelHandler); err != nil {
+			log.Fatalf("REST server failed: %v", err)
+		}
+	}()
 
 	log.Printf("Qdrant Adapter started. Listening on %s, publishing to %s", cfg.QdrantOpsTopic, cfg.QdrantResultsTopic)
 

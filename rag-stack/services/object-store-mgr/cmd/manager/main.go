@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+
 	"app-builds/common/telemetry"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
@@ -49,27 +54,80 @@ func main() {
 		o.UsePathStyle = true
 	})
 
-	resp, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket),
-	})
-	if err != nil {
-		log.Printf("Error: unable to list objects in bucket %s: %v", bucket, err)
-		// Don't fatal here, maybe it's just an empty bucket or temporary issue
-	} else {
-		fmt.Printf("Current objects in bucket %s:\n", bucket)
-		for _, item := range resp.Contents {
-			fmt.Printf("- %s (Size: %d)\n", *item.Key, *item.Size)
-		}
-	}
+	mux := http.NewServeMux()
 
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/s3/buckets", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		resp, err := client.ListBuckets(r.Context(), &s3.ListBucketsInput{})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(resp.Buckets)
+	})
+
+	mux.HandleFunc("/api/s3/buckets/", func(w http.ResponseWriter, r *http.Request) {
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/s3/buckets/"), "/")
+		if len(parts) < 1 {
+			http.Error(w, "Bucket name required", http.StatusBadRequest)
+			return
+		}
+		bucketName := parts[0]
+
+		if len(parts) == 1 { // List objects
+			resp, err := client.ListObjectsV2(r.Context(), &s3.ListObjectsV2Input{
+				Bucket: aws.String(bucketName),
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			json.NewEncoder(w).Encode(resp.Contents)
+			return
+		}
+
+		// Object operations
+		objectKey := strings.Join(parts[1:], "/")
+		switch r.Method {
+		case http.MethodGet:
+			resp, err := client.GetObject(r.Context(), &s3.GetObjectInput{
+				Bucket: aws.String(bucketName),
+				Key:    aws.String(objectKey),
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer resp.Body.Close()
+			io.Copy(w, resp.Body)
+		case http.MethodDelete:
+			_, err := client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
+				Bucket: aws.String(bucketName),
+				Key:    aws.String(objectKey),
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "OK")
 	})
 
-	fmt.Println("Health server starting on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Health server failed: %v", err)
+	otelHandler := otelhttp.NewHandler(mux, "object-store-mgr")
+
+	fmt.Println("Server starting on :8080")
+	if err := http.ListenAndServe(":8080", otelHandler); err != nil {
+		log.Fatalf("Server failed: %v", err)
 	}
 }
 

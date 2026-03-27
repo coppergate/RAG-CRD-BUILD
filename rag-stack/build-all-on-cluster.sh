@@ -32,6 +32,8 @@ services=(
     "rag-web-ui"
     "rag-ingestion"
     "rag-test-runner"
+    "rag-admin-api"
+    "memory-controller"
 )
 job_names=()
 trigger_pids=()

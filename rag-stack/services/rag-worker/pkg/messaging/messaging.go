@@ -155,6 +155,32 @@ func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model st
 	}
 }
 
+// SendStreamChunk sends a streaming result chunk to the results topic.
+func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string) {
+	payload, err := json.Marshal(map[string]interface{}{
+		"id":              id,
+		"session_id":      sessionID,
+		"chunk":           chunk,
+		"sequence_number": sequence,
+		"is_last":         isLast,
+		"model":           model,
+	})
+	if err != nil {
+		log.Printf("[%s] Failed to marshal stream chunk: %v", id, err)
+		return
+	}
+
+	msg := &pulsar.ProducerMessage{
+		Payload:    payload,
+		Properties: make(map[string]string),
+	}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Properties))
+
+	if _, err := c.Producers.Results.Send(ctx, msg); err != nil {
+		log.Printf("[%s] Failed to send stream chunk to topic: %v", id, err)
+	}
+}
+
 // SendError sends an error message to the results topic.
 func (c *Client) SendError(ctx context.Context, id, errMsg string) {
 	payload, err := json.Marshal(map[string]string{

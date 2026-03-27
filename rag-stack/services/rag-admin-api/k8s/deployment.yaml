@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-admin-api
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-admin-api
+  template:
+    metadata:
+      labels:
+        app: rag-admin-api
+    spec:
+      nodeSelector:
+        role: storage-node
+      containers:
+      - name: admin-api
+        image: registry.container-registry.svc.cluster.local:5000/rag-admin-api:__VERSION__
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_ADAPTER_URL
+          value: "http://db-adapter.rag-system.svc.cluster.local:8080"
+        - name: S3_MANAGER_URL
+          value: "http://object-store-mgr.rag-system.svc.cluster.local:8080"
+        - name: QDRANT_ADAPTER_URL
+          value: "http://qdrant-adapter.rag-system.svc.cluster.local:8080"
+        - name: LLM_GATEWAY_URL
+          value: "http://llm-gateway.rag-system.svc.cluster.local:8080"
+        - name: MEMORY_CONTROLLER_URL
+          value: "http://memory-controller.rag-system.svc.cluster.local:8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-admin-api
+  namespace: rag-system
+spec:
+  selector:
+    app: rag-admin-api
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rag-admin-api
+  namespace: rag-system
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  tls:
+  - hosts:
+    - rag-admin-api.rag.hierocracy.home
+    secretName: rag-admin-api-tls
+  rules:
+  - host: rag-admin-api.rag.hierocracy.home
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: rag-admin-api
+            port:
+              name: http

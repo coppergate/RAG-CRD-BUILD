@@ -44,10 +44,21 @@ This document tracks basic tasks and procedures determined during development to
 ```bash
 ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
   "for svc in rag-worker llm-gateway db-adapter qdrant-adapter \
-              rag-ingestion rag-web-ui object-store-mgr rag-test-runner; do \
+              rag-ingestion rag-web-ui object-store-mgr rag-test-runner \
+              rag-admin-api memory-controller; do \
      echo \"\$svc: \$(curl -sk https://registry.hierocracy.home:5000/v2/\$svc/tags/list)\"; \
    done"
 ```
+
+## RAG Pipeline Explorer (Flutter UI) BFF
+The Flutter UI communicates with the cluster via the `rag-admin-api` (BFF) service.
+1.  **Endpoint**: `https://rag-admin-api.rag.hierocracy.home`
+2.  **Streaming**: Chat streaming uses WebSockets at `wss://gateway.hierocracy.home/v1/rag/chat/stream`.
+3.  **Adapter APIs**: The BFF proxies requests to:
+    -   `object-store-mgr`: `/api/s3/*` for bucket/object browsing.
+    -   `db-adapter`: `/api/db/*` for TimescaleDB session/stats browsing.
+    -   `qdrant-adapter`: `/api/qdrant/*` for vector collection browsing.
+    -   `memory-controller`: `/api/memory/*` for memory management.
 
 ## Local/Bootstrap Build and Push (Host-Based)
 Use this only for bootstrapping or when the cluster-native pipeline is unavailable.

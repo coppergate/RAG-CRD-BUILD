@@ -251,11 +251,16 @@ mark_step_done "rag-worker"
 fi
 
 if ! is_step_done "object-store-mgr"; then
-echo "--- 8. Running Object Store Manager Job (one-shot) ---"
-# Remove old Deployment if it exists, then run the Job
-$KUBECTL -n $NAMESPACE delete deploy/object-store-mgr --ignore-not-found
-apply_manifest "$REPO_DIR/services/object-store-mgr/mgr-job.yaml"
+echo "--- 8. Deploying Object Store Manager (Go) ---"
+apply_manifest "$REPO_DIR/services/object-store-mgr/mgr-deployment.yaml"
+$KUBECTL apply -f "$REPO_DIR/services/object-store-mgr/mgr-service.yaml"
 mark_step_done "object-store-mgr"
+fi
+
+if ! is_step_done "memory-controller"; then
+echo "--- 8.5 Deploying Memory Controller (Go) ---"
+apply_manifest "$REPO_DIR/services/memory-controller/k8s/deployment.yaml"
+mark_step_done "memory-controller"
 fi
 
 if ! is_step_done "rag-web-ui"; then
@@ -270,9 +275,16 @@ apply_manifest "$REPO_DIR/services/db-adapter/k8s/deployment.yaml"
 mark_step_done "db-adapter"
 fi
 
+if ! is_step_done "rag-admin-api"; then
+echo "--- 10.5 Deploying RAG Admin API (Go BFF) ---"
+apply_manifest "$REPO_DIR/services/rag-admin-api/k8s/deployment.yaml"
+mark_step_done "rag-admin-api"
+fi
+
 if ! is_step_done "qdrant-adapter"; then
 echo "--- 11. Deploying Qdrant Adapter (Go) ---"
 apply_manifest "$REPO_DIR/services/qdrant-adapter/k8s/deployment.yaml"
+$KUBECTL apply -f "$REPO_DIR/services/qdrant-adapter/k8s/service.yaml"
 mark_step_done "qdrant-adapter"
 fi
 

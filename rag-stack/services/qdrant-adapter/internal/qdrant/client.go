@@ -108,6 +108,32 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 	return contexts, nil
 }
 
+func (q *QdrantClient) ListCollections() (interface{}, error) {
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
+	url := fmt.Sprintf("%s://%s:%s/collections", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort)
+	resp, err := q.httpClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var result interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result, nil
+}
+
+func (q *QdrantClient) GetCollection(name string) (interface{}, error) {
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
+	url := fmt.Sprintf("%s://%s:%s/collections/%s", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, name)
+	resp, err := q.httpClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var result interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result, nil
+}
+
 func (q *QdrantClient) Upsert(collection string, vectorSize int, points []interface{}) error {
 	return q.upsertWithRetry(collection, vectorSize, points, true)
 }

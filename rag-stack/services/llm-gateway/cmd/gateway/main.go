@@ -63,6 +63,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", openAIHandler.HandleChatCompletions)
 	mux.HandleFunc("/v1/rag/chat", openAIHandler.HandleGenericChat)
+	mux.HandleFunc("/v1/rag/chat/stream", openAIHandler.HandleStreamingChat)
 	healthSrv.RegisterRoutes(mux)
 
 	otelHandler := otelhttp.NewHandler(mux, "llm-gateway")

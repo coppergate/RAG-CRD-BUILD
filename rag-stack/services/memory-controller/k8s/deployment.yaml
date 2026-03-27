@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-controller
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memory-controller
+  template:
+    metadata:
+      labels:
+        app: memory-controller
+    spec:
+      nodeSelector:
+        role: storage-node
+      containers:
+      - name: controller
+        image: registry.container-registry.svc.cluster.local:5000/memory-controller:__VERSION__
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secret
+              key: url
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-controller
+  namespace: rag-system
+spec:
+  selector:
+    app: memory-controller
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
