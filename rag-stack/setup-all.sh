@@ -149,12 +149,34 @@ else
 fi
 fi
 
-if ! is_step_done "pulsar"; then
-echo "--- 3. Deploying Infrastructure: Apache Pulsar ---"
-$REPO_DIR/infrastructure/pulsar/install.sh
-mark_step_done "pulsar"
+echo "--- 3. Verifying Pulsar Prerequisite ---"
+# Pulsar infrastructure is installed by setup-complete.sh (Step 1.5.8).
+# setup-all.sh only deploys RAG services and assumes infrastructure is ready.
+# Verify Pulsar is running before deploying services that depend on it.
+PULSAR_NS="apache-pulsar"
+PULSAR_READY=false
+echo "Checking for running Pulsar broker pods in namespace $PULSAR_NS..."
+BROKER_READY=$($KUBECTL get pods -n "$PULSAR_NS" -l "component=broker" -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null || echo "")
+if [[ -n "$BROKER_READY" ]]; then
+    echo "Pulsar brokers running: $BROKER_READY"
+    PULSAR_READY=true
 fi
 
+if [[ "$PULSAR_READY" != "true" ]]; then
+    echo ""
+    echo "ERROR: Apache Pulsar is not running in namespace '$PULSAR_NS'."
+    echo "Pulsar must be installed BEFORE deploying RAG services."
+    echo ""
+    echo "To install Pulsar, either:"
+    echo "  1. Run the full setup:  ./setup-complete.sh"
+    echo "  2. Install Pulsar only: bash rag-stack/infrastructure/pulsar/install.sh"
+    echo ""
+    echo "Current pods in $PULSAR_NS:"
+    $KUBECTL get pods -n "$PULSAR_NS" 2>&1 || echo "  (namespace does not exist)"
+    exit 1
+fi
+
+# Ensure tenants/namespaces are initialized (idempotent — safe to re-run)
 if ! is_step_done "pulsar-init"; then
 echo "--- 3.1 Initializing Pulsar Tenants and Namespaces ---"
 bash "$REPO_DIR/infrastructure/pulsar/init-rag-pulsar.sh"

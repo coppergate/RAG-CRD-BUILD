@@ -97,6 +97,43 @@ To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
 - **Isolation**: Tag-based filtering uses a strict `must` match to ensure context isolation.
 - **Tag Matching**: Filtering and storage must use UUID `tag_ids` for consistency. Human-readable `tag_names` are for display only.
 
+## Pulsar Installation
+Pulsar is installed by `setup-complete.sh` (Step 1.5.8) — NOT by `setup-all.sh`.
+`setup-all.sh` only deploys RAG services and **verifies** that Pulsar is already running.
+
+### Prerequisites
+- **Rook-Ceph**: The `rook-ceph-block` StorageClass must exist (Pulsar PVCs depend on it).
+- **cert-manager**: Must be running for Pulsar TLS certificates.
+- Both are installed by `setup-01-basic.sh` (Step 1 of `setup-complete.sh`).
+
+### Installation Flow
+1. `setup-complete.sh` → Step 1.5.8 calls `rag-stack/infrastructure/pulsar/install.sh`
+2. `install.sh` creates namespace, labels nodes, adds Helm repo, runs `helm upgrade --install` with `--wait --timeout 60m`
+3. Post-install verification checks all 4 component types (ZK, BK, Broker, Proxy) are running
+4. `setup-complete.sh` → Step 1.5.8.1 calls `init-rag-pulsar.sh` to create tenant `rag-pipeline` and namespaces (`stage`, `data`, `operations`)
+
+### Standalone Pulsar Install (without full setup)
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/install.sh && \
+   bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh"
+```
+
+### Verifying Pulsar Health
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   /home/k8s/kube/kubectl get pods -n apache-pulsar && \
+   /home/k8s/kube/kubectl exec -n apache-pulsar pulsar-toolset-0 -- \
+     /pulsar/bin/pulsar-admin tenants list"
+```
+
+### Important Notes
+- `setup-all.sh` will **exit with an error** if Pulsar brokers are not running. This is intentional — RAG services depend on Pulsar and will fail at runtime without it.
+- The Pulsar `install.sh` journal is NOT cleared on success (to prevent redundant re-runs when called from multiple parent scripts).
+- Use `FRESH_INSTALL=true` with `setup-complete.sh` to clear all journals and re-run from scratch.
+
 ## TLS and Security
 1.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
 2.  **Trust Distribution**: The combined CA certificate is managed via the `registry-ca-cm` ConfigMap in target namespaces.

@@ -214,6 +214,14 @@ STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.8: Apache Pulsar Infrastructure"
 echo "----------------------------------------------------"
+# Verify Rook-Ceph storage is available (Pulsar PVCs depend on it)
+echo "Verifying rook-ceph-block StorageClass exists..."
+if ! $KUBECTL get storageclass rook-ceph-block >/dev/null 2>&1; then
+    echo "ERROR: StorageClass 'rook-ceph-block' not found."
+    echo "Pulsar requires Rook-Ceph storage. Ensure Step 1 (basic infra) completed successfully."
+    exit 1
+fi
+echo "StorageClass rook-ceph-block found."
 # REPO_DIR is needed for pulsar scripts
 export REPO_DIR="$BASE_DIR/rag-stack"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/install.sh
@@ -228,6 +236,21 @@ echo ""
 echo "Step 1.5.8.1: Pulsar Initialization"
 echo "----------------------------------------------------"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh
+
+# Verify tenant and namespaces were created
+echo "Verifying Pulsar tenants and namespaces..."
+TOOLSET_POD=$($KUBECTL get pods -n apache-pulsar -l component=toolset -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [[ -n "$TOOLSET_POD" ]]; then
+    TENANTS=$($KUBECTL exec -n apache-pulsar "$TOOLSET_POD" -- /pulsar/bin/pulsar-admin tenants list 2>/dev/null || echo "")
+    if echo "$TENANTS" | grep -q "rag-pipeline"; then
+        echo "Pulsar init verified: rag-pipeline tenant exists."
+    else
+        echo "WARNING: rag-pipeline tenant not found after init. Tenants: $TENANTS"
+    fi
+else
+    echo "WARNING: Could not find toolset pod to verify Pulsar init."
+fi
+
 mark_step_done "pulsar-init"
 STEP_TS_END=$(date +%s)
 log_step_timing "pulsar-init" "$STEP_TS_START" "$STEP_TS_END" "ok"

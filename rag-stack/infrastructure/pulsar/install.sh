@@ -280,5 +280,42 @@ else
   log "BookKeeper metadata step already completed (journal 60.bkMeta)"
 fi
 
-echo "Pulsar Installation Complete. BookKeeper cluster metadata validated."
-clear_journal
+echo "--- 6. Post-Install Verification ---"
+# Verify that critical Pulsar components are actually running before declaring success.
+# This catches cases where Helm --wait succeeded but pods subsequently crashed.
+VERIFY_TIMEOUT=120
+VERIFY_POLL=10
+VERIFY_ELAPSED=0
+VERIFY_OK=false
+
+while [[ "$VERIFY_ELAPSED" -lt "$VERIFY_TIMEOUT" ]]; do
+    ZK_READY=$($KUBECTL get pods -n $NAMESPACE -l component=zookeeper --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+    BK_READY=$($KUBECTL get pods -n $NAMESPACE -l component=bookie --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+    BR_READY=$($KUBECTL get pods -n $NAMESPACE -l component=broker --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+    PX_READY=$($KUBECTL get pods -n $NAMESPACE -l component=proxy --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+
+    if [[ "$ZK_READY" -ge 1 && "$BK_READY" -ge 1 && "$BR_READY" -ge 1 && "$PX_READY" -ge 1 ]]; then
+        VERIFY_OK=true
+        break
+    fi
+    log "Waiting for Pulsar components (ZK=$ZK_READY BK=$BK_READY BR=$BR_READY PX=$PX_READY)..."
+    sleep "$VERIFY_POLL"
+    VERIFY_ELAPSED=$((VERIFY_ELAPSED + VERIFY_POLL))
+done
+
+if [[ "$VERIFY_OK" == "true" ]]; then
+    log "Pulsar verification PASSED: ZK=$ZK_READY BK=$BK_READY BR=$BR_READY PX=$PX_READY"
+else
+    log "ERROR: Pulsar verification FAILED after ${VERIFY_TIMEOUT}s."
+    log "Pod status:"
+    $KUBECTL get pods -n $NAMESPACE -o wide 2>&1 || true
+    log "Recent events:"
+    $KUBECTL get events -n $NAMESPACE --sort-by=.lastTimestamp 2>&1 | tail -30 || true
+    fail "Pulsar components are not running. Aborting."
+fi
+
+echo "Pulsar Installation Complete. All components verified running."
+# Do NOT clear journal here — let the parent script (setup-complete.sh) manage
+# journal lifecycle via clear_all_journals on FRESH_INSTALL.
+# This prevents re-running all Pulsar steps when setup-all.sh or other scripts
+# call install.sh again in the same session.
