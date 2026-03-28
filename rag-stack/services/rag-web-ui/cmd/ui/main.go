@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -395,8 +396,6 @@ func deleteDataHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-func healthHandler(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
-
 func renderTemplate(w http.ResponseWriter, data interface{}) {
 	tmpl := `
 	<!DOCTYPE html>
@@ -525,11 +524,26 @@ func renderTemplate(w http.ResponseWriter, data interface{}) {
 func main() {
 	initEnv()
 
+	healthSrv := health.NewServer()
+
 	shutdown, err := telemetry.InitTracer("rag-web-ui")
 	if err != nil {
 		log.Printf("Warning: failed to initialize tracer: %v", err)
 	} else {
 		defer shutdown(context.Background())
+	}
+
+	// Register readiness checks
+	if db != nil {
+		healthSrv.RegisterCheck("database", func() error {
+			return db.Ping()
+		})
+	}
+	if s3Client != nil {
+		healthSrv.RegisterCheck("s3", func() error {
+			_, err := s3Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+			return err
+		})
 	}
 
 	mux := http.NewServeMux()
@@ -542,7 +556,8 @@ func main() {
 	mux.HandleFunc("/trigger-ingest", triggerIngestHandler)
 	mux.HandleFunc("/create-tag", createTagHandler)
 	mux.HandleFunc("/delete-data", deleteDataHandler)
-	mux.HandleFunc("/health", healthHandler)
+	
+	healthSrv.RegisterRoutes(mux)
 
 	otelHandler := otelhttp.NewHandler(mux, "rag-web-ui")
 

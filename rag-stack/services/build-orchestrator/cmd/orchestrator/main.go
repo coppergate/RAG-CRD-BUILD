@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"app-builds/common/health"
 	"github.com/apache/pulsar-client-go/pulsar"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -470,10 +471,21 @@ func waitForJobCompletion(ctx context.Context, clientset *kubernetes.Clientset, 
 func runHTTPServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("ok"))
+	healthSrv := health.NewServer()
+	healthSrv.RegisterCheck("pulsar", func() error {
+		if client == nil {
+			return fmt.Errorf("pulsar client is nil")
+		}
+		return nil
 	})
+	healthSrv.RegisterCheck("kubernetes", func() error {
+		if clientset == nil {
+			return fmt.Errorf("kubernetes clientset is nil")
+		}
+		_, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{Limit: 1})
+		return err
+	})
+	healthSrv.RegisterRoutes(mux)
 
 	mux.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

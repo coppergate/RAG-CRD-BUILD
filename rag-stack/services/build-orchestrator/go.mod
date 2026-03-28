@@ -3,11 +3,14 @@ module build-orchestrator
 go 1.25
 
 require (
+	app-builds/common v0.0.0
 	github.com/apache/pulsar-client-go v0.12.1
 	k8s.io/api v0.28.3
 	k8s.io/apimachinery v0.28.3
 	k8s.io/client-go v0.28.3
 )
+
+replace app-builds/common => ../common
 
 require (
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect

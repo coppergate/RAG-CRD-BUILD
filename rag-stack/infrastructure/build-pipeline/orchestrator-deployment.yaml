@@ -61,7 +61,7 @@ spec:
           subPath: ca.crt
         readinessProbe:
           httpGet:
-            path: /health
+            path: /readyz
             port: http
           initialDelaySeconds: 5
           periodSeconds: 10
@@ -69,7 +69,7 @@ spec:
           failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /health
+            path: /healthz
             port: http
           initialDelaySeconds: 15
           periodSeconds: 15
