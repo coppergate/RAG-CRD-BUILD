@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
       - name: cleanup
-        image: registry.hierocracy.home:5000/rag-test-runner:2.0.0
+        image: registry.hierocracy.home:5000/rag-test-runner:__VERSION__
         command: ["/bin/sh", "-c"]
         args:
           - |

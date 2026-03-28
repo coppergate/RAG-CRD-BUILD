@@ -64,6 +64,12 @@ spec:
               key: url
         - name: QDRANT_HOST
           value: "qdrant"
+        - name: QDRANT_COLLECTION
+          value: "vectors"
+        - name: INGEST_BATCH_SIZE
+          value: "20"
+        - name: CHUNK_SIZE
+          value: "1000"
         - name: S3_ENDPOINT
           valueFrom:
             configMapKeyRef:

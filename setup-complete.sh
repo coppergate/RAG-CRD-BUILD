@@ -23,7 +23,7 @@ set -Eeuo pipefail
 #
 BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
-VERSION="${VERSION:-1.5.8}"
+VERSION="${VERSION:-2.2.1}"
 export VERSION
 IMAGE_PREFETCH_ON_START="${IMAGE_PREFETCH_ON_START:-true}"
 IMAGE_PREFETCH_GROUPS="${IMAGE_PREFETCH_GROUPS:-bootstrap,storage,apm-core,pulsar-core,registry,data-services,ollama}"
@@ -172,6 +172,18 @@ $BASE_DIR/infrastructure/registry/install.sh
 mark_step_done "registry"
 STEP_TS_END=$(date +%s)
 log_step_timing "registry" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
+if ! is_step_done "llm-models-pre-populate"; then
+STEP_TS_START=$(date +%s)
+echo ""
+echo "Step 1.5.2: LLM Model Pre-population into Local Registry"
+echo "----------------------------------------------------"
+# This ensures that Step 2 (Deployment) can seed models from the local registry
+bash "$BASE_DIR/rag-stack/infrastructure/ollama/push-models-to-cluster.sh"
+mark_step_done "llm-models-pre-populate"
+STEP_TS_END=$(date +%s)
+log_step_timing "llm-models-pre-populate" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 if [[ "$IMAGE_PREFETCH_ON_START" == "true" ]] && ! is_step_done "image-prefetch-initial"; then

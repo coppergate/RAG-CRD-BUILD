@@ -2,6 +2,25 @@
 
 This document tracks basic tasks and procedures determined during development to ensure efficiency and avoid redundant logic parsing. These instructions are designed for the **Junie** agent to follow directly.
 
+## Configuration and Hardcoded Values (Externalized)
+
+The following values have been externalized to environment variables and can be configured in the Kubernetes deployment manifests:
+
+### RAG Ingestion Service (`rag-ingestion`)
+- `QDRANT_COLLECTION`: Qdrant collection name (default: `vectors`).
+- `INGEST_BATCH_SIZE`: Number of points to upsert to Qdrant in a single batch (default: `20`).
+- `CHUNK_SIZE`: Size of text chunks for embedding (default: `1000`).
+- `CHUNK_OVERLAP`: Overlap between text chunks (default: `200`).
+
+### RAG Worker (`rag-worker`)
+- `QDRANT_COLLECTION`: Qdrant collection name for search (default: `vectors`).
+- `QDRANT_SEARCH_LIMIT`: Maximum number of results to return from a vector search (default: `5`).
+- `QDRANT_SEARCH_TIMEOUT`: Timeout for Qdrant search operations (default: `30s`).
+- `RECURSION_BUDGET`: Maximum recursion depth for agentic reasoning (default: `2.0`).
+
+### LLM Gateway (`llm-gateway`)
+- `REQUEST_TIMEOUT`: Timeout for Pulsar-based inference requests (default: `120s`).
+
 ## Building Service Images — ALWAYS Use the Cluster Pipeline
 
 **IMPORTANT**: All RAG service image builds MUST go through the in-cluster Kaniko build pipeline. Do NOT use `podman build` or `docker build` on the host to build service images. The host-based `build-and-push.sh` is only for bootstrapping when the cluster is not available.

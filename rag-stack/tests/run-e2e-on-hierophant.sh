@@ -14,7 +14,7 @@ mkdir -p "$OUT_DIR"
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-2.2.0}"
+VERSION="${VERSION:-2.2.1}"
 
 echo "[INFO] Preflight: Checking connectivity to hierophant and cluster..."
 # 1. Ping hierophant
@@ -66,7 +66,7 @@ echo "[STEP] Refresh tests ConfigMap" | tee -a "${OUT_DIR}/job.log"
 echo "[STEP] Apply cleanup job" | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" delete job rag-test-cleanup --ignore-not-found | tee -a "${OUT_DIR}/job.log"
 RENDERED_CLEANUP="/tmp/rag-test-cleanup-${VERSION}.yaml"
-sed "s|:2.0.0|:${VERSION}|g" /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/cleanup-job.yaml > "$RENDERED_CLEANUP"
+sed "s|:__VERSION__|:${VERSION}|g" /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/cleanup-job.yaml > "$RENDERED_CLEANUP"
 "$KUBECTL" apply -f "$RENDERED_CLEANUP" | tee -a "${OUT_DIR}/job.log"
 rm -f "$RENDERED_CLEANUP"
 

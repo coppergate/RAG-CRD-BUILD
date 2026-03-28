@@ -32,7 +32,11 @@ func main() {
 	cfg := config.LoadConfig()
 
 	healthSrv := health.NewServer()
-	healthSrv.Start(":8080")
+	if cfg.TLSCert != "" && cfg.TLSKey != "" {
+		healthSrv.StartTLS(":8080", cfg.TLSCert, cfg.TLSKey)
+	} else {
+		healthSrv.Start(":8080")
+	}
 
 	shutdownTracer := initTracer()
 	if shutdownTracer != nil {

@@ -18,4 +18,14 @@ RUN python -m pip install --upgrade pip==26.0.1 \
 # Copy source
 COPY rag-ingestion/service.py ./service.py
 
-CMD ["uvicorn", "service:app", "--host", "0.0.0.0", "--port", "8000"]
+# Create entrypoint for TLS support
+RUN echo '#!/bin/bash\n\
+if [[ -n "$TLS_CERT" && -n "$TLS_KEY" ]]; then\n\
+  echo "Starting uvicorn with TLS..."\n\
+  exec uvicorn service:app --host 0.0.0.0 --port 8000 --ssl-keyfile "$TLS_KEY" --ssl-certfile "$TLS_CERT"\n\
+else\n\
+  echo "Starting uvicorn (HTTP)..."\n\
+  exec uvicorn service:app --host 0.0.0.0 --port 8000\n\
+fi' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+CMD ["/app/entrypoint.sh"]

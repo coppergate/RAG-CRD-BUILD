@@ -57,7 +57,21 @@ func (s *Server) Start(addr string) {
 	s.RegisterRoutes(mux)
 
 	go func() {
+		log.Printf("Starting HTTP health server on %s", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {
+			log.Printf("Health server stopped: %v", err)
+		}
+	}()
+}
+
+// StartTLS launches the health server on the given address using TLS in a background goroutine.
+func (s *Server) StartTLS(addr, certFile, keyFile string) {
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux)
+
+	go func() {
+		log.Printf("Starting HTTPS health server on %s (cert=%s)", addr, certFile)
+		if err := http.ListenAndServeTLS(addr, certFile, keyFile, mux); err != nil {
 			log.Printf("Health server stopped: %v", err)
 		}
 	}()

@@ -86,6 +86,14 @@ spec:
           value: "persistent://rag-pipeline/operations/qdrant-ops"
         - name: PULSAR_QDRANT_RESULTS_TOPIC
           value: "persistent://rag-pipeline/operations/qdrant-ops-results"
+        - name: QDRANT_COLLECTION
+          value: "vectors"
+        - name: QDRANT_SEARCH_LIMIT
+          value: "5"
+        - name: QDRANT_SEARCH_TIMEOUT
+          value: "30s"
+        - name: RECURSION_BUDGET
+          value: "2.0"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OTEL_USE_TLS

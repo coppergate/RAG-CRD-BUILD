@@ -74,10 +74,11 @@ QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 
 _ollama_default = "https://ollama.llms-ollama.svc.cluster.local:11434" if not ALLOW_INSECURE else "http://ollama.llms-ollama.svc.cluster.local:11434"
 OLLAMA_URL = os.getenv("OLLAMA_URL", _ollama_default)
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
-COLLECTION_NAME = "vectors"
+QDRANT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "vectors")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
+INGEST_BATCH_SIZE = int(os.getenv("INGEST_BATCH_SIZE", "20"))
 S3_ENDPOINT = os.getenv("S3_ENDPOINT")
 if S3_ENDPOINT and not S3_ENDPOINT.startswith("http"):
     S3_ENDPOINT = f"http://{S3_ENDPOINT}"
@@ -193,9 +194,9 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
     try:
         current_vs = vector_size
         if not current_vs:
-            current_vs = get_model_dimensions(OLLAMA_MODEL)
+            current_vs = get_model_dimensions(QDRANT_MODEL)
 
-        logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {OLLAMA_MODEL} (dims: {current_vs})")
+        logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {QDRANT_MODEL} (dims: {current_vs})")
 
         pulsar_client = _create_pulsar_client()
         q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
@@ -271,7 +272,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                             cur.execute("INSERT INTO code_embedding_tag (embedding_id, tag_id) VALUES (%s, %s)", (emb_id, t_id))
 
                     idx += 1
-                    if len(points) >= 20:
+                    if len(points) >= INGEST_BATCH_SIZE:
                         q_prod.send(json.dumps({
                             "id": f"upsert-{uuid.uuid4()}",
                             "action": "upsert",
