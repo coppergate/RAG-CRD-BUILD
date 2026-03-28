@@ -9,7 +9,8 @@ set -euo pipefail
 
 STORAGE_DIR="${OLLAMA_MODEL_STORE:-/mnt/storage/ollama-models}"
 REGISTRY="${REGISTRY:-hierophant.hierocracy.home:5000}"
-OLLAMA_IMAGE="${REGISTRY}/ollama/ollama:0.15.6"
+OLLAMA_IMAGE_LOCAL="${REGISTRY}/ollama/ollama:0.15.6"
+OLLAMA_IMAGE_UPSTREAM="docker.io/ollama/ollama:0.15.6"
 
 # Models to pre-pull (add/remove as needed)
 MODELS=("llama3.1" "granite3.1-dense:8b")
@@ -22,6 +23,21 @@ echo ""
 
 mkdir -p "$STORAGE_DIR"
 
+# Ensure the base Ollama image is in the local registry
+echo "[0/4] Checking for base Ollama image in local registry..."
+if ! podman pull "$OLLAMA_IMAGE_LOCAL" 2>/dev/null; then
+  echo "  Base image $OLLAMA_IMAGE_LOCAL not found in local registry."
+  echo "  Attempting to pull from upstream $OLLAMA_IMAGE_UPSTREAM..."
+  podman pull "$OLLAMA_IMAGE_UPSTREAM"
+  echo "  Tagging $OLLAMA_IMAGE_UPSTREAM -> $OLLAMA_IMAGE_LOCAL"
+  podman tag "$OLLAMA_IMAGE_UPSTREAM" "$OLLAMA_IMAGE_LOCAL"
+  echo "  Pushing $OLLAMA_IMAGE_LOCAL to local registry..."
+  podman push "$OLLAMA_IMAGE_LOCAL"
+  echo "  ✓ Base image pushed to local registry."
+else
+  echo "  ✓ Base image found in local registry."
+fi
+
 # Start a temporary ollama server with model storage on /mnt/storage
 CONTAINER_NAME="ollama-pre-pull"
 echo "[1/4] Starting temporary Ollama container..."
@@ -29,9 +45,9 @@ podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
 podman run -d \
   --name "$CONTAINER_NAME" \
   --replace \
-  -v "$STORAGE_DIR:/root/.ollama/models" \
+  -v "$STORAGE_DIR:/root/.ollama/models:z" \
   -e OLLAMA_LLM_LIBRARY=cpu \
-  "$OLLAMA_IMAGE"
+  "$OLLAMA_IMAGE_LOCAL"
 
 echo "[2/4] Waiting for Ollama to start..."
 for i in $(seq 1 30); do

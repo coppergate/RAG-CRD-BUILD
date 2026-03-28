@@ -271,17 +271,18 @@ The RAG stack uses the **Ent ORM** for type-safe database access, centralized in
 
 ## LLM Model Management
 
-### Pre-Pulling Models (Outside Install)
-Models should be downloaded and pushed to the local registry BEFORE running the cluster install.
-This avoids long postStart hangs and internet dependency during install.
+### Pre-Pulling and Caching Models
+Models are downloaded and pushed to the local registry to avoid internet dependency during cluster installation.
 
-1. **Script**: `rag-stack/infrastructure/ollama/pre-pull-models.sh`
-2. **Storage**: Models are cached at `/mnt/storage/ollama-models/` on hierophant.
-3. **Registry**: Models are also pushed as OCI artifacts to the local registry.
-4. **Command**:
+1. **Script**: `rag-stack/infrastructure/ollama/pre-pull-models.sh` (for host cache) or `push-models-to-cluster.sh` (for registry sync).
+2. **Local Cache**: Models are cached at `/mnt/storage/ollama-models/` on hierophant. This directory is mounted into the temporary Ollama container to avoid redundant downloads.
+3. **Registry**: Models are pushed as OCI artifacts to the local registry (`registry.hierocracy.home:5000`).
+4. **Base Image Fallback**: If the base `ollama/ollama:0.15.6` image is missing from the local registry, the scripts will fallback to `docker.io`, tag it, and push it to the local registry.
+5. **Command**:
     ```bash
-    cd /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/ollama
-    bash ./pre-pull-models.sh
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "cd /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/ollama && \
+       bash ./push-models-to-cluster.sh"
     ```
 
 ### Model Seeding (During Install)
