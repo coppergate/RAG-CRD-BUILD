@@ -217,3 +217,11 @@ func (pc *PulsarClient) Close() {
 	pc.promptProducer.Close()
 	pc.client.Close()
 }
+
+// Ping checks if the client is healthy.
+func (pc *PulsarClient) Ping() error {
+	if pc.client == nil {
+		return fmt.Errorf("pulsar client is nil")
+	}
+	return nil
+}

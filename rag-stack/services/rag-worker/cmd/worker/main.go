@@ -53,6 +53,29 @@ func main() {
 	defer consumer.Close()
 
 	healthSrv.RegisterCheck("pulsar", func() error {
+		return msgClient.Ping()
+	})
+
+	healthSrv.RegisterCheck("ollama-planner", func() error {
+		client, err := registry.GetClient(cfg.PlannerModel)
+		if err != nil {
+			return err
+		}
+		// If it's an OllamaClient, we can ping it
+		if oc, ok := client.(*ollama.OllamaClient); ok {
+			return oc.Ping()
+		}
+		return nil
+	})
+
+	healthSrv.RegisterCheck("ollama-executor", func() error {
+		client, err := registry.GetClient(cfg.ExecutorModel)
+		if err != nil {
+			return err
+		}
+		if oc, ok := client.(*ollama.OllamaClient); ok {
+			return oc.Ping()
+		}
 		return nil
 	})
 

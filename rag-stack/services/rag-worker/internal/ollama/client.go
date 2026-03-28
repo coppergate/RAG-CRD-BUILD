@@ -159,3 +159,16 @@ func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
 
 	return result.Embedding, nil
 }
+	
+func (o *OllamaClient) Ping() error {
+	url := fmt.Sprintf("%s/api/tags", o.url)
+	resp, err := o.httpClient.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ollama returned status %d", resp.StatusCode)
+	}
+	return nil
+}

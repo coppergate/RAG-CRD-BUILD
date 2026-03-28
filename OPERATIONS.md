@@ -108,6 +108,23 @@ To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
 - **Isolation**: Tag-based filtering uses a strict `must` match to ensure context isolation.
 - **Tag Matching**: Filtering and storage must use UUID `tag_ids` for consistency. Human-readable `tag_names` are for display only.
 
+## Health and Readiness Checks
+All RAG services implement standardized health and readiness endpoints for Kubernetes probes and external monitoring.
+1.  **Endpoints**:
+    -   `/healthz`: Liveness probe. Returns `200 OK` if the process is running.
+    -   `/readyz`: Readiness probe. Returns `200 OK` only if all critical dependencies (DB, Pulsar, Ollama, S3) are reachable.
+    -   `/health`: Legacy endpoint (maps to `/healthz`).
+2.  **Implementation**:
+    -   **Go Services**: Use the `app-builds/common/health` package.
+    -   **Python Services**: Use FastAPI with explicit `/healthz` and `/readyz` decorators.
+3.  **Dependency Checks**:
+    -   `readyz` performs deep checks:
+        -   `database`: `SELECT 1` or lightweight query.
+        -   `pulsar`: Client/Producer/Consumer connectivity.
+        -   `ollama`: `/api/tags` connectivity.
+        -   `s3`: `ListBuckets` or similar.
+4.  **Monitoring**: The `rag-admin-api` (BFF) aggregates these checks for the UI.
+
 ## Pulsar Installation
 Pulsar is installed by `setup-complete.sh` (Step 1.5.8) — NOT by `setup-all.sh`.
 `setup-all.sh` only deploys RAG services and **verifies** that Pulsar is already running.

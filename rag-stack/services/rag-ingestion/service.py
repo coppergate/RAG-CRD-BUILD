@@ -315,9 +315,59 @@ async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_ingestion, req.ingestion_id, req.tag_names, req.tag_ids, req.vector_size, req.file_names)
     return {"status": "accepted", "ingestion_id": req.ingestion_id}
 
-@app.get("/health")
-async def health():
+@app.get("/healthz")
+async def healthz():
     return {"status": "ok"}
+
+@app.get("/readyz")
+async def readyz():
+    errors = {}
+
+    # Check DB
+    try:
+        pool = get_db_pool()
+        if pool:
+            conn = pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            finally:
+                pool.putconn(conn)
+        else:
+            errors["database"] = "connection pool not initialized"
+    except Exception as e:
+        errors["database"] = str(e)
+
+    # Check Pulsar
+    try:
+        client = _create_pulsar_client()
+        client.close()
+    except Exception as e:
+        errors["pulsar"] = str(e)
+
+    # Check Ollama
+    try:
+        resp = http_session.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        resp.raise_for_status()
+    except Exception as e:
+        errors["ollama"] = str(e)
+
+    # Check S3
+    try:
+        s3 = get_s3_client()
+        s3.list_buckets()
+    except Exception as e:
+        errors["s3"] = str(e)
+
+    if errors:
+        logger.error(f"Readiness check failed: {errors}")
+        raise HTTPException(status_code=503, detail=errors)
+
+    return {"status": "ready"}
+
+@app.get("/health")
+async def health_legacy():
+    return await healthz()
 
 @app.on_event("shutdown")
 async def shutdown_event():

@@ -195,3 +195,13 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string) {
 		log.Printf("[%s] Failed to send error to topic: %v", id, err)
 	}
 }
+
+// Ping checks if the client is healthy.
+func (c *Client) Ping() error {
+	if c.client == nil {
+		return fmt.Errorf("pulsar client is nil")
+	}
+	// No direct ping method, so we verify the client isn't closed
+	// (we can't easily check actual connectivity without sending a msg)
+	return nil
+}

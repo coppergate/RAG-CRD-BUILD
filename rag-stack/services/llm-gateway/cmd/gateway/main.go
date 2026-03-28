@@ -60,6 +60,10 @@ func main() {
 		return err
 	})
 
+	healthSrv.RegisterCheck("pulsar", func() error {
+		return pc.Ping()
+	})
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", openAIHandler.HandleChatCompletions)
 	mux.HandleFunc("/v1/rag/chat", openAIHandler.HandleGenericChat)

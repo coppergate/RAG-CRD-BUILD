@@ -105,6 +105,18 @@ func (r *ModelRegistry) GetExecutor(modelID string) (Executor, error) {
 	return factory(client), nil
 }
 
+func (r *ModelRegistry) GetClient(modelID string) (ChatClient, error) {
+	r.mu.RLock()
+	spec, ok := r.specs[modelID]
+	r.mu.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("model %s not found in registry", modelID)
+	}
+
+	return r.getOrCreateClient(spec)
+}
+
 func (r *ModelRegistry) getOrCreateClient(spec ModelSpec) (ChatClient, error) {
 	key := fmt.Sprintf("%s|%s|%s", spec.Backend, spec.Endpoint, spec.Name)
 	
