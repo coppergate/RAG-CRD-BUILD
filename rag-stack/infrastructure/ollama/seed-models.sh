@@ -93,11 +93,13 @@ spec:
             fi
             sleep 1
           done
-          echo "Pulling ${MODEL}..."
-          if ollama pull "${MODEL}"; then
-            echo "SUCCESS: ${MODEL} seeded"
+          echo "Pulling ${REGISTRY}/ollama/${MODEL}..."
+          if ollama pull "${REGISTRY}/ollama/${MODEL}"; then
+            echo "SUCCESS: ${MODEL} seeded from local registry"
+            # Tag it as the short name so Ollama pods can find it easily
+            ollama cp "${REGISTRY}/ollama/${MODEL}" "${MODEL}"
           else
-            echo "ERROR: Failed to pull ${MODEL}"
+            echo "ERROR: Failed to pull ${MODEL} from local registry"
             kill \$OLLAMA_PID 2>/dev/null
             exit 1
           fi
@@ -128,11 +130,11 @@ spec:
         name: registry-ca-cm
 EOF
 
-  echo "  Waiting for seeder pod $SEEDER_NAME to complete (timeout 300s)..."
+  echo "  Waiting for seeder pod $SEEDER_NAME to complete (timeout 1800s)..."
   if $KUBECTL wait --for=condition=Ready pod/"$SEEDER_NAME" -n "$NAMESPACE" --timeout=30s 2>/dev/null; then
     true  # pod is running
   fi
-  $KUBECTL wait --for=jsonpath='{.status.phase}'=Succeeded pod/"$SEEDER_NAME" -n "$NAMESPACE" --timeout=300s 2>/dev/null
+  $KUBECTL wait --for=jsonpath='{.status.phase}'=Succeeded pod/"$SEEDER_NAME" -n "$NAMESPACE" --timeout=1800s 2>/dev/null || true
   PHASE=$($KUBECTL get pod "$SEEDER_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null)
 
   if [ "$PHASE" = "Succeeded" ]; then

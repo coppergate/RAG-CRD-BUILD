@@ -34,6 +34,12 @@ echo "Waiting for RAG System certificates to be issued..."
 $KUBECTL wait --for=condition=Ready certificate/llm-gateway-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/rag-ingestion-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/rag-web-ui-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/db-adapter-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/qdrant-adapter-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/rag-admin-api-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/object-store-mgr-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=60s
 mark_step_done "rag-system-tls"
 fi
 
@@ -272,6 +278,7 @@ fi
 if ! is_step_done "db-adapter"; then
 echo "--- 10. Deploying DB Adapter (Go) ---"
 apply_manifest "$REPO_DIR/services/db-adapter/k8s/deployment.yaml"
+$KUBECTL apply -f "$REPO_DIR/services/db-adapter/k8s/service.yaml"
 mark_step_done "db-adapter"
 fi
 

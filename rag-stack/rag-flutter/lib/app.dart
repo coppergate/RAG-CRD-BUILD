@@ -1,0 +1,129 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+// Import features
+import 'features/chat/chat_page.dart';
+import 'features/ingestion/ingestion_page.dart';
+import 'features/memory/memory_page.dart';
+import 'features/s3_browser/s3_page.dart';
+import 'features/timescale/timescale_page.dart';
+import 'features/qdrant/qdrant_page.dart';
+import 'features/models/models_page.dart';
+import 'features/observability/observability_page.dart';
+import 'features/settings/settings_page.dart';
+
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final _shellNavigatorKey = GlobalKey<NavigatorState>();
+
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/chat',
+    navigatorKey: _rootNavigatorKey,
+    routes: [
+      ShellRoute(
+        navigatorKey: _shellNavigatorKey,
+        builder: (context, state, child) {
+          return MainScaffold(child: child);
+        },
+        routes: [
+          GoRoute(path: '/chat', builder: (context, state) => const ChatPage()),
+          GoRoute(path: '/ingestion', builder: (context, state) => const IngestionPage()),
+          GoRoute(path: '/memory', builder: (context, state) => const MemoryPage()),
+          GoRoute(path: '/s3', builder: (context, state) => const S3Page()),
+          GoRoute(path: '/timescale', builder: (context, state) => const TimescalePage()),
+          GoRoute(path: '/qdrant', builder: (context, state) => const QdrantPage()),
+          GoRoute(path: '/models', builder: (context, state) => const ModelsPage()),
+          GoRoute(path: '/observability', builder: (context, state) => const ObservabilityPage()),
+          GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
+        ],
+      ),
+    ],
+  );
+});
+
+class AppScaffold extends ConsumerWidget {
+  const AppScaffold({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
+    return MaterialApp.router(
+      title: 'RAG Pipeline Explorer',
+      theme: ThemeData(
+        brightness: Brightness.light,
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+      ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+      ),
+      routerConfig: router,
+    );
+  }
+}
+
+class MainScaffold extends StatefulWidget {
+  final Widget child;
+
+  const MainScaffold({super.key, required this.child});
+
+  @override
+  State<MainScaffold> createState() => _MainScaffoldState();
+}
+
+class _MainScaffoldState extends State<MainScaffold> {
+  int _selectedIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Row(
+        children: [
+          NavigationRail(
+            extended: true,
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (int index) {
+              setState(() {
+                _selectedIndex = index;
+              });
+              _onDestinationSelected(index, context);
+            },
+            labelType: NavigationRailLabelType.none,
+            destinations: const [
+              NavigationRailDestination(icon: Icon(Icons.chat), label: Text('Chat')),
+              NavigationRailDestination(icon: Icon(Icons.upload_file), label: Text('Ingestion')),
+              NavigationRailDestination(icon: Icon(Icons.memory), label: Text('Memory')),
+              NavigationRailDestination(icon: Icon(Icons.storage), label: Text('S3 Browser')),
+              NavigationRailDestination(icon: Icon(Icons.table_chart), label: Text('TimescaleDB')),
+              NavigationRailDestination(icon: Icon(Icons.hub), label: Text('Qdrant')),
+              NavigationRailDestination(icon: Icon(Icons.compare), label: Text('Model Comparison')),
+              NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('Observability')),
+              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('Settings')),
+            ],
+          ),
+          const VerticalDivider(thickness: 1, width: 1),
+          Expanded(child: widget.child),
+        ],
+      ),
+    );
+  }
+
+  void _onDestinationSelected(int index, BuildContext context) {
+    final routes = [
+      '/chat',
+      '/ingestion',
+      '/memory',
+      '/s3',
+      '/timescale',
+      '/qdrant',
+      '/models',
+      '/observability',
+      '/settings',
+    ];
+    context.go(routes[index]);
+  }
+}

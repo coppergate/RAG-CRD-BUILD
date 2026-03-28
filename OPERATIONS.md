@@ -50,15 +50,33 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
    done"
 ```
 
-## RAG Pipeline Explorer (Flutter UI) BFF
-The Flutter UI communicates with the cluster via the `rag-admin-api` (BFF) service.
-1.  **Endpoint**: `https://rag-admin-api.rag.hierocracy.home`
-2.  **Streaming**: Chat streaming uses WebSockets at `wss://gateway.hierocracy.home/v1/rag/chat/stream`.
-3.  **Adapter APIs**: The BFF proxies requests to:
-    -   `object-store-mgr`: `/api/s3/*` for bucket/object browsing.
-    -   `db-adapter`: `/api/db/*` for TimescaleDB session/stats browsing.
-    -   `qdrant-adapter`: `/api/qdrant/*` for vector collection browsing.
-    -   `memory-controller`: `/api/memory/*` for memory management.
+## RAG Pipeline Explorer (Flutter UI)
+The RAG Pipeline Explorer is a Flutter-based desktop/web application for managing the RAG cluster.
+1.  **Source Directory**: `rag-stack/rag-flutter`
+2.  **Development (Linux Desktop)**:
+    ```bash
+    cd rag-stack/rag-flutter
+    flutter run -d linux
+    ```
+3.  **Development (Web)**:
+    ```bash
+    cd rag-stack/rag-flutter
+    flutter run -d chrome
+    ```
+4.  **Production Build (Web)**:
+    ```bash
+    cd rag-stack/rag-flutter
+    flutter build web --release
+    ```
+5.  **BFF (Backend for Frontend)**:
+    The Flutter UI communicates with the cluster via the `rag-admin-api` (BFF) service.
+    -   **Endpoint**: `https://rag-admin-api.rag.hierocracy.home`
+    -   **Streaming**: Chat streaming uses WebSockets at `wss://gateway.hierocracy.home/v1/rag/chat/stream`.
+    -   **Adapter APIs**: The BFF proxies requests to:
+        -   `object-store-mgr`: `/api/s3/*` for bucket/object browsing.
+        -   `db-adapter`: `/api/db/*` for TimescaleDB session/stats browsing.
+        -   `qdrant-adapter`: `/api/qdrant/*` for vector collection browsing.
+        -   `memory-controller`: `/api/memory/*` for memory management.
 
 ## Local/Bootstrap Build and Push (Host-Based)
 Use this only for bootstrapping or when the cluster-native pipeline is unavailable.

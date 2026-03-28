@@ -26,12 +26,14 @@ spec:
           httpGet:
             path: /healthz
             port: 8080
+            scheme: HTTPS
           periodSeconds: 5
           failureThreshold: 30
         readinessProbe:
           httpGet:
             path: /readyz
             port: 8080
+            scheme: HTTPS
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 2
@@ -40,6 +42,7 @@ spec:
           httpGet:
             path: /healthz
             port: 8080
+            scheme: HTTPS
           initialDelaySeconds: 30
           periodSeconds: 20
           timeoutSeconds: 2
@@ -87,13 +90,27 @@ spec:
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OTEL_USE_TLS
           value: "true"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
         volumeMounts:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt
           subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
       volumes:
       - name: app-dir
         emptyDir: {}
       - name: registry-ca
         configMap:
           name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: rag-worker-tls
+          optional: true

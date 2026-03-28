@@ -52,7 +52,7 @@ spec:
       serviceAccountName: rag-web-ui
       containers:
       - name: web-ui
-        image: registry.container-registry.svc.cluster.local:5000/rag-web-ui:2.0.1
+        image: registry.container-registry.svc.cluster.local:5000/rag-web-ui:__VERSION__
         imagePullPolicy: Always
         ports:
         - containerPort: 8080

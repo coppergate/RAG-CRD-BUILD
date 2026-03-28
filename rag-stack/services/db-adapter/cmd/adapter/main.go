@@ -56,6 +56,8 @@ func main() {
 	cfg := config.Load()
 	healthSrv := health.NewServer()
 
+	log.Printf("DEBUG: TLS_CERT=%q, TLS_KEY=%q", cfg.TLSCert, cfg.TLSKey)
+
 	shutdown, err := telemetry.InitTracer("db-adapter")
 	if err != nil {
 		log.Printf("Warning: failed to initialize tracer: %v", err)
