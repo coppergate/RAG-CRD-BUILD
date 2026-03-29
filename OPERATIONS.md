@@ -277,8 +277,9 @@ Models are downloaded and pushed to the local registry to avoid internet depende
 1. **Script**: `rag-stack/infrastructure/ollama/pre-pull-models.sh` (for host cache) or `push-models-to-cluster.sh` (for registry sync).
 2. **Local Cache**: Models are cached at `/mnt/storage/ollama-models/` on hierophant. This directory is mounted into the temporary Ollama container to avoid redundant downloads.
 3. **Registry**: Models are pushed as OCI artifacts to the local registry (`registry.hierocracy.home:5000`).
-4. **Base Image Fallback**: If the base `ollama/ollama:0.15.6` image is missing from the local registry, the scripts will fallback to `docker.io`, tag it, and push it to the local registry.
-5. **Command**:
+4. **TLS Trust**: The in-cluster registry uses a private CA. The scripts automatically extract this CA from the cluster and create a combined bundle at `/mnt/storage/registry-config/combined-ca-bundle.crt` which is mounted into the container to ensure both local registry and internet (`ollama.com`) connectivity.
+5. **Base Image Fallback**: If the base `ollama/ollama:0.15.6` image is missing from the local registry, the scripts will fallback to `docker.io`, tag it, and push it to the local registry (using `--tls-verify=false` for the bootstrap push).
+6. **Command**:
     ```bash
     ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
       "cd /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/ollama && \

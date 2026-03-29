@@ -8,9 +8,33 @@
 set -euo pipefail
 
 STORAGE_DIR="${OLLAMA_MODEL_STORE:-/mnt/storage/ollama-models}"
-REGISTRY="${REGISTRY:-hierophant.hierocracy.home:5000}"
+REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
 OLLAMA_IMAGE_LOCAL="${REGISTRY}/ollama/ollama:0.15.6"
 OLLAMA_IMAGE_UPSTREAM="docker.io/ollama/ollama:0.15.6"
+REGISTRY_CONFIG_DIR="/mnt/storage/registry-config"
+
+# Ensure directories exist
+mkdir -p "$STORAGE_DIR"
+mkdir -p "$REGISTRY_CONFIG_DIR"
+
+# 0. Setup TLS trust for the local registry
+COMBINED_CA="$REGISTRY_CONFIG_DIR/combined-ca-bundle.crt"
+LOCAL_CA="$REGISTRY_CONFIG_DIR/ca.crt"
+
+if [ ! -f "$LOCAL_CA" ]; then
+    echo "Extracting Registry CA from cluster..."
+    export KUBECONFIG=/home/k8s/kube/config/kubeconfig
+    /home/k8s/kube/kubectl get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 -d > "$LOCAL_CA" || echo "Warning: Could not extract CA from cluster."
+fi
+
+if [ -f "$LOCAL_CA" ]; then
+    echo "Creating combined CA bundle for container..."
+    HOST_CA_BUNDLE="/etc/pki/tls/certs/ca-bundle.crt"
+    if [ ! -f "$HOST_CA_BUNDLE" ]; then
+        HOST_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+    fi
+    cat "$HOST_CA_BUNDLE" "$LOCAL_CA" > "$COMBINED_CA"
+fi
 
 # Models to pre-pull (add/remove as needed)
 MODELS=("llama3.1" "granite3.1-dense:8b")
@@ -32,7 +56,7 @@ if ! podman pull "$OLLAMA_IMAGE_LOCAL" 2>/dev/null; then
   echo "  Tagging $OLLAMA_IMAGE_UPSTREAM -> $OLLAMA_IMAGE_LOCAL"
   podman tag "$OLLAMA_IMAGE_UPSTREAM" "$OLLAMA_IMAGE_LOCAL"
   echo "  Pushing $OLLAMA_IMAGE_LOCAL to local registry..."
-  podman push "$OLLAMA_IMAGE_LOCAL"
+  podman push --tls-verify=false "$OLLAMA_IMAGE_LOCAL"
   echo "  ✓ Base image pushed to local registry."
 else
   echo "  ✓ Base image found in local registry."
@@ -46,6 +70,7 @@ podman run -d \
   --name "$CONTAINER_NAME" \
   --replace \
   -v "$STORAGE_DIR:/ollama-models:z" \
+  -v "$COMBINED_CA:/etc/ssl/certs/ca-certificates.crt:z" \
   -e OLLAMA_MODELS=/ollama-models \
   -e OLLAMA_LLM_LIBRARY=cpu \
   "$OLLAMA_IMAGE_LOCAL"
@@ -78,7 +103,7 @@ for MODEL in "${MODELS[@]}"; do
   echo "  Copying $MODEL -> $LOCAL_REF"
   podman exec -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama cp "$MODEL" "$LOCAL_REF"
   echo "  Pushing $LOCAL_REF..."
-  podman exec -e OLLAMA_REGISTRY_INSECURE=1 -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama push "$LOCAL_REF" --insecure
+  podman exec -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama push "$LOCAL_REF"
   echo "  ✓ $LOCAL_REF"
 done
 
