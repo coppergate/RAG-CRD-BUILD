@@ -9,7 +9,9 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
 REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
-ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-latest}"
+# Default to current project version for consistency
+VERSION="${VERSION:-2.2.8}"
+ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
 
 source "$REPO_DIR/../../../scripts/journal-helper.sh"
 init_journal
@@ -17,14 +19,24 @@ init_journal
 should_run_step() {
     local step_name="$1"
     local verify_cmd="$2"
-    if ! is_step_done "$step_name"; then
-        return 0
+
+    if is_step_done "$step_name"; then
+        if [[ -z "$verify_cmd" ]] || eval "$verify_cmd" >/dev/null 2>&1; then
+            return 1 # Skip
+        else
+            echo "Journal has '$step_name' but live verification failed. Re-running step..."
+            return 0 # Run
+        fi
     fi
-    if ! eval "$verify_cmd" >/dev/null 2>&1; then
-        echo "Journal has '$step_name' but live verification failed. Re-running step..."
-        return 0
+
+    # Even if NOT in journal, skip if verification passes
+    if [[ -n "$verify_cmd" ]] && eval "$verify_cmd" >/dev/null 2>&1; then
+        echo "Step '$step_name' is not in journal but live verification succeeded. Skipping."
+        mark_step_done "$step_name"
+        return 1 # Skip
     fi
-    return 1
+
+    return 0
 }
 
 if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
@@ -78,13 +90,15 @@ fi
 rm -f "$COMBINED_CA"
 mark_step_done "build-pipeline-ca"
 
-if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1 && skopeo inspect --tls-verify=false docker://$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"; then
+# Use the external registry URL for skopeo if running on hierophant
+SKOPEO_REGISTRY="registry.hierocracy.home:5000"
+if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1 && skopeo inspect --tls-verify=false docker://$SKOPEO_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"; then
     echo "--- Bootstrapping Build Orchestrator Image (Cluster-Native) ---"
     ORCHESTRATOR_TAG="$ORCHESTRATOR_TAG" REGISTRY="$REGISTRY" bash "$REPO_DIR/bootstrap-orchestrator.sh"
     mark_step_done "build-orchestrator-image"
 fi
 
-if should_run_step "build-orchestrator" "$KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=30s"; then
+if should_run_step "build-orchestrator" "$KUBECTL get deployment build-orchestrator -n $NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | grep -q \":$ORCHESTRATOR_TAG$\" && $KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=30s"; then
     echo "--- Deploying Build Orchestrator ---"
     $KUBECTL apply -f "$REPO_DIR/orchestrator-deployment.yaml"
     $KUBECTL -n "$NAMESPACE" set image deploy/build-orchestrator orchestrator="$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"

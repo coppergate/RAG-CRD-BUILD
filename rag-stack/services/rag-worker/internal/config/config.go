@@ -32,6 +32,9 @@ type Config struct {
 	QdrantSearchTimeout time.Duration
 	RecursionBudget    float64
 	ShutdownTimeout    time.Duration
+
+	TLSCert            string
+	TLSKey             string
 }
 
 func LoadConfig() *Config {
@@ -70,5 +73,8 @@ func LoadConfig() *Config {
 		QdrantSearchTimeout: envutil.GetEnvDuration("QDRANT_SEARCH_TIMEOUT", 30*time.Second),
 		RecursionBudget:     envutil.GetEnvFloat("RECURSION_BUDGET", 2.0),
 		ShutdownTimeout:     envutil.GetEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
+
+		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
+		TLSKey:              envutil.GetEnv("TLS_KEY", ""),
 	}
 }

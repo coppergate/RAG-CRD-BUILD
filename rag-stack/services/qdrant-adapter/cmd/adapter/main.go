@@ -19,7 +19,6 @@ import (
 	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
 	"app-builds/qdrant-adapter/internal/qdrant"
-	"encoding/json"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"

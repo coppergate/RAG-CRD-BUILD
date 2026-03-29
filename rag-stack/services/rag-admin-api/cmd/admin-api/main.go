@@ -11,7 +11,6 @@ import (
 
 	"app-builds/common/health"
 	"app-builds/common/telemetry"
-	"app-builds/common/tlsutil"
 	"app-builds/rag-admin-api/internal/config"
 	"app-builds/rag-admin-api/internal/handlers"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"

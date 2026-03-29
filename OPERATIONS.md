@@ -21,7 +21,22 @@ The following values have been externalized to environment variables and can be 
 ### LLM Gateway (`llm-gateway`)
 - `REQUEST_TIMEOUT`: Timeout for Pulsar-based inference requests (default: `120s`).
 
-## Building Service Images — ALWAYS Use the Cluster Pipeline
+## Session Establishment (Operational Context)
+
+Every new session for the **Junie** agent MUST establish the operational context by following these steps:
+1.  **Branch Check**: Ensure the local git branch `work-YYYY-MM-DD` exists for the current date. If not, create it.
+2.  **Versioning**: Verify the current project version in `setup-complete.sh` and ensure it reflects the latest entry in `changelog.json` (incremented for a new session).
+3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
+4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md` to ensure any new procedures are understood and recorded.
+
+## Current Focus (Iteration 7: Phase 1)
+
+As of version `2.2.8`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
+1.  **Memory Controller**: A scaffold service exists in `rag-stack/services/memory-controller`. It implements basic health checks and a mock `/api/memory/items` endpoint.
+2.  **Database Schema**: Memory tables (`memory_items`, `memory_links`, `memory_events`) are defined in `iteration-7.md` but the SQL migration file in `rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql` needs to be created.
+3.  **Contracts**: JSON schemas for `MemoryWriteRequest`, `MemoryRetrieveRequest`, and `MemoryPack` are defined but need to be implemented in `rag-stack/contracts/`.
+
+---
 
 **IMPORTANT**: All RAG service image builds MUST go through the in-cluster Kaniko build pipeline. Do NOT use `podman build` or `docker build` on the host to build service images. The host-based `build-and-push.sh` is only for bootstrapping when the cluster is not available.
 
@@ -35,13 +50,13 @@ The following values have been externalized to environment variables and can be 
 
 ### Triggering a Build
 1.  **Access Hierophant**: Use `./run-on-hierophant.sh` or SSH directly.
-2.  **Versioning**: Set the `VERSION` environment variable (e.g., `2.2.0`).
+2.  **Versioning**: Set the `VERSION` environment variable (e.g., `2.2.8`).
 3.  **Command**: Run `rag-stack/build-all-on-cluster.sh --wait` (the `--wait` flag polls the registry until all images are available).
 4.  **Example Command**:
     ```bash
     ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
       "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && \
-       VERSION=2.2.0 bash ./build-all-on-cluster.sh --wait"
+       VERSION=2.2.8 bash ./build-all-on-cluster.sh --wait"
     ```
 
 ### Monitoring Builds
@@ -57,7 +72,10 @@ The following values have been externalized to environment variables and can be 
       "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
        /home/k8s/kube/kubectl logs -n build-pipeline deploy/build-orchestrator --tail=100"
     ```
-- **Build Status Dashboard**: The build-orchestrator exposes a web UI at its service endpoint (port 8080) with SSE-based live updates.
+- **Build Status Dashboard & Health**: The `build-orchestrator` exposes two separate servers to avoid port conflicts:
+    - **Status Dashboard**: Web UI and SSE-based live updates on port **8080**.
+    - **Health Checks**: `/healthz` and `/readyz` endpoints on port **8081**.
+    Both use HTTPS and require the `build-orchestrator-tls` secret.
 
 ### Verifying Images in Registry
 ```bash
@@ -161,6 +179,25 @@ All RAG services implement standardized health and readiness endpoints for Kuber
         -   `ollama`: `/api/tags` connectivity.
         -   `s3`: `ListBuckets` or similar.
 4.  **Monitoring**: The `rag-admin-api` (BFF) aggregates these checks for the UI.
+
+## Pre-deployment Go Dependency Check
+
+To ensure that all Go services are synchronized with their dependencies and compile correctly before launching a cluster-native build:
+
+1.  **Manual Check Procedure**:
+    ```bash
+    for svc in rag-stack/services/*; do
+      if [ -d "$svc" ] && [ -f "$svc/go.mod" ]; then
+        echo "--- Checking $svc ---"
+        (cd "$svc" && go mod tidy && go build ./...)
+      fi
+    done
+    ```
+2.  **Requirements**:
+    -   `go` version 1.25+ installed on the build machine.
+    -   The `common` module MUST be tidied FIRST if any shared types have changed.
+3.  **Verification**: The check passes if `go build` exits with code 0 for all services.
+    -   Common failure points include missing `replace` directives or unused imports in generated/edited code.
 
 ## Pulsar Installation
 Pulsar is installed by `setup-complete.sh` (Step 1.5.8) — NOT by `setup-all.sh`.

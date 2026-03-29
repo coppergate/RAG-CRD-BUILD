@@ -216,6 +216,7 @@ func main() {
 	statusTopic := getenvDefault("BUILD_STATUS_TOPIC", "persistent://public/default/build-status")
 	failedTaskTopic := strings.TrimSpace(os.Getenv("FAILED_TASK_TOPIC"))
 	httpAddr := getenvDefault("HTTP_ADDR", ":8080")
+	healthAddr := getenvDefault("HEALTH_ADDR", ":8081")
 	maxConcurrent := getenvIntDefault("MAX_CONCURRENT_BUILDS", 3)
 	maxTaskRetries := getenvIntDefault("MAX_TASK_RETRIES", 2)
 	if maxConcurrent < 1 {
@@ -229,7 +230,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error building in-cluster config: %v", err)
 	}
-	clientset, err := kubernetes.NewForConfig(config)
+	k8sClientset, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("Error creating kubernetes client: %v", err)
 	}
@@ -243,13 +244,13 @@ func main() {
 		}
 	}
 
-	client, err := pulsar.NewClient(pulsarOpts)
+	pulsarClient, err = pulsar.NewClient(pulsarOpts)
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
-	defer client.Close()
+	defer pulsarClient.Close()
 
-	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
+	consumer, err := pulsarClient.Subscribe(pulsar.ConsumerOptions{
 		Topic:            topic,
 		SubscriptionName: "build-orchestrator-sub",
 		Type:             pulsar.Shared,
@@ -261,7 +262,7 @@ func main() {
 
 	var statusProducer pulsar.Producer
 	if statusTopic != "" {
-		statusProducer, err = client.CreateProducer(pulsar.ProducerOptions{Topic: statusTopic})
+		statusProducer, err = pulsarClient.CreateProducer(pulsar.ProducerOptions{Topic: statusTopic})
 		if err != nil {
 			log.Fatalf("Could not create status topic producer: %v", err)
 		}
@@ -269,7 +270,7 @@ func main() {
 	}
 	var failedProducer pulsar.Producer
 	if failedTaskTopic != "" {
-		failedProducer, err = client.CreateProducer(pulsar.ProducerOptions{Topic: failedTaskTopic})
+		failedProducer, err = pulsarClient.CreateProducer(pulsar.ProducerOptions{Topic: failedTaskTopic})
 		if err != nil {
 			log.Fatalf("Could not create failed-task topic producer: %v", err)
 		}
@@ -284,6 +285,8 @@ func main() {
 	defer cancel()
 
 	var activeBuilds int32
+
+	// Launch HTTP server
 	taskQueue := make(chan buildTaskEnvelope, maxConcurrent*8)
 
 	for i := 0; i < maxConcurrent; i++ {
@@ -308,7 +311,7 @@ func main() {
 						Message:     fmt.Sprintf("Picked up by worker-%d", workerID),
 					})
 
-					err := processTask(ctx, clientset, env.task, jobName, publisher)
+					err := processTask(ctx, k8sClientset, env.task, jobName, publisher)
 					if err != nil {
 						redelivery := int(env.msg.RedeliveryCount())
 						if redelivery >= maxTaskRetries {
@@ -347,7 +350,8 @@ func main() {
 		}()
 	}
 
-	go runHTTPServer(ctx, httpAddr, hub, &activeBuilds, maxConcurrent)
+	go runStatusServer(ctx, httpAddr, hub, &activeBuilds, maxConcurrent)
+	go runHealthServer(ctx, healthAddr)
 
 	go func() {
 		for {
@@ -468,24 +472,17 @@ func waitForJobCompletion(ctx context.Context, clientset *kubernetes.Clientset, 
 	}
 }
 
-func runHTTPServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int) {
-	mux := http.NewServeMux()
+var (
+	pulsarClient pulsar.Client
+	k8sClientset *kubernetes.Clientset
+)
 
-	healthSrv := health.NewServer()
-	healthSrv.RegisterCheck("pulsar", func() error {
-		if client == nil {
-			return fmt.Errorf("pulsar client is nil")
-		}
-		return nil
-	})
-	healthSrv.RegisterCheck("kubernetes", func() error {
-		if clientset == nil {
-			return fmt.Errorf("kubernetes clientset is nil")
-		}
-		_, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{Limit: 1})
-		return err
-	})
-	healthSrv.RegisterRoutes(mux)
+func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int) {
+	certFile := os.Getenv("TLS_CERT")
+	keyFile := os.Getenv("TLS_KEY")
+	log.Printf("Starting status dashboard server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
+
+	mux := http.NewServeMux()
 
 	mux.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -547,8 +544,60 @@ func runHTTPServer(ctx context.Context, addr string, hub *statusHub, activeBuild
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Printf("HTTP server error: %v", err)
+	if certFile != "" && keyFile != "" {
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+			log.Printf("Status HTTPS server error: %v", err)
+		}
+	} else {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Status HTTP server error: %v", err)
+		}
+	}
+}
+
+func runHealthServer(ctx context.Context, addr string) {
+	certFile := os.Getenv("TLS_CERT")
+	keyFile := os.Getenv("TLS_KEY")
+	log.Printf("Starting health server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
+
+	mux := http.NewServeMux()
+	healthSrv := health.NewServer()
+	healthSrv.RegisterCheck("pulsar", func() error {
+		if pulsarClient == nil {
+			return fmt.Errorf("pulsar client is nil")
+		}
+		return nil
+	})
+	healthSrv.RegisterCheck("kubernetes", func() error {
+		if k8sClientset == nil {
+			return fmt.Errorf("kubernetes clientset is nil")
+		}
+		ns := os.Getenv("POD_NAMESPACE")
+		if ns == "" {
+			ns = "build-pipeline"
+		}
+		_, err := k8sClientset.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{Limit: 1})
+		return err
+	})
+	healthSrv.RegisterRoutes(mux)
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
+
+	if certFile != "" && keyFile != "" {
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+			log.Printf("Health HTTPS server error: %v", err)
+		}
+	} else {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Health HTTP server error: %v", err)
+		}
 	}
 }
 

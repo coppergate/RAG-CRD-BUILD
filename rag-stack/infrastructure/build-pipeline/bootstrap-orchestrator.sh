@@ -8,18 +8,29 @@ REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="latest"
+VERSION="${VERSION:-2.2.8}"
 REGISTRY="registry.hierocracy.home:5000"
 INTERNAL_REGISTRY="registry.container-registry.svc.cluster.local:5000"
 ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
+
+# Check if image already exists in registry to avoid redundant bootstrap builds
+echo "--- Checking if Build Orchestrator image $ORCHESTRATOR_TAG already exists ---"
+if command -v skopeo >/dev/null 2>&1; then
+    if skopeo inspect --tls-verify=false "docker://$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG" >/dev/null 2>&1; then
+        echo "Image build-orchestrator:$ORCHESTRATOR_TAG already exists in registry. Skipping bootstrap build."
+        exit 0
+    fi
+else
+    echo "Warning: skopeo not found, cannot check if image exists. Proceeding with build."
+fi
 
 source "$REPO_DIR/../scripts/journal-helper.sh"
 
 echo "--- 1. Packaging Build Orchestrator sources ---"
 TARBALL="orchestrator-bootstrap.tar.gz"
-# We only need the orchestrator folder for the bootstrap
-cd "$REPO_DIR/services/build-orchestrator"
-tar -czf "$SAFE_TMP_DIR/$TARBALL" .
+# Package orchestrator and common for bootstrap
+cd "$REPO_DIR/services"
+tar -czf "$SAFE_TMP_DIR/$TARBALL" build-orchestrator common
 cd - > /dev/null
 
 echo "--- 2. Uploading sources to S3 ---"
@@ -130,7 +141,7 @@ spec:
       - name: kaniko
         image: $INTERNAL_REGISTRY/martizih/kaniko:v1.27.0
         args:
-        - "--dockerfile=Dockerfile"
+        - "--dockerfile=build-orchestrator/Dockerfile"
         - "--context=dir:///workspace"
         - "--destination=$INTERNAL_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
         - "--destination=$INTERNAL_REGISTRY/build-orchestrator:latest"
