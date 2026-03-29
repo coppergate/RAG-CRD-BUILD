@@ -76,7 +76,7 @@ else
 fi
 
 echo "--- 3. Ensuring namespaces exist ---"
-namespaces=("stage" "data" "operations")
+namespaces=("stage" "data" "operations" "dlq")
 for ns in "${namespaces[@]}"; do
     full_ns="rag-pipeline/$ns"
     if ! pulsar_admin namespaces list rag-pipeline | grep -q "^$full_ns$"; then

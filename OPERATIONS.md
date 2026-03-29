@@ -231,6 +231,16 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
      /pulsar/bin/pulsar-admin tenants list"
 ```
 
+### Pulsar Initialization (Tenants and Namespaces)
+If services fail with `no partitioned metadata for topic` or `Namespace not found`, ensure the RAG tenants and namespaces are provisioned:
+1. **Script**: `rag-stack/infrastructure/pulsar/init-rag-pulsar.sh`
+2. **Namespaces Created**: `rag-pipeline/stage`, `rag-pipeline/data`, `rag-pipeline/operations`, `rag-pipeline/dlq`.
+3. **Run Command**:
+   ```bash
+   ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+     "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh"
+   ```
+
 ### Important Notes
 - `setup-all.sh` will **exit with an error** if Pulsar brokers are not running. This is intentional — RAG services depend on Pulsar and will fail at runtime without it.
 - The Pulsar `install.sh` journal is NOT cleared on success (to prevent redundant re-runs when called from multiple parent scripts).
