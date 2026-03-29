@@ -4,19 +4,14 @@ WORKDIR /app
 
 RUN apk add --no-cache gcc musl-dev git
 
-# Copy shared common package
+# Cache modules layer
 COPY common/ /common/
+COPY rag-admin-api/go.mod rag-admin-api/go.sum ./
+RUN CGO_ENABLED=0 go mod download
 
-# Copy the service source
+# Copy sources and build
 COPY rag-admin-api/ .
-
-# Since we don't have a go.mod yet, initialize it if it doesn't exist or use the one from source
-# For the build pipeline, we expect go.mod to be present in the service directory
-RUN go mod init app-builds/rag-admin-api || true
-RUN go mod tidy
-
-# Build
-RUN CGO_ENABLED=0 go build -v -o rag-admin-api cmd/admin-api/main.go
+RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o rag-admin-api cmd/admin-api/main.go
 
 # Final image
 FROM registry.hierocracy.home:5000/alpine:3.23.3

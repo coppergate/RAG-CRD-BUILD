@@ -32,7 +32,7 @@ Every new session for the **Junie** agent MUST establish the operational context
 ## Current Focus (Iteration 7: Phase 1)
 
 As of version `2.2.8`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
-1.  **Memory Controller**: A scaffold service exists in `rag-stack/services/memory-controller`. It implements basic health checks and a mock `/api/memory/items` endpoint.
+1.  **Memory Controller**: A scaffold service exists in `rag-stack/services/memory-controller`. It includes a context-aware `Dockerfile` for cluster-native builds and implements basic health checks and a mock `/api/memory/items` endpoint.
 2.  **Database Schema**: Memory tables (`memory_items`, `memory_links`, `memory_events`) are defined in `iteration-7.md` but the SQL migration file in `rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql` needs to be created.
 3.  **Contracts**: JSON schemas for `MemoryWriteRequest`, `MemoryRetrieveRequest`, and `MemoryPack` are defined but need to be implemented in `rag-stack/contracts/`.
 
