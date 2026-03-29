@@ -38,14 +38,15 @@ else
   echo "  ✓ Base image found in local registry."
 fi
 
-# Start a temporary ollama server with model storage on /mnt/storage
+# Start a temporary ollama server with model storage on /ollama-models
 CONTAINER_NAME="ollama-pre-pull"
 echo "[1/4] Starting temporary Ollama container..."
 podman rm -f "$CONTAINER_NAME" 2>/dev/null || true
 podman run -d \
   --name "$CONTAINER_NAME" \
   --replace \
-  -v "$STORAGE_DIR:/root/.ollama/models:z" \
+  -v "$STORAGE_DIR:/ollama-models:z" \
+  -e OLLAMA_MODELS=/ollama-models \
   -e OLLAMA_LLM_LIBRARY=cpu \
   "$OLLAMA_IMAGE_LOCAL"
 
@@ -67,7 +68,7 @@ done
 echo "[3/4] Pulling models..."
 for MODEL in "${MODELS[@]}"; do
   echo "  Pulling $MODEL..."
-  podman exec "$CONTAINER_NAME" ollama pull "$MODEL"
+  podman exec -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama pull "$MODEL"
   echo "  ✓ $MODEL"
 done
 
@@ -75,9 +76,9 @@ echo "[4/4] Pushing models to local registry as OCI artifacts..."
 for MODEL in "${MODELS[@]}"; do
   LOCAL_REF="${REGISTRY}/ollama/${MODEL}"
   echo "  Copying $MODEL -> $LOCAL_REF"
-  podman exec "$CONTAINER_NAME" ollama cp "$MODEL" "$LOCAL_REF"
+  podman exec -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama cp "$MODEL" "$LOCAL_REF"
   echo "  Pushing $LOCAL_REF..."
-  podman exec -e OLLAMA_REGISTRY_INSECURE=1 "$CONTAINER_NAME" ollama push "$LOCAL_REF" --insecure
+  podman exec -e OLLAMA_REGISTRY_INSECURE=1 -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama push "$LOCAL_REF" --insecure
   echo "  ✓ $LOCAL_REF"
 done
 

@@ -166,7 +166,7 @@ fi
 if ! is_step_done "registry" || ! $KUBECTL get namespace container-registry >/dev/null 2>&1; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5: Local Registry Setup (Ensuring Ready)"
+echo "Step 1.1.1: Local Registry Setup (Ensuring Ready)"
 echo "----------------------------------------------------"
 $BASE_DIR/infrastructure/registry/install.sh
 mark_step_done "registry"
@@ -177,7 +177,7 @@ fi
 if ! is_step_done "llm-models-pre-populate"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5.2: LLM Model Pre-population into Local Registry"
+echo "Step 1.1.2: LLM Model Pre-population into Local Registry"
 echo "----------------------------------------------------"
 # This ensures that Step 2 (Deployment) can seed models from the local registry
 bash "$BASE_DIR/rag-stack/infrastructure/ollama/push-models-to-cluster.sh"
@@ -189,7 +189,7 @@ fi
 if [[ "$IMAGE_PREFETCH_ON_START" == "true" ]] && ! is_step_done "image-prefetch-initial"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5.1: Initial Image Prefetch to Local Registry"
+echo "Step 1.1.3: Initial Image Prefetch to Local Registry"
 echo "----------------------------------------------------"
 APPLY=true MIRROR_GROUPS="$IMAGE_PREFETCH_GROUPS" PARALLELISM="$IMAGE_PREFETCH_PARALLELISM" \
   bash "$BASE_DIR/scripts/mirror-all-images.sh"

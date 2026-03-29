@@ -46,8 +46,8 @@ for MODEL in "${!MODEL_PVC_MAP[@]}"; do
         \"containers\": [{
           \"name\": \"check\",
           \"image\": \"${REGISTRY}/ollama/ollama:0.15.6\",
-          \"command\": [\"sh\", \"-c\", \"find /root/.ollama/models/manifests -type f 2>/dev/null | head -1 || echo EMPTY\"],
-          \"volumeMounts\": [{\"name\": \"models\", \"mountPath\": \"/root/.ollama/models\"}]
+          \"command\": [\"sh\", \"-c\", \"find /ollama-models/manifests -type f 2>/dev/null | head -1 || echo EMPTY\"],
+          \"volumeMounts\": [{\"name\": \"models\", \"mountPath\": \"/ollama-models\"}]
         }],
         \"volumes\": [{\"name\": \"models\", \"persistentVolumeClaim\": {\"claimName\": \"$PVC_NAME\"}}]
       }
@@ -78,11 +78,11 @@ spec:
         - -c
         - |
           echo "Starting Ollama for model seeding..."
-          OLLAMA_MODELS=/root/.ollama/models ollama serve &
+          OLLAMA_MODELS=/ollama-models ollama serve &
           OLLAMA_PID=\$!
           # Wait for ollama to be ready (max 60s)
           for i in \$(seq 1 60); do
-            if ollama list >/dev/null 2>&1; then
+            if OLLAMA_MODELS=/ollama-models ollama list >/dev/null 2>&1; then
               echo "Ollama ready after \${i}s"
               break
             fi
@@ -94,10 +94,10 @@ spec:
             sleep 1
           done
           echo "Pulling ${REGISTRY}/ollama/${MODEL}..."
-          if ollama pull "${REGISTRY}/ollama/${MODEL}"; then
+          if OLLAMA_MODELS=/ollama-models ollama pull "${REGISTRY}/ollama/${MODEL}"; then
             echo "SUCCESS: ${MODEL} seeded from local registry"
             # Tag it as the short name so Ollama pods can find it easily
-            ollama cp "${REGISTRY}/ollama/${MODEL}" "${MODEL}"
+            OLLAMA_MODELS=/ollama-models ollama cp "${REGISTRY}/ollama/${MODEL}" "${MODEL}"
           else
             echo "ERROR: Failed to pull ${MODEL} from local registry"
             kill \$OLLAMA_PID 2>/dev/null
@@ -108,9 +108,11 @@ spec:
       env:
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OLLAMA_MODELS
+          value: "/ollama-models"
       volumeMounts:
         - name: models
-          mountPath: /root/.ollama/models
+          mountPath: /ollama-models
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt
           subPath: ca.crt

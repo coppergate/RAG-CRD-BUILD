@@ -36,9 +36,11 @@ fi
 CONTAINER_NAME="ollama-cluster-sync"
 # Use podman on hierophant. We use --tls-verify=false for the registry push later.
 # Mount the local storage to avoid redundant internet downloads.
+# We set OLLAMA_MODELS to a path outside of /root to avoid permission issues with volume mounts.
 podman run -d \
   --name "$CONTAINER_NAME" \
-  -v "$STORAGE_DIR:/root/.ollama/models:z" \
+  -v "$STORAGE_DIR:/ollama-models:z" \
+  -e OLLAMA_MODELS=/ollama-models \
   -e OLLAMA_LLM_LIBRARY=cpu \
   --replace "$OLLAMA_IMAGE_LOCAL"
 
@@ -71,16 +73,16 @@ for MODEL in "${MODELS[@]}"; do
 
     # Pull model from library.ollama.com
     echo "  Pulling $MODEL from ollama.com..."
-    podman exec "$CONTAINER_NAME" ollama pull "$MODEL"
+    podman exec -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama pull "$MODEL"
 
     # Tag (copy) for local registry
     echo "  Tagging (copying) $MODEL as $LOCAL_MODEL_PATH..."
-    podman exec "$CONTAINER_NAME" ollama cp "$MODEL" "$LOCAL_MODEL_PATH"
+    podman exec -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama cp "$MODEL" "$LOCAL_MODEL_PATH"
 
     # Push to local registry
     echo "  Pushing $LOCAL_MODEL_PATH to cluster registry..."
     # We set OLLAMA_REGISTRY_INSECURE=1 to allow HTTPS with self-signed cert or HTTP
-    podman exec -e OLLAMA_REGISTRY_INSECURE=1 "$CONTAINER_NAME" ollama push "$LOCAL_MODEL_PATH" --insecure
+    podman exec -e OLLAMA_REGISTRY_INSECURE=1 -e OLLAMA_MODELS=/ollama-models "$CONTAINER_NAME" ollama push "$LOCAL_MODEL_PATH" --insecure
 done
 
 # Cleanup
