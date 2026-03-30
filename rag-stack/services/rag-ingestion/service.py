@@ -68,11 +68,11 @@ RequestsInstrumentor().instrument()
 app = FastAPI(title="RAG Ingestion Service")
 FastAPIInstrumentor.instrument_app(app)
 
-# Configuration — defaults are TLS-secure unless ALLOW_INSECURE is set
+# Configuration — defaults are HTTP for Ollama in-cluster
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-
-_ollama_default = "https://ollama.llms-ollama.svc.cluster.local:11434" if not ALLOW_INSECURE else "http://ollama.llms-ollama.svc.cluster.local:11434"
+# the current ollama deploy does not support https
+_ollama_default = "http://ollama.llms-ollama.svc.cluster.local:11434"
 OLLAMA_URL = os.getenv("OLLAMA_URL", _ollama_default)
 QDRANT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "vectors")
@@ -348,9 +348,11 @@ async def readyz():
 
     # Check Ollama
     try:
+        logger.info(f"Checking Ollama health at: {OLLAMA_URL}/api/tags")
         resp = http_session.get(f"{OLLAMA_URL}/api/tags", timeout=5)
         resp.raise_for_status()
     except Exception as e:
+        logger.error(f"Ollama health check failed for {OLLAMA_URL}: {e}")
         errors["ollama"] = str(e)
 
     # Check S3

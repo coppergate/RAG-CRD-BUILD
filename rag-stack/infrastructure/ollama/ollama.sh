@@ -78,5 +78,7 @@ $KUBECTL rollout status deploy/ollama-llama3 -n llms-ollama --timeout=120s || tr
 $KUBECTL rollout status deploy/ollama-granite31-8b -n llms-ollama --timeout=120s || true
 
 # Seed models from local registry into PVCs
-echo "Seeding LLM models from local registry..."
-bash "$SCRIPT_DIR/seed-models.sh"
+if [[ "${SKIP_SEEDING:-false}" != "true" ]]; then
+    echo "Seeding LLM models from local registry..."
+    bash "$SCRIPT_DIR/seed-models.sh"
+fi
