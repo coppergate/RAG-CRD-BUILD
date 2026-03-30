@@ -75,11 +75,11 @@ spec:
         - name: PULSAR_RESULTS_TOPIC
           value: "persistent://rag-pipeline/stage/results"
         - name: PLANNER_URL
-          value: "https://ollama.llms-ollama.svc.cluster.local:11434"
+          value: "http://ollama.llms-ollama.svc.cluster.local:11434"
         - name: PLANNER_MODEL
           value: "llama3.1"
         - name: EXECUTOR_URL
-          value: "https://ollama-code.llms-ollama.svc.cluster.local:11434"
+          value: "http://ollama-code.llms-ollama.svc.cluster.local:11434"
         - name: EXECUTOR_MODEL
           value: "granite3.1-dense:8b"
         - name: PULSAR_QDRANT_OPS_TOPIC

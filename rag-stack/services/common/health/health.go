@@ -89,6 +89,7 @@ func (s *Server) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(errors) > 0 {
+		log.Printf("Health checks failed: %v", errors)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(map[string]interface{}{

@@ -50,7 +50,7 @@ spec:
             memory: "3Gi"
         env:
         - name: OLLAMA_URL
-          value: "https://ollama.llms-ollama.svc.cluster.local:11434"
+          value: "http://ollama.llms-ollama.svc.cluster.local:11434"
         - name: PULSAR_URL
           value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: TLS_CERT

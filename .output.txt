@@ -1,0 +1,206 @@
+Name:             ollama-granite31-8b-59fc47468c-pchjb
+Namespace:        llms-ollama
+Priority:         0
+Service Account:  ollama-granite31-8b
+Node:             inference-1/10.0.0.121
+Start Time:       Sun, 29 Mar 2026 12:09:24 -0600
+Labels:           app.kubernetes.io/instance=ollama-granite31-8b
+                  app.kubernetes.io/managed-by=Helm
+                  app.kubernetes.io/name=ollama
+                  app.kubernetes.io/version=0.18.3
+                  helm.sh/chart=ollama-1.53.0
+                  pod-template-hash=59fc47468c
+Annotations:      k8tz.io/injected: true
+                  k8tz.io/timezone: Europe/London
+Status:           Running
+IP:               10.244.8.86
+IPs:
+  IP:           10.244.8.86
+Controlled By:  ReplicaSet/ollama-granite31-8b-59fc47468c
+Init Containers:
+  k8tz:
+    Container ID:    containerd://8284507f833fa151a4642b0780cbfdaab8390b29308c469c9986f2c58d6a46e2
+    Image:           quay.io/k8tz/k8tz:0.19.0
+    Image ID:        quay.io/k8tz/k8tz@sha256:a94d72b49ba0dc653f6a033663c6d63b64a50638a4cc3814072e6f3a50ec5218
+    Port:            <none>
+    Host Port:       <none>
+    SeccompProfile:  RuntimeDefault
+    Args:
+      bootstrap
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Sun, 29 Mar 2026 12:09:31 -0600
+      Finished:     Sun, 29 Mar 2026 12:09:32 -0600
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /mnt/zoneinfo from k8tz (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hx9zz (ro)
+Containers:
+  ollama:
+    Container ID:   containerd://cf9ab6ec4d1dbd7654a0ee97894868b7e0ad60aecacdf248998879cae00e18c3
+    Image:          registry.container-registry.svc.cluster.local:5000/ollama/ollama:0.15.6
+    Image ID:       registry.container-registry.svc.cluster.local:5000/ollama/ollama@sha256:9d1952270c6e03f717f002c8801fcaccc2422312abd264edca54198014482585
+    Port:           11434/TCP (http)
+    Host Port:      0/TCP (http)
+    State:          Running
+      Started:      Sun, 29 Mar 2026 12:11:08 -0600
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      nvidia.com/gpu:  1
+    Requests:
+      nvidia.com/gpu:  1
+    Liveness:          http-get http://:http/ delay=60s timeout=5s period=10s #success=1 #failure=6
+    Readiness:         http-get http://:http/ delay=30s timeout=3s period=5s #success=1 #failure=6
+    Environment:
+      OLLAMA_HOST:               0.0.0.0:11434
+      PATH:                      /usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      OLLAMA_HOST:               0.0.0.0:11434
+      OLLAMA_REGISTRY_INSECURE:  0
+      SSL_CERT_FILE:             /etc/ssl/certs/ca-certificates.crt
+      TZ:                        Europe/London
+    Mounts:
+      /etc/localtime from k8tz (ro,path="Europe/London")
+      /etc/ssl/certs/ca-certificates.crt from registry-ca (rw,path="ca.crt")
+      /root/.ollama from ollama-data (rw)
+      /usr/share/zoneinfo from k8tz (ro)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hx9zz (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True
+  Initialized                 True
+  Ready                       True
+  ContainersReady             True
+  PodScheduled                True
+Volumes:
+  ollama-data:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  ollama-granite31-8b
+    ReadOnly:   false
+  registry-ca:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      registry-ca-cm
+    Optional:  false
+  kube-api-access-hx9zz:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+  k8tz:
+    Type:        EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:
+    SizeLimit:   <unset>
+QoS Class:       BestEffort
+Node-Selectors:  llm-model=granite3.1-dense-8b
+                 role=inference-node
+Tolerations:     node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                 node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+                 nvidia.com/gpu:NoSchedule op=Exists
+Events:          <none>
+Name:             ollama-llama3-84679bd85f-ptqp5
+Namespace:        llms-ollama
+Priority:         0
+Service Account:  ollama-llama3
+Node:             inference-0/10.0.0.120
+Start Time:       Sun, 29 Mar 2026 12:09:23 -0600
+Labels:           app.kubernetes.io/instance=ollama-llama3
+                  app.kubernetes.io/managed-by=Helm
+                  app.kubernetes.io/name=ollama
+                  app.kubernetes.io/version=0.18.3
+                  helm.sh/chart=ollama-1.53.0
+                  pod-template-hash=84679bd85f
+Annotations:      k8tz.io/injected: true
+                  k8tz.io/timezone: Europe/London
+Status:           Running
+IP:               10.244.7.36
+IPs:
+  IP:           10.244.7.36
+Controlled By:  ReplicaSet/ollama-llama3-84679bd85f
+Init Containers:
+  k8tz:
+    Container ID:    containerd://5029c19dfed153d522da106afb793caf10fc4d088b5e67c7a78362afc935b4bc
+    Image:           quay.io/k8tz/k8tz:0.19.0
+    Image ID:        quay.io/k8tz/k8tz@sha256:a94d72b49ba0dc653f6a033663c6d63b64a50638a4cc3814072e6f3a50ec5218
+    Port:            <none>
+    Host Port:       <none>
+    SeccompProfile:  RuntimeDefault
+    Args:
+      bootstrap
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Sun, 29 Mar 2026 12:09:33 -0600
+      Finished:     Sun, 29 Mar 2026 12:09:34 -0600
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /mnt/zoneinfo from k8tz (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-8jsn4 (ro)
+Containers:
+  ollama:
+    Container ID:   containerd://47c3c9e71ed511a566319e38bf7f41bcd757af2892779246ed40eb31c2ea80b3
+    Image:          registry.container-registry.svc.cluster.local:5000/ollama/ollama:0.15.6
+    Image ID:       registry.container-registry.svc.cluster.local:5000/ollama/ollama@sha256:9d1952270c6e03f717f002c8801fcaccc2422312abd264edca54198014482585
+    Port:           11434/TCP (http)
+    Host Port:      0/TCP (http)
+    State:          Running
+      Started:      Sun, 29 Mar 2026 12:11:16 -0600
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      nvidia.com/gpu:  1
+    Requests:
+      nvidia.com/gpu:  1
+    Liveness:          http-get http://:http/ delay=60s timeout=5s period=10s #success=1 #failure=6
+    Readiness:         http-get http://:http/ delay=30s timeout=3s period=5s #success=1 #failure=6
+    Environment:
+      OLLAMA_HOST:               0.0.0.0:11434
+      PATH:                      /usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      OLLAMA_HOST:               0.0.0.0:11434
+      OLLAMA_REGISTRY_INSECURE:  0
+      SSL_CERT_FILE:             /etc/ssl/certs/ca-certificates.crt
+      TZ:                        Europe/London
+    Mounts:
+      /etc/localtime from k8tz (ro,path="Europe/London")
+      /etc/ssl/certs/ca-certificates.crt from registry-ca (rw,path="ca.crt")
+      /root/.ollama from ollama-data (rw)
+      /usr/share/zoneinfo from k8tz (ro)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-8jsn4 (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True
+  Initialized                 True
+  Ready                       True
+  ContainersReady             True
+  PodScheduled                True
+Volumes:
+  ollama-data:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  ollama-llama3
+    ReadOnly:   false
+  registry-ca:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      registry-ca-cm
+    Optional:  false
+  kube-api-access-8jsn4:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+  k8tz:
+    Type:        EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:
+    SizeLimit:   <unset>
+QoS Class:       BestEffort
+Node-Selectors:  llm-model=llama3.1
+                 role=inference-node
+Tolerations:     node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                 node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+                 nvidia.com/gpu:NoSchedule op=Exists
+Events:          <none>
