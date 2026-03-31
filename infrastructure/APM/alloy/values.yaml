@@ -16,24 +16,97 @@ alloy:
         forward_to = [prometheus.remote_write.mimir.receiver]
       }
 
-      // Scrape DCGM Exporter (GPUs)
+      // Scrape DCGM Exporter (GPUs) via local pod discovery to avoid out-of-order samples
+      discovery.kubernetes "dcgm" {
+        role = "pod"
+        namespaces {
+          names = ["gpu-operator"]
+        }
+      }
+
+      discovery.relabel "dcgm" {
+        targets = discovery.kubernetes.dcgm.targets
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          regex         = sys.env("HOSTNAME")
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          regex         = "nvidia-dcgm-exporter"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "instance"
+        }
+      }
+
       prometheus.scrape "dcgm" {
-        targets = [
-          {"__address__" = "dcgm-exporter.gpu-operator.svc.cluster.local:9400"},
-        ]
+        targets    = discovery.relabel.dcgm.output
         forward_to = [prometheus.remote_write.mimir.receiver]
         scrape_interval = "15s"
       }
 
-      // Scrape Apache Pulsar components (no PodMonitor/ServiceMonitor required)
+      // Scrape Apache Pulsar components via local pod discovery
+      discovery.kubernetes "pulsar" {
+        role = "pod"
+        namespaces {
+          names = ["apache-pulsar"]
+        }
+      }
+
+      discovery.relabel "pulsar" {
+        targets = discovery.kubernetes.pulsar.targets
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          regex         = sys.env("HOSTNAME")
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          regex         = "pulsar"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_component"]
+          target_label  = "__tmp_port"
+        }
+        rule {
+          source_labels = ["__tmp_port"]
+          regex         = "(broker|proxy)"
+          replacement   = "8080"
+          target_label  = "__tmp_port_actual"
+        }
+        rule {
+          source_labels = ["__tmp_port"]
+          regex         = "(zookeeper|bookie|recovery)"
+          replacement   = "8000"
+          target_label  = "__tmp_port_actual"
+        }
+        rule {
+          source_labels = ["__address__", "__tmp_port_actual"]
+          separator     = ":"
+          regex         = "(.+):(.+)"
+          replacement   = "$1:$2"
+          target_label  = "__address__"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_component"]
+          target_label  = "component"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_cluster"]
+          target_label  = "cluster"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "instance"
+        }
+      }
+
       prometheus.scrape "pulsar" {
-        targets = [
-          {"__address__" = "pulsar-zookeeper.apache-pulsar.svc.cluster.local:8000"},
-          {"__address__" = "pulsar-bookie.apache-pulsar.svc.cluster.local:8000"},
-          {"__address__" = "pulsar-recovery.apache-pulsar.svc.cluster.local:8000"},
-          {"__address__" = "pulsar-broker.apache-pulsar.svc.cluster.local:8080"},
-          {"__address__" = "pulsar-proxy.apache-pulsar.svc.cluster.local:8080"},
-        ]
+        targets    = discovery.relabel.pulsar.output
         forward_to = [prometheus.remote_write.mimir.receiver]
         scrape_interval = "30s"
       }
@@ -43,6 +116,7 @@ alloy:
           url = "https://mimir-gateway.monitoring.svc.cluster.local/api/v1/push"
           tls_config {
             ca_file = "/etc/ssl/certs/ca.crt"
+            insecure_skip_verify = true
           }
         }
       }
@@ -82,6 +156,7 @@ alloy:
           url = "https://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
           tls_config {
             ca_file = "/etc/ssl/certs/ca.crt"
+            insecure_skip_verify = true
           }
         }
       }

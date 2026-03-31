@@ -307,6 +307,48 @@ The RAG stack uses the **Ent ORM** for type-safe database access, centralized in
     -   All services (e.g., `db-adapter`, `llm-gateway`) should import and use the client from `app-builds/common/ent`.
     -   Ensure `go mod tidy` is run in both `common` and the consuming service after changes.
 
+## APM Stack (Monitoring) TLS Configuration
+
+As of version `2.2.11`, the APM stack is configured with TLS for internal communication:
+
+1.  **Loki & Mimir (Gateways)**:
+    -   Exposed on port **443** (HTTPS) via their respective gateway services.
+    -   Gateways use NGINX with SSL enabled on port **8443**.
+    -   Alloy and Grafana connect via `https://loki-gateway.monitoring.svc.cluster.local` and `https://mimir-gateway.monitoring.svc.cluster.local`.
+    -   Trust is managed via the `registry-ca-cm` ConfigMap (mounted as `/etc/ssl/certs/ca.crt`).
+
+2.  **Tempo**:
+    -   **Push API (OTLP)**: Exposed on port **4318** (HTTPS). Alloy pushes traces securely.
+    -   **Query API (REST)**: Exposed on port **3200** (HTTP). Grafana queries traces via plain HTTP to avoid handshake issues.
+    -   **Note**: If enabling TLS on port 3200, ensure the client supports the specific cipher suites/protocols used by Tempo.
+
+3.  **Grafana**:
+    -   The `central-grafana` instance trusts the internal CA by mounting the `registry-ca-cm`.
+    -   Datasources for Loki and Prometheus/Mimir use `https` with `tlsSkipVerify: true` (as the internal hostname might not match the certificate SAN).
+    -   Datasource for Tempo uses `http://tempo.monitoring.svc.cluster.local:3200`.
+
+### Manual Patching (if templates are not applied)
+If a fresh install is not performed, the gateways can be manually patched:
+```bash
+# Example for Loki Gateway
+kubectl patch cm loki-gateway -n monitoring --type=merge --patch-file=patch-loki-nginx.yaml
+kubectl patch deploy loki-gateway -n monitoring --patch-file=patch-loki-deploy.yaml
+```
+Refer to the `infrastructure/APM` templates for the exact `nginx.conf` and deployment structures.
+
+### Alloy Scraping Strategy (Out-of-Order Prevention)
+As of version `2.2.11`, Alloy (DaemonSet) uses **local pod discovery** for cluster-wide services (Pulsar, DCGM) to avoid `err-mimir-sample-out-of-order` errors.
+
+-   **Mechanism**: Uses `discovery.kubernetes` with `role = "pod"`.
+-   **Filter**: Relabels targets to `keep` only those where `__meta_kubernetes_pod_node_name` matches the local node (using `sys.env("HOSTNAME")`).
+-   **Effect**: Each Alloy instance only scrapes pods on its own node, preventing duplicate series from being pushed to Mimir from multiple nodes.
+
+### Timezone (k8tz) Configuration
+The cluster uses `k8tz` to inject the `Europe/London` (BST) timezone into all pods.
+-   **Injection**: Pods receive a `k8tz` init container and a `TZ` environment variable.
+-   **Inclusion**: All namespaces except `k8tz` itself are included (including `kube-system`).
+-   **Verification**: `date` inside pods should show `BST`.
+
 ## Storage Layout on Hierophant
 - **Podman storage**: `/mnt/storage/containers/storage` — configured via `~/.config/containers/storage.conf`
 - **Registry data**: `/mnt/storage/registry-data` — Docker registry image layers and manifests

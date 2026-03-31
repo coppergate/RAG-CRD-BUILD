@@ -163,6 +163,14 @@ gateway:
 nginx:
   nodeSelector:
     role: storage-node
+  extraVolumes:
+    - name: service-tls
+      secret:
+        secretName: mimir-gateway-tls
+  extraVolumeMounts:
+    - name: service-tls
+      mountPath: /etc/nginx/certs
+      readOnly: true
 
 smoke_test:
   nodeSelector:

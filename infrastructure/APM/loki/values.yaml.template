@@ -81,6 +81,14 @@ gateway:
   tls:
     enabled: true
     secretName: loki-gateway-tls
+  extraVolumes:
+    - name: service-tls
+      secret:
+        secretName: loki-gateway-tls
+  extraVolumeMounts:
+    - name: service-tls
+      mountPath: /etc/nginx/certs
+      readOnly: true
 
 read:
   replicas: 0

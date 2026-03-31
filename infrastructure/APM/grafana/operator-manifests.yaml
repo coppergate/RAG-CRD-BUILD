@@ -48,6 +48,16 @@ spec:
         spec:
           nodeSelector:
             role: storage-node
+          containers:
+            - name: grafana
+              volumeMounts:
+                - name: registry-ca
+                  mountPath: /etc/ssl/certs/ca.crt
+                  subPath: ca.crt
+          volumes:
+            - name: registry-ca
+              configMap:
+                name: registry-ca-cm
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
@@ -62,8 +72,11 @@ spec:
     name: Loki
     type: loki
     access: proxy
-    url: http://loki-gateway.monitoring.svc.cluster.local
+    url: https://loki-gateway.monitoring.svc.cluster.local
     isDefault: false
+    jsonData:
+      tlsAuth: false
+      tlsSkipVerify: true
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
@@ -78,8 +91,11 @@ spec:
     name: Tempo
     type: tempo
     access: proxy
-    url: http://tempo-gateway.monitoring.svc.cluster.local
+    url: http://tempo.monitoring.svc.cluster.local:3200
     isDefault: false
+    jsonData:
+      tlsAuth: false
+      tlsSkipVerify: true
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
@@ -94,8 +110,12 @@ spec:
     name: Prometheus
     type: prometheus
     access: proxy
-    url: http://mimir-gateway.monitoring.svc.cluster.local/prometheus
+    url: https://mimir-gateway.monitoring.svc.cluster.local/prometheus
     isDefault: true
+    jsonData:
+      tlsAuth: false
+      tlsSkipVerify: true
+      httpMethod: POST
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
