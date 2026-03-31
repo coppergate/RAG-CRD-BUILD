@@ -326,7 +326,11 @@ As of version `2.2.11`, the APM stack is configured with TLS for internal commun
     -   The `central-grafana` instance trusts the internal CA by mounting the `registry-ca-cm`.
     -   Datasources for Loki and Prometheus/Mimir use `https` with `tlsSkipVerify: true` (as the internal hostname might not match the certificate SAN).
     -   Datasource for Tempo uses `http://tempo.monitoring.svc.cluster.local:3200`.
-
+4.  **Tempo Metrics Generator**:
+    -   **Enabled**: As of version `2.2.13`, Tempo's `metrics_generator` is enabled to support TraceQL features like `rate()`.
+    -   **Storage**: Uses `/var/tempo/generator/wal` on the `storage` volume.
+    -   **Remote Write**: Pushes generated metrics back to Mimir via `https://mimir-gateway.monitoring.svc.cluster.local/api/v1/push`.
+    -   **Ring**: Registers itself in the `metrics-generator` hash ring (internally via `memberlist`).
 ### Manual Patching (if templates are not applied)
 If a fresh install is not performed, the gateways can be manually patched:
 ```bash
