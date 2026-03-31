@@ -161,11 +161,47 @@ alloy:
         }
       }
 
+      // OTLP Trace Ingestion
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.monitoring.svc.cluster.local:4318"
+          tls {
+            ca_file = "/etc/ssl/certs/ca.crt"
+            insecure_skip_verify = true
+          }
+        }
+      }
+
   mounts:
     extra:
       - name: registry-ca
         mountPath: /etc/ssl/certs/ca.crt
         subPath: ca.crt
+
+  service:
+    enabled: true
+    type: ClusterIP
+    additionalPorts:
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+        protocol: TCP
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+        protocol: TCP
 
 controller:
   type: daemonset
