@@ -56,7 +56,7 @@ func initEnv() {
 	}
 	llmModel = os.Getenv("LLM_MODEL")
 	if llmModel == "" {
-		llmModel = "llama3.1"
+		llmModel = "llama3"
 	}
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {

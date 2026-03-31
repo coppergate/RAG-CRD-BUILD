@@ -28,15 +28,18 @@ if OTEL_ENABLED:
         OTEL_ENABLED = False
 
 # Constants from environment or defaults
-endpoint_env = os.getenv("S3_ENDPOINT", "http://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
+endpoint_env = os.getenv("S3_ENDPOINT", "rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
+bucket_port = os.getenv("BUCKET_PORT", "443")
 if endpoint_env and not endpoint_env.startswith("http"):
-    S3_ENDPOINT = "http://" + endpoint_env
+    scheme = "https" if bucket_port == "443" else "http"
+    S3_ENDPOINT = f"{scheme}://{endpoint_env}"
 else:
     S3_ENDPOINT = endpoint_env
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
-GATEWAY_URL = os.getenv("GATEWAY_URL", "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase-bucket")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 
 def test_s3_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing S3 Operations...")
@@ -103,11 +106,10 @@ def test_qdrant_ops():
 def test_rag_retrieval():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing RAG Retrieval via Gateway...")
     print(f"  - GATEWAY_URL={GATEWAY_URL}")
-    # This assumes the gateway is connected to a worker that can search Qdrant
-    # For a basic connectivity test, we just check if the gateway responds
+    test_file_base = "e2e-test-file-"
     payload = {
-        "model": "llama3.1",
-        "messages": [{"role": "user", "content": "Tell me about the project"}]
+        "model": OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": f"Retrieve the secret code from the {test_file_base} documents."}]
     }
     try:
         headers = {}

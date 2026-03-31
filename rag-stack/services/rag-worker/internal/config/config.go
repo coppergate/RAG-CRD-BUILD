@@ -60,7 +60,7 @@ func LoadConfig() *Config {
 		QdrantHost:         envutil.GetEnv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local"),
 		QdrantPort:         envutil.GetEnv("QDRANT_PORT", "6333"),
 		PlannerURL:         envutil.GetEnv("PLANNER_URL", plannerDefault),
-		PlannerModel:       envutil.GetEnv("PLANNER_MODEL", "llama3.1"),
+		PlannerModel:       envutil.GetEnv("PLANNER_MODEL", "llama3.1:latest"),
 		PlannerPromptType:  envutil.GetEnv("PLANNER_PROMPT_TYPE", "llama3"),
 		ExecutorURL:        envutil.GetEnv("EXECUTOR_URL", executorDefault),
 		ExecutorModel:      envutil.GetEnv("EXECUTOR_MODEL", "granite3.1-dense:8b"),

@@ -7,7 +7,7 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 VERSION="${VERSION:-2.0.4}"
 
-MODEL_LLAMA="llama3.1"
+MODEL_LLAMA="llama3"
 MODEL_GRANITE="granite3.1-dense:8b"
 
 run_scenario() {

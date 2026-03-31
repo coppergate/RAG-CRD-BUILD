@@ -7,6 +7,6 @@ spec:
   selector:
     app: db-adapter
   ports:
-  - port: 8080
+  - port: 443
     targetPort: 8080
-    name: http
+    name: https

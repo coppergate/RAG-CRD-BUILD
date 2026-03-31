@@ -68,15 +68,19 @@ spec:
               name: timescaledb-secret
               key: url
         - name: S3_ENDPOINT
-          valueFrom:
-            configMapKeyRef:
-              name: rag-codebase-bucket
-              key: BUCKET_HOST
+          value: "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc"
         - name: BUCKET_NAME
           valueFrom:
             configMapKeyRef:
               name: rag-codebase-bucket
               key: BUCKET_NAME
+        - name: BUCKET_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_PORT
+        - name: OLLAMA_MODEL
+          value: "llama3.1:latest"
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:

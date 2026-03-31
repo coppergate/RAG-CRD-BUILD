@@ -44,7 +44,7 @@ func LoadConfig() *Config {
 		QdrantUseTLS:        envutil.GetEnv("QDRANT_USE_TLS", qdrantTLSDefault) == "true",
 		DefaultVectorSize:   envutil.GetEnvInt("DEFAULT_VECTOR_SIZE", 4096),
 		OllamaURL:           envutil.GetEnv("OLLAMA_URL", ollamaDefault),
-		OllamaModel:         envutil.GetEnv("OLLAMA_MODEL", "llama3.1"),
+		OllamaModel:         envutil.GetEnv("OLLAMA_MODEL", "llama3.1:latest"),
 		QdrantOpsTopic:      envutil.GetEnv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops"),
 		QdrantResultsTopic:  envutil.GetEnv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops-results"),
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),

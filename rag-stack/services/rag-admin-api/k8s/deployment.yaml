@@ -45,6 +45,10 @@ spec:
           value: "https://llm-gateway.rag-system.svc.cluster.local:8080"
         - name: MEMORY_CONTROLLER_URL
           value: "https://memory-controller.rag-system.svc.cluster.local:8080"
+        - name: OTEL_USE_TLS
+          value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "otel-collector.monitoring.svc.cluster.local:4318"
         - name: TLS_CERT
           value: "/etc/ssl/certs/tls.crt"
         - name: TLS_KEY
@@ -90,6 +94,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: https
 spec:
   tls:
   - hosts:

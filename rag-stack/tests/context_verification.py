@@ -7,14 +7,14 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 # Environment Configuration
-endpoint_env = os.getenv("S3_ENDPOINT", "http://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
+endpoint_env = os.getenv("S3_ENDPOINT", "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
 if endpoint_env and not endpoint_env.startswith("http"):
-    S3_ENDPOINT = "http://" + endpoint_env
+    S3_ENDPOINT = "https://" + endpoint_env
 else:
     S3_ENDPOINT = endpoint_env
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
-GATEWAY_URL = os.getenv("GATEWAY_URL", "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase-bucket")
 
 # A set of facts that are NOT in the model's base training but will be in the context
@@ -67,7 +67,7 @@ def run_context_tests():
     for query in CONTEXT_QUERIES:
         print(f"  - Query: {query['question']}")
         payload = {
-            "model": "llama3.1",
+            "model": "llama3.1:latest",
             "session_id": session_id,
             "tags": ["test-tag"],
             "messages": [{"role": "user", "content": query['question']}],

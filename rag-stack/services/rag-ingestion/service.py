@@ -57,6 +57,9 @@ if os.getenv("OTEL_USE_TLS") == "true":
         otlp_endpoint = otlp_endpoint.replace("http://", "https://")
     elif not otlp_endpoint.startswith("https://"):
         otlp_endpoint = f"https://{otlp_endpoint}"
+    # Ensure OTEL exporter trusts our CA
+    if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
+        os.environ["OTEL_EXPORTER_OTLP_CERTIFICATE"] = SSL_CERT_FILE
 
 processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
 provider.add_span_processor(processor)
@@ -74,14 +77,16 @@ QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 # the current ollama deploy does not support https
 _ollama_default = "http://ollama.llms-ollama.svc.cluster.local:11434"
 OLLAMA_URL = os.getenv("OLLAMA_URL", _ollama_default)
-QDRANT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+QDRANT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "vectors")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 INGEST_BATCH_SIZE = int(os.getenv("INGEST_BATCH_SIZE", "20"))
 S3_ENDPOINT = os.getenv("S3_ENDPOINT")
+BUCKET_PORT = os.getenv("BUCKET_PORT", "80")
 if S3_ENDPOINT and not S3_ENDPOINT.startswith("http"):
-    S3_ENDPOINT = f"http://{S3_ENDPOINT}"
+    scheme = "https" if BUCKET_PORT == "443" else "http"
+    S3_ENDPOINT = f"{scheme}://{S3_ENDPOINT}"
 
 S3_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
 S3_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -128,20 +133,22 @@ class IngestRequest(BaseModel):
     file_names: Optional[List[str]] = None
 
 def get_s3_client():
+    verify = SSL_CERT_FILE if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE) else True
     return boto3.client(
         's3',
         endpoint_url=S3_ENDPOINT,
         aws_access_key_id=S3_ACCESS_KEY,
         aws_secret_access_key=S3_SECRET_KEY,
         config=Config(signature_version='s3v4'),
-        region_name='us-east-1'
+        region_name='us-east-1',
+        verify=verify
     )
 
 def get_ollama_embeddings_with_retry(text: str) -> List[float]:
     """Get embeddings from Ollama with exponential backoff retry."""
     url = f"{OLLAMA_URL}/api/embeddings"
     payload = {
-        "model": OLLAMA_MODEL,
+        "model": QDRANT_MODEL,
         "prompt": text
     }
     last_error = None

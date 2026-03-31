@@ -49,7 +49,7 @@ def test_gateway_session_upsert():
     # 2. Call LLM Gateway
     print(f"  - Calling LLM Gateway at {GATEWAY_URL}")
     payload = {
-        "model": "llama3.1",
+        "model": "llama3.1:latest",
         "session_id": session_id,
         "messages": [{"role": "user", "content": "Hello, this is a session test."}]
     }
@@ -167,7 +167,7 @@ def test_pulsar_db_crud():
         "session_id": session_id,
         "type": "chat_completion",
         "payload": {
-            "model": "llama3.1",
+            "model": "llama3",
             "messages": [{"role": "user", "content": prompt_content}]
         },
         "timestamp": datetime.now().isoformat()

@@ -51,6 +51,8 @@ spec:
         env:
         - name: OLLAMA_URL
           value: "http://ollama.llms-ollama.svc.cluster.local:11434"
+        - name: OLLAMA_MODEL
+          value: "llama3.1:latest"
         - name: PULSAR_URL
           value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: TLS_CERT
@@ -71,10 +73,7 @@ spec:
         - name: CHUNK_SIZE
           value: "1000"
         - name: S3_ENDPOINT
-          valueFrom:
-            configMapKeyRef:
-              name: rag-codebase-bucket
-              key: BUCKET_HOST
+          value: "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc"
         - name: BUCKET_NAME
           valueFrom:
             configMapKeyRef:
@@ -92,8 +91,21 @@ spec:
               key: AWS_SECRET_ACCESS_KEY
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: REQUESTS_CA_BUNDLE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: AWS_CA_BUNDLE
+          value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OTEL_USE_TLS
           value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "https://otel-collector.monitoring.svc.cluster.local:4318/v1/traces"
+        - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: BUCKET_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_PORT
         volumeMounts:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt

@@ -10,7 +10,7 @@ from pulsar import Client
 PULSAR_URL = os.getenv("PULSAR_URL", "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "http://llm-gateway.rag-system.svc.cluster.local:8080")
 if not GATEWAY_URL.startswith("http"):
-    GATEWAY_URL = f"http://{GATEWAY_URL}"
+    GATEWAY_URL = f"https://{GATEWAY_URL}"
 # Ensure we don't have double /v1/chat/completions if the env var already includes it
 if "/v1/chat/completions" in GATEWAY_URL:
     GATEWAY_BASE_URL = GATEWAY_URL.split("/v1/chat/completions")[0]

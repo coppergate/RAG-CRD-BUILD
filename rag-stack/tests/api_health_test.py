@@ -10,15 +10,15 @@ import sys
 
 # Base URLs (using service names in the cluster)
 RAG_SYSTEM_NAMESPACE = "rag-system"
-BASE_DOMAIN = f"{RAG_SYSTEM_NAMESPACE}.svc.cluster.local:8080"
+BASE_DOMAIN = f"{RAG_SYSTEM_NAMESPACE}.svc.cluster.local"
 
 SERVICES = {
-    "rag-admin-api": f"https://rag-admin-api.{BASE_DOMAIN}",
-    "db-adapter": f"https://db-adapter.{BASE_DOMAIN}",
-    "qdrant-adapter": f"https://qdrant-adapter.{BASE_DOMAIN}",
-    "object-store-mgr": f"https://object-store-mgr.{BASE_DOMAIN}",
-    "memory-controller": f"https://memory-controller.{BASE_DOMAIN}",
-    "llm-gateway": f"https://llm-gateway.{BASE_DOMAIN}",
+    "rag-admin-api": f"https://rag-admin-api.{BASE_DOMAIN}:443",
+    "db-adapter": f"https://db-adapter.{BASE_DOMAIN}:443",
+    "qdrant-adapter": f"https://qdrant-adapter.{BASE_DOMAIN}:443",
+    "object-store-mgr": f"https://object-store-mgr.{BASE_DOMAIN}:443",
+    "memory-controller": f"https://memory-controller.{BASE_DOMAIN}:443",
+    "llm-gateway": f"https://llm-gateway.{BASE_DOMAIN}:443",
 }
 
 # Path to the CA bundle used in the cluster
@@ -97,8 +97,11 @@ class APIHealthTest(unittest.TestCase):
             resp = requests.get(url, verify=self.verify, timeout=5)
             self.assertEqual(resp.status_code, 200, f"Qdrant Adapter collections failed: {resp.status_code}")
             data = resp.json()
-            self.assertIsInstance(data, list)
-            print(f"  [OK] Qdrant Adapter collections count: {len(data)}")
+            # The API returns {"result": {"collections": [...]}, "status": "ok", ...}
+            self.assertIn("result", data)
+            self.assertIn("collections", data["result"])
+            self.assertIsInstance(data["result"]["collections"], list)
+            print(f"  [OK] Qdrant Adapter collections count: {len(data['result']['collections'])}")
         except Exception as e:
             self.fail(f"Qdrant Adapter API test failed: {e}")
 

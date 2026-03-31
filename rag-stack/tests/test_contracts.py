@@ -32,7 +32,7 @@ def test_response_schema_examples():
         "prompt_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
         "content": "Junie is an autonomous programmer.",
         "sequence_number": 0,
-        "model_name": "llama3.1"
+        "model_name": "llama3.1:latest"
     }
     Draft7Validator(RESPONSE_SCHEMA).validate(ok)
 
