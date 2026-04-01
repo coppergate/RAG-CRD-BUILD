@@ -10,7 +10,7 @@ export REPO_DIR
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-2.3.4}"
+VERSION="${VERSION:-2.3.5}"
 REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
 
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/journal-helper.sh"
@@ -80,11 +80,11 @@ fi
 rm -f "$COMBINED_CA"
 mark_step_done "registry-ca"
 
-if ! is_step_done "ollama"; then
-echo "--- 1.5. Deploying LLM: Ollama ---"
-bash "$REPO_DIR/infrastructure/ollama/ollama.sh"
-mark_step_done "ollama"
-fi
+# if ! is_step_done "ollama"; then
+# echo "--- 1.5. Deploying LLM: Ollama ---"
+# bash "$REPO_DIR/infrastructure/ollama/ollama.sh"
+# mark_step_done "ollama"
+# fi
 
 if ! is_step_done "timescaledb"; then
 echo "--- 2. Deploying Infrastructure: TimescaleDB ---"
@@ -184,11 +184,11 @@ if [[ "$PULSAR_READY" != "true" ]]; then
 fi
 
 # Ensure tenants/namespaces are initialized (idempotent — safe to re-run)
-if ! is_step_done "pulsar-init"; then
-echo "--- 3.1 Initializing Pulsar Tenants and Namespaces ---"
-bash "$REPO_DIR/infrastructure/pulsar/init-rag-pulsar.sh"
-mark_step_done "pulsar-init"
-fi
+# if ! is_step_done "pulsar-init"; then
+# echo "--- 3.1 Initializing Pulsar Tenants and Namespaces ---"
+# bash "$REPO_DIR/infrastructure/pulsar/init-rag-pulsar.sh"
+# mark_step_done "pulsar-init"
+# fi
 
 if ! is_step_done "qdrant"; then
 echo "--- 4. Deploying Vector Database: Qdrant ---"

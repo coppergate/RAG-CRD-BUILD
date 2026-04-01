@@ -28,14 +28,14 @@ RUN flutter pub get
 RUN flutter build web --release
 
 # Stage 2: Serve the static files using Busybox HTTPD
-FROM registry.hierocracy.home:5000/alpine:3.23.3
+FROM registry.hierocracy.home:5000/busybox:1.37.0-musl
 
 # Use busybox httpd to serve static files. 
-# It is included by default in Alpine's busybox.
 WORKDIR /www
 COPY --from=build /app/build/web .
 
 # Serve on port 8080 (aligned with other services)
 EXPOSE 8080
 
-CMD ["httpd", "-f", "-v", "-p", "8080", "-h", "/www"]
+# Explicitly use /bin/busybox httpd to avoid PATH issues
+CMD ["/bin/busybox", "httpd", "-f", "-v", "-p", "8080", "-h", "/www"]
