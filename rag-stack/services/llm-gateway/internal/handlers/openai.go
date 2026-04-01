@@ -50,7 +50,7 @@ func init() {
 }
 
 type OpenAIHandler struct {
-	Pulsar *pulsar.PulsarClient
+	Pulsar pulsar.Client
 	Ent    *ent.Client
 }
 
