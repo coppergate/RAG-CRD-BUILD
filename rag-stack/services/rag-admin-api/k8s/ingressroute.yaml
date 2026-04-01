@@ -1,0 +1,17 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rag-admin-api
+  namespace: rag-system
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`rag-admin-api.rag.hierocracy.home`)
+      kind: Rule
+      services:
+        - name: rag-admin-api
+          port: 443
+          serversTransport: skip-verify
+  tls:
+    secretName: rag-admin-api-cert
