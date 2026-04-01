@@ -28,7 +28,7 @@ RUN flutter pub get
 RUN flutter build web --release
 
 # Stage 2: Serve the static files using Busybox HTTPD
-FROM registry.hierocracy.home:5000/busybox:1.37.0-musl
+FROM registry.hierocracy.home:5000/busybox:1.37.0
 
 # Use busybox httpd to serve static files. 
 WORKDIR /www
