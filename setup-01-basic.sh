@@ -106,7 +106,11 @@ if ! is_step_done "k8tz"; then
 helm repo add k8tz https://k8tz.github.io/k8tz/
 helm repo update
 
-helm upgrade --install k8tz k8tz/k8tz --set timezone=Europe/London
+helm upgrade --install k8tz k8tz/k8tz \
+    --set timezone=Europe/London \
+    --set "injection.namespaceSelector.matchExpressions[0].key=kubernetes.io/metadata.name" \
+    --set "injection.namespaceSelector.matchExpressions[0].operator=NotIn" \
+    --set "injection.namespaceSelector.matchExpressions[0].values[0]=k8tz"
 mark_step_done "k8tz"
 fi
 

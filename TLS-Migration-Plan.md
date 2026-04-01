@@ -42,7 +42,7 @@ Audit and remove the following flags/configurations:
 | Component | Files to Modify | Action |
 | :--- | :--- | :--- |
 | **Prometheus** | `infrastructure/prometheus/prometheus-operator.yaml` | Remove `insecureSkipVerify` from all ServiceMonitors/PodMonitors. |
-| **Loki/Tempo** | `infrastructure/APM/*/values.yaml.template` | Set `insecure: false` and point to `https://`. |
+| **Loki/Tempo** | `infrastructure/APM/*/values.yaml.template` | Set `insecure: false` and point to `https://`. (COMPLETED) |
 | **Kaniko** | `rag-stack/infrastructure/build-pipeline/*` | Remove `--insecure`, `--insecure-pull`, and `--insecure-registry`. |
 | **Orchestrator** | `rag-stack/services/build-orchestrator/cmd/orchestrator/main.go` | Remove hardcoded `--insecure` flags from the job template generator. |
 | **Ollama** | `rag-stack/infrastructure/ollama/values.yaml` | Set `insecure: false`. |

@@ -28,6 +28,9 @@ Each service requiring TLS has a `Certificate` resource that defines its DNS nam
 | **Qdrant** | `qdrant-tls` | `rag-system` | `qdrant.hierocracy.home` |
 | **TimescaleDB** | `timescaledb-server-tls`| `timescaledb` | `timescaledb.hierocracy.home` |
 | **Registry** | `in-cluster-registry-tls`| `container-registry`| `registry.hierocracy.home` |
+| **Loki Gateway**| `loki-gateway-tls` | `monitoring` | `loki.monitoring.svc` |
+| **Mimir Gateway**| `mimir-gateway-tls` | `monitoring` | `mimir.monitoring.svc` |
+| **Tempo Push** | `tempo-tls` | `monitoring` | `tempo.monitoring.svc` |
 
 ## 3. Trust Distribution & Combined CAs
 
@@ -62,7 +65,20 @@ To ensure all components trust both the registry and the internal services, a co
   - **Go**: Uses the system root CA pool (via `SSL_CERT_FILE`) automatically.
   - **Python**: Explicitly configures the Pulsar client using `tls_trust_certs_file_path=os.getenv("SSL_CERT_FILE")`.
 
-## 5. Network Ingress
+### 4.6 APM Stack (Monitoring)
+- **Gateways (Loki/Mimir)**: Use a manual NGINX sidecar/gateway configured with TLS (port 8443 internally, 443 via Service).
+- **Tempo**: Configured with a dedicated `tempo-tls` secret for the OTLP/gRPC/HTTPS ingestion endpoint (port 4318).
+- **Grafana**: Datasources (Loki, Prometheus, Tempo) are configured with `tlsSkipVerify: true` or explicitly trust the internal CA.
+- **Alloy**: DaemonSet agents use `tls_config` with CA trust to push metrics, logs, and traces to the respective gateways.
+
+## 5. Timezone Consistency (k8tz)
+
+To ensure consistent timestamps for logs, metrics, and traces across the cluster, **k8tz** is used for cluster-wide timezone injection.
+- **Timezone**: `Europe/London` (BST/GMT).
+- **Scope**: Enabled for all namespaces, including `kube-system`, except where explicitly excluded (e.g., `k8tz` itself).
+- **Implementation**: Mutating Admission Webhook that injects a `k8tz` init container and the `TZ` environment variable.
+
+## 6. Network Ingress
 
 All external-facing services are exposed via **Traefik** with TLS termination.
 - **Entrypoint**: `websecure` (Port 443).

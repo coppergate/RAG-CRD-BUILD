@@ -42,6 +42,17 @@ tempo:
             cert_file: /etc/ssl/certs/tls.crt
             key_file: /etc/ssl/certs/tls.key
 
+  metrics_generator:
+    enabled: true
+    config:
+      storage:
+        path: /var/tempo/generator/wal
+        remote_write:
+          - url: https://mimir-gateway.monitoring.svc.cluster.local/api/v1/push
+            tls_config:
+              ca_file: /etc/ssl/certs/ca.crt
+              insecure_skip_verify: true
+
   retention: 24h
   # Additional overrides if needed
   overrides: {}

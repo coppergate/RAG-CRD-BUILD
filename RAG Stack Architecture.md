@@ -21,11 +21,10 @@ graph TD
     end
 
     subgraph "Kubernetes: monitoring namespace: APM"
-        Alloy[Grafana Alloy]
-        OTel[OTel Collector]
-        Loki[Loki - Logs]
-        Mimir[Mimir - Metrics]
-        Tempo[Tempo - Traces]
+        Alloy[Grafana Alloy - DaemonSet]
+        Loki[Loki - Gateway TLS]
+        Mimir[Mimir - Gateway TLS]
+        Tempo[Tempo - HTTPS Push]
         Grafana[Grafana Dashboards]
     end
 
@@ -109,11 +108,12 @@ graph TD
     Ops -.->|Consume| DBAdapter
     DBAdapter -->|Persist: TLS| TDB
 
-    %% Observability Flow: OTLP over HTTPS-GRPC
-    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|Metrics/Traces| OTel
-    Alloy -->|Kubernetes Logs| Loki
-    OTel --> Mimir
-    OTel --> Tempo
+    %% Observability Flow: OTLP & Logs over HTTPS
+    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|OTLP/HTTPS| Alloy
+    Alloy -->|Metrics: HTTPS| Mimir
+    Alloy -->|Logs: HTTPS| Loki
+    Alloy -->|Traces: HTTPS/4318| Tempo
+    Tempo -->|Generated Metrics| Mimir
     Mimir & Loki & Tempo --> Grafana
 
     %% Build Pipeline Flow
@@ -131,8 +131,10 @@ graph TD
 - `qdrant-adapter`: Centralized vector DB adapter ensuring consistent tag-filtered search and upsert logic.
 - `db-adapter`: Async persistence layer for audit logs, session state, and chat history.
 - `rag-ingestion-service`: Persistent Python service for multi-source data ingestion and embedding generation.
-- `common/telemetry`: Shared OTLP package for distributed tracing and Prometheus metrics.
-- `TLS/Security`: end-to-end encryption using `cert-manager` and internal Root CA; all inter-service traffic uses HTTPS, GRPC+TLS, or Pulsar+SSL.
+- `common/telemetry`: Shared OTLP package for distributed tracing and Prometheus metrics; services export to local `Alloy` instances.
+- `TLS/Security`: end-to-end encryption using `cert-manager` and internal Root CA; all inter-service traffic uses HTTPS, GRPC+TLS, or Pulsar+SSL. Monitoring (Loki/Mimir/Tempo) uses NGINX-based TLS gateways.
+- `k8tz`: Cluster-wide timezone injection (`Europe/London`) for consistent log/metric timestamps.
+- `metrics-generator`: Tempo module for generating RED metrics from traces, remote-writing to Mimir.
 
 #### 3. Contextual Memory Model - Miras/Titans-Inspired -
 
@@ -148,7 +150,7 @@ graph TD
 flowchart TD
     subgraph "Phase 0 - Infrastructure Bootstrap - Hierophant"
         Talos[Talos Registry Trust Patch] --> Labels[Label storage-nodes]
-        Labels --> Basic[setup-01-basic-sh - Rook-Ceph - Traefik]
+        Labels --> Basic[setup-01-basic-sh - Rook-Ceph - Traefik - k8tz]
         Basic --> Reg[Registry Install]
         Reg --> Prefetch[Image Prefetch to Local Registry]
     end

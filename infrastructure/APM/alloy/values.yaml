@@ -130,6 +130,11 @@ alloy:
       discovery.relabel "pods" {
         targets = discovery.kubernetes.pods.targets
         rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          regex         = sys.env("HOSTNAME")
+          action        = "keep"
+        }
+        rule {
           source_labels = ["__meta_kubernetes_pod_label_app"]
           target_label  = "app"
         }

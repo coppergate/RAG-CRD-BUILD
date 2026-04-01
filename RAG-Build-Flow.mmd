@@ -1,7 +1,7 @@
 flowchart TD
     subgraph "Phase 0 - Infrastructure Bootstrap - Hierophant"
         Talos[Talos Registry Trust Patch] --> Labels[Label storage-nodes]
-        Labels --> Basic[setup-01-basic-sh - Rook-Ceph - Traefik]
+        Labels --> Basic[setup-01-basic-sh - Rook-Ceph - Traefik - k8tz]
         Basic --> Reg[Registry Install]
         Reg --> Prefetch[Image Prefetch to Local Registry]
     end

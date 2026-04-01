@@ -16,11 +16,10 @@ graph TD
     end
 
     subgraph "Kubernetes: monitoring namespace: APM"
-        Alloy[Grafana Alloy]
-        OTel[OTel Collector]
-        Loki[Loki - Logs]
-        Mimir[Mimir - Metrics]
-        Tempo[Tempo - Traces]
+        Alloy[Grafana Alloy - DaemonSet]
+        Loki[Loki - Gateway TLS]
+        Mimir[Mimir - Gateway TLS]
+        Tempo[Tempo - HTTPS Push]
         Grafana[Grafana Dashboards]
     end
 
@@ -104,11 +103,12 @@ graph TD
     Ops -.->|Consume| DBAdapter
     DBAdapter -->|Persist: TLS| TDB
 
-    %% Observability Flow: OTLP over HTTPS-GRPC
-    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|Metrics/Traces| OTel
-    Alloy -->|Kubernetes Logs| Loki
-    OTel --> Mimir
-    OTel --> Tempo
+    %% Observability Flow: OTLP & Logs over HTTPS
+    UI & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -->|OTLP/HTTPS| Alloy
+    Alloy -->|Metrics: HTTPS| Mimir
+    Alloy -->|Logs: HTTPS| Loki
+    Alloy -->|Traces: HTTPS/4318| Tempo
+    Tempo -->|Generated Metrics| Mimir
     Mimir & Loki & Tempo --> Grafana
 
     %% Build Pipeline Flow
