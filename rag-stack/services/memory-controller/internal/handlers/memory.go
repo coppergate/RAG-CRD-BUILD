@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
@@ -79,7 +78,7 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 		
 		if req.Scope.SessionID != "" {
 			sid, _ := uuid.Parse(req.Scope.SessionID)
-			builder.SetSessionID(sid)
+			builder = builder.SetSessionID(sid)
 		}
 		
 		mi, err := builder.Save(ctx)
@@ -91,13 +90,16 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 		
 		// Create links
 		for _, ref := range item.SourceRefs {
-			err = tx.MemoryLink.Create().
+			tx.MemoryLink.Create().
 				SetMemoryItemID(mi.ID).
 				SetTags(req.Scope.Tags).
-				// We don't have all fields in MemoryLink yet to match SourceRef exactly, 
-				// but we can store them in Metadata or add more fields later.
-				// For now, let's just create the link.
-				SaveX(ctx) 
+				// Store extra data in Metadata if needed
+				SetMetadata(map[string]interface{}{
+					"source_kind":   ref.SourceKind,
+					"source_id":     ref.SourceID,
+					"relation_type": ref.RelationType,
+				}).
+				SaveX(ctx)
 		}
 		
 		// Log event

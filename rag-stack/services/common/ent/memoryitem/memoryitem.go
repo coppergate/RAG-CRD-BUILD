@@ -38,6 +38,8 @@ const (
 	FieldPinning = "pinning"
 	// FieldTTL holds the string denoting the ttl field in the database.
 	FieldTTL = "ttl"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -61,6 +63,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldPinning,
 	FieldTTL,
+	FieldMetadata,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }

@@ -44,6 +44,8 @@ func (MemoryItem) Fields() []ent.Field {
 		field.Int64("ttl").
 			Optional().
 			Comment("TTL in seconds"),
+		field.JSON("metadata", map[string]interface{}{}).
+			Optional(),
 		field.Time("created_at").
 			Default(time.Now),
 		field.Time("updated_at").

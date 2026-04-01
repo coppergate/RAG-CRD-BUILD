@@ -48,11 +48,11 @@ func init() {
 	// memoryitem.DefaultPinning holds the default value on creation for the pinning field.
 	memoryitem.DefaultPinning = memoryitemDescPinning.Default.(bool)
 	// memoryitemDescCreatedAt is the schema descriptor for created_at field.
-	memoryitemDescCreatedAt := memoryitemFields[13].Descriptor()
+	memoryitemDescCreatedAt := memoryitemFields[14].Descriptor()
 	// memoryitem.DefaultCreatedAt holds the default value on creation for the created_at field.
 	memoryitem.DefaultCreatedAt = memoryitemDescCreatedAt.Default.(func() time.Time)
 	// memoryitemDescUpdatedAt is the schema descriptor for updated_at field.
-	memoryitemDescUpdatedAt := memoryitemFields[14].Descriptor()
+	memoryitemDescUpdatedAt := memoryitemFields[15].Descriptor()
 	// memoryitem.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	memoryitem.DefaultUpdatedAt = memoryitemDescUpdatedAt.Default.(func() time.Time)
 	// memoryitem.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -64,7 +64,7 @@ func init() {
 	memorylinkFields := schema.MemoryLink{}.Fields()
 	_ = memorylinkFields
 	// memorylinkDescCreatedAt is the schema descriptor for created_at field.
-	memorylinkDescCreatedAt := memorylinkFields[5].Descriptor()
+	memorylinkDescCreatedAt := memorylinkFields[6].Descriptor()
 	// memorylink.DefaultCreatedAt holds the default value on creation for the created_at field.
 	memorylink.DefaultCreatedAt = memorylinkDescCreatedAt.Default.(func() time.Time)
 	// memorylinkDescID is the schema descriptor for id field.

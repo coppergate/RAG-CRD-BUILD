@@ -43,6 +43,8 @@ type MemoryItem struct {
 	Pinning bool `json:"pinning,omitempty"`
 	// TTL in seconds
 	TTL int64 `json:"ttl,omitempty"`
+	// Metadata holds the value of the "metadata" field.
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -55,7 +57,7 @@ func (*MemoryItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case memoryitem.FieldDecayState:
+		case memoryitem.FieldDecayState, memoryitem.FieldMetadata:
 			values[i] = new([]byte)
 		case memoryitem.FieldPinning:
 			values[i] = new(sql.NullBool)
@@ -164,6 +166,14 @@ func (_m *MemoryItem) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TTL = value.Int64
 			}
+		case memoryitem.FieldMetadata:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
+					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
+			}
 		case memoryitem.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -247,6 +257,9 @@ func (_m *MemoryItem) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("ttl=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TTL))
+	builder.WriteString(", ")
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

@@ -135,6 +135,16 @@ func TagsNotNil() predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldNotNull(FieldTags))
 }
 
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.MemoryLink {
+	return predicate.MemoryLink(sql.FieldIsNull(FieldMetadata))
+}
+
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.MemoryLink {
+	return predicate.MemoryLink(sql.FieldNotNull(FieldMetadata))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldEQ(FieldCreatedAt, v))

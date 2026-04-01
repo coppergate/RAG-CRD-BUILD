@@ -4,7 +4,9 @@ go 1.25.0
 
 require (
 	app-builds/common v0.0.0
+	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.12.0
+	github.com/mattn/go-sqlite3 v1.14.38
 )
 
 require (
@@ -19,7 +21,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.18.1 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect

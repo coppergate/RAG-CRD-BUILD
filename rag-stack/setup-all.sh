@@ -10,7 +10,7 @@ export REPO_DIR
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-2.3.2}"
+VERSION="${VERSION:-2.3.4}"
 REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
 
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/journal-helper.sh"
@@ -40,6 +40,7 @@ $KUBECTL wait --for=condition=Ready certificate/rag-admin-api-cert -n $NAMESPACE
 $KUBECTL wait --for=condition=Ready certificate/object-store-mgr-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
 mark_step_done "rag-system-tls"
 fi
 
@@ -267,6 +268,12 @@ if ! is_step_done "memory-controller"; then
 echo "--- 8.5 Deploying Memory Controller (Go) ---"
 apply_manifest "$REPO_DIR/services/memory-controller/k8s/deployment.yaml"
 mark_step_done "memory-controller"
+fi
+
+if ! is_step_done "rag-explorer"; then
+echo "--- 8.6 Deploying RAG Explorer (Flutter Web) ---"
+apply_manifest "$REPO_DIR/services/rag-explorer/k8s/deployment.yaml"
+mark_step_done "rag-explorer"
 fi
 
 if ! is_step_done "rag-web-ui"; then

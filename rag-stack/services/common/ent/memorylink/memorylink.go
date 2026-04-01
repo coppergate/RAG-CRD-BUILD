@@ -22,6 +22,8 @@ const (
 	FieldIngestionIds = "ingestion_ids"
 	// FieldTags holds the string denoting the tags field in the database.
 	FieldTags = "tags"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the memorylink in the database.
@@ -35,6 +37,7 @@ var Columns = []string{
 	FieldSourceMessageIds,
 	FieldIngestionIds,
 	FieldTags,
+	FieldMetadata,
 	FieldCreatedAt,
 }
 

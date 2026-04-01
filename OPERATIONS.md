@@ -31,11 +31,11 @@ Every new session for the **Junie** agent MUST establish the operational context
 
 ## Current Focus (Iteration 7: Phase 1)
 
-As of version `2.3.2`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
-1.  **Memory Controller**: Implemented real database operations via Ent client. Replaced mock endpoints with `HandleItems` supporting GET (list) and POST (write).
-2.  **Database Schema**: Memory tables (`memory_items`, `memory_links`, `memory_events`) are implemented in `rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql`.
-3.  **Contracts**: JSON schemas and Go structs for `MemoryWriteRequest`, `MemoryRetrieveRequest`, and `MemoryPack` are implemented in `rag-stack/contracts/` and `rag-stack/services/common/contracts/`.
-4.  **Flutter UI**: Transitioned to real service integration with WebSocket-based streaming for chat.
+As of version `2.3.3`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
+1.  **Testing**: Implemented unit and integration tests for `rag-admin-api`, `memory-controller`, and `llm-gateway`.
+2.  **Memory Controller**: Implemented real database operations via Ent client. Replaced mock endpoints with `HandleItems` supporting GET (list) and POST (write).
+3.  **LLM Gateway**: Refactored to use a `PulsarClient` interface for better testability.
+4.  **Database Schema**: Memory tables (`memory_items`, `memory_links`, `memory_events`) are implemented with `metadata` support.
 
 ---
 
@@ -89,32 +89,38 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 ```
 
 ## RAG Pipeline Explorer (Flutter UI)
-The RAG Pipeline Explorer is a Flutter-based desktop/web application for managing the RAG cluster.
-1.  **Source Directory**: `rag-stack/rag-flutter`
-2.  **Development (Linux Desktop)**:
-    ```bash
-    cd rag-stack/rag-flutter
-    flutter run -d linux
-    ```
-3.  **Development (Web)**:
-    ```bash
-    cd rag-stack/rag-flutter
-    flutter run -d chrome
-    ```
-4.  **Production Build (Web)**:
-    ```bash
-    cd rag-stack/rag-flutter
-    flutter build web --release
-    ```
-5.  **BFF (Backend for Frontend)**:
-    The Flutter UI communicates with the cluster via the `rag-admin-api` (BFF) service.
-    -   **Endpoint**: `https://rag-admin-api.rag.hierocracy.home`
-    -   **Streaming**: Chat streaming uses WebSockets at `wss://gateway.hierocracy.home/v1/rag/chat/stream`.
-    -   **Adapter APIs**: The BFF proxies requests to:
-        -   `object-store-mgr`: `/api/s3/*` for bucket/object browsing.
-        -   `db-adapter`: `/api/db/*` for TimescaleDB session/stats browsing.
-        -   `qdrant-adapter`: `/api/qdrant/*` for vector collection browsing.
-        -   `memory-controller`: `/api/memory/*` for memory management.
+The RAG Pipeline Explorer is the new Flutter-based web application for managing the RAG cluster. It replaces the legacy `rag-web-ui`.
+
+### 1. Source and Build
+- **Source Directory**: `rag-stack/services/rag-explorer` (formerly `rag-flutter`).
+- **Dockerfile**: Multi-stage build (Flutter Web Build -> Alpine with Busybox HTTPD).
+- **Service Name**: `rag-explorer` in the build pipeline.
+
+### 2. Running for Development
+#### Local Desktop (Linux/Chrome)
+```bash
+cd rag-stack/services/rag-explorer
+flutter run -d linux # For desktop app
+flutter run -d chrome # For web browser
+```
+
+### 3. Deploying to Cluster
+1. **Build**: Trigger the Kaniko build on **hierophant**:
+   ```bash
+   ssh junie@hierophant "VERSION=2.3.4 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
+   ```
+2. **Deploy**: The UI is automatically deployed by `setup-all.sh` in Iteration 7:
+   ```bash
+   ssh junie@hierophant "VERSION=2.3.4 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
+   ```
+3. **Verification**:
+   - **Endpoint**: `https://rag-explorer.rag.hierocracy.home`
+   - **Status**: `kubectl get pods -n rag-system -l app=rag-explorer`
+
+### 4. Configuration (BFF Connectivity)
+The UI connects to the cluster via `rag-admin-api` (BFF) at `https://rag-admin-api.rag.hierocracy.home`.
+- **CORS**: Ensure `rag-admin-api` allows requests from `rag-explorer.rag.hierocracy.home`.
+- **WebSockets**: Streaming chat uses `wss://rag-admin-api.rag.hierocracy.home/api/llm/chat/stream`.
 
 ## Local/Bootstrap Build and Push (Host-Based)
 Use this only for bootstrapping or when the cluster-native pipeline is unavailable.

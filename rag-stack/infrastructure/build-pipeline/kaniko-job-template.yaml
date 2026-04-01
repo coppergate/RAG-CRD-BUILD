@@ -23,7 +23,7 @@ spec:
         - name: workspace
           mountPath: /workspace
         - name: registry-ca
-          mountPath: /etc/ssl/certs/ca-certificates.crt
+          mountPath: /etc/ssl/certs/registry-ca.crt
           subPath: ca.crt
       containers:
       - name: kaniko
@@ -33,6 +33,7 @@ spec:
         - "--context=dir:///workspace"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:${VERSION}"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:latest"
+        - "--registry-certificate=${REGISTRY}=/kaniko/ssl/certs/registry-ca.crt"
         #- "--insecure" # No longer needed with TLS
         #- "--insecure-pull"
         #- "--insecure-registry=${REGISTRY}"
@@ -44,7 +45,7 @@ spec:
         - name: workspace
           mountPath: /workspace
         - name: registry-ca
-          mountPath: /kaniko/ssl/certs/ca-certificates.crt
+          mountPath: /kaniko/ssl/certs/registry-ca.crt
           subPath: ca.crt
         resources:
           requests:

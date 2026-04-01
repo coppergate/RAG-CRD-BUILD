@@ -246,6 +246,18 @@ func (_u *MemoryItemUpdate) ClearTTL() *MemoryItemUpdate {
 	return _u
 }
 
+// SetMetadata sets the "metadata" field.
+func (_u *MemoryItemUpdate) SetMetadata(v map[string]interface{}) *MemoryItemUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (_u *MemoryItemUpdate) ClearMetadata() *MemoryItemUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *MemoryItemUpdate) SetCreatedAt(v time.Time) *MemoryItemUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -378,6 +390,12 @@ func (_u *MemoryItemUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.TTLCleared() {
 		_spec.ClearField(memoryitem.FieldTTL, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.Metadata(); ok {
+		_spec.SetField(memoryitem.FieldMetadata, field.TypeJSON, value)
+	}
+	if _u.mutation.MetadataCleared() {
+		_spec.ClearField(memoryitem.FieldMetadata, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(memoryitem.FieldCreatedAt, field.TypeTime, value)
@@ -622,6 +640,18 @@ func (_u *MemoryItemUpdateOne) ClearTTL() *MemoryItemUpdateOne {
 	return _u
 }
 
+// SetMetadata sets the "metadata" field.
+func (_u *MemoryItemUpdateOne) SetMetadata(v map[string]interface{}) *MemoryItemUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (_u *MemoryItemUpdateOne) ClearMetadata() *MemoryItemUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *MemoryItemUpdateOne) SetCreatedAt(v time.Time) *MemoryItemUpdateOne {
 	_u.mutation.SetCreatedAt(v)
@@ -784,6 +814,12 @@ func (_u *MemoryItemUpdateOne) sqlSave(ctx context.Context) (_node *MemoryItem, 
 	}
 	if _u.mutation.TTLCleared() {
 		_spec.ClearField(memoryitem.FieldTTL, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.Metadata(); ok {
+		_spec.SetField(memoryitem.FieldMetadata, field.TypeJSON, value)
+	}
+	if _u.mutation.MetadataCleared() {
+		_spec.ClearField(memoryitem.FieldMetadata, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(memoryitem.FieldCreatedAt, field.TypeTime, value)

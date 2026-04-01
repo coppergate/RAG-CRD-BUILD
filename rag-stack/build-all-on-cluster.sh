@@ -29,6 +29,7 @@ services=(
     "object-store-mgr"
     "qdrant-adapter"
     "rag-worker"
+    "rag-explorer"
     "rag-web-ui"
     "rag-ingestion"
     "rag-test-runner"

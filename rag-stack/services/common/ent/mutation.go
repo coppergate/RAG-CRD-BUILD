@@ -575,6 +575,7 @@ type MemoryItemMutation struct {
 	pinning            *bool
 	ttl                *int64
 	addttl             *int64
+	metadata           *map[string]interface{}
 	created_at         *time.Time
 	updated_at         *time.Time
 	clearedFields      map[string]struct{}
@@ -1258,6 +1259,55 @@ func (m *MemoryItemMutation) ResetTTL() {
 	delete(m.clearedFields, memoryitem.FieldTTL)
 }
 
+// SetMetadata sets the "metadata" field.
+func (m *MemoryItemMutation) SetMetadata(value map[string]interface{}) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *MemoryItemMutation) Metadata() (r map[string]interface{}, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the MemoryItem entity.
+// If the MemoryItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MemoryItemMutation) OldMetadata(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *MemoryItemMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[memoryitem.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *MemoryItemMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[memoryitem.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *MemoryItemMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, memoryitem.FieldMetadata)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *MemoryItemMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -1364,7 +1414,7 @@ func (m *MemoryItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MemoryItemMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 15)
 	if m.tenant_id != nil {
 		fields = append(fields, memoryitem.FieldTenantID)
 	}
@@ -1400,6 +1450,9 @@ func (m *MemoryItemMutation) Fields() []string {
 	}
 	if m.ttl != nil {
 		fields = append(fields, memoryitem.FieldTTL)
+	}
+	if m.metadata != nil {
+		fields = append(fields, memoryitem.FieldMetadata)
 	}
 	if m.created_at != nil {
 		fields = append(fields, memoryitem.FieldCreatedAt)
@@ -1439,6 +1492,8 @@ func (m *MemoryItemMutation) Field(name string) (ent.Value, bool) {
 		return m.Pinning()
 	case memoryitem.FieldTTL:
 		return m.TTL()
+	case memoryitem.FieldMetadata:
+		return m.Metadata()
 	case memoryitem.FieldCreatedAt:
 		return m.CreatedAt()
 	case memoryitem.FieldUpdatedAt:
@@ -1476,6 +1531,8 @@ func (m *MemoryItemMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldPinning(ctx)
 	case memoryitem.FieldTTL:
 		return m.OldTTL(ctx)
+	case memoryitem.FieldMetadata:
+		return m.OldMetadata(ctx)
 	case memoryitem.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case memoryitem.FieldUpdatedAt:
@@ -1572,6 +1629,13 @@ func (m *MemoryItemMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTTL(v)
+		return nil
+	case memoryitem.FieldMetadata:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
 		return nil
 	case memoryitem.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -1674,6 +1738,9 @@ func (m *MemoryItemMutation) ClearedFields() []string {
 	if m.FieldCleared(memoryitem.FieldTTL) {
 		fields = append(fields, memoryitem.FieldTTL)
 	}
+	if m.FieldCleared(memoryitem.FieldMetadata) {
+		fields = append(fields, memoryitem.FieldMetadata)
+	}
 	return fields
 }
 
@@ -1705,6 +1772,9 @@ func (m *MemoryItemMutation) ClearField(name string) error {
 		return nil
 	case memoryitem.FieldTTL:
 		m.ClearTTL()
+		return nil
+	case memoryitem.FieldMetadata:
+		m.ClearMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown MemoryItem nullable field %s", name)
@@ -1749,6 +1819,9 @@ func (m *MemoryItemMutation) ResetField(name string) error {
 		return nil
 	case memoryitem.FieldTTL:
 		m.ResetTTL()
+		return nil
+	case memoryitem.FieldMetadata:
+		m.ResetMetadata()
 		return nil
 	case memoryitem.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -1821,6 +1894,7 @@ type MemoryLinkMutation struct {
 	appendingestion_ids      []uuid.UUID
 	tags                     *[]string
 	appendtags               []string
+	metadata                 *map[string]interface{}
 	created_at               *time.Time
 	clearedFields            map[string]struct{}
 	done                     bool
@@ -2163,6 +2237,55 @@ func (m *MemoryLinkMutation) ResetTags() {
 	delete(m.clearedFields, memorylink.FieldTags)
 }
 
+// SetMetadata sets the "metadata" field.
+func (m *MemoryLinkMutation) SetMetadata(value map[string]interface{}) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *MemoryLinkMutation) Metadata() (r map[string]interface{}, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the MemoryLink entity.
+// If the MemoryLink object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MemoryLinkMutation) OldMetadata(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *MemoryLinkMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[memorylink.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *MemoryLinkMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[memorylink.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *MemoryLinkMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, memorylink.FieldMetadata)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *MemoryLinkMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -2233,7 +2356,7 @@ func (m *MemoryLinkMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *MemoryLinkMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.memory_item_id != nil {
 		fields = append(fields, memorylink.FieldMemoryItemID)
 	}
@@ -2245,6 +2368,9 @@ func (m *MemoryLinkMutation) Fields() []string {
 	}
 	if m.tags != nil {
 		fields = append(fields, memorylink.FieldTags)
+	}
+	if m.metadata != nil {
+		fields = append(fields, memorylink.FieldMetadata)
 	}
 	if m.created_at != nil {
 		fields = append(fields, memorylink.FieldCreatedAt)
@@ -2265,6 +2391,8 @@ func (m *MemoryLinkMutation) Field(name string) (ent.Value, bool) {
 		return m.IngestionIds()
 	case memorylink.FieldTags:
 		return m.Tags()
+	case memorylink.FieldMetadata:
+		return m.Metadata()
 	case memorylink.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -2284,6 +2412,8 @@ func (m *MemoryLinkMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldIngestionIds(ctx)
 	case memorylink.FieldTags:
 		return m.OldTags(ctx)
+	case memorylink.FieldMetadata:
+		return m.OldMetadata(ctx)
 	case memorylink.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -2322,6 +2452,13 @@ func (m *MemoryLinkMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTags(v)
+		return nil
+	case memorylink.FieldMetadata:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
 		return nil
 	case memorylink.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -2369,6 +2506,9 @@ func (m *MemoryLinkMutation) ClearedFields() []string {
 	if m.FieldCleared(memorylink.FieldTags) {
 		fields = append(fields, memorylink.FieldTags)
 	}
+	if m.FieldCleared(memorylink.FieldMetadata) {
+		fields = append(fields, memorylink.FieldMetadata)
+	}
 	return fields
 }
 
@@ -2392,6 +2532,9 @@ func (m *MemoryLinkMutation) ClearField(name string) error {
 	case memorylink.FieldTags:
 		m.ClearTags()
 		return nil
+	case memorylink.FieldMetadata:
+		m.ClearMetadata()
+		return nil
 	}
 	return fmt.Errorf("unknown MemoryLink nullable field %s", name)
 }
@@ -2411,6 +2554,9 @@ func (m *MemoryLinkMutation) ResetField(name string) error {
 		return nil
 	case memorylink.FieldTags:
 		m.ResetTags()
+		return nil
+	case memorylink.FieldMetadata:
+		m.ResetMetadata()
 		return nil
 	case memorylink.FieldCreatedAt:
 		m.ResetCreatedAt()

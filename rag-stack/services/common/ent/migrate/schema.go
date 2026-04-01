@@ -54,6 +54,7 @@ var (
 		{Name: "status", Type: field.TypeString, Default: "active"},
 		{Name: "pinning", Type: field.TypeBool, Default: false},
 		{Name: "ttl", Type: field.TypeInt64, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -97,6 +98,7 @@ var (
 		{Name: "source_message_ids", Type: field.TypeJSON, Nullable: true},
 		{Name: "ingestion_ids", Type: field.TypeJSON, Nullable: true},
 		{Name: "tags", Type: field.TypeJSON, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// MemoryLinksTable holds the schema information for the "memory_links" table.

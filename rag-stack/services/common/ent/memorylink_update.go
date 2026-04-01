@@ -98,6 +98,18 @@ func (_u *MemoryLinkUpdate) ClearTags() *MemoryLinkUpdate {
 	return _u
 }
 
+// SetMetadata sets the "metadata" field.
+func (_u *MemoryLinkUpdate) SetMetadata(v map[string]interface{}) *MemoryLinkUpdate {
+	_u.mutation.SetMetadata(v)
+	return _u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (_u *MemoryLinkUpdate) ClearMetadata() *MemoryLinkUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *MemoryLinkUpdate) SetCreatedAt(v time.Time) *MemoryLinkUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -189,6 +201,12 @@ func (_u *MemoryLinkUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if _u.mutation.TagsCleared() {
 		_spec.ClearField(memorylink.FieldTags, field.TypeJSON)
 	}
+	if value, ok := _u.mutation.Metadata(); ok {
+		_spec.SetField(memorylink.FieldMetadata, field.TypeJSON, value)
+	}
+	if _u.mutation.MetadataCleared() {
+		_spec.ClearField(memorylink.FieldMetadata, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(memorylink.FieldCreatedAt, field.TypeTime, value)
 	}
@@ -277,6 +295,18 @@ func (_u *MemoryLinkUpdateOne) AppendTags(v []string) *MemoryLinkUpdateOne {
 // ClearTags clears the value of the "tags" field.
 func (_u *MemoryLinkUpdateOne) ClearTags() *MemoryLinkUpdateOne {
 	_u.mutation.ClearTags()
+	return _u
+}
+
+// SetMetadata sets the "metadata" field.
+func (_u *MemoryLinkUpdateOne) SetMetadata(v map[string]interface{}) *MemoryLinkUpdateOne {
+	_u.mutation.SetMetadata(v)
+	return _u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (_u *MemoryLinkUpdateOne) ClearMetadata() *MemoryLinkUpdateOne {
+	_u.mutation.ClearMetadata()
 	return _u
 }
 
@@ -400,6 +430,12 @@ func (_u *MemoryLinkUpdateOne) sqlSave(ctx context.Context) (_node *MemoryLink, 
 	}
 	if _u.mutation.TagsCleared() {
 		_spec.ClearField(memorylink.FieldTags, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Metadata(); ok {
+		_spec.SetField(memorylink.FieldMetadata, field.TypeJSON, value)
+	}
+	if _u.mutation.MetadataCleared() {
+		_spec.ClearField(memorylink.FieldMetadata, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(memorylink.FieldCreatedAt, field.TypeTime, value)

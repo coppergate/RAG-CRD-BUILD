@@ -690,6 +690,16 @@ func TTLNotNil() predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldNotNull(FieldTTL))
 }
 
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldIsNull(FieldMetadata))
+}
+
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNotNull(FieldMetadata))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldEQ(FieldCreatedAt, v))

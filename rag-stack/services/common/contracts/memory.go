@@ -1,7 +1,5 @@
 package contracts
 
-import "github.com/google/uuid"
-
 type MemoryScope struct {
 	SessionID string   `json:"session_id,omitempty"`
 	UserID    string   `json:"user_id,omitempty"`

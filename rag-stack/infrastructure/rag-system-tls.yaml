@@ -278,3 +278,35 @@ spec:
     name: hierocracy-ca-issuer
     kind: ClusterIssuer
     group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rag-explorer-cert
+  namespace: rag-system
+spec:
+  secretName: rag-explorer-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: rag-explorer.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - rag-explorer
+    - rag-explorer.rag-system
+    - rag-explorer.rag-system.svc
+    - rag-explorer.rag-system.svc.cluster.local
+    - rag-explorer.rag.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

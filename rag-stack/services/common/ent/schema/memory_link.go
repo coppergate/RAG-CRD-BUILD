@@ -29,6 +29,8 @@ func (MemoryLink) Fields() []ent.Field {
 			Comment("Provenance from ingested data"),
 		field.JSON("tags", []string{}).
 			Optional(),
+		field.JSON("metadata", map[string]interface{}{}).
+			Optional(),
 		field.Time("created_at").
 			Default(time.Now),
 	}

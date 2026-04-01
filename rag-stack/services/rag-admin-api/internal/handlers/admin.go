@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"app-builds/rag-admin-api/internal/config"
 	"app-builds/common/tlsutil"
 	"time"
@@ -15,9 +16,22 @@ type AdminHandler struct {
 	Cfg *config.Config
 }
 
-func (h *AdminHandler) ProxyTo(targetURL string) http.HandlerFunc {
+func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.HandlerFunc {
 	target, _ := url.Parse(targetURL)
 	proxy := httputil.NewSingleHostReverseProxy(target)
+	
+	// Customize the director to strip prefix if needed
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		if prefixToStrip != "" {
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefixToStrip)
+			if !strings.HasPrefix(req.URL.Path, "/") {
+				req.URL.Path = "/" + req.URL.Path
+			}
+		}
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		proxy.ServeHTTP(w, r)
 	}

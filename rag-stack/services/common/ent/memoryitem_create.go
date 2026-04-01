@@ -168,6 +168,12 @@ func (_c *MemoryItemCreate) SetNillableTTL(v *int64) *MemoryItemCreate {
 	return _c
 }
 
+// SetMetadata sets the "metadata" field.
+func (_c *MemoryItemCreate) SetMetadata(v map[string]interface{}) *MemoryItemCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *MemoryItemCreate) SetCreatedAt(v time.Time) *MemoryItemCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -384,6 +390,10 @@ func (_c *MemoryItemCreate) createSpec() (*MemoryItem, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TTL(); ok {
 		_spec.SetField(memoryitem.FieldTTL, field.TypeInt64, value)
 		_node.TTL = value
+	}
+	if value, ok := _c.mutation.Metadata(); ok {
+		_spec.SetField(memoryitem.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(memoryitem.FieldCreatedAt, field.TypeTime, value)
@@ -640,6 +650,24 @@ func (u *MemoryItemUpsert) AddTTL(v int64) *MemoryItemUpsert {
 // ClearTTL clears the value of the "ttl" field.
 func (u *MemoryItemUpsert) ClearTTL() *MemoryItemUpsert {
 	u.SetNull(memoryitem.FieldTTL)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *MemoryItemUpsert) SetMetadata(v map[string]interface{}) *MemoryItemUpsert {
+	u.Set(memoryitem.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *MemoryItemUpsert) UpdateMetadata() *MemoryItemUpsert {
+	u.SetExcluded(memoryitem.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *MemoryItemUpsert) ClearMetadata() *MemoryItemUpsert {
+	u.SetNull(memoryitem.FieldMetadata)
 	return u
 }
 
@@ -943,6 +971,27 @@ func (u *MemoryItemUpsertOne) UpdateTTL() *MemoryItemUpsertOne {
 func (u *MemoryItemUpsertOne) ClearTTL() *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
 		s.ClearTTL()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *MemoryItemUpsertOne) SetMetadata(v map[string]interface{}) *MemoryItemUpsertOne {
+	return u.Update(func(s *MemoryItemUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *MemoryItemUpsertOne) UpdateMetadata() *MemoryItemUpsertOne {
+	return u.Update(func(s *MemoryItemUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *MemoryItemUpsertOne) ClearMetadata() *MemoryItemUpsertOne {
+	return u.Update(func(s *MemoryItemUpsert) {
+		s.ClearMetadata()
 	})
 }
 
@@ -1417,6 +1466,27 @@ func (u *MemoryItemUpsertBulk) UpdateTTL() *MemoryItemUpsertBulk {
 func (u *MemoryItemUpsertBulk) ClearTTL() *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
 		s.ClearTTL()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *MemoryItemUpsertBulk) SetMetadata(v map[string]interface{}) *MemoryItemUpsertBulk {
+	return u.Update(func(s *MemoryItemUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *MemoryItemUpsertBulk) UpdateMetadata() *MemoryItemUpsertBulk {
+	return u.Update(func(s *MemoryItemUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *MemoryItemUpsertBulk) ClearMetadata() *MemoryItemUpsertBulk {
+	return u.Update(func(s *MemoryItemUpsert) {
+		s.ClearMetadata()
 	})
 }
 

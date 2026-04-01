@@ -48,6 +48,12 @@ func (_c *MemoryLinkCreate) SetTags(v []string) *MemoryLinkCreate {
 	return _c
 }
 
+// SetMetadata sets the "metadata" field.
+func (_c *MemoryLinkCreate) SetMetadata(v map[string]interface{}) *MemoryLinkCreate {
+	_c.mutation.SetMetadata(v)
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *MemoryLinkCreate) SetCreatedAt(v time.Time) *MemoryLinkCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -181,6 +187,10 @@ func (_c *MemoryLinkCreate) createSpec() (*MemoryLink, *sqlgraph.CreateSpec) {
 		_spec.SetField(memorylink.FieldTags, field.TypeJSON, value)
 		_node.Tags = value
 	}
+	if value, ok := _c.mutation.Metadata(); ok {
+		_spec.SetField(memorylink.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
+	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(memorylink.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -300,6 +310,24 @@ func (u *MemoryLinkUpsert) UpdateTags() *MemoryLinkUpsert {
 // ClearTags clears the value of the "tags" field.
 func (u *MemoryLinkUpsert) ClearTags() *MemoryLinkUpsert {
 	u.SetNull(memorylink.FieldTags)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *MemoryLinkUpsert) SetMetadata(v map[string]interface{}) *MemoryLinkUpsert {
+	u.Set(memorylink.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *MemoryLinkUpsert) UpdateMetadata() *MemoryLinkUpsert {
+	u.SetExcluded(memorylink.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *MemoryLinkUpsert) ClearMetadata() *MemoryLinkUpsert {
+	u.SetNull(memorylink.FieldMetadata)
 	return u
 }
 
@@ -437,6 +465,27 @@ func (u *MemoryLinkUpsertOne) UpdateTags() *MemoryLinkUpsertOne {
 func (u *MemoryLinkUpsertOne) ClearTags() *MemoryLinkUpsertOne {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.ClearTags()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *MemoryLinkUpsertOne) SetMetadata(v map[string]interface{}) *MemoryLinkUpsertOne {
+	return u.Update(func(s *MemoryLinkUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *MemoryLinkUpsertOne) UpdateMetadata() *MemoryLinkUpsertOne {
+	return u.Update(func(s *MemoryLinkUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *MemoryLinkUpsertOne) ClearMetadata() *MemoryLinkUpsertOne {
+	return u.Update(func(s *MemoryLinkUpsert) {
+		s.ClearMetadata()
 	})
 }
 
@@ -743,6 +792,27 @@ func (u *MemoryLinkUpsertBulk) UpdateTags() *MemoryLinkUpsertBulk {
 func (u *MemoryLinkUpsertBulk) ClearTags() *MemoryLinkUpsertBulk {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.ClearTags()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *MemoryLinkUpsertBulk) SetMetadata(v map[string]interface{}) *MemoryLinkUpsertBulk {
+	return u.Update(func(s *MemoryLinkUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *MemoryLinkUpsertBulk) UpdateMetadata() *MemoryLinkUpsertBulk {
+	return u.Update(func(s *MemoryLinkUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *MemoryLinkUpsertBulk) ClearMetadata() *MemoryLinkUpsertBulk {
+	return u.Update(func(s *MemoryLinkUpsert) {
+		s.ClearMetadata()
 	})
 }
 

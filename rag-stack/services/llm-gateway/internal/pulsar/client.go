@@ -16,7 +16,7 @@ import (
 	"app-builds/llm-gateway/internal/config"
 )
 
-type PulsarClient struct {
+type pulsarClient struct {
 	client         pulsar.Client
 	producer       pulsar.Producer
 	promptProducer pulsar.Producer
@@ -43,7 +43,7 @@ type StreamChunk struct {
 	Error          string `json:"error,omitempty"`
 }
 
-func NewPulsarClient(cfg *config.Config) (*PulsarClient, error) {
+func NewPulsarClient(cfg *config.Config) (Client, error) {
 	opts := pulsar.ClientOptions{
 		URL: cfg.PulsarURL,
 	}
@@ -85,7 +85,7 @@ func NewPulsarClient(cfg *config.Config) (*PulsarClient, error) {
 		return nil, fmt.Errorf("could not subscribe to results topic %s: %w", cfg.ResponseTopic, err)
 	}
 
-	pc := &PulsarClient{
+	pc := &pulsarClient{
 		client:         client,
 		producer:       producer,
 		promptProducer: promptProducer,
@@ -98,7 +98,7 @@ func NewPulsarClient(cfg *config.Config) (*PulsarClient, error) {
 	return pc, nil
 }
 
-func (pc *PulsarClient) consumeResults() {
+func (pc *pulsarClient) consumeResults() {
 	for {
 		msg, err := pc.consumer.Receive(context.Background())
 		if err != nil {
@@ -125,7 +125,7 @@ func (pc *PulsarClient) consumeResults() {
 	}
 }
 
-func (pc *PulsarClient) SendRequest(ctx context.Context, id string, payload interface{}) (string, error) {
+func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload interface{}) (string, error) {
 	tracer := otel.Tracer("pulsar-client")
 	ctx, span := tracer.Start(ctx, "SendRequest")
 	defer span.End()
@@ -167,7 +167,7 @@ func (pc *PulsarClient) SendRequest(ctx context.Context, id string, payload inte
 	}
 }
 
-func (pc *PulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, content string) error {
+func (pc *pulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, content string) error {
 	payload := map[string]string{
 		"id":         id,
 		"session_id": sessionID,
@@ -184,15 +184,15 @@ func (pc *PulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, cont
 	return err
 }
 
-func (pc *PulsarClient) SubscribeStream(id string, ch chan StreamChunk) {
+func (pc *pulsarClient) SubscribeStream(id string, ch chan StreamChunk) {
 	pc.streams.Store(id, ch)
 }
 
-func (pc *PulsarClient) UnsubscribeStream(id string) {
+func (pc *pulsarClient) UnsubscribeStream(id string) {
 	pc.streams.Delete(id)
 }
 
-func (pc *PulsarClient) SendRawRequest(ctx context.Context, payload interface{}) error {
+func (pc *pulsarClient) SendRawRequest(ctx context.Context, payload interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -211,7 +211,7 @@ func (pc *PulsarClient) SendRawRequest(ctx context.Context, payload interface{})
 	return err
 }
 
-func (pc *PulsarClient) Close() {
+func (pc *pulsarClient) Close() {
 	pc.consumer.Close()
 	pc.producer.Close()
 	pc.promptProducer.Close()
@@ -219,7 +219,7 @@ func (pc *PulsarClient) Close() {
 }
 
 // Ping checks if the client is healthy.
-func (pc *PulsarClient) Ping() error {
+func (pc *pulsarClient) Ping() error {
 	if pc.client == nil {
 		return fmt.Errorf("pulsar client is nil")
 	}
