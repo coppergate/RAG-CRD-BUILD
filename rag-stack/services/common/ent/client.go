@@ -11,6 +11,9 @@ import (
 
 	"app-builds/common/ent/migrate"
 
+	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
+	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
@@ -26,6 +29,12 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// MemoryEvent is the client for interacting with the MemoryEvent builders.
+	MemoryEvent *MemoryEventClient
+	// MemoryItem is the client for interacting with the MemoryItem builders.
+	MemoryItem *MemoryItemClient
+	// MemoryLink is the client for interacting with the MemoryLink builders.
+	MemoryLink *MemoryLinkClient
 	// Prompt is the client for interacting with the Prompt builders.
 	Prompt *PromptClient
 	// Response is the client for interacting with the Response builders.
@@ -43,6 +52,9 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.MemoryEvent = NewMemoryEventClient(c.config)
+	c.MemoryItem = NewMemoryItemClient(c.config)
+	c.MemoryLink = NewMemoryLinkClient(c.config)
 	c.Prompt = NewPromptClient(c.config)
 	c.Response = NewResponseClient(c.config)
 	c.Session = NewSessionClient(c.config)
@@ -136,11 +148,14 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:      ctx,
-		config:   cfg,
-		Prompt:   NewPromptClient(cfg),
-		Response: NewResponseClient(cfg),
-		Session:  NewSessionClient(cfg),
+		ctx:         ctx,
+		config:      cfg,
+		MemoryEvent: NewMemoryEventClient(cfg),
+		MemoryItem:  NewMemoryItemClient(cfg),
+		MemoryLink:  NewMemoryLinkClient(cfg),
+		Prompt:      NewPromptClient(cfg),
+		Response:    NewResponseClient(cfg),
+		Session:     NewSessionClient(cfg),
 	}, nil
 }
 
@@ -158,18 +173,21 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:      ctx,
-		config:   cfg,
-		Prompt:   NewPromptClient(cfg),
-		Response: NewResponseClient(cfg),
-		Session:  NewSessionClient(cfg),
+		ctx:         ctx,
+		config:      cfg,
+		MemoryEvent: NewMemoryEventClient(cfg),
+		MemoryItem:  NewMemoryItemClient(cfg),
+		MemoryLink:  NewMemoryLinkClient(cfg),
+		Prompt:      NewPromptClient(cfg),
+		Response:    NewResponseClient(cfg),
+		Session:     NewSessionClient(cfg),
 	}, nil
 }
 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		Prompt.
+//		MemoryEvent.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -191,22 +209,32 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
-	c.Prompt.Use(hooks...)
-	c.Response.Use(hooks...)
-	c.Session.Use(hooks...)
+	for _, n := range []interface{ Use(...Hook) }{
+		c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.Prompt, c.Response, c.Session,
+	} {
+		n.Use(hooks...)
+	}
 }
 
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
-	c.Prompt.Intercept(interceptors...)
-	c.Response.Intercept(interceptors...)
-	c.Session.Intercept(interceptors...)
+	for _, n := range []interface{ Intercept(...Interceptor) }{
+		c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.Prompt, c.Response, c.Session,
+	} {
+		n.Intercept(interceptors...)
+	}
 }
 
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *MemoryEventMutation:
+		return c.MemoryEvent.mutate(ctx, m)
+	case *MemoryItemMutation:
+		return c.MemoryItem.mutate(ctx, m)
+	case *MemoryLinkMutation:
+		return c.MemoryLink.mutate(ctx, m)
 	case *PromptMutation:
 		return c.Prompt.mutate(ctx, m)
 	case *ResponseMutation:
@@ -215,6 +243,405 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Session.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// MemoryEventClient is a client for the MemoryEvent schema.
+type MemoryEventClient struct {
+	config
+}
+
+// NewMemoryEventClient returns a client for the MemoryEvent from the given config.
+func NewMemoryEventClient(c config) *MemoryEventClient {
+	return &MemoryEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `memoryevent.Hooks(f(g(h())))`.
+func (c *MemoryEventClient) Use(hooks ...Hook) {
+	c.hooks.MemoryEvent = append(c.hooks.MemoryEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `memoryevent.Intercept(f(g(h())))`.
+func (c *MemoryEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MemoryEvent = append(c.inters.MemoryEvent, interceptors...)
+}
+
+// Create returns a builder for creating a MemoryEvent entity.
+func (c *MemoryEventClient) Create() *MemoryEventCreate {
+	mutation := newMemoryEventMutation(c.config, OpCreate)
+	return &MemoryEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MemoryEvent entities.
+func (c *MemoryEventClient) CreateBulk(builders ...*MemoryEventCreate) *MemoryEventCreateBulk {
+	return &MemoryEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MemoryEventClient) MapCreateBulk(slice any, setFunc func(*MemoryEventCreate, int)) *MemoryEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MemoryEventCreateBulk{err: fmt.Errorf("calling to MemoryEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MemoryEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MemoryEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MemoryEvent.
+func (c *MemoryEventClient) Update() *MemoryEventUpdate {
+	mutation := newMemoryEventMutation(c.config, OpUpdate)
+	return &MemoryEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MemoryEventClient) UpdateOne(_m *MemoryEvent) *MemoryEventUpdateOne {
+	mutation := newMemoryEventMutation(c.config, OpUpdateOne, withMemoryEvent(_m))
+	return &MemoryEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MemoryEventClient) UpdateOneID(id uuid.UUID) *MemoryEventUpdateOne {
+	mutation := newMemoryEventMutation(c.config, OpUpdateOne, withMemoryEventID(id))
+	return &MemoryEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MemoryEvent.
+func (c *MemoryEventClient) Delete() *MemoryEventDelete {
+	mutation := newMemoryEventMutation(c.config, OpDelete)
+	return &MemoryEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MemoryEventClient) DeleteOne(_m *MemoryEvent) *MemoryEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MemoryEventClient) DeleteOneID(id uuid.UUID) *MemoryEventDeleteOne {
+	builder := c.Delete().Where(memoryevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MemoryEventDeleteOne{builder}
+}
+
+// Query returns a query builder for MemoryEvent.
+func (c *MemoryEventClient) Query() *MemoryEventQuery {
+	return &MemoryEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMemoryEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MemoryEvent entity by its id.
+func (c *MemoryEventClient) Get(ctx context.Context, id uuid.UUID) (*MemoryEvent, error) {
+	return c.Query().Where(memoryevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MemoryEventClient) GetX(ctx context.Context, id uuid.UUID) *MemoryEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MemoryEventClient) Hooks() []Hook {
+	return c.hooks.MemoryEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *MemoryEventClient) Interceptors() []Interceptor {
+	return c.inters.MemoryEvent
+}
+
+func (c *MemoryEventClient) mutate(ctx context.Context, m *MemoryEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MemoryEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MemoryEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MemoryEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MemoryEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MemoryEvent mutation op: %q", m.Op())
+	}
+}
+
+// MemoryItemClient is a client for the MemoryItem schema.
+type MemoryItemClient struct {
+	config
+}
+
+// NewMemoryItemClient returns a client for the MemoryItem from the given config.
+func NewMemoryItemClient(c config) *MemoryItemClient {
+	return &MemoryItemClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `memoryitem.Hooks(f(g(h())))`.
+func (c *MemoryItemClient) Use(hooks ...Hook) {
+	c.hooks.MemoryItem = append(c.hooks.MemoryItem, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `memoryitem.Intercept(f(g(h())))`.
+func (c *MemoryItemClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MemoryItem = append(c.inters.MemoryItem, interceptors...)
+}
+
+// Create returns a builder for creating a MemoryItem entity.
+func (c *MemoryItemClient) Create() *MemoryItemCreate {
+	mutation := newMemoryItemMutation(c.config, OpCreate)
+	return &MemoryItemCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MemoryItem entities.
+func (c *MemoryItemClient) CreateBulk(builders ...*MemoryItemCreate) *MemoryItemCreateBulk {
+	return &MemoryItemCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MemoryItemClient) MapCreateBulk(slice any, setFunc func(*MemoryItemCreate, int)) *MemoryItemCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MemoryItemCreateBulk{err: fmt.Errorf("calling to MemoryItemClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MemoryItemCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MemoryItemCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MemoryItem.
+func (c *MemoryItemClient) Update() *MemoryItemUpdate {
+	mutation := newMemoryItemMutation(c.config, OpUpdate)
+	return &MemoryItemUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MemoryItemClient) UpdateOne(_m *MemoryItem) *MemoryItemUpdateOne {
+	mutation := newMemoryItemMutation(c.config, OpUpdateOne, withMemoryItem(_m))
+	return &MemoryItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MemoryItemClient) UpdateOneID(id uuid.UUID) *MemoryItemUpdateOne {
+	mutation := newMemoryItemMutation(c.config, OpUpdateOne, withMemoryItemID(id))
+	return &MemoryItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MemoryItem.
+func (c *MemoryItemClient) Delete() *MemoryItemDelete {
+	mutation := newMemoryItemMutation(c.config, OpDelete)
+	return &MemoryItemDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MemoryItemClient) DeleteOne(_m *MemoryItem) *MemoryItemDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MemoryItemClient) DeleteOneID(id uuid.UUID) *MemoryItemDeleteOne {
+	builder := c.Delete().Where(memoryitem.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MemoryItemDeleteOne{builder}
+}
+
+// Query returns a query builder for MemoryItem.
+func (c *MemoryItemClient) Query() *MemoryItemQuery {
+	return &MemoryItemQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMemoryItem},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MemoryItem entity by its id.
+func (c *MemoryItemClient) Get(ctx context.Context, id uuid.UUID) (*MemoryItem, error) {
+	return c.Query().Where(memoryitem.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MemoryItemClient) GetX(ctx context.Context, id uuid.UUID) *MemoryItem {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MemoryItemClient) Hooks() []Hook {
+	return c.hooks.MemoryItem
+}
+
+// Interceptors returns the client interceptors.
+func (c *MemoryItemClient) Interceptors() []Interceptor {
+	return c.inters.MemoryItem
+}
+
+func (c *MemoryItemClient) mutate(ctx context.Context, m *MemoryItemMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MemoryItemCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MemoryItemUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MemoryItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MemoryItemDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MemoryItem mutation op: %q", m.Op())
+	}
+}
+
+// MemoryLinkClient is a client for the MemoryLink schema.
+type MemoryLinkClient struct {
+	config
+}
+
+// NewMemoryLinkClient returns a client for the MemoryLink from the given config.
+func NewMemoryLinkClient(c config) *MemoryLinkClient {
+	return &MemoryLinkClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `memorylink.Hooks(f(g(h())))`.
+func (c *MemoryLinkClient) Use(hooks ...Hook) {
+	c.hooks.MemoryLink = append(c.hooks.MemoryLink, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `memorylink.Intercept(f(g(h())))`.
+func (c *MemoryLinkClient) Intercept(interceptors ...Interceptor) {
+	c.inters.MemoryLink = append(c.inters.MemoryLink, interceptors...)
+}
+
+// Create returns a builder for creating a MemoryLink entity.
+func (c *MemoryLinkClient) Create() *MemoryLinkCreate {
+	mutation := newMemoryLinkMutation(c.config, OpCreate)
+	return &MemoryLinkCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of MemoryLink entities.
+func (c *MemoryLinkClient) CreateBulk(builders ...*MemoryLinkCreate) *MemoryLinkCreateBulk {
+	return &MemoryLinkCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *MemoryLinkClient) MapCreateBulk(slice any, setFunc func(*MemoryLinkCreate, int)) *MemoryLinkCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &MemoryLinkCreateBulk{err: fmt.Errorf("calling to MemoryLinkClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*MemoryLinkCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &MemoryLinkCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for MemoryLink.
+func (c *MemoryLinkClient) Update() *MemoryLinkUpdate {
+	mutation := newMemoryLinkMutation(c.config, OpUpdate)
+	return &MemoryLinkUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *MemoryLinkClient) UpdateOne(_m *MemoryLink) *MemoryLinkUpdateOne {
+	mutation := newMemoryLinkMutation(c.config, OpUpdateOne, withMemoryLink(_m))
+	return &MemoryLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *MemoryLinkClient) UpdateOneID(id uuid.UUID) *MemoryLinkUpdateOne {
+	mutation := newMemoryLinkMutation(c.config, OpUpdateOne, withMemoryLinkID(id))
+	return &MemoryLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for MemoryLink.
+func (c *MemoryLinkClient) Delete() *MemoryLinkDelete {
+	mutation := newMemoryLinkMutation(c.config, OpDelete)
+	return &MemoryLinkDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *MemoryLinkClient) DeleteOne(_m *MemoryLink) *MemoryLinkDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *MemoryLinkClient) DeleteOneID(id uuid.UUID) *MemoryLinkDeleteOne {
+	builder := c.Delete().Where(memorylink.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &MemoryLinkDeleteOne{builder}
+}
+
+// Query returns a query builder for MemoryLink.
+func (c *MemoryLinkClient) Query() *MemoryLinkQuery {
+	return &MemoryLinkQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeMemoryLink},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a MemoryLink entity by its id.
+func (c *MemoryLinkClient) Get(ctx context.Context, id uuid.UUID) (*MemoryLink, error) {
+	return c.Query().Where(memorylink.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *MemoryLinkClient) GetX(ctx context.Context, id uuid.UUID) *MemoryLink {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *MemoryLinkClient) Hooks() []Hook {
+	return c.hooks.MemoryLink
+}
+
+// Interceptors returns the client interceptors.
+func (c *MemoryLinkClient) Interceptors() []Interceptor {
+	return c.inters.MemoryLink
+}
+
+func (c *MemoryLinkClient) mutate(ctx context.Context, m *MemoryLinkMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&MemoryLinkCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&MemoryLinkUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&MemoryLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&MemoryLinkDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown MemoryLink mutation op: %q", m.Op())
 	}
 }
 
@@ -620,9 +1047,9 @@ func (c *SessionClient) mutate(ctx context.Context, m *SessionMutation) (Value, 
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Prompt, Response, Session []ent.Hook
+		MemoryEvent, MemoryItem, MemoryLink, Prompt, Response, Session []ent.Hook
 	}
 	inters struct {
-		Prompt, Response, Session []ent.Interceptor
+		MemoryEvent, MemoryItem, MemoryLink, Prompt, Response, Session []ent.Interceptor
 	}
 )

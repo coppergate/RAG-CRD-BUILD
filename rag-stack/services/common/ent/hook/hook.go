@@ -8,6 +8,42 @@ import (
 	"fmt"
 )
 
+// The MemoryEventFunc type is an adapter to allow the use of ordinary
+// function as MemoryEvent mutator.
+type MemoryEventFunc func(context.Context, *ent.MemoryEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MemoryEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MemoryEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MemoryEventMutation", m)
+}
+
+// The MemoryItemFunc type is an adapter to allow the use of ordinary
+// function as MemoryItem mutator.
+type MemoryItemFunc func(context.Context, *ent.MemoryItemMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MemoryItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MemoryItemMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MemoryItemMutation", m)
+}
+
+// The MemoryLinkFunc type is an adapter to allow the use of ordinary
+// function as MemoryLink mutator.
+type MemoryLinkFunc func(context.Context, *ent.MemoryLinkMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f MemoryLinkFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.MemoryLinkMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MemoryLinkMutation", m)
+}
+
 // The PromptFunc type is an adapter to allow the use of ordinary
 // function as Prompt mutator.
 type PromptFunc func(context.Context, *ent.PromptMutation) (ent.Value, error)

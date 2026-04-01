@@ -3,6 +3,9 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
+	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/schema"
@@ -16,6 +19,58 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	memoryeventFields := schema.MemoryEvent{}.Fields()
+	_ = memoryeventFields
+	// memoryeventDescCreatedAt is the schema descriptor for created_at field.
+	memoryeventDescCreatedAt := memoryeventFields[4].Descriptor()
+	// memoryevent.DefaultCreatedAt holds the default value on creation for the created_at field.
+	memoryevent.DefaultCreatedAt = memoryeventDescCreatedAt.Default.(func() time.Time)
+	// memoryeventDescID is the schema descriptor for id field.
+	memoryeventDescID := memoryeventFields[0].Descriptor()
+	// memoryevent.DefaultID holds the default value on creation for the id field.
+	memoryevent.DefaultID = memoryeventDescID.Default.(func() uuid.UUID)
+	memoryitemFields := schema.MemoryItem{}.Fields()
+	_ = memoryitemFields
+	// memoryitemDescSalience is the schema descriptor for salience field.
+	memoryitemDescSalience := memoryitemFields[7].Descriptor()
+	// memoryitem.DefaultSalience holds the default value on creation for the salience field.
+	memoryitem.DefaultSalience = memoryitemDescSalience.Default.(float64)
+	// memoryitemDescRetentionScore is the schema descriptor for retention_score field.
+	memoryitemDescRetentionScore := memoryitemFields[8].Descriptor()
+	// memoryitem.DefaultRetentionScore holds the default value on creation for the retention_score field.
+	memoryitem.DefaultRetentionScore = memoryitemDescRetentionScore.Default.(float64)
+	// memoryitemDescStatus is the schema descriptor for status field.
+	memoryitemDescStatus := memoryitemFields[10].Descriptor()
+	// memoryitem.DefaultStatus holds the default value on creation for the status field.
+	memoryitem.DefaultStatus = memoryitemDescStatus.Default.(string)
+	// memoryitemDescPinning is the schema descriptor for pinning field.
+	memoryitemDescPinning := memoryitemFields[11].Descriptor()
+	// memoryitem.DefaultPinning holds the default value on creation for the pinning field.
+	memoryitem.DefaultPinning = memoryitemDescPinning.Default.(bool)
+	// memoryitemDescCreatedAt is the schema descriptor for created_at field.
+	memoryitemDescCreatedAt := memoryitemFields[13].Descriptor()
+	// memoryitem.DefaultCreatedAt holds the default value on creation for the created_at field.
+	memoryitem.DefaultCreatedAt = memoryitemDescCreatedAt.Default.(func() time.Time)
+	// memoryitemDescUpdatedAt is the schema descriptor for updated_at field.
+	memoryitemDescUpdatedAt := memoryitemFields[14].Descriptor()
+	// memoryitem.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	memoryitem.DefaultUpdatedAt = memoryitemDescUpdatedAt.Default.(func() time.Time)
+	// memoryitem.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	memoryitem.UpdateDefaultUpdatedAt = memoryitemDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// memoryitemDescID is the schema descriptor for id field.
+	memoryitemDescID := memoryitemFields[0].Descriptor()
+	// memoryitem.DefaultID holds the default value on creation for the id field.
+	memoryitem.DefaultID = memoryitemDescID.Default.(func() uuid.UUID)
+	memorylinkFields := schema.MemoryLink{}.Fields()
+	_ = memorylinkFields
+	// memorylinkDescCreatedAt is the schema descriptor for created_at field.
+	memorylinkDescCreatedAt := memorylinkFields[5].Descriptor()
+	// memorylink.DefaultCreatedAt holds the default value on creation for the created_at field.
+	memorylink.DefaultCreatedAt = memorylinkDescCreatedAt.Default.(func() time.Time)
+	// memorylinkDescID is the schema descriptor for id field.
+	memorylinkDescID := memorylinkFields[0].Descriptor()
+	// memorylink.DefaultID holds the default value on creation for the id field.
+	memorylink.DefaultID = memorylinkDescID.Default.(func() uuid.UUID)
 	promptFields := schema.Prompt{}.Fields()
 	_ = promptFields
 	// promptDescPromptID is the schema descriptor for prompt_id field.

@@ -47,6 +47,9 @@ func main() {
 	// Memory Controller Proxy
 	mux.HandleFunc("/api/memory/", h.ProxyTo(cfg.MemoryControllerURL))
 	
+	// LLM Gateway Proxy (for chat and streaming)
+	mux.HandleFunc("/api/chat/", h.ProxyTo(cfg.LLMGatewayURL))
+	
 	// Health Aggregation
 	mux.HandleFunc("/api/health/all", h.HandleHealthAggregation)
 

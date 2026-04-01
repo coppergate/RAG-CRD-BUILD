@@ -9,7 +9,7 @@ To perform a complete, from-scratch installation of the basic infrastructure, bu
 ```bash
 ssh -i ~/.ssh/id_hierophant_access -o BatchMode=yes -o StrictHostKeyChecking=no junie@hierophant \
 "cd /mnt/hegemon-share/share/code/complete-build && \
-FRESH_INSTALL=true VERSION=2.3.1 ./setup-complete.sh"
+FRESH_INSTALL=true VERSION=2.3.2 ./setup-complete.sh"
 ```
 
 ---

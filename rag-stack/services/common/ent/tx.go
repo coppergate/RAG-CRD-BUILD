@@ -12,6 +12,12 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// MemoryEvent is the client for interacting with the MemoryEvent builders.
+	MemoryEvent *MemoryEventClient
+	// MemoryItem is the client for interacting with the MemoryItem builders.
+	MemoryItem *MemoryItemClient
+	// MemoryLink is the client for interacting with the MemoryLink builders.
+	MemoryLink *MemoryLinkClient
 	// Prompt is the client for interacting with the Prompt builders.
 	Prompt *PromptClient
 	// Response is the client for interacting with the Response builders.
@@ -149,6 +155,9 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.MemoryEvent = NewMemoryEventClient(tx.config)
+	tx.MemoryItem = NewMemoryItemClient(tx.config)
+	tx.MemoryLink = NewMemoryLinkClient(tx.config)
 	tx.Prompt = NewPromptClient(tx.config)
 	tx.Response = NewResponseClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
@@ -161,7 +170,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: Prompt.QueryXXX(), the query will be executed
+// applies a query, for example: MemoryEvent.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

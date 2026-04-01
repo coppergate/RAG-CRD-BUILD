@@ -31,10 +31,11 @@ Every new session for the **Junie** agent MUST establish the operational context
 
 ## Current Focus (Iteration 7: Phase 1)
 
-As of version `2.3.1`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
-1.  **Memory Controller**: A scaffold service exists in `rag-stack/services/memory-controller`. It includes a context-aware `Dockerfile` for cluster-native builds and implements basic health checks and a mock `/api/memory/items` endpoint.
-2.  **Database Schema**: Memory tables (`memory_items`, `memory_links`, `memory_events`) are defined in `iteration-7.md` but the SQL migration file in `rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql` needs to be created.
-3.  **Contracts**: JSON schemas for `MemoryWriteRequest`, `MemoryRetrieveRequest`, and `MemoryPack` are defined but need to be implemented in `rag-stack/contracts/`.
+As of version `2.3.2`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
+1.  **Memory Controller**: Implemented real database operations via Ent client. Replaced mock endpoints with `HandleItems` supporting GET (list) and POST (write).
+2.  **Database Schema**: Memory tables (`memory_items`, `memory_links`, `memory_events`) are implemented in `rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql`.
+3.  **Contracts**: JSON schemas and Go structs for `MemoryWriteRequest`, `MemoryRetrieveRequest`, and `MemoryPack` are implemented in `rag-stack/contracts/` and `rag-stack/services/common/contracts/`.
+4.  **Flutter UI**: Transitioned to real service integration with WebSocket-based streaming for chat.
 
 ---
 
@@ -294,6 +295,19 @@ The `rag-worker` service is refactored for multi-model modularity.
 - **Frequency**: Update at the conclusion of each prompting session when changes are made.
 - **Format**: Structured JSON with datetime stamp and brief description (most recent at the top).
 - **Git Policy**: The changelog does NOT need to be committed to git.
+
+## Database Migrations (TimescaleDB)
+
+Manual schema updates should be applied from **hierophant** using the provided SQL files.
+
+1.  **Iteration 7 Phase 1 (Memory)**:
+    ```bash
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+       export DB_PASS=\$(/home/k8s/kube/kubectl get secret timescaledb-app -n timescaledb -o jsonpath='{.data.password}' | base64 -d) && \
+       /home/k8s/kube/kubectl exec -it -n timescaledb timescaledb-rw-0 -- \
+       env PGPASSWORD=\$DB_PASS psql -U app -d app -f /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql"
+    ```
 
 ## Ent ORM Management (Shared)
 The RAG stack uses the **Ent ORM** for type-safe database access, centralized in the **common** module.

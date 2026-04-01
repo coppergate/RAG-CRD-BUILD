@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
+import '../../core/services/chat_service.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
@@ -12,10 +14,12 @@ class ChatPage extends ConsumerStatefulWidget {
 class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final List<ResponseMessage> _messages = [];
+  String _currentSessionId = const Uuid().v4();
   String _selectedPlanner = 'llama3.1';
   String _selectedExecutor = 'llama3.1';
   String _memoryMode = 'off';
   bool _showMetadata = true;
+  bool _isStreaming = false;
 
   @override
   Widget build(BuildContext context) {
@@ -258,23 +262,60 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   void _sendMessage() {
-    if (_messageController.text.isEmpty) return;
+    if (_messageController.text.isEmpty || _isStreaming) return;
 
+    final userPrompt = _messageController.text;
     setState(() {
       _messages.add(ResponseMessage(
-        content: _messageController.text,
+        content: userPrompt,
         role: 'user',
         timestamp: DateTime.now(),
       ));
       _messageController.clear();
+      _isStreaming = true;
       
-      // Mock response for now
+      // Add empty assistant message for streaming
       _messages.add(ResponseMessage(
-        content: 'Response to: ${_messages.last.content} (Phase 1 Mock)',
+        content: '',
         role: 'assistant',
         timestamp: DateTime.now(),
-        metadata: {'latency': '123ms', 'tokens': 50},
       ));
     });
+
+    final chatService = ref.read(chatServiceProvider);
+    final stream = chatService.streamChat(
+      prompt: userPrompt,
+      sessionId: _currentSessionId,
+      planner: _selectedPlanner,
+      executor: _selectedExecutor,
+      tags: ['general'], // Default tag
+    );
+
+    stream.listen(
+      (chunk) {
+        setState(() {
+          final lastIndex = _messages.length - 1;
+          _messages[lastIndex] = _messages[lastIndex].copyWith(
+            content: _messages[lastIndex].content + chunk.content,
+            metadata: chunk.metadata,
+          );
+        });
+      },
+      onDone: () {
+        setState(() {
+          _isStreaming = false;
+        });
+      },
+      onError: (err) {
+        setState(() {
+          _isStreaming = false;
+          _messages.add(ResponseMessage(
+            content: 'Error: $err',
+            role: 'assistant',
+            timestamp: DateTime.now(),
+          ));
+        });
+      },
+    );
   }
 }

@@ -7,4 +7,5 @@ class ServiceEndpoints {
   static const String memoryController = 'https://memory-controller.rag.hierocracy.home';
   static const String qdrantDirect = 'https://qdrant.rag.hierocracy.home';
   static const String grafana = 'https://grafana.rag.hierocracy.home';
+  static const String ragAdminApi = 'https://rag-admin-api.rag.hierocracy.home';
 }

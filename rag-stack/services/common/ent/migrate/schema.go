@@ -8,6 +8,110 @@ import (
 )
 
 var (
+	// MemoryEventsColumns holds the columns for the "memory_events" table.
+	MemoryEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "memory_item_id", Type: field.TypeUUID},
+		{Name: "event_type", Type: field.TypeString},
+		{Name: "event_data", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// MemoryEventsTable holds the schema information for the "memory_events" table.
+	MemoryEventsTable = &schema.Table{
+		Name:       "memory_events",
+		Columns:    MemoryEventsColumns,
+		PrimaryKey: []*schema.Column{MemoryEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "memoryevent_memory_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryEventsColumns[1]},
+			},
+			{
+				Name:    "memoryevent_event_type",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryEventsColumns[2]},
+			},
+			{
+				Name:    "memoryevent_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryEventsColumns[4]},
+			},
+		},
+	}
+	// MemoryItemsColumns holds the columns for the "memory_items" table.
+	MemoryItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "tenant_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "user_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "type", Type: field.TypeString},
+		{Name: "summary", Type: field.TypeString, Size: 2147483647},
+		{Name: "content", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "salience", Type: field.TypeFloat64, Default: 0},
+		{Name: "retention_score", Type: field.TypeFloat64, Default: 1},
+		{Name: "decay_state", Type: field.TypeJSON, Nullable: true},
+		{Name: "status", Type: field.TypeString, Default: "active"},
+		{Name: "pinning", Type: field.TypeBool, Default: false},
+		{Name: "ttl", Type: field.TypeInt64, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// MemoryItemsTable holds the schema information for the "memory_items" table.
+	MemoryItemsTable = &schema.Table{
+		Name:       "memory_items",
+		Columns:    MemoryItemsColumns,
+		PrimaryKey: []*schema.Column{MemoryItemsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "memoryitem_tenant_id",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryItemsColumns[1]},
+			},
+			{
+				Name:    "memoryitem_session_id",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryItemsColumns[2]},
+			},
+			{
+				Name:    "memoryitem_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryItemsColumns[3]},
+			},
+			{
+				Name:    "memoryitem_type",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryItemsColumns[4]},
+			},
+			{
+				Name:    "memoryitem_status",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryItemsColumns[10]},
+			},
+		},
+	}
+	// MemoryLinksColumns holds the columns for the "memory_links" table.
+	MemoryLinksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "memory_item_id", Type: field.TypeUUID},
+		{Name: "source_message_ids", Type: field.TypeJSON, Nullable: true},
+		{Name: "ingestion_ids", Type: field.TypeJSON, Nullable: true},
+		{Name: "tags", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// MemoryLinksTable holds the schema information for the "memory_links" table.
+	MemoryLinksTable = &schema.Table{
+		Name:       "memory_links",
+		Columns:    MemoryLinksColumns,
+		PrimaryKey: []*schema.Column{MemoryLinksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "memorylink_memory_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{MemoryLinksColumns[1]},
+			},
+		},
+	}
 	// PromptsColumns holds the columns for the "prompts" table.
 	PromptsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -60,6 +164,9 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		MemoryEventsTable,
+		MemoryItemsTable,
+		MemoryLinksTable,
 		PromptsTable,
 		ResponsesTable,
 		SessionsTable,

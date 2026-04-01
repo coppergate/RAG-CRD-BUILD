@@ -6,6 +6,15 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// MemoryEvent is the predicate function for memoryevent builders.
+type MemoryEvent func(*sql.Selector)
+
+// MemoryItem is the predicate function for memoryitem builders.
+type MemoryItem func(*sql.Selector)
+
+// MemoryLink is the predicate function for memorylink builders.
+type MemoryLink func(*sql.Selector)
+
 // Prompt is the predicate function for prompt builders.
 type Prompt func(*sql.Selector)
 

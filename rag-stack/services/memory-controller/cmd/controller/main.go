@@ -13,6 +13,7 @@ import (
 	"app-builds/common/health"
 	"app-builds/common/telemetry"
 	"app-builds/memory-controller/internal/config"
+	"app-builds/memory-controller/internal/handlers"
 	_ "github.com/lib/pq"
 )
 
@@ -43,11 +44,8 @@ func main() {
 	
 	healthSrv.RegisterRoutes(mux)
 	
-	mux.HandleFunc("/api/memory/items", func(w http.ResponseWriter, r *http.Request) {
-		// Mock implementation for now, should query db-adapter or use entClient
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`[]`))
-	})
+	memoryHandler := handlers.NewMemoryHandler(entClient)
+	mux.HandleFunc("/api/memory/items", memoryHandler.HandleItems)
 
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,

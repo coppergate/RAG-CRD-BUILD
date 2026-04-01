@@ -3,6 +3,9 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
+	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
@@ -75,9 +78,12 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			prompt.Table:   prompt.ValidColumn,
-			response.Table: response.ValidColumn,
-			session.Table:  session.ValidColumn,
+			memoryevent.Table: memoryevent.ValidColumn,
+			memoryitem.Table:  memoryitem.ValidColumn,
+			memorylink.Table:  memorylink.ValidColumn,
+			prompt.Table:      prompt.ValidColumn,
+			response.Table:    response.ValidColumn,
+			session.Table:     session.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)
