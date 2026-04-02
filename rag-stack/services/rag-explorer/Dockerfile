@@ -20,9 +20,6 @@ ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:${PAT
 WORKDIR /app
 COPY . .
 
-# Ensure web files exist
-RUN flutter create . --platforms=web
-
 # Fetch dependencies and build for web
 RUN flutter pub get
 RUN flutter build web --release
