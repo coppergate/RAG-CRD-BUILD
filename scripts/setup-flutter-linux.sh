@@ -9,22 +9,10 @@ echo "--- Flutter Linux Desktop Setup ---"
 # 1. Dependency Check (Fedora)
 # These usually require sudo access.
 echo "The following dependencies are required for Flutter Linux Desktop development on Fedora:"
-echo "  dnf install clang cmake ninja-build pkg-config gtk3-devel xz-devel libstdc++-devel mesa-libGL-devel"
+echo "  sudo dnf install -y clang cmake ninja-build pkgconf-pkg-config gtk3-devel xz-devel libstdc++-devel mesa-libGL-devel"
 echo ""
-echo "Attempting to verify presence of tools..."
-MISSING_TOOLS=()
-for tool in clang cmake ninja pkg-config; do
-  if ! command -v $tool >/dev/null 2>&1; then
-    MISSING_TOOLS+=($tool)
-  fi
-done
-
-if [ ${#MISSING_TOOLS[@]} -ne 0 ]; then
-  echo "WARNING: The following tools are missing: ${MISSING_TOOLS[*]}"
-  echo "Please run the following command with sudo to install dependencies:"
-  echo "  sudo dnf install clang cmake ninja-build pkgconf-pkg-config gtk3-devel xz-devel libstdc++-devel mesa-libGL-devel"
-  # We can't proceed with 'flutter run -d linux' without these, but we can install Flutter SDK itself.
-fi
+echo "Attempting to install missing tools..."
+sudo dnf install -y clang cmake ninja-build pkgconf-pkg-config gtk3-devel xz-devel libstdc++-devel mesa-libGL-devel
 
 # 2. Install Flutter SDK locally (if not present)
 FLUTTER_DIR="$HOME/flutter"
@@ -45,9 +33,26 @@ export PATH="$FLUTTER_DIR/bin:$PATH"
 echo "Enabling Linux desktop support..."
 flutter config --enable-linux-desktop
 
-# 5. Verify installation
+# 5. Verify and initialize projects
 echo "Running flutter doctor..."
 flutter doctor
+
+echo ""
+echo "Initializing RAG Explorer platform support..."
+RAG_EXPLORER_DIR="rag-stack/services/rag-explorer"
+if [ -d "$RAG_EXPLORER_DIR" ]; then
+  cd "$RAG_EXPLORER_DIR"
+  # Add linux and web support if missing
+  "$FLUTTER_DIR/bin/flutter" create --platforms=linux,web .
+  # Clean up any stale build artifacts that might cause permission issues (e.g. CMAKE_INSTALL_PREFIX)
+  "$FLUTTER_DIR/bin/flutter" clean
+  
+  echo "Fetching dependencies and running code generation..."
+  "$FLUTTER_DIR/bin/flutter" pub get
+  "$FLUTTER_DIR/bin/flutter" pub run build_runner build --delete-conflicting-outputs
+  
+  cd - > /dev/null
+fi
 
 echo ""
 echo "--- Setup Complete ---"

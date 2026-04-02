@@ -31,7 +31,7 @@ Every new session for the **Junie** agent MUST establish the operational context
 
 ## Current Focus (Iteration 7: Phase 1)
 
-As of version `2.3.6`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
+As of version `2.3.9`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
 1.  **Testing**: Implemented unit and integration tests for `rag-admin-api`, `memory-controller`, and `llm-gateway`.
 2.  **Memory Controller**: Implemented real database operations via Ent client. Replaced mock endpoints with `HandleItems` supporting GET (list) and POST (write).
 3.  **LLM Gateway**: Refactored to use a `PulsarClient` interface for better testability.
@@ -123,11 +123,11 @@ To run the RAG Explorer as a Linux desktop application or in a web browser, foll
 ### 3. Deploying to Cluster
 1. **Build**: Trigger the Kaniko build on **hierophant**:
    ```bash
-   ssh junie@hierophant "VERSION=2.3.6 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
+   ssh junie@hierophant "VERSION=2.3.9 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
    ```
 2. **Deploy**: The UI is automatically deployed by `setup-all.sh` in Iteration 7:
    ```bash
-   ssh junie@hierophant "VERSION=2.3.6 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
+   ssh junie@hierophant "VERSION=2.3.9 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
    ```
 3. **Verification**:
    - **Endpoint**: `https://rag-explorer.rag.hierocracy.home`
@@ -426,11 +426,55 @@ It fetches the real password from the CloudNativePG-managed `timescaledb-app` se
 `timescaledb` namespace. **Do NOT use the hardcoded `timescaledb-secret.yaml` file** — it exists
 only as a template reference and its password will not match after a cluster rebuild.
 
-## Headlamp Access
-To get the login token for Headlamp:
-1.  **Command**: Run the following on **hierophant**:
-    ```bash
-    ssh -i ~/.ssh/id_hierophant_access junie@hierophant "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && /home/k8s/kube/kubectl get secret headlamp-admin-token -n headlamp -o jsonpath='{.data.token}' | base64 -d"
-    ```
-2.  **Usage**: Copy the decrypted token and paste it into the Headlamp login page.
-3.  **Role**: This token belongs to the `headlamp-admin` ServiceAccount and has `cluster-admin` privileges.
+## Flutter Development (RAG Explorer)
+
+The RAG Explorer is a Flutter-based UI that can run as a Linux Desktop application or a Web application.
+
+### 1. Environment Setup (Fedora)
+To install the Flutter SDK and system-level dependencies (clang, cmake, ninja, gtk3):
+```bash
+bash scripts/setup-flutter-linux.sh
+```
+This script will:
+- Install missing Fedora packages via `sudo dnf`.
+- Clone the Flutter SDK to `~/flutter`.
+- Enable Linux desktop support.
+- Initialize platform-specific files for the RAG Explorer.
+- **Perform code generation** (Freezed/JsonSerializable).
+
+### 2. Code Generation (Manual)
+If you modify models or Riverpod providers, you must regenerate the supporting code:
+```bash
+cd rag-stack/services/rag-explorer
+flutter pub get
+flutter pub run build_runner build --delete-conflicting-outputs
+```
+
+### 3. Running the Application
+- **Linux Desktop**:
+  ```bash
+  cd rag-stack/services/rag-explorer
+  flutter run -d linux
+  ```
+- **Web Browser**:
+  ```bash
+  cd rag-stack/services/rag-explorer
+  flutter run -d chrome
+  ```
+
+### 4. Build and Deployment
+The RAG Explorer is built as a container using Kaniko in the cluster-native pipeline.
+- **Dockerfile**: `rag-stack/services/rag-explorer/Dockerfile`
+- **Kubernetes**: `rag-stack/services/rag-explorer/k8s/deployment.yaml`
+- **Ingress**: `https://rag-explorer.rag.hierocracy.home`
+
+### 5. Troubleshooting (Flutter)
+
+#### CMake Error: "cannot set permissions on /usr/local/rag_explorer"
+This error occurs if the CMake build cache (`CMakeCache.txt`) contains a stale `CMAKE_INSTALL_PREFIX` pointing to `/usr/local`. This usually happens if a build was interrupted or if `cmake` was run manually without the correct Flutter flags.
+- **Solution**: Run `flutter clean` in the `rag-explorer` directory and then try `flutter run` or `flutter build` again.
+  ```bash
+  cd rag-stack/services/rag-explorer
+  flutter clean
+  flutter run -d linux
+  ```

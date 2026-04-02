@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 SERVICE="${1:-}"
-VERSION="${2:-2.2.1}"
+VERSION="${2:-2.3.9}"
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
