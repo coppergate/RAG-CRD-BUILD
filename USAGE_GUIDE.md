@@ -33,7 +33,11 @@ When ingesting documents, assign **tags** (e.g., `project-alpha`, `internal-docs
 Use the **RAG Pipeline Explorer** (Flutter UI) or the legacy web UI for interacting with the system.
 
 ### 3.1 Accessing the Explorer
-The UI is available at: `https://rag-explorer.rag.hierocracy.home` (or local desktop build).
+The UI is available in two forms:
+- **Web UI**: `https://rag-explorer.rag.hierocracy.home` (standard access).
+- **Linux Desktop App**: For a more integrated experience on this VM, you can run the RAG Explorer as a native Linux application.
+  - Follow the setup instructions in `OPERATIONS.md` to install Flutter and dependencies.
+  - Launch with `flutter run -d linux` from the `rag-stack/services/rag-explorer` directory.
 
 ### 3.2 Chat Workflow
 1. **Select Models**: Choose a `Planner` (for reasoning) and an `Executor` (for generation).

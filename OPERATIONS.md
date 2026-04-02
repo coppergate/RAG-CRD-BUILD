@@ -98,11 +98,27 @@ The RAG Pipeline Explorer is the new Flutter-based web application for managing 
 
 ### 2. Running for Development
 #### Local Desktop (Linux/Chrome)
-```bash
-cd rag-stack/services/rag-explorer
-flutter run -d linux # For desktop app
-flutter run -d chrome # For web browser
-```
+To run the RAG Explorer as a Linux desktop application or in a web browser, follow these steps:
+
+1.  **Install Flutter SDK and Dependencies**:
+    Run the setup script to install Flutter and its Linux desktop development dependencies on this VM:
+    ```bash
+    bash ./scripts/setup-flutter-linux.sh
+    ```
+    *Note: The script will prompt you to manually run `sudo dnf install` commands for system-level dependencies.*
+
+2.  **Add Flutter to PATH**:
+    Ensure `flutter` is in your `PATH` (add to `~/.bashrc` for persistence):
+    ```bash
+    export PATH="$HOME/flutter/bin:$PATH"
+    ```
+
+3.  **Run the Application**:
+    ```bash
+    cd rag-stack/services/rag-explorer
+    flutter run -d linux # For desktop app
+    flutter run -d chrome # For web browser
+    ```
 
 ### 3. Deploying to Cluster
 1. **Build**: Trigger the Kaniko build on **hierophant**:
