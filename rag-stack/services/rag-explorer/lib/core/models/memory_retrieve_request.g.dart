@@ -6,9 +6,9 @@ part of 'memory_retrieve_request.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$MemoryRetrieveRequestImpl _$$MemoryRetrieveRequestImplFromJson(
+_MemoryRetrieveRequest _$MemoryRetrieveRequestFromJson(
         Map<String, dynamic> json) =>
-    _$MemoryRetrieveRequestImpl(
+    _MemoryRetrieveRequest(
       query: json['query'] as String,
       sessionId: json['sessionId'] as String?,
       userId: json['userId'] as String?,
@@ -16,8 +16,8 @@ _$MemoryRetrieveRequestImpl _$$MemoryRetrieveRequestImplFromJson(
       filters: json['filters'] as Map<String, dynamic>?,
     );
 
-Map<String, dynamic> _$$MemoryRetrieveRequestImplToJson(
-        _$MemoryRetrieveRequestImpl instance) =>
+Map<String, dynamic> _$MemoryRetrieveRequestToJson(
+        _MemoryRetrieveRequest instance) =>
     <String, dynamic>{
       'query': instance.query,
       'sessionId': instance.sessionId,

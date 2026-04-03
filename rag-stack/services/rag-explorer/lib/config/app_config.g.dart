@@ -6,8 +6,7 @@ part of 'app_config.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$AppConfigImpl _$$AppConfigImplFromJson(Map<String, dynamic> json) =>
-    _$AppConfigImpl(
+_AppConfig _$AppConfigFromJson(Map<String, dynamic> json) => _AppConfig(
       llmGatewayUrl: json['llmGatewayUrl'] as String,
       ragIngestionUrl: json['ragIngestionUrl'] as String,
       objectStoreMgrUrl: json['objectStoreMgrUrl'] as String,
@@ -26,7 +25,7 @@ _$AppConfigImpl _$$AppConfigImplFromJson(Map<String, dynamic> json) =>
       modelComparisonEnabled: json['modelComparisonEnabled'] as bool? ?? true,
     );
 
-Map<String, dynamic> _$$AppConfigImplToJson(_$AppConfigImpl instance) =>
+Map<String, dynamic> _$AppConfigToJson(_AppConfig instance) =>
     <String, dynamic>{
       'llmGatewayUrl': instance.llmGatewayUrl,
       'ragIngestionUrl': instance.ragIngestionUrl,

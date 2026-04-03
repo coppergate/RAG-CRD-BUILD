@@ -4,7 +4,7 @@ part 'memory_write_request.freezed.dart';
 part 'memory_write_request.g.dart';
 
 @freezed
-class MemoryWriteRequest with _$MemoryWriteRequest {
+abstract class MemoryWriteRequest with _$MemoryWriteRequest {
   const factory MemoryWriteRequest({
     required String content,
     @Default('short') String type,

@@ -6,9 +6,8 @@ part of 'memory_write_request.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$MemoryWriteRequestImpl _$$MemoryWriteRequestImplFromJson(
-        Map<String, dynamic> json) =>
-    _$MemoryWriteRequestImpl(
+_MemoryWriteRequest _$MemoryWriteRequestFromJson(Map<String, dynamic> json) =>
+    _MemoryWriteRequest(
       content: json['content'] as String,
       type: json['type'] as String? ?? 'short',
       salience: (json['salience'] as num?)?.toDouble(),
@@ -17,8 +16,7 @@ _$MemoryWriteRequestImpl _$$MemoryWriteRequestImplFromJson(
       metadata: json['metadata'] as Map<String, dynamic>?,
     );
 
-Map<String, dynamic> _$$MemoryWriteRequestImplToJson(
-        _$MemoryWriteRequestImpl instance) =>
+Map<String, dynamic> _$MemoryWriteRequestToJson(_MemoryWriteRequest instance) =>
     <String, dynamic>{
       'content': instance.content,
       'type': instance.type,

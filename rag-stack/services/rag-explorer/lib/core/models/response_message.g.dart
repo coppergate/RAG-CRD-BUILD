@@ -6,9 +6,8 @@ part of 'response_message.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$ResponseMessageImpl _$$ResponseMessageImplFromJson(
-        Map<String, dynamic> json) =>
-    _$ResponseMessageImpl(
+_ResponseMessage _$ResponseMessageFromJson(Map<String, dynamic> json) =>
+    _ResponseMessage(
       content: json['content'] as String,
       sessionId: json['sessionId'] as String?,
       messageId: json['messageId'] as String?,
@@ -19,8 +18,7 @@ _$ResponseMessageImpl _$$ResponseMessageImplFromJson(
           : DateTime.parse(json['timestamp'] as String),
     );
 
-Map<String, dynamic> _$$ResponseMessageImplToJson(
-        _$ResponseMessageImpl instance) =>
+Map<String, dynamic> _$ResponseMessageToJson(_ResponseMessage instance) =>
     <String, dynamic>{
       'content': instance.content,
       'sessionId': instance.sessionId,

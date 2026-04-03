@@ -1,5 +1,5 @@
-// coverage:ignore-file
 // GENERATED CODE - DO NOT MODIFY BY HAND
+// coverage:ignore-file
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
@@ -9,107 +9,62 @@ part of 'prompt_message.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// dart format off
 T _$identity<T>(T value) => value;
-
-final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
-
-PromptMessage _$PromptMessageFromJson(Map<String, dynamic> json) {
-  return _PromptMessage.fromJson(json);
-}
 
 /// @nodoc
 mixin _$PromptMessage {
-  String get prompt => throw _privateConstructorUsedError;
-  String? get sessionId => throw _privateConstructorUsedError;
-  String? get plannerModel => throw _privateConstructorUsedError;
-  String? get executorModel => throw _privateConstructorUsedError;
-  List<String>? get tags => throw _privateConstructorUsedError;
-  String get memoryMode => throw _privateConstructorUsedError;
-
-  /// Serializes this PromptMessage to a JSON map.
-  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  String get prompt;
+  String? get sessionId;
+  String? get plannerModel;
+  String? get executorModel;
+  List<String>? get tags;
+  String get memoryMode;
 
   /// Create a copy of PromptMessage
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  $PromptMessageCopyWith<PromptMessage> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $PromptMessageCopyWith<$Res> {
-  factory $PromptMessageCopyWith(
-          PromptMessage value, $Res Function(PromptMessage) then) =
-      _$PromptMessageCopyWithImpl<$Res, PromptMessage>;
-  @useResult
-  $Res call(
-      {String prompt,
-      String? sessionId,
-      String? plannerModel,
-      String? executorModel,
-      List<String>? tags,
-      String memoryMode});
-}
-
-/// @nodoc
-class _$PromptMessageCopyWithImpl<$Res, $Val extends PromptMessage>
-    implements $PromptMessageCopyWith<$Res> {
-  _$PromptMessageCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  /// Create a copy of PromptMessage
-  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  $PromptMessageCopyWith<PromptMessage> get copyWith =>
+      _$PromptMessageCopyWithImpl<PromptMessage>(
+          this as PromptMessage, _$identity);
+
+  /// Serializes this PromptMessage to a JSON map.
+  Map<String, dynamic> toJson();
+
   @override
-  $Res call({
-    Object? prompt = null,
-    Object? sessionId = freezed,
-    Object? plannerModel = freezed,
-    Object? executorModel = freezed,
-    Object? tags = freezed,
-    Object? memoryMode = null,
-  }) {
-    return _then(_value.copyWith(
-      prompt: null == prompt
-          ? _value.prompt
-          : prompt // ignore: cast_nullable_to_non_nullable
-              as String,
-      sessionId: freezed == sessionId
-          ? _value.sessionId
-          : sessionId // ignore: cast_nullable_to_non_nullable
-              as String?,
-      plannerModel: freezed == plannerModel
-          ? _value.plannerModel
-          : plannerModel // ignore: cast_nullable_to_non_nullable
-              as String?,
-      executorModel: freezed == executorModel
-          ? _value.executorModel
-          : executorModel // ignore: cast_nullable_to_non_nullable
-              as String?,
-      tags: freezed == tags
-          ? _value.tags
-          : tags // ignore: cast_nullable_to_non_nullable
-              as List<String>?,
-      memoryMode: null == memoryMode
-          ? _value.memoryMode
-          : memoryMode // ignore: cast_nullable_to_non_nullable
-              as String,
-    ) as $Val);
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is PromptMessage &&
+            (identical(other.prompt, prompt) || other.prompt == prompt) &&
+            (identical(other.sessionId, sessionId) ||
+                other.sessionId == sessionId) &&
+            (identical(other.plannerModel, plannerModel) ||
+                other.plannerModel == plannerModel) &&
+            (identical(other.executorModel, executorModel) ||
+                other.executorModel == executorModel) &&
+            const DeepCollectionEquality().equals(other.tags, tags) &&
+            (identical(other.memoryMode, memoryMode) ||
+                other.memoryMode == memoryMode));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, prompt, sessionId, plannerModel,
+      executorModel, const DeepCollectionEquality().hash(tags), memoryMode);
+
+  @override
+  String toString() {
+    return 'PromptMessage(prompt: $prompt, sessionId: $sessionId, plannerModel: $plannerModel, executorModel: $executorModel, tags: $tags, memoryMode: $memoryMode)';
   }
 }
 
 /// @nodoc
-abstract class _$$PromptMessageImplCopyWith<$Res>
-    implements $PromptMessageCopyWith<$Res> {
-  factory _$$PromptMessageImplCopyWith(
-          _$PromptMessageImpl value, $Res Function(_$PromptMessageImpl) then) =
-      __$$PromptMessageImplCopyWithImpl<$Res>;
-  @override
+abstract mixin class $PromptMessageCopyWith<$Res> {
+  factory $PromptMessageCopyWith(
+          PromptMessage value, $Res Function(PromptMessage) _then) =
+      _$PromptMessageCopyWithImpl;
   @useResult
   $Res call(
       {String prompt,
@@ -121,12 +76,12 @@ abstract class _$$PromptMessageImplCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$PromptMessageImplCopyWithImpl<$Res>
-    extends _$PromptMessageCopyWithImpl<$Res, _$PromptMessageImpl>
-    implements _$$PromptMessageImplCopyWith<$Res> {
-  __$$PromptMessageImplCopyWithImpl(
-      _$PromptMessageImpl _value, $Res Function(_$PromptMessageImpl) _then)
-      : super(_value, _then);
+class _$PromptMessageCopyWithImpl<$Res>
+    implements $PromptMessageCopyWith<$Res> {
+  _$PromptMessageCopyWithImpl(this._self, this._then);
+
+  final PromptMessage _self;
+  final $Res Function(PromptMessage) _then;
 
   /// Create a copy of PromptMessage
   /// with the given fields replaced by the non-null parameter values.
@@ -140,39 +95,205 @@ class __$$PromptMessageImplCopyWithImpl<$Res>
     Object? tags = freezed,
     Object? memoryMode = null,
   }) {
-    return _then(_$PromptMessageImpl(
+    return _then(_self.copyWith(
       prompt: null == prompt
-          ? _value.prompt
+          ? _self.prompt
           : prompt // ignore: cast_nullable_to_non_nullable
               as String,
       sessionId: freezed == sessionId
-          ? _value.sessionId
+          ? _self.sessionId
           : sessionId // ignore: cast_nullable_to_non_nullable
               as String?,
       plannerModel: freezed == plannerModel
-          ? _value.plannerModel
+          ? _self.plannerModel
           : plannerModel // ignore: cast_nullable_to_non_nullable
               as String?,
       executorModel: freezed == executorModel
-          ? _value.executorModel
+          ? _self.executorModel
           : executorModel // ignore: cast_nullable_to_non_nullable
               as String?,
       tags: freezed == tags
-          ? _value._tags
+          ? _self.tags
           : tags // ignore: cast_nullable_to_non_nullable
               as List<String>?,
       memoryMode: null == memoryMode
-          ? _value.memoryMode
+          ? _self.memoryMode
           : memoryMode // ignore: cast_nullable_to_non_nullable
               as String,
     ));
   }
 }
 
+/// Adds pattern-matching-related methods to [PromptMessage].
+extension PromptMessagePatterns on PromptMessage {
+  /// A variant of `map` that fallback to returning `orElse`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_PromptMessage value)? $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _PromptMessage() when $default != null:
+        return $default(_that);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// Callbacks receives the raw object, upcasted.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case final Subclass2 value:
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_PromptMessage value) $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _PromptMessage():
+        return $default(_that);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `map` that fallback to returning `null`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_PromptMessage value)? $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _PromptMessage() when $default != null:
+        return $default(_that);
+      case _:
+        return null;
+    }
+  }
+
+  /// A variant of `when` that fallback to an `orElse` callback.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(String prompt, String? sessionId, String? plannerModel,
+            String? executorModel, List<String>? tags, String memoryMode)?
+        $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _PromptMessage() when $default != null:
+        return $default(_that.prompt, _that.sessionId, _that.plannerModel,
+            _that.executorModel, _that.tags, _that.memoryMode);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// As opposed to `map`, this offers destructuring.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case Subclass2(:final field2):
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(String prompt, String? sessionId, String? plannerModel,
+            String? executorModel, List<String>? tags, String memoryMode)
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _PromptMessage():
+        return $default(_that.prompt, _that.sessionId, _that.plannerModel,
+            _that.executorModel, _that.tags, _that.memoryMode);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `when` that fallback to returning `null`
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(String prompt, String? sessionId, String? plannerModel,
+            String? executorModel, List<String>? tags, String memoryMode)?
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _PromptMessage() when $default != null:
+        return $default(_that.prompt, _that.sessionId, _that.plannerModel,
+            _that.executorModel, _that.tags, _that.memoryMode);
+      case _:
+        return null;
+    }
+  }
+}
+
 /// @nodoc
 @JsonSerializable()
-class _$PromptMessageImpl implements _PromptMessage {
-  const _$PromptMessageImpl(
+class _PromptMessage implements PromptMessage {
+  const _PromptMessage(
       {required this.prompt,
       this.sessionId,
       this.plannerModel,
@@ -180,9 +301,8 @@ class _$PromptMessageImpl implements _PromptMessage {
       final List<String>? tags,
       this.memoryMode = 'off'})
       : _tags = tags;
-
-  factory _$PromptMessageImpl.fromJson(Map<String, dynamic> json) =>
-      _$$PromptMessageImplFromJson(json);
+  factory _PromptMessage.fromJson(Map<String, dynamic> json) =>
+      _$PromptMessageFromJson(json);
 
   @override
   final String prompt;
@@ -206,16 +326,26 @@ class _$PromptMessageImpl implements _PromptMessage {
   @JsonKey()
   final String memoryMode;
 
+  /// Create a copy of PromptMessage
+  /// with the given fields replaced by the non-null parameter values.
   @override
-  String toString() {
-    return 'PromptMessage(prompt: $prompt, sessionId: $sessionId, plannerModel: $plannerModel, executorModel: $executorModel, tags: $tags, memoryMode: $memoryMode)';
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  _$PromptMessageCopyWith<_PromptMessage> get copyWith =>
+      __$PromptMessageCopyWithImpl<_PromptMessage>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$PromptMessageToJson(
+      this,
+    );
   }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$PromptMessageImpl &&
+            other is _PromptMessage &&
             (identical(other.prompt, prompt) || other.prompt == prompt) &&
             (identical(other.sessionId, sessionId) ||
                 other.sessionId == sessionId) &&
@@ -233,51 +363,76 @@ class _$PromptMessageImpl implements _PromptMessage {
   int get hashCode => Object.hash(runtimeType, prompt, sessionId, plannerModel,
       executorModel, const DeepCollectionEquality().hash(_tags), memoryMode);
 
-  /// Create a copy of PromptMessage
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  @pragma('vm:prefer-inline')
-  _$$PromptMessageImplCopyWith<_$PromptMessageImpl> get copyWith =>
-      __$$PromptMessageImplCopyWithImpl<_$PromptMessageImpl>(this, _$identity);
-
-  @override
-  Map<String, dynamic> toJson() {
-    return _$$PromptMessageImplToJson(
-      this,
-    );
+  String toString() {
+    return 'PromptMessage(prompt: $prompt, sessionId: $sessionId, plannerModel: $plannerModel, executorModel: $executorModel, tags: $tags, memoryMode: $memoryMode)';
   }
 }
 
-abstract class _PromptMessage implements PromptMessage {
-  const factory _PromptMessage(
-      {required final String prompt,
-      final String? sessionId,
-      final String? plannerModel,
-      final String? executorModel,
-      final List<String>? tags,
-      final String memoryMode}) = _$PromptMessageImpl;
+/// @nodoc
+abstract mixin class _$PromptMessageCopyWith<$Res>
+    implements $PromptMessageCopyWith<$Res> {
+  factory _$PromptMessageCopyWith(
+          _PromptMessage value, $Res Function(_PromptMessage) _then) =
+      __$PromptMessageCopyWithImpl;
+  @override
+  @useResult
+  $Res call(
+      {String prompt,
+      String? sessionId,
+      String? plannerModel,
+      String? executorModel,
+      List<String>? tags,
+      String memoryMode});
+}
 
-  factory _PromptMessage.fromJson(Map<String, dynamic> json) =
-      _$PromptMessageImpl.fromJson;
+/// @nodoc
+class __$PromptMessageCopyWithImpl<$Res>
+    implements _$PromptMessageCopyWith<$Res> {
+  __$PromptMessageCopyWithImpl(this._self, this._then);
 
-  @override
-  String get prompt;
-  @override
-  String? get sessionId;
-  @override
-  String? get plannerModel;
-  @override
-  String? get executorModel;
-  @override
-  List<String>? get tags;
-  @override
-  String get memoryMode;
+  final _PromptMessage _self;
+  final $Res Function(_PromptMessage) _then;
 
   /// Create a copy of PromptMessage
   /// with the given fields replaced by the non-null parameter values.
   @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$PromptMessageImplCopyWith<_$PromptMessageImpl> get copyWith =>
-      throw _privateConstructorUsedError;
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? prompt = null,
+    Object? sessionId = freezed,
+    Object? plannerModel = freezed,
+    Object? executorModel = freezed,
+    Object? tags = freezed,
+    Object? memoryMode = null,
+  }) {
+    return _then(_PromptMessage(
+      prompt: null == prompt
+          ? _self.prompt
+          : prompt // ignore: cast_nullable_to_non_nullable
+              as String,
+      sessionId: freezed == sessionId
+          ? _self.sessionId
+          : sessionId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      plannerModel: freezed == plannerModel
+          ? _self.plannerModel
+          : plannerModel // ignore: cast_nullable_to_non_nullable
+              as String?,
+      executorModel: freezed == executorModel
+          ? _self.executorModel
+          : executorModel // ignore: cast_nullable_to_non_nullable
+              as String?,
+      tags: freezed == tags
+          ? _self._tags
+          : tags // ignore: cast_nullable_to_non_nullable
+              as List<String>?,
+      memoryMode: null == memoryMode
+          ? _self.memoryMode
+          : memoryMode // ignore: cast_nullable_to_non_nullable
+              as String,
+    ));
+  }
 }
+
+// dart format on

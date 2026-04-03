@@ -3,17 +3,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/app_config.dart';
 import '../../config/service_endpoints.dart';
 
-final appConfigProvider = StateProvider<AppConfig>((ref) {
-  return const AppConfig(
-    llmGatewayUrl: ServiceEndpoints.llmGateway,
-    ragIngestionUrl: ServiceEndpoints.ragIngestion,
-    objectStoreMgrUrl: ServiceEndpoints.objectStoreMgr,
-    dbAdapterUrl: ServiceEndpoints.dbAdapter,
-    qdrantAdapterUrl: ServiceEndpoints.qdrantAdapter,
-    memoryControllerUrl: ServiceEndpoints.memoryController,
-    grafanaUrl: ServiceEndpoints.grafana,
-  );
-});
+final appConfigProvider = NotifierProvider<AppConfigNotifier, AppConfig>(() => AppConfigNotifier());
+
+class AppConfigNotifier extends Notifier<AppConfig> {
+  @override
+  AppConfig build() {
+    return const AppConfig(
+      llmGatewayUrl: ServiceEndpoints.llmGateway,
+      ragIngestionUrl: ServiceEndpoints.ragIngestion,
+      objectStoreMgrUrl: ServiceEndpoints.objectStoreMgr,
+      dbAdapterUrl: ServiceEndpoints.dbAdapter,
+      qdrantAdapterUrl: ServiceEndpoints.qdrantAdapter,
+      memoryControllerUrl: ServiceEndpoints.memoryController,
+      grafanaUrl: ServiceEndpoints.grafana,
+    );
+  }
+
+  void update(AppConfig config) {
+    state = config;
+  }
+}
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});

@@ -4,7 +4,7 @@ part 'prompt_message.freezed.dart';
 part 'prompt_message.g.dart';
 
 @freezed
-class PromptMessage with _$PromptMessage {
+abstract class PromptMessage with _$PromptMessage {
   const factory PromptMessage({
     required String prompt,
     String? sessionId,

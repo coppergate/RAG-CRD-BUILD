@@ -6,8 +6,7 @@ part of 'db_op_message.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$DbOpMessageImpl _$$DbOpMessageImplFromJson(Map<String, dynamic> json) =>
-    _$DbOpMessageImpl(
+_DbOpMessage _$DbOpMessageFromJson(Map<String, dynamic> json) => _DbOpMessage(
       operation: json['operation'] as String,
       table: json['table'] as String,
       data: json['data'] as Map<String, dynamic>,
@@ -17,7 +16,7 @@ _$DbOpMessageImpl _$$DbOpMessageImplFromJson(Map<String, dynamic> json) =>
           : DateTime.parse(json['timestamp'] as String),
     );
 
-Map<String, dynamic> _$$DbOpMessageImplToJson(_$DbOpMessageImpl instance) =>
+Map<String, dynamic> _$DbOpMessageToJson(_DbOpMessage instance) =>
     <String, dynamic>{
       'operation': instance.operation,
       'table': instance.table,

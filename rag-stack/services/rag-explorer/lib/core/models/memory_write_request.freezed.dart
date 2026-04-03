@@ -1,5 +1,5 @@
-// coverage:ignore-file
 // GENERATED CODE - DO NOT MODIFY BY HAND
+// coverage:ignore-file
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
@@ -9,107 +9,60 @@ part of 'memory_write_request.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// dart format off
 T _$identity<T>(T value) => value;
-
-final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
-
-MemoryWriteRequest _$MemoryWriteRequestFromJson(Map<String, dynamic> json) {
-  return _MemoryWriteRequest.fromJson(json);
-}
 
 /// @nodoc
 mixin _$MemoryWriteRequest {
-  String get content => throw _privateConstructorUsedError;
-  String get type => throw _privateConstructorUsedError;
-  double? get salience => throw _privateConstructorUsedError;
-  String? get sessionId => throw _privateConstructorUsedError;
-  String? get userId => throw _privateConstructorUsedError;
-  Map<String, dynamic>? get metadata => throw _privateConstructorUsedError;
-
-  /// Serializes this MemoryWriteRequest to a JSON map.
-  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  String get content;
+  String get type;
+  double? get salience;
+  String? get sessionId;
+  String? get userId;
+  Map<String, dynamic>? get metadata;
 
   /// Create a copy of MemoryWriteRequest
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  $MemoryWriteRequestCopyWith<MemoryWriteRequest> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $MemoryWriteRequestCopyWith<$Res> {
-  factory $MemoryWriteRequestCopyWith(
-          MemoryWriteRequest value, $Res Function(MemoryWriteRequest) then) =
-      _$MemoryWriteRequestCopyWithImpl<$Res, MemoryWriteRequest>;
-  @useResult
-  $Res call(
-      {String content,
-      String type,
-      double? salience,
-      String? sessionId,
-      String? userId,
-      Map<String, dynamic>? metadata});
-}
-
-/// @nodoc
-class _$MemoryWriteRequestCopyWithImpl<$Res, $Val extends MemoryWriteRequest>
-    implements $MemoryWriteRequestCopyWith<$Res> {
-  _$MemoryWriteRequestCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  /// Create a copy of MemoryWriteRequest
-  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  $MemoryWriteRequestCopyWith<MemoryWriteRequest> get copyWith =>
+      _$MemoryWriteRequestCopyWithImpl<MemoryWriteRequest>(
+          this as MemoryWriteRequest, _$identity);
+
+  /// Serializes this MemoryWriteRequest to a JSON map.
+  Map<String, dynamic> toJson();
+
   @override
-  $Res call({
-    Object? content = null,
-    Object? type = null,
-    Object? salience = freezed,
-    Object? sessionId = freezed,
-    Object? userId = freezed,
-    Object? metadata = freezed,
-  }) {
-    return _then(_value.copyWith(
-      content: null == content
-          ? _value.content
-          : content // ignore: cast_nullable_to_non_nullable
-              as String,
-      type: null == type
-          ? _value.type
-          : type // ignore: cast_nullable_to_non_nullable
-              as String,
-      salience: freezed == salience
-          ? _value.salience
-          : salience // ignore: cast_nullable_to_non_nullable
-              as double?,
-      sessionId: freezed == sessionId
-          ? _value.sessionId
-          : sessionId // ignore: cast_nullable_to_non_nullable
-              as String?,
-      userId: freezed == userId
-          ? _value.userId
-          : userId // ignore: cast_nullable_to_non_nullable
-              as String?,
-      metadata: freezed == metadata
-          ? _value.metadata
-          : metadata // ignore: cast_nullable_to_non_nullable
-              as Map<String, dynamic>?,
-    ) as $Val);
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is MemoryWriteRequest &&
+            (identical(other.content, content) || other.content == content) &&
+            (identical(other.type, type) || other.type == type) &&
+            (identical(other.salience, salience) ||
+                other.salience == salience) &&
+            (identical(other.sessionId, sessionId) ||
+                other.sessionId == sessionId) &&
+            (identical(other.userId, userId) || other.userId == userId) &&
+            const DeepCollectionEquality().equals(other.metadata, metadata));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, content, type, salience,
+      sessionId, userId, const DeepCollectionEquality().hash(metadata));
+
+  @override
+  String toString() {
+    return 'MemoryWriteRequest(content: $content, type: $type, salience: $salience, sessionId: $sessionId, userId: $userId, metadata: $metadata)';
   }
 }
 
 /// @nodoc
-abstract class _$$MemoryWriteRequestImplCopyWith<$Res>
-    implements $MemoryWriteRequestCopyWith<$Res> {
-  factory _$$MemoryWriteRequestImplCopyWith(_$MemoryWriteRequestImpl value,
-          $Res Function(_$MemoryWriteRequestImpl) then) =
-      __$$MemoryWriteRequestImplCopyWithImpl<$Res>;
-  @override
+abstract mixin class $MemoryWriteRequestCopyWith<$Res> {
+  factory $MemoryWriteRequestCopyWith(
+          MemoryWriteRequest value, $Res Function(MemoryWriteRequest) _then) =
+      _$MemoryWriteRequestCopyWithImpl;
   @useResult
   $Res call(
       {String content,
@@ -121,12 +74,12 @@ abstract class _$$MemoryWriteRequestImplCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$MemoryWriteRequestImplCopyWithImpl<$Res>
-    extends _$MemoryWriteRequestCopyWithImpl<$Res, _$MemoryWriteRequestImpl>
-    implements _$$MemoryWriteRequestImplCopyWith<$Res> {
-  __$$MemoryWriteRequestImplCopyWithImpl(_$MemoryWriteRequestImpl _value,
-      $Res Function(_$MemoryWriteRequestImpl) _then)
-      : super(_value, _then);
+class _$MemoryWriteRequestCopyWithImpl<$Res>
+    implements $MemoryWriteRequestCopyWith<$Res> {
+  _$MemoryWriteRequestCopyWithImpl(this._self, this._then);
+
+  final MemoryWriteRequest _self;
+  final $Res Function(MemoryWriteRequest) _then;
 
   /// Create a copy of MemoryWriteRequest
   /// with the given fields replaced by the non-null parameter values.
@@ -140,39 +93,205 @@ class __$$MemoryWriteRequestImplCopyWithImpl<$Res>
     Object? userId = freezed,
     Object? metadata = freezed,
   }) {
-    return _then(_$MemoryWriteRequestImpl(
+    return _then(_self.copyWith(
       content: null == content
-          ? _value.content
+          ? _self.content
           : content // ignore: cast_nullable_to_non_nullable
               as String,
       type: null == type
-          ? _value.type
+          ? _self.type
           : type // ignore: cast_nullable_to_non_nullable
               as String,
       salience: freezed == salience
-          ? _value.salience
+          ? _self.salience
           : salience // ignore: cast_nullable_to_non_nullable
               as double?,
       sessionId: freezed == sessionId
-          ? _value.sessionId
+          ? _self.sessionId
           : sessionId // ignore: cast_nullable_to_non_nullable
               as String?,
       userId: freezed == userId
-          ? _value.userId
+          ? _self.userId
           : userId // ignore: cast_nullable_to_non_nullable
               as String?,
       metadata: freezed == metadata
-          ? _value._metadata
+          ? _self.metadata
           : metadata // ignore: cast_nullable_to_non_nullable
               as Map<String, dynamic>?,
     ));
   }
 }
 
+/// Adds pattern-matching-related methods to [MemoryWriteRequest].
+extension MemoryWriteRequestPatterns on MemoryWriteRequest {
+  /// A variant of `map` that fallback to returning `orElse`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_MemoryWriteRequest value)? $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _MemoryWriteRequest() when $default != null:
+        return $default(_that);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// Callbacks receives the raw object, upcasted.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case final Subclass2 value:
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_MemoryWriteRequest value) $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _MemoryWriteRequest():
+        return $default(_that);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `map` that fallback to returning `null`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_MemoryWriteRequest value)? $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _MemoryWriteRequest() when $default != null:
+        return $default(_that);
+      case _:
+        return null;
+    }
+  }
+
+  /// A variant of `when` that fallback to an `orElse` callback.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(String content, String type, double? salience,
+            String? sessionId, String? userId, Map<String, dynamic>? metadata)?
+        $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _MemoryWriteRequest() when $default != null:
+        return $default(_that.content, _that.type, _that.salience,
+            _that.sessionId, _that.userId, _that.metadata);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// As opposed to `map`, this offers destructuring.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case Subclass2(:final field2):
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(String content, String type, double? salience,
+            String? sessionId, String? userId, Map<String, dynamic>? metadata)
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _MemoryWriteRequest():
+        return $default(_that.content, _that.type, _that.salience,
+            _that.sessionId, _that.userId, _that.metadata);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `when` that fallback to returning `null`
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(String content, String type, double? salience,
+            String? sessionId, String? userId, Map<String, dynamic>? metadata)?
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _MemoryWriteRequest() when $default != null:
+        return $default(_that.content, _that.type, _that.salience,
+            _that.sessionId, _that.userId, _that.metadata);
+      case _:
+        return null;
+    }
+  }
+}
+
 /// @nodoc
 @JsonSerializable()
-class _$MemoryWriteRequestImpl implements _MemoryWriteRequest {
-  const _$MemoryWriteRequestImpl(
+class _MemoryWriteRequest implements MemoryWriteRequest {
+  const _MemoryWriteRequest(
       {required this.content,
       this.type = 'short',
       this.salience,
@@ -180,9 +299,8 @@ class _$MemoryWriteRequestImpl implements _MemoryWriteRequest {
       this.userId,
       final Map<String, dynamic>? metadata})
       : _metadata = metadata;
-
-  factory _$MemoryWriteRequestImpl.fromJson(Map<String, dynamic> json) =>
-      _$$MemoryWriteRequestImplFromJson(json);
+  factory _MemoryWriteRequest.fromJson(Map<String, dynamic> json) =>
+      _$MemoryWriteRequestFromJson(json);
 
   @override
   final String content;
@@ -205,16 +323,26 @@ class _$MemoryWriteRequestImpl implements _MemoryWriteRequest {
     return EqualUnmodifiableMapView(value);
   }
 
+  /// Create a copy of MemoryWriteRequest
+  /// with the given fields replaced by the non-null parameter values.
   @override
-  String toString() {
-    return 'MemoryWriteRequest(content: $content, type: $type, salience: $salience, sessionId: $sessionId, userId: $userId, metadata: $metadata)';
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  _$MemoryWriteRequestCopyWith<_MemoryWriteRequest> get copyWith =>
+      __$MemoryWriteRequestCopyWithImpl<_MemoryWriteRequest>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$MemoryWriteRequestToJson(
+      this,
+    );
   }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$MemoryWriteRequestImpl &&
+            other is _MemoryWriteRequest &&
             (identical(other.content, content) || other.content == content) &&
             (identical(other.type, type) || other.type == type) &&
             (identical(other.salience, salience) ||
@@ -230,52 +358,76 @@ class _$MemoryWriteRequestImpl implements _MemoryWriteRequest {
   int get hashCode => Object.hash(runtimeType, content, type, salience,
       sessionId, userId, const DeepCollectionEquality().hash(_metadata));
 
-  /// Create a copy of MemoryWriteRequest
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  @pragma('vm:prefer-inline')
-  _$$MemoryWriteRequestImplCopyWith<_$MemoryWriteRequestImpl> get copyWith =>
-      __$$MemoryWriteRequestImplCopyWithImpl<_$MemoryWriteRequestImpl>(
-          this, _$identity);
-
-  @override
-  Map<String, dynamic> toJson() {
-    return _$$MemoryWriteRequestImplToJson(
-      this,
-    );
+  String toString() {
+    return 'MemoryWriteRequest(content: $content, type: $type, salience: $salience, sessionId: $sessionId, userId: $userId, metadata: $metadata)';
   }
 }
 
-abstract class _MemoryWriteRequest implements MemoryWriteRequest {
-  const factory _MemoryWriteRequest(
-      {required final String content,
-      final String type,
-      final double? salience,
-      final String? sessionId,
-      final String? userId,
-      final Map<String, dynamic>? metadata}) = _$MemoryWriteRequestImpl;
+/// @nodoc
+abstract mixin class _$MemoryWriteRequestCopyWith<$Res>
+    implements $MemoryWriteRequestCopyWith<$Res> {
+  factory _$MemoryWriteRequestCopyWith(
+          _MemoryWriteRequest value, $Res Function(_MemoryWriteRequest) _then) =
+      __$MemoryWriteRequestCopyWithImpl;
+  @override
+  @useResult
+  $Res call(
+      {String content,
+      String type,
+      double? salience,
+      String? sessionId,
+      String? userId,
+      Map<String, dynamic>? metadata});
+}
 
-  factory _MemoryWriteRequest.fromJson(Map<String, dynamic> json) =
-      _$MemoryWriteRequestImpl.fromJson;
+/// @nodoc
+class __$MemoryWriteRequestCopyWithImpl<$Res>
+    implements _$MemoryWriteRequestCopyWith<$Res> {
+  __$MemoryWriteRequestCopyWithImpl(this._self, this._then);
 
-  @override
-  String get content;
-  @override
-  String get type;
-  @override
-  double? get salience;
-  @override
-  String? get sessionId;
-  @override
-  String? get userId;
-  @override
-  Map<String, dynamic>? get metadata;
+  final _MemoryWriteRequest _self;
+  final $Res Function(_MemoryWriteRequest) _then;
 
   /// Create a copy of MemoryWriteRequest
   /// with the given fields replaced by the non-null parameter values.
   @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$MemoryWriteRequestImplCopyWith<_$MemoryWriteRequestImpl> get copyWith =>
-      throw _privateConstructorUsedError;
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? content = null,
+    Object? type = null,
+    Object? salience = freezed,
+    Object? sessionId = freezed,
+    Object? userId = freezed,
+    Object? metadata = freezed,
+  }) {
+    return _then(_MemoryWriteRequest(
+      content: null == content
+          ? _self.content
+          : content // ignore: cast_nullable_to_non_nullable
+              as String,
+      type: null == type
+          ? _self.type
+          : type // ignore: cast_nullable_to_non_nullable
+              as String,
+      salience: freezed == salience
+          ? _self.salience
+          : salience // ignore: cast_nullable_to_non_nullable
+              as double?,
+      sessionId: freezed == sessionId
+          ? _self.sessionId
+          : sessionId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      userId: freezed == userId
+          ? _self.userId
+          : userId // ignore: cast_nullable_to_non_nullable
+              as String?,
+      metadata: freezed == metadata
+          ? _self._metadata
+          : metadata // ignore: cast_nullable_to_non_nullable
+              as Map<String, dynamic>?,
+    ));
+  }
 }
+
+// dart format on

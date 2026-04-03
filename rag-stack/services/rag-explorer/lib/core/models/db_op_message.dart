@@ -4,7 +4,7 @@ part 'db_op_message.freezed.dart';
 part 'db_op_message.g.dart';
 
 @freezed
-class DbOpMessage with _$DbOpMessage {
+abstract class DbOpMessage with _$DbOpMessage {
   const factory DbOpMessage({
     required String operation,
     required String table,

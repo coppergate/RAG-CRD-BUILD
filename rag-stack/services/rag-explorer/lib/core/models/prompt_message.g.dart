@@ -6,8 +6,8 @@ part of 'prompt_message.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$PromptMessageImpl _$$PromptMessageImplFromJson(Map<String, dynamic> json) =>
-    _$PromptMessageImpl(
+_PromptMessage _$PromptMessageFromJson(Map<String, dynamic> json) =>
+    _PromptMessage(
       prompt: json['prompt'] as String,
       sessionId: json['sessionId'] as String?,
       plannerModel: json['plannerModel'] as String?,
@@ -16,7 +16,7 @@ _$PromptMessageImpl _$$PromptMessageImplFromJson(Map<String, dynamic> json) =>
       memoryMode: json['memoryMode'] as String? ?? 'off',
     );
 
-Map<String, dynamic> _$$PromptMessageImplToJson(_$PromptMessageImpl instance) =>
+Map<String, dynamic> _$PromptMessageToJson(_PromptMessage instance) =>
     <String, dynamic>{
       'prompt': instance.prompt,
       'sessionId': instance.sessionId,

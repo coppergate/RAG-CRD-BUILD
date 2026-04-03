@@ -5,7 +5,7 @@ set -Eeuo pipefail
 
 # Canonical registry reachable from hierophant (resolves to 172.20.1.26)
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-VERSION="${VERSION:-2.4.1}"
+VERSION="${VERSION:-2.4.2}"
 TLS_VERIFY="${TLS_VERIFY:-false}"
 
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"

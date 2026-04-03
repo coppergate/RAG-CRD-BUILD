@@ -4,7 +4,7 @@ part 'memory_pack.freezed.dart';
 part 'memory_pack.g.dart';
 
 @freezed
-class MemoryPack with _$MemoryPack {
+abstract class MemoryPack with _$MemoryPack {
   const factory MemoryPack({
     required List<dynamic> memories,
     required Map<String, dynamic> metadata,

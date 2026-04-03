@@ -1,5 +1,5 @@
-// coverage:ignore-file
 // GENERATED CODE - DO NOT MODIFY BY HAND
+// coverage:ignore-file
 // ignore_for_file: type=lint
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
@@ -9,100 +9,58 @@ part of 'db_op_message.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// dart format off
 T _$identity<T>(T value) => value;
-
-final _privateConstructorUsedError = UnsupportedError(
-    'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
-
-DbOpMessage _$DbOpMessageFromJson(Map<String, dynamic> json) {
-  return _DbOpMessage.fromJson(json);
-}
 
 /// @nodoc
 mixin _$DbOpMessage {
-  String get operation => throw _privateConstructorUsedError;
-  String get table => throw _privateConstructorUsedError;
-  Map<String, dynamic> get data => throw _privateConstructorUsedError;
-  String? get condition => throw _privateConstructorUsedError;
-  DateTime? get timestamp => throw _privateConstructorUsedError;
-
-  /// Serializes this DbOpMessage to a JSON map.
-  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+  String get operation;
+  String get table;
+  Map<String, dynamic> get data;
+  String? get condition;
+  DateTime? get timestamp;
 
   /// Create a copy of DbOpMessage
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
-  $DbOpMessageCopyWith<DbOpMessage> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $DbOpMessageCopyWith<$Res> {
-  factory $DbOpMessageCopyWith(
-          DbOpMessage value, $Res Function(DbOpMessage) then) =
-      _$DbOpMessageCopyWithImpl<$Res, DbOpMessage>;
-  @useResult
-  $Res call(
-      {String operation,
-      String table,
-      Map<String, dynamic> data,
-      String? condition,
-      DateTime? timestamp});
-}
-
-/// @nodoc
-class _$DbOpMessageCopyWithImpl<$Res, $Val extends DbOpMessage>
-    implements $DbOpMessageCopyWith<$Res> {
-  _$DbOpMessageCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  /// Create a copy of DbOpMessage
-  /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
+  $DbOpMessageCopyWith<DbOpMessage> get copyWith =>
+      _$DbOpMessageCopyWithImpl<DbOpMessage>(this as DbOpMessage, _$identity);
+
+  /// Serializes this DbOpMessage to a JSON map.
+  Map<String, dynamic> toJson();
+
   @override
-  $Res call({
-    Object? operation = null,
-    Object? table = null,
-    Object? data = null,
-    Object? condition = freezed,
-    Object? timestamp = freezed,
-  }) {
-    return _then(_value.copyWith(
-      operation: null == operation
-          ? _value.operation
-          : operation // ignore: cast_nullable_to_non_nullable
-              as String,
-      table: null == table
-          ? _value.table
-          : table // ignore: cast_nullable_to_non_nullable
-              as String,
-      data: null == data
-          ? _value.data
-          : data // ignore: cast_nullable_to_non_nullable
-              as Map<String, dynamic>,
-      condition: freezed == condition
-          ? _value.condition
-          : condition // ignore: cast_nullable_to_non_nullable
-              as String?,
-      timestamp: freezed == timestamp
-          ? _value.timestamp
-          : timestamp // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-    ) as $Val);
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is DbOpMessage &&
+            (identical(other.operation, operation) ||
+                other.operation == operation) &&
+            (identical(other.table, table) || other.table == table) &&
+            const DeepCollectionEquality().equals(other.data, data) &&
+            (identical(other.condition, condition) ||
+                other.condition == condition) &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, operation, table,
+      const DeepCollectionEquality().hash(data), condition, timestamp);
+
+  @override
+  String toString() {
+    return 'DbOpMessage(operation: $operation, table: $table, data: $data, condition: $condition, timestamp: $timestamp)';
   }
 }
 
 /// @nodoc
-abstract class _$$DbOpMessageImplCopyWith<$Res>
-    implements $DbOpMessageCopyWith<$Res> {
-  factory _$$DbOpMessageImplCopyWith(
-          _$DbOpMessageImpl value, $Res Function(_$DbOpMessageImpl) then) =
-      __$$DbOpMessageImplCopyWithImpl<$Res>;
-  @override
+abstract mixin class $DbOpMessageCopyWith<$Res> {
+  factory $DbOpMessageCopyWith(
+          DbOpMessage value, $Res Function(DbOpMessage) _then) =
+      _$DbOpMessageCopyWithImpl;
   @useResult
   $Res call(
       {String operation,
@@ -113,12 +71,11 @@ abstract class _$$DbOpMessageImplCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$DbOpMessageImplCopyWithImpl<$Res>
-    extends _$DbOpMessageCopyWithImpl<$Res, _$DbOpMessageImpl>
-    implements _$$DbOpMessageImplCopyWith<$Res> {
-  __$$DbOpMessageImplCopyWithImpl(
-      _$DbOpMessageImpl _value, $Res Function(_$DbOpMessageImpl) _then)
-      : super(_value, _then);
+class _$DbOpMessageCopyWithImpl<$Res> implements $DbOpMessageCopyWith<$Res> {
+  _$DbOpMessageCopyWithImpl(this._self, this._then);
+
+  final DbOpMessage _self;
+  final $Res Function(DbOpMessage) _then;
 
   /// Create a copy of DbOpMessage
   /// with the given fields replaced by the non-null parameter values.
@@ -131,44 +88,209 @@ class __$$DbOpMessageImplCopyWithImpl<$Res>
     Object? condition = freezed,
     Object? timestamp = freezed,
   }) {
-    return _then(_$DbOpMessageImpl(
+    return _then(_self.copyWith(
       operation: null == operation
-          ? _value.operation
+          ? _self.operation
           : operation // ignore: cast_nullable_to_non_nullable
               as String,
       table: null == table
-          ? _value.table
+          ? _self.table
           : table // ignore: cast_nullable_to_non_nullable
               as String,
       data: null == data
-          ? _value._data
+          ? _self.data
           : data // ignore: cast_nullable_to_non_nullable
               as Map<String, dynamic>,
       condition: freezed == condition
-          ? _value.condition
+          ? _self.condition
           : condition // ignore: cast_nullable_to_non_nullable
               as String?,
       timestamp: freezed == timestamp
-          ? _value.timestamp
+          ? _self.timestamp
           : timestamp // ignore: cast_nullable_to_non_nullable
               as DateTime?,
     ));
   }
 }
 
+/// Adds pattern-matching-related methods to [DbOpMessage].
+extension DbOpMessagePatterns on DbOpMessage {
+  /// A variant of `map` that fallback to returning `orElse`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_DbOpMessage value)? $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _DbOpMessage() when $default != null:
+        return $default(_that);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// Callbacks receives the raw object, upcasted.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case final Subclass2 value:
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_DbOpMessage value) $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _DbOpMessage():
+        return $default(_that);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `map` that fallback to returning `null`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_DbOpMessage value)? $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _DbOpMessage() when $default != null:
+        return $default(_that);
+      case _:
+        return null;
+    }
+  }
+
+  /// A variant of `when` that fallback to an `orElse` callback.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(String operation, String table, Map<String, dynamic> data,
+            String? condition, DateTime? timestamp)?
+        $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _DbOpMessage() when $default != null:
+        return $default(_that.operation, _that.table, _that.data,
+            _that.condition, _that.timestamp);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// As opposed to `map`, this offers destructuring.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case Subclass2(:final field2):
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(String operation, String table, Map<String, dynamic> data,
+            String? condition, DateTime? timestamp)
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _DbOpMessage():
+        return $default(_that.operation, _that.table, _that.data,
+            _that.condition, _that.timestamp);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `when` that fallback to returning `null`
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(String operation, String table, Map<String, dynamic> data,
+            String? condition, DateTime? timestamp)?
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _DbOpMessage() when $default != null:
+        return $default(_that.operation, _that.table, _that.data,
+            _that.condition, _that.timestamp);
+      case _:
+        return null;
+    }
+  }
+}
+
 /// @nodoc
 @JsonSerializable()
-class _$DbOpMessageImpl implements _DbOpMessage {
-  const _$DbOpMessageImpl(
+class _DbOpMessage implements DbOpMessage {
+  const _DbOpMessage(
       {required this.operation,
       required this.table,
       required final Map<String, dynamic> data,
       this.condition,
       this.timestamp})
       : _data = data;
-
-  factory _$DbOpMessageImpl.fromJson(Map<String, dynamic> json) =>
-      _$$DbOpMessageImplFromJson(json);
+  factory _DbOpMessage.fromJson(Map<String, dynamic> json) =>
+      _$DbOpMessageFromJson(json);
 
   @override
   final String operation;
@@ -187,16 +309,26 @@ class _$DbOpMessageImpl implements _DbOpMessage {
   @override
   final DateTime? timestamp;
 
+  /// Create a copy of DbOpMessage
+  /// with the given fields replaced by the non-null parameter values.
   @override
-  String toString() {
-    return 'DbOpMessage(operation: $operation, table: $table, data: $data, condition: $condition, timestamp: $timestamp)';
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  _$DbOpMessageCopyWith<_DbOpMessage> get copyWith =>
+      __$DbOpMessageCopyWithImpl<_DbOpMessage>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$DbOpMessageToJson(
+      this,
+    );
   }
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$DbOpMessageImpl &&
+            other is _DbOpMessage &&
             (identical(other.operation, operation) ||
                 other.operation == operation) &&
             (identical(other.table, table) || other.table == table) &&
@@ -212,48 +344,69 @@ class _$DbOpMessageImpl implements _DbOpMessage {
   int get hashCode => Object.hash(runtimeType, operation, table,
       const DeepCollectionEquality().hash(_data), condition, timestamp);
 
-  /// Create a copy of DbOpMessage
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  @pragma('vm:prefer-inline')
-  _$$DbOpMessageImplCopyWith<_$DbOpMessageImpl> get copyWith =>
-      __$$DbOpMessageImplCopyWithImpl<_$DbOpMessageImpl>(this, _$identity);
-
-  @override
-  Map<String, dynamic> toJson() {
-    return _$$DbOpMessageImplToJson(
-      this,
-    );
+  String toString() {
+    return 'DbOpMessage(operation: $operation, table: $table, data: $data, condition: $condition, timestamp: $timestamp)';
   }
 }
 
-abstract class _DbOpMessage implements DbOpMessage {
-  const factory _DbOpMessage(
-      {required final String operation,
-      required final String table,
-      required final Map<String, dynamic> data,
-      final String? condition,
-      final DateTime? timestamp}) = _$DbOpMessageImpl;
+/// @nodoc
+abstract mixin class _$DbOpMessageCopyWith<$Res>
+    implements $DbOpMessageCopyWith<$Res> {
+  factory _$DbOpMessageCopyWith(
+          _DbOpMessage value, $Res Function(_DbOpMessage) _then) =
+      __$DbOpMessageCopyWithImpl;
+  @override
+  @useResult
+  $Res call(
+      {String operation,
+      String table,
+      Map<String, dynamic> data,
+      String? condition,
+      DateTime? timestamp});
+}
 
-  factory _DbOpMessage.fromJson(Map<String, dynamic> json) =
-      _$DbOpMessageImpl.fromJson;
+/// @nodoc
+class __$DbOpMessageCopyWithImpl<$Res> implements _$DbOpMessageCopyWith<$Res> {
+  __$DbOpMessageCopyWithImpl(this._self, this._then);
 
-  @override
-  String get operation;
-  @override
-  String get table;
-  @override
-  Map<String, dynamic> get data;
-  @override
-  String? get condition;
-  @override
-  DateTime? get timestamp;
+  final _DbOpMessage _self;
+  final $Res Function(_DbOpMessage) _then;
 
   /// Create a copy of DbOpMessage
   /// with the given fields replaced by the non-null parameter values.
   @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$DbOpMessageImplCopyWith<_$DbOpMessageImpl> get copyWith =>
-      throw _privateConstructorUsedError;
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? operation = null,
+    Object? table = null,
+    Object? data = null,
+    Object? condition = freezed,
+    Object? timestamp = freezed,
+  }) {
+    return _then(_DbOpMessage(
+      operation: null == operation
+          ? _self.operation
+          : operation // ignore: cast_nullable_to_non_nullable
+              as String,
+      table: null == table
+          ? _self.table
+          : table // ignore: cast_nullable_to_non_nullable
+              as String,
+      data: null == data
+          ? _self._data
+          : data // ignore: cast_nullable_to_non_nullable
+              as Map<String, dynamic>,
+      condition: freezed == condition
+          ? _self.condition
+          : condition // ignore: cast_nullable_to_non_nullable
+              as String?,
+      timestamp: freezed == timestamp
+          ? _self.timestamp
+          : timestamp // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
+    ));
+  }
 }
+
+// dart format on

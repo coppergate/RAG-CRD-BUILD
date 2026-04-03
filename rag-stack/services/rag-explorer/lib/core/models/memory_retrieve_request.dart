@@ -4,7 +4,7 @@ part 'memory_retrieve_request.freezed.dart';
 part 'memory_retrieve_request.g.dart';
 
 @freezed
-class MemoryRetrieveRequest with _$MemoryRetrieveRequest {
+abstract class MemoryRetrieveRequest with _$MemoryRetrieveRequest {
   const factory MemoryRetrieveRequest({
     required String query,
     String? sessionId,

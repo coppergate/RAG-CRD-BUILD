@@ -6,13 +6,12 @@ part of 'memory_pack.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$MemoryPackImpl _$$MemoryPackImplFromJson(Map<String, dynamic> json) =>
-    _$MemoryPackImpl(
+_MemoryPack _$MemoryPackFromJson(Map<String, dynamic> json) => _MemoryPack(
       memories: json['memories'] as List<dynamic>,
       metadata: json['metadata'] as Map<String, dynamic>,
     );
 
-Map<String, dynamic> _$$MemoryPackImplToJson(_$MemoryPackImpl instance) =>
+Map<String, dynamic> _$MemoryPackToJson(_MemoryPack instance) =>
     <String, dynamic>{
       'memories': instance.memories,
       'metadata': instance.metadata,

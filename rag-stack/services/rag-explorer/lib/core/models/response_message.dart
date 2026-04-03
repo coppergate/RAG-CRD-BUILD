@@ -4,7 +4,7 @@ part 'response_message.freezed.dart';
 part 'response_message.g.dart';
 
 @freezed
-class ResponseMessage with _$ResponseMessage {
+abstract class ResponseMessage with _$ResponseMessage {
   const factory ResponseMessage({
     required String content,
     String? sessionId,
