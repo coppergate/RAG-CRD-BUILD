@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rag_explorer/features/settings/settings_page.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
 import '../../core/models/session.dart';
@@ -14,7 +15,7 @@ class ChatPage extends ConsumerStatefulWidget {
 
 class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
-  final List<ResponseMessage> _messages = [];
+  List<ResponseMessage> _messages = [];
   List<Session> _sessions = [];
   String _currentSessionId = const Uuid().v4();
   String _selectedPlanner = 'llama3.1';
