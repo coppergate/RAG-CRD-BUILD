@@ -77,37 +77,64 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _selectedIndex = 0;
+  bool _isPinned = true;
+  bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Row(
         children: [
-          NavigationRail(
-            extended: true,
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-              _onDestinationSelected(index, context);
-            },
-            labelType: NavigationRailLabelType.none,
-            destinations: const [
-              NavigationRailDestination(icon: Icon(Icons.chat), label: Text('Chat')),
-              NavigationRailDestination(icon: Icon(Icons.upload_file), label: Text('Ingestion')),
-              NavigationRailDestination(icon: Icon(Icons.memory), label: Text('Memory')),
-              NavigationRailDestination(icon: Icon(Icons.storage), label: Text('S3 Browser')),
-              NavigationRailDestination(icon: Icon(Icons.table_chart), label: Text('TimescaleDB')),
-              NavigationRailDestination(icon: Icon(Icons.hub), label: Text('Qdrant')),
-              NavigationRailDestination(icon: Icon(Icons.compare), label: Text('Model Comparison')),
-              NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('Observability')),
-              NavigationRailDestination(icon: Icon(Icons.settings), label: Text('Settings')),
-            ],
-          ),
+          _buildSidebar(),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(child: widget.child),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSidebar() {
+    final bool isExtended = _isPinned || _isHovered;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: isExtended ? 250 : 72,
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Icon(_isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: isExtended ? const Text('Pin Menu') : null,
+              onTap: () => setState(() => _isPinned = !_isPinned),
+            ),
+            const Divider(),
+            Expanded(
+              child: NavigationRail(
+                extended: isExtended,
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: (int index) {
+                  setState(() => _selectedIndex = index);
+                  _onDestinationSelected(index, context);
+                },
+                labelType: NavigationRailLabelType.none,
+                destinations: const [
+                  NavigationRailDestination(icon: Icon(Icons.chat), label: Text('Chat')),
+                  NavigationRailDestination(icon: Icon(Icons.upload_file), label: Text('Ingestion')),
+                  NavigationRailDestination(icon: Icon(Icons.memory), label: Text('Memory')),
+                  NavigationRailDestination(icon: Icon(Icons.storage), label: Text('S3 Browser')),
+                  NavigationRailDestination(icon: Icon(Icons.table_chart), label: Text('TimescaleDB')),
+                  NavigationRailDestination(icon: Icon(Icons.hub), label: Text('Qdrant')),
+                  NavigationRailDestination(icon: Icon(Icons.compare), label: Text('Model Comparison')),
+                  NavigationRailDestination(icon: Icon(Icons.dashboard), label: Text('Observability')),
+                  NavigationRailDestination(icon: Icon(Icons.settings), label: Text('Settings')),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

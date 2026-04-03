@@ -31,7 +31,7 @@ Every new session for the **Junie** agent MUST establish the operational context
 
 ## Current Focus (Iteration 7: Phase 1)
 
-As of version `2.3.9`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
+As of version `2.4.0`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
 1.  **Testing**: Implemented unit and integration tests for `rag-admin-api`, `memory-controller`, and `llm-gateway`.
 2.  **Memory Controller**: Implemented real database operations via Ent client. Replaced mock endpoints with `HandleItems` supporting GET (list) and POST (write).
 3.  **LLM Gateway**: Refactored to use a `PulsarClient` interface for better testability.
@@ -123,11 +123,11 @@ To run the RAG Explorer as a Linux desktop application or in a web browser, foll
 ### 3. Deploying to Cluster
 1. **Build**: Trigger the Kaniko build on **hierophant**:
    ```bash
-   ssh junie@hierophant "VERSION=2.3.9 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
+   ssh junie@hierophant "VERSION=2.4.0 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
    ```
 2. **Deploy**: The UI is automatically deployed by `setup-all.sh` in Iteration 7:
    ```bash
-   ssh junie@hierophant "VERSION=2.3.9 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
+   ssh junie@hierophant "VERSION=2.4.0 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
    ```
 3. **Verification**:
    - **Endpoint**: `https://rag-explorer.rag.hierocracy.home`

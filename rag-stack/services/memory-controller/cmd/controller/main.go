@@ -46,6 +46,8 @@ func main() {
 	
 	memoryHandler := handlers.NewMemoryHandler(entClient)
 	mux.HandleFunc("/api/memory/items", memoryHandler.HandleItems)
+	mux.HandleFunc("/api/memory/sessions", memoryHandler.HandleSessions)
+	mux.HandleFunc("/api/memory/sessions/", memoryHandler.HandleSessions)
 
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,

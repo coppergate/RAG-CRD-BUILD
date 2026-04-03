@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
+import '../../core/models/session.dart';
 import '../../core/services/chat_service.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -14,12 +15,47 @@ class ChatPage extends ConsumerStatefulWidget {
 class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final List<ResponseMessage> _messages = [];
+  List<Session> _sessions = [];
   String _currentSessionId = const Uuid().v4();
   String _selectedPlanner = 'llama3.1';
   String _selectedExecutor = 'llama3.1';
   String _memoryMode = 'off';
   bool _showMetadata = true;
   bool _isStreaming = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSessions();
+  }
+
+  Future<void> _loadSessions() async {
+    final chatService = ref.read(chatServiceProvider);
+    final sessions = await chatService.getSessions();
+    if (mounted) {
+      setState(() {
+        _sessions = sessions;
+      });
+    }
+  }
+
+  Future<void> _deleteSession(String sessionId) async {
+    final chatService = ref.read(chatServiceProvider);
+    final success = await chatService.deleteSession(sessionId);
+    if (success) {
+      if (sessionId == _currentSessionId) {
+        _startNewSession();
+      }
+      _loadSessions();
+    }
+  }
+
+  void _startNewSession() {
+    setState(() {
+      _currentSessionId = const Uuid().v4();
+      _messages.clear();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +104,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: _startNewSession,
               icon: const Icon(Icons.add),
               label: const Text('New Session'),
               style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(40)),
@@ -76,17 +112,61 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ),
           const Divider(),
           Expanded(
-            child: ListView.builder(
-              itemCount: 5, // Mock data
-              itemBuilder: (context, index) {
-                return ListTile(
-                  leading: const Icon(Icons.chat_bubble_outline),
-                  title: Text('Session ${index + 1}'),
-                  subtitle: const Text('Last active: 2h ago'),
-                  onTap: () {},
-                );
-              },
+            child: RefreshIndicator(
+              onRefresh: _loadSessions,
+              child: ListView.builder(
+                itemCount: _sessions.length,
+                itemBuilder: (context, index) {
+                  final session = _sessions[index];
+                  final isSelected = session.id == _currentSessionId;
+                  return ListTile(
+                    leading: const Icon(Icons.chat_bubble_outline),
+                    title: Text(session.name ?? 'Session ${session.id.substring(0, 8)}'),
+                    subtitle: Text('Last active: ${_formatTime(session.lastActiveAt)}'),
+                    selected: isSelected,
+                    onTap: () {
+                      setState(() {
+                        _currentSessionId = session.id;
+                        _messages.clear();
+                        // In a real app, we would load messages for this session
+                      });
+                    },
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      onPressed: () => _confirmDeleteSession(session),
+                    ),
+                  );
+                },
+              ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'just now';
+  }
+
+  void _confirmDeleteSession(Session session) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Session?'),
+        content: Text('Are you sure you want to delete "${session.name ?? 'this session'}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteSession(session.id);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

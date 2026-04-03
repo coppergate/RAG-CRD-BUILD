@@ -7,7 +7,9 @@ import (
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
 	"app-builds/common/ent/memoryitem"
+	"app-builds/common/ent/session"
 	"github.com/google/uuid"
+	"strings"
 )
 
 type MemoryHandler struct {
@@ -120,4 +122,76 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 	
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+func (h *MemoryHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.listSessions(w, r)
+	case http.MethodDelete:
+		h.deleteSession(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *MemoryHandler) listSessions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sessions, err := h.client.Session.Query().
+		Order(ent.Desc(session.FieldLastActiveAt)).
+		All(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sessions)
+}
+
+func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/memory/sessions/")
+	if idStr == "" || idStr == r.URL.Path {
+		idStr = r.URL.Query().Get("id")
+	}
+
+	if idStr == "" {
+		http.Error(w, "Session ID required", http.StatusBadRequest)
+		return
+	}
+
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid Session ID", http.StatusBadRequest)
+		return
+	}
+
+	// Delete session and its items
+	tx, err := h.client.Tx(ctx)
+	if err != nil {
+		http.Error(w, "Failed to start transaction", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = tx.MemoryItem.Delete().
+		Where(memoryitem.SessionID(id)).
+		Exec(ctx)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Failed to delete memory items: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = tx.Session.DeleteOneID(id).Exec(ctx)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Failed to delete session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
