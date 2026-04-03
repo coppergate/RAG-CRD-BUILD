@@ -14,4 +14,4 @@ spec:
           port: 443
           serversTransport: skip-verify
   tls:
-    secretName: rag-admin-api-cert
+    secretName: rag-admin-api-tls
