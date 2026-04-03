@@ -29,13 +29,13 @@ Every new session for the **Junie** agent MUST establish the operational context
 3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md` to ensure any new procedures are understood and recorded.
 
-## Current Focus (Iteration 7: Phase 1)
+## Current Focus (Iteration 8: Session Management & UI Polish)
 
-As of version `2.4.4`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
-1.  **Testing**: Implemented unit and integration tests for `rag-admin-api`, `memory-controller`, and `llm-gateway`.
-2.  **Memory Controller**: Implemented real database operations via Ent client. Replaced mock endpoints with `HandleItems` supporting GET (list) and POST (write).
-3.  **LLM Gateway**: Refactored to use a `PulsarClient` interface for better testability.
-4.  **Database Schema**: Memory tables (`memory_items`, `memory_links`, `memory_events`) are implemented with `metadata` support.
+As of version 2.4.5, the project is focusing on **Iteration 8 (Session Management & UI Polish)**.
+1.  **Session Management**: Implemented Session Deletion and Flyout Menu with Pin feature.
+2.  **UI Polish**: Upgraded Flutter dependencies (Riverpod 3.x, Freezed 3.x), transitioning to standard Ingress for `rag-admin-api`.
+3.  **Security**: Enhanced TLS configuration with step-by-step procedures in `TLS-GUIDE.md` and fixed SAN issues for RAG Explorer.
+4.  **Consistency**: Synchronized service endpoints and DNS entries to use `rag-admin-api`.
 
 ---
 
