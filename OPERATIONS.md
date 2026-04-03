@@ -31,7 +31,7 @@ Every new session for the **Junie** agent MUST establish the operational context
 
 ## Current Focus (Iteration 7: Phase 1)
 
-As of version `2.4.3`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
+As of version `2.4.4`, the project is focusing on **Iteration 7 (Local Prompt Memory + Recall)**.
 1.  **Testing**: Implemented unit and integration tests for `rag-admin-api`, `memory-controller`, and `llm-gateway`.
 2.  **Memory Controller**: Implemented real database operations via Ent client. Replaced mock endpoints with `HandleItems` supporting GET (list) and POST (write).
 3.  **LLM Gateway**: Refactored to use a `PulsarClient` interface for better testability.
@@ -123,11 +123,11 @@ To run the RAG Explorer as a Linux desktop application or in a web browser, foll
 ### 3. Deploying to Cluster
 1. **Build**: Trigger the Kaniko build on **hierophant**:
    ```bash
-   ssh junie@hierophant "VERSION=2.4.3 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
+   ssh junie@hierophant "VERSION=2.4.4 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
    ```
 2. **Deploy**: The UI is automatically deployed by `setup-all.sh` in Iteration 7:
    ```bash
-   ssh junie@hierophant "VERSION=2.4.3 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
+   ssh junie@hierophant "VERSION=2.4.4 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
    ```
 3. **Verification**:
    - **Endpoint**: `https://rag-explorer.rag.hierocracy.home`
@@ -270,11 +270,12 @@ If services fail with `no partitioned metadata for topic` or `Namespace not foun
 - Use `FRESH_INSTALL=true` with `setup-complete.sh` to clear all journals and re-run from scratch.
 
 ## TLS and Security
-1.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
-2.  **Trust Distribution**: The combined CA certificate is managed via the `registry-ca-cm` ConfigMap in target namespaces.
-3.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`) for CA trust.
-4.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.
-5.  **Service TLS**: All RAG services (adapters, gateway, admin-api) now use TLS for their REST APIs (port 8080 or 443).
+1.  **Management Guide**: Refer to [TLS-GUIDE.md](TLS-GUIDE.md) for step-by-step instructions on creating certificates, adding SANs, and managing trust.
+2.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
+3.  **Trust Distribution**: The combined CA certificate is managed via the `registry-ca-cm` ConfigMap in target namespaces.
+4.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`) for CA trust.
+5.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.
+6.  **Service TLS**: All RAG services (adapters, gateway, admin-api) now use TLS for their REST APIs (port 8080 or 443).
     -   Certificates and keys are mounted from secrets named `<service>-tls`.
     -   Probes use `scheme: HTTPS`.
 
