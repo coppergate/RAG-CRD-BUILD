@@ -181,6 +181,7 @@ spec:
     - rag-admin-api.rag-system
     - rag-admin-api.rag-system.svc
     - rag-admin-api.rag-system.svc.cluster.local
+    - rag-admin-api.rag.hierocracy.home
   issuerRef:
     name: hierocracy-ca-issuer
     kind: ClusterIssuer

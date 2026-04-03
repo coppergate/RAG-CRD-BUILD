@@ -7,7 +7,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`rag-admin-api.rag.hierocracy.home`) || Host(`rag-admin-ui.rag.hierocracy.home`)
+    - match: Host(`rag-admin-api.rag.hierocracy.home`)
       kind: Rule
       services:
         - name: rag-admin-api
