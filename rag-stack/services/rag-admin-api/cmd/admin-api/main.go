@@ -50,6 +50,9 @@ func main() {
 	// LLM Gateway Proxy (for chat and streaming)
 	mux.HandleFunc("/api/chat/", h.ProxyTo(cfg.LLMGatewayURL, "/api/chat"))
 	
+	// RAG Ingestion Proxy
+	mux.HandleFunc("/api/ingest/", h.ProxyTo(cfg.IngestionURL, "/api/ingest"))
+	
 	// Health Aggregation
 	mux.HandleFunc("/api/health/all", h.HandleHealthAggregation)
 

@@ -11,6 +11,7 @@ type Config struct {
 	QdrantAdapterURL   string
 	LLMGatewayURL      string
 	MemoryControllerURL string
+	IngestionURL       string
 	TLSCert            string
 	TLSKey             string
 }
@@ -23,6 +24,7 @@ func Load() *Config {
 		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "http://qdrant-adapter.rag.svc.cluster.local:8080"),
 		LLMGatewayURL:       envutil.GetEnv("LLM_GATEWAY_URL", "http://llm-gateway.rag.svc.cluster.local:8080"),
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "http://memory-controller.rag.svc.cluster.local:8080"),
+		IngestionURL:        envutil.GetEnv("INGESTION_URL", "http://rag-ingestion.rag.svc.cluster.local:8000"),
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:              envutil.GetEnv("TLS_KEY", ""),
 	}

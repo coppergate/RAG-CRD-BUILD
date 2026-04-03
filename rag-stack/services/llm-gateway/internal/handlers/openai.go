@@ -220,6 +220,12 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	}
 
 	correlationID := uuid.New().String()
+
+	// Save user message to DB via Pulsar event
+	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt); err != nil {
+		log.Printf("[%s] Failed to send prompt event for session %s: %v", correlationID, sessionID, err)
+	}
+
 	internalReq := contracts.InternalRequest{
 		ID:            correlationID,
 		SessionID:     sessionID,
@@ -309,6 +315,11 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 
 	correlationID := uuid.New().String()
+
+	// Save user message to DB via Pulsar event
+	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt); err != nil {
+		log.Printf("[%s] Failed to send prompt event for session %s: %v", correlationID, sessionID, err)
+	}
 
 	// Direct mapping to InternalRequest
 	internalReq := contracts.InternalRequest{
