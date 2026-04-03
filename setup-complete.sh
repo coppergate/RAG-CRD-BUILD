@@ -23,7 +23,7 @@ set -Eeuo pipefail
 #
 BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
-VERSION="${VERSION:-2.4.4}"
+VERSION="${VERSION:-2.4.5}"
 export VERSION
 IMAGE_PREFETCH_ON_START="${IMAGE_PREFETCH_ON_START:-true}"
 IMAGE_PREFETCH_GROUPS="${IMAGE_PREFETCH_GROUPS:-bootstrap,storage,apm-core,pulsar-core,registry,data-services,ollama}"

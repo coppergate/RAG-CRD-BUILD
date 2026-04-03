@@ -13,12 +13,13 @@ class ApiClient {
     _dio.options.receiveTimeout = const Duration(seconds: 30);
 
     if (_config.skipTlsVerification) {
-      (_dio.httpClientAdapter as IOHttpClientAdapter).onHttpClientCreate = (HttpClient client) {
+      (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
+        final client = HttpClient();
         client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
         return client;
       };
     } else if (_config.caCertPath != null && !kIsWeb) {
-      (_dio.httpClientAdapter as IOHttpClientAdapter).onHttpClientCreate = (HttpClient client) {
+      (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {
         final SecurityContext context = SecurityContext.defaultContext;
         context.setTrustedCertificates(_config.caCertPath!);
         return HttpClient(context: context);
