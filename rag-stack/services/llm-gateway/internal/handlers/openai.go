@@ -55,38 +55,46 @@ type OpenAIHandler struct {
 }
 
 type ChatCompletionRequest struct {
-	Model     string   `json:"model"`
-	SessionID string   `json:"session_id,omitempty"` // Added for session tracking
-	Tags      []string `json:"tags,omitempty"`       // Added for RAG isolation
-	Messages  []struct {
+	Model       string   `json:"model"`
+	SessionID   string   `json:"session_id,omitempty"`   // Added for session tracking
+	SessionName string   `json:"session_name,omitempty"` // Added for friendly name
+	Tags        []string `json:"tags,omitempty"`         // Added for RAG isolation
+	Messages    []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"messages"`
 }
 
 type GenericChatRequest struct {
-	SessionID string   `json:"session_id"`
-	Prompt    string   `json:"prompt"`
-	Planner   string   `json:"planner"`
-	Executor  string   `json:"executor"`
-	Tags      []string `json:"tags"`
+	SessionID   string   `json:"session_id"`
+	SessionName string   `json:"session_name,omitempty"`
+	Prompt      string   `json:"prompt"`
+	Planner     string   `json:"planner"`
+	Executor    string   `json:"executor"`
+	Tags        []string `json:"tags"`
 }
 
-func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID string) (string, error) {
+func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID string, sessionName string) (string, error) {
 	if sessionID == "" {
 		sessionID = uuid.New().String()
 	}
+	if sessionName == "" {
+		sessionName = sessionID
+	}
 
 	builder := h.Ent.Session.Create().
-		SetName(sessionID).
+		SetName(sessionName).
 		SetLastActiveAt(time.Now())
 
 	var upserter *ent.SessionUpsertOne
 	if u, err := uuid.Parse(sessionID); err == nil {
 		builder.SetID(u)
-		upserter = builder.OnConflictColumns(session.FieldID).UpdateLastActiveAt()
+		upserter = builder.OnConflictColumns(session.FieldID).
+			UpdateLastActiveAt().
+			UpdateName()
 	} else {
-		upserter = builder.OnConflictColumns(session.FieldName).UpdateLastActiveAt()
+		upserter = builder.OnConflictColumns(session.FieldName).
+			UpdateLastActiveAt()
 	}
 
 	id, err := upserter.ID(ctx)
@@ -129,7 +137,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	// 1. Session tracking
-	sessionID, err := h.ensureSession(ctx, req.SessionID)
+	sessionID, err := h.ensureSession(ctx, req.SessionID, req.SessionName)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
@@ -213,7 +221,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	sessionID, err := h.ensureSession(ctx, req.SessionID)
+	sessionID, err := h.ensureSession(ctx, req.SessionID, req.SessionName)
 	if err != nil {
 		log.Printf("Failed to ensure session: %v", err)
 		return
@@ -306,7 +314,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 
 	// 1. Session tracking
-	sessionID, err := h.ensureSession(ctx, req.SessionID)
+	sessionID, err := h.ensureSession(ctx, req.SessionID, req.SessionName)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))

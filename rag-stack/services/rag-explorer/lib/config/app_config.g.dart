@@ -25,6 +25,7 @@ _AppConfig _$AppConfigFromJson(Map<String, dynamic> json) => _AppConfig(
       const ['llama3.1', 'granite3.1-dense:8b'],
   memoryExplorerEnabled: json['memoryExplorerEnabled'] as bool? ?? true,
   modelComparisonEnabled: json['modelComparisonEnabled'] as bool? ?? true,
+  promptTimeoutSeconds: (json['promptTimeoutSeconds'] as num?)?.toInt() ?? 60,
 );
 
 Map<String, dynamic> _$AppConfigToJson(_AppConfig instance) =>
@@ -43,4 +44,5 @@ Map<String, dynamic> _$AppConfigToJson(_AppConfig instance) =>
       'availableModels': instance.availableModels,
       'memoryExplorerEnabled': instance.memoryExplorerEnabled,
       'modelComparisonEnabled': instance.modelComparisonEnabled,
+      'promptTimeoutSeconds': instance.promptTimeoutSeconds,
     };

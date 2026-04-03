@@ -64,6 +64,7 @@ class ChatService {
   Stream<ResponseMessage> streamChat({
     required String prompt,
     required String sessionId,
+    String? sessionName,
     required String planner,
     required String executor,
     required List<String> tags,
@@ -79,6 +80,7 @@ class ChatService {
     final request = {
       'prompt': prompt,
       'session_id': sessionId,
+      'session_name': sessionName,
       'planner': planner,
       'executor': executor,
       'tags': tags,
@@ -86,7 +88,9 @@ class ChatService {
 
     channel.sink.add(jsonEncode(request));
 
-    return channel.stream.map((event) {
+    return channel.stream
+        .timeout(Duration(seconds: _config.promptTimeoutSeconds))
+        .map((event) {
       final data = jsonDecode(event);
       return ResponseMessage(
         content: data['chunk'] ?? '',

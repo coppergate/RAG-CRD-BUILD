@@ -17,7 +17,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   List<ResponseMessage> _messages = [];
   List<Session> _sessions = [];
-  String _currentSessionId = const Uuid().v4();
+  String? _currentSessionId;
+  String? _currentSessionName;
   String _selectedPlanner = 'llama3.1';
   String _selectedExecutor = 'llama3.1';
   String _memoryMode = 'off';
@@ -52,10 +53,38 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   void _startNewSession() {
-    setState(() {
-      _currentSessionId = const Uuid().v4();
-      _messages.clear();
-    });
+    final nameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New Chat Session'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            hintText: 'Enter a friendly name for this session',
+            labelText: 'Session Name',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(context);
+                setState(() {
+                  _currentSessionId = const Uuid().v4();
+                  _currentSessionName = name;
+                  _messages.clear();
+                });
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -130,6 +159,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       final msgs = await chatService.getMessages(session.id);
                       setState(() {
                         _currentSessionId = session.id;
+                        _currentSessionName = session.name;
                         _messages = msgs;
                       });
                     },
@@ -252,7 +282,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]),
             ),
             const SizedBox(height: 4),
-            Text(msg.content, style: const TextStyle(color: Colors.black87)),
+            if (msg.content.isEmpty && !isUser && _isStreaming)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Text(msg.content, style: const TextStyle(color: Colors.black87)),
           ],
         ),
       ),
@@ -260,6 +297,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildInputArea() {
+    final bool isEnabled = _currentSessionId != null && !_isStreaming;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -271,16 +309,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           Expanded(
             child: TextField(
               controller: _messageController,
-              decoration: const InputDecoration(
-                hintText: 'Type a message...',
+              enabled: isEnabled,
+              decoration: InputDecoration(
+                hintText: _currentSessionId == null ? 'Select or create a session to chat...' : 'Type a message...',
                 border: InputBorder.none,
               ),
               onSubmitted: (_) => _sendMessage(),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.send, color: Colors.blue),
-            onPressed: _sendMessage,
+            icon: Icon(Icons.send, color: isEnabled ? Colors.blue : Colors.grey),
+            onPressed: isEnabled ? _sendMessage : null,
           ),
         ],
       ),
@@ -345,7 +384,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   void _sendMessage() {
-    if (_messageController.text.isEmpty || _isStreaming) return;
+    if (_messageController.text.isEmpty || _isStreaming || _currentSessionId == null) return;
 
     final userPrompt = _messageController.text;
     setState(() {
@@ -368,7 +407,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final chatService = ref.read(chatServiceProvider);
     final stream = chatService.streamChat(
       prompt: userPrompt,
-      sessionId: _currentSessionId,
+      sessionId: _currentSessionId!,
+      sessionName: _currentSessionName,
       planner: _selectedPlanner,
       executor: _selectedExecutor,
       tags: ['general'], // Default tag

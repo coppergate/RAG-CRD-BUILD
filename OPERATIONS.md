@@ -91,7 +91,16 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 ## RAG Pipeline Explorer (Flutter UI)
 The RAG Pipeline Explorer is the new Flutter-based web application for managing the RAG cluster. It replaces the legacy `rag-web-ui`.
 
-### 1. Source and Build
+### 1. Key Features (Iteration 8+)
+- **Session Management**: 
+    - **Friendly Names**: Users are prompted for a friendly name when creating a new session. This name is persisted in the database via the `name` field in the session record.
+    - **Selective Chat**: The chat interface is disabled until a session is selected from the sidebar.
+- **LLM Interaction**:
+    - **Waiting Indicator**: An animated `CircularProgressIndicator` is displayed while waiting for the LLM to start streaming the response.
+    - **Configurable Timeout**: LLM prompt streaming has a configurable timeout (default: 60 seconds), defined in `AppConfig`.
+- **BFF Connectivity**: Centralized via `rag-admin-api` proxying.
+
+### 2. Source and Build
 - **Source Directory**: `rag-stack/services/rag-explorer` (formerly `rag-flutter`).
 - **Dockerfile**: Multi-stage build (Flutter Web Build -> Alpine with Busybox HTTPD).
 - **Service Name**: `rag-explorer` in the build pipeline.
