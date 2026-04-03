@@ -48,9 +48,11 @@ class AppScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    final config = ref.watch(appConfigProvider);
 
     return MaterialApp.router(
       title: 'RAG Pipeline Explorer',
+      themeMode: config.darkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
         brightness: Brightness.light,
         primarySwatch: Colors.blue,
@@ -66,26 +68,41 @@ class AppScaffold extends ConsumerWidget {
   }
 }
 
-class MainScaffold extends StatefulWidget {
+class MainScaffold extends ConsumerStatefulWidget {
   final Widget child;
 
   const MainScaffold({super.key, required this.child});
 
   @override
-  State<MainScaffold> createState() => _MainScaffoldState();
+  ConsumerState<MainScaffold> createState() => _MainScaffoldState();
 }
 
-class _MainScaffoldState extends State<MainScaffold> {
-  int _selectedIndex = 0;
+class _MainScaffoldState extends ConsumerState<MainScaffold> {
   bool _isPinned = true;
   bool _isHovered = false;
 
+  final List<String> _routes = [
+    '/chat',
+    '/ingestion',
+    '/memory',
+    '/s3',
+    '/timescale',
+    '/qdrant',
+    '/models',
+    '/observability',
+    '/settings',
+  ];
+
   @override
   Widget build(BuildContext context) {
+    final location = GoRouterState.of(context).matchedLocation;
+    int selectedIndex = _routes.indexOf(location);
+    if (selectedIndex == -1) selectedIndex = 0;
+
     return Scaffold(
       body: Row(
         children: [
-          _buildSidebar(),
+          _buildSidebar(selectedIndex),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(child: widget.child),
         ],
@@ -93,7 +110,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     );
   }
 
-  Widget _buildSidebar() {
+  Widget _buildSidebar(int selectedIndex) {
     final bool isExtended = _isPinned || _isHovered;
 
     return MouseRegion(
@@ -114,10 +131,9 @@ class _MainScaffoldState extends State<MainScaffold> {
             Expanded(
               child: NavigationRail(
                 extended: isExtended,
-                selectedIndex: _selectedIndex,
+                selectedIndex: selectedIndex,
                 onDestinationSelected: (int index) {
-                  setState(() => _selectedIndex = index);
-                  _onDestinationSelected(index, context);
+                  context.go(_routes[index]);
                 },
                 labelType: NavigationRailLabelType.none,
                 destinations: const [
@@ -137,20 +153,5 @@ class _MainScaffoldState extends State<MainScaffold> {
         ),
       ),
     );
-  }
-
-  void _onDestinationSelected(int index, BuildContext context) {
-    final routes = [
-      '/chat',
-      '/ingestion',
-      '/memory',
-      '/s3',
-      '/timescale',
-      '/qdrant',
-      '/models',
-      '/observability',
-      '/settings',
-    ];
-    context.go(routes[index]);
   }
 }

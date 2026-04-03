@@ -124,11 +124,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     title: Text(session.name ?? 'Session ${session.id.substring(0, 8)}'),
                     subtitle: Text('Last active: ${_formatTime(session.lastActiveAt)}'),
                     selected: isSelected,
-                    onTap: () {
+                    onTap: () async {
+                      final chatService = ref.read(chatServiceProvider);
+                      final msgs = await chatService.getMessages(session.id);
                       setState(() {
                         _currentSessionId = session.id;
-                        _messages.clear();
-                        // In a real app, we would load messages for this session
+                        _messages = msgs;
                       });
                     },
                     trailing: IconButton(
@@ -193,7 +194,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildDropdown(String label, String value, Function(String?) onChanged, {List<String>? items}) {
-    final List<String> dropdownItems = items ?? ['llama3.1', 'granite3.1-dense:8b'];
+    final config = ref.read(appConfigProvider);
+    final List<String> dropdownItems = items ?? config.availableModels;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -385,6 +387,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         setState(() {
           _isStreaming = false;
         });
+        _loadSessions();
       },
       onError: (err) {
         setState(() {

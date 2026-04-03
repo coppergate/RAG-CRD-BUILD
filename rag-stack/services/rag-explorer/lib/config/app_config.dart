@@ -13,6 +13,7 @@ abstract class AppConfig with _$AppConfig {
     required String qdrantAdapterUrl,
     required String memoryControllerUrl,
     required String grafanaUrl,
+    required String ragAdminApiUrl,
     @Default(true) bool skipTlsVerification,
     String? caCertPath,
     @Default(false) bool darkMode,

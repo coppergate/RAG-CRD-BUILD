@@ -7,9 +7,9 @@ part of 'memory_pack.dart';
 // **************************************************************************
 
 _MemoryPack _$MemoryPackFromJson(Map<String, dynamic> json) => _MemoryPack(
-      memories: json['memories'] as List<dynamic>,
-      metadata: json['metadata'] as Map<String, dynamic>,
-    );
+  memories: json['memories'] as List<dynamic>,
+  metadata: json['metadata'] as Map<String, dynamic>,
+);
 
 Map<String, dynamic> _$MemoryPackToJson(_MemoryPack instance) =>
     <String, dynamic>{

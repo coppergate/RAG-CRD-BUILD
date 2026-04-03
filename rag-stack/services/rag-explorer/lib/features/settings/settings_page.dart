@@ -16,11 +16,24 @@ class AppConfigNotifier extends Notifier<AppConfig> {
       qdrantAdapterUrl: ServiceEndpoints.qdrantAdapter,
       memoryControllerUrl: ServiceEndpoints.memoryController,
       grafanaUrl: ServiceEndpoints.grafana,
+      ragAdminApiUrl: ServiceEndpoints.ragAdminApi,
     );
   }
 
   void update(AppConfig config) {
     state = config;
+  }
+
+  void updateRagAdminApi(String url) {
+    state = state.copyWith(
+      ragAdminApiUrl: url,
+      llmGatewayUrl: '$url/api/chat',
+      ragIngestionUrl: '$url/api/ingest',
+      objectStoreMgrUrl: '$url/api/s3',
+      dbAdapterUrl: '$url/api/db',
+      qdrantAdapterUrl: '$url/api/qdrant',
+      memoryControllerUrl: '$url/api/memory',
+    );
   }
 }
 
@@ -38,6 +51,11 @@ class SettingsPage extends ConsumerWidget {
         children: [
           _buildSectionHeader('Service Endpoints'),
           _buildTextField(
+            label: 'RAG Admin API (Base Gateway)',
+            value: config.ragAdminApiUrl,
+            onChanged: (val) => ref.read(appConfigProvider.notifier).updateRagAdminApi(val),
+          ),
+          _buildTextField(
             label: 'LLM Gateway',
             value: config.llmGatewayUrl,
             onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(llmGatewayUrl: val)),
@@ -51,6 +69,26 @@ class SettingsPage extends ConsumerWidget {
             label: 'DB Adapter',
             value: config.dbAdapterUrl,
             onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(dbAdapterUrl: val)),
+          ),
+          _buildTextField(
+            label: 'Object Store Mgr',
+            value: config.objectStoreMgrUrl,
+            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(objectStoreMgrUrl: val)),
+          ),
+          _buildTextField(
+            label: 'Qdrant Adapter',
+            value: config.qdrantAdapterUrl,
+            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(qdrantAdapterUrl: val)),
+          ),
+          _buildTextField(
+            label: 'Memory Controller',
+            value: config.memoryControllerUrl,
+            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(memoryControllerUrl: val)),
+          ),
+          _buildTextField(
+            label: 'Grafana',
+            value: config.grafanaUrl,
+            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(grafanaUrl: val)),
           ),
           const SizedBox(height: 24),
           _buildSectionHeader('TLS Configuration'),

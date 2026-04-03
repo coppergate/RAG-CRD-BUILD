@@ -7,14 +7,14 @@ part of 'db_op_message.dart';
 // **************************************************************************
 
 _DbOpMessage _$DbOpMessageFromJson(Map<String, dynamic> json) => _DbOpMessage(
-      operation: json['operation'] as String,
-      table: json['table'] as String,
-      data: json['data'] as Map<String, dynamic>,
-      condition: json['condition'] as String?,
-      timestamp: json['timestamp'] == null
-          ? null
-          : DateTime.parse(json['timestamp'] as String),
-    );
+  operation: json['operation'] as String,
+  table: json['table'] as String,
+  data: json['data'] as Map<String, dynamic>,
+  condition: json['condition'] as String?,
+  timestamp: json['timestamp'] == null
+      ? null
+      : DateTime.parse(json['timestamp'] as String),
+);
 
 Map<String, dynamic> _$DbOpMessageToJson(_DbOpMessage instance) =>
     <String, dynamic>{
