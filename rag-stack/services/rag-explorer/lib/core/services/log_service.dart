@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
@@ -21,27 +22,35 @@ class LogNotifier extends StateNotifier<List<LogEntry>> {
   LogNotifier() : super([]);
 
   String _extractLocation() {
-    final stack = StackTrace.current.toString().split('\n');
-    // Find the first frame that is NOT in this file
-    for (var frame in stack) {
-      if (frame.isEmpty) continue;
-      // Skip the frames from this service
-      if (frame.contains('log_service.dart')) continue;
-      
-      // Extract what's inside parentheses if it exists
-      final match = RegExp(r'\((.+)\)').firstMatch(frame);
-      if (match != null) {
-        String loc = match.group(1)!;
-        // Simplify if it's a package path
-        loc = loc.replaceAll('package:rag_explorer/', '');
-        return loc;
+    if (!kDebugMode && !kProfileMode) {
+      return 'release';
+    }
+    
+    try {
+      final stack = StackTrace.current.toString().split('\n');
+      // Find the first frame that is NOT in this file
+      for (var frame in stack) {
+        if (frame.isEmpty) continue;
+        // Skip the frames from this service
+        if (frame.contains('log_service.dart')) continue;
+        
+        // Extract what's inside parentheses if it exists
+        final match = RegExp(r'\((.+)\)').firstMatch(frame);
+        if (match != null) {
+          String loc = match.group(1)!;
+          // Simplify if it's a package path
+          loc = loc.replaceAll('package:rag_explorer/', '');
+          return loc;
+        }
+        
+        // Fallback: take the last part of the frame string
+        final parts = frame.trim().split(RegExp(r'\s+'));
+        if (parts.isNotEmpty) {
+          return parts.last;
+        }
       }
-      
-      // Fallback: take the last part of the frame string
-      final parts = frame.trim().split(RegExp(r'\s+'));
-      if (parts.isNotEmpty) {
-        return parts.last;
-      }
+    } catch (e) {
+      // Silently fail if stack trace parsing fails
     }
     return 'unknown';
   }
