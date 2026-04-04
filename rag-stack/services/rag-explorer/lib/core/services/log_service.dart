@@ -5,21 +5,50 @@ class LogEntry {
   final DateTime timestamp;
   final String message;
   final String level;
+  final String? location;
 
-  LogEntry({required this.timestamp, required this.message, this.level = 'INFO'});
+  LogEntry({required this.timestamp, required this.message, this.level = 'INFO', this.location});
 
   @override
   String toString() {
     final timeStr = "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}.${timestamp.millisecond.toString().padLeft(3, '0')}";
-    return '[$timeStr] $level: $message';
+    final locStr = location != null ? ' [$location]' : '';
+    return '[$timeStr] $level$locStr: $message';
   }
 }
 
 class LogNotifier extends StateNotifier<List<LogEntry>> {
   LogNotifier() : super([]);
 
+  String _extractLocation() {
+    final stack = StackTrace.current.toString().split('\n');
+    // Find the first frame that is NOT in this file
+    for (var frame in stack) {
+      if (frame.isEmpty) continue;
+      // Skip the frames from this service
+      if (frame.contains('log_service.dart')) continue;
+      
+      // Extract what's inside parentheses if it exists
+      final match = RegExp(r'\((.+)\)').firstMatch(frame);
+      if (match != null) {
+        String loc = match.group(1)!;
+        // Simplify if it's a package path
+        loc = loc.replaceAll('package:rag_explorer/', '');
+        return loc;
+      }
+      
+      // Fallback: take the last part of the frame string
+      final parts = frame.trim().split(RegExp(r'\s+'));
+      if (parts.isNotEmpty) {
+        return parts.last;
+      }
+    }
+    return 'unknown';
+  }
+
   void log(String message, {String level = 'INFO'}) {
-    final entry = LogEntry(timestamp: DateTime.now(), message: message, level: level);
+    final location = _extractLocation();
+    final entry = LogEntry(timestamp: DateTime.now(), message: message, level: level, location: location);
     
     // Also print to console immediately
     print(entry.toString());

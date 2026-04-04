@@ -102,6 +102,7 @@ The RAG Pipeline Explorer is the new Flutter-based web application for managing 
     - **Flyout Log Panel**: A toggleable "System Logs" panel is available on the right side of the UI (Terminal icon in the AppBar).
     - **Log Persistence**: Logs are stored in-memory using `LogService` (Riverpod) and provide real-time feedback on WebSocket connectivity, request payloads, and API calls.
     - **Level-based Highlighting**: ERROR (red), WARN (orange), INFO (black), and DEBUG (blue) levels are supported for easier diagnostics.
+    - **Source Location Propagation**: Logs now include the source file and line number (e.g., `[features/chat/chat_page.dart:531:12]`) to aid in debugging. This is achieved by capturing `StackTrace.current` and parsing the caller frame in `LogNotifier`.
     - **Thread-safe Updates**: Log state updates are deferred using `Future.microtask` to prevent Riverpod "modifying provider during build" warnings when logs are triggered from widget lifecycles.
     - **Resizability & Selectability**: Both the "System Logs" and "Response Metadata" panels can be resized by dragging the dividers. The log panel content is wrapped in a `SelectionArea` to enable text selection and copying.
 - **BFF Connectivity**: Centralized via `rag-admin-api` proxying.
