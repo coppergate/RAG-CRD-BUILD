@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 class LogEntry {
   final DateTime timestamp;
@@ -19,13 +20,20 @@ class LogNotifier extends StateNotifier<List<LogEntry>> {
 
   void log(String message, {String level = 'INFO'}) {
     final entry = LogEntry(timestamp: DateTime.now(), message: message, level: level);
-    state = [...state, entry];
-    // Keep last 500 logs for better history in UI
-    if (state.length > 500) {
-      state = state.sublist(state.length - 500);
-    }
-    // Also print to console
+    
+    // Also print to console immediately
     print(entry.toString());
+
+    // Update state in a microtask to avoid "modifying provider during build" errors
+    // This is especially important for logging which might be triggered during
+    // widget lifecycles like initState or build.
+    Future.microtask(() {
+      state = [...state, entry];
+      // Keep last 500 logs for better history in UI
+      if (state.length > 500) {
+        state = state.sublist(state.length - 500);
+      }
+    });
   }
 
   void info(String message) => log(message, level: 'INFO');

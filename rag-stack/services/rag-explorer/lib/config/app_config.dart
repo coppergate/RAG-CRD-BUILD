@@ -16,7 +16,7 @@ abstract class AppConfig with _$AppConfig {
     required String ragAdminApiUrl,
     @Default(true) bool skipTlsVerification,
     String? caCertPath,
-    @Default(false) bool darkMode,
+    @Default(true) bool darkMode,
     @Default(['llama3.1', 'granite3.1-dense:8b']) List<String> availableModels,
     @Default(true) bool memoryExplorerEnabled,
     @Default(true) bool modelComparisonEnabled,

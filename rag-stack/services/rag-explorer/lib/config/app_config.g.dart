@@ -17,7 +17,7 @@ _AppConfig _$AppConfigFromJson(Map<String, dynamic> json) => _AppConfig(
   ragAdminApiUrl: json['ragAdminApiUrl'] as String,
   skipTlsVerification: json['skipTlsVerification'] as bool? ?? true,
   caCertPath: json['caCertPath'] as String?,
-  darkMode: json['darkMode'] as bool? ?? false,
+  darkMode: json['darkMode'] as bool? ?? true,
   availableModels:
       (json['availableModels'] as List<dynamic>?)
           ?.map((e) => e as String)
