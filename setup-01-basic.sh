@@ -392,6 +392,19 @@ $KUBECTL rook-ceph -n rook-ceph ceph config set class:hdd bluestore_slow_ops_war
 mark_step_done "rook-ceph-plugin"
 fi
 
+
+if ! is_step_done "krew kube ai"; then
+echo "Installing kube ai plugin via KREW..."
+$KUBECTL krew install ai
+
+$KUBECTL rook-ceph -n rook-ceph ceph config set class:hdd bdev_enable_discard false
+$KUBECTL rook-ceph -n rook-ceph ceph config set class:hdd bluestore_slow_ops_warn_lifetime 60
+$KUBECTL rook-ceph -n rook-ceph ceph config set class:hdd bluestore_slow_ops_warn_threshold 10
+mark_step_done "krew kube ai"
+fi
+
+
+
 if ! is_step_done "traefik"; then
 echo "installing traefik"
 source $config_source_dir/infrastructure/traefik/traefik.sh

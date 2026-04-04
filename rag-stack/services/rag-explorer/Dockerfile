@@ -21,8 +21,10 @@ WORKDIR /app
 COPY . .
 
 # Fetch dependencies and build for web
+RUN flutter config --no-analytics
+RUN flutter config --enable-web
 RUN flutter pub get
-RUN flutter build web --release
+RUN flutter build web --release -v
 
 # Stage 2: Serve the static files using Busybox HTTPD
 FROM registry.hierocracy.home:5000/busybox:1.37.0
