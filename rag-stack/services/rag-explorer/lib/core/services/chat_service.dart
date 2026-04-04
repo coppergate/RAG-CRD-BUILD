@@ -31,6 +31,22 @@ class ChatService {
     }
   }
 
+  Future<Session?> createSession(String id, String name) async {
+    try {
+      final response = await _dio.post(
+        '${_config.ragAdminApiUrl}/api/memory/sessions',
+        data: {'id': id, 'name': name},
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return Session.fromJson(response.data);
+      }
+      return null;
+    } catch (e) {
+      print('Error creating session: $e');
+      return null;
+    }
+  }
+
   Future<bool> deleteSession(String sessionId) async {
     try {
       final response = await _dio.delete('${_config.ragAdminApiUrl}/api/memory/sessions/$sessionId');

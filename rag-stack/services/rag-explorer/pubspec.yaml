@@ -30,6 +30,6 @@ dev_dependencies:
   riverpod_generator: ^4.0.3
   json_serializable: ^6.13.0
   freezed: ^3.2.5
-
+  lints: ^3.0.0
 flutter:
   uses-material-design: true

@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppConfig {
 
- String get llmGatewayUrl; String get ragIngestionUrl; String get objectStoreMgrUrl; String get dbAdapterUrl; String get qdrantAdapterUrl; String get memoryControllerUrl; String get grafanaUrl; String get ragAdminApiUrl; bool get skipTlsVerification; String? get caCertPath; bool get darkMode; List<String> get availableModels; bool get memoryExplorerEnabled; bool get modelComparisonEnabled;
+ String get llmGatewayUrl; String get ragIngestionUrl; String get objectStoreMgrUrl; String get dbAdapterUrl; String get qdrantAdapterUrl; String get memoryControllerUrl; String get grafanaUrl; String get ragAdminApiUrl; bool get skipTlsVerification; String? get caCertPath; bool get darkMode; List<String> get availableModels; bool get memoryExplorerEnabled; bool get modelComparisonEnabled; int get promptTimeoutSeconds;
 /// Create a copy of AppConfig
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $AppConfigCopyWith<AppConfig> get copyWith => _$AppConfigCopyWithImpl<AppConfig>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppConfig&&(identical(other.llmGatewayUrl, llmGatewayUrl) || other.llmGatewayUrl == llmGatewayUrl)&&(identical(other.ragIngestionUrl, ragIngestionUrl) || other.ragIngestionUrl == ragIngestionUrl)&&(identical(other.objectStoreMgrUrl, objectStoreMgrUrl) || other.objectStoreMgrUrl == objectStoreMgrUrl)&&(identical(other.dbAdapterUrl, dbAdapterUrl) || other.dbAdapterUrl == dbAdapterUrl)&&(identical(other.qdrantAdapterUrl, qdrantAdapterUrl) || other.qdrantAdapterUrl == qdrantAdapterUrl)&&(identical(other.memoryControllerUrl, memoryControllerUrl) || other.memoryControllerUrl == memoryControllerUrl)&&(identical(other.grafanaUrl, grafanaUrl) || other.grafanaUrl == grafanaUrl)&&(identical(other.ragAdminApiUrl, ragAdminApiUrl) || other.ragAdminApiUrl == ragAdminApiUrl)&&(identical(other.skipTlsVerification, skipTlsVerification) || other.skipTlsVerification == skipTlsVerification)&&(identical(other.caCertPath, caCertPath) || other.caCertPath == caCertPath)&&(identical(other.darkMode, darkMode) || other.darkMode == darkMode)&&const DeepCollectionEquality().equals(other.availableModels, availableModels)&&(identical(other.memoryExplorerEnabled, memoryExplorerEnabled) || other.memoryExplorerEnabled == memoryExplorerEnabled)&&(identical(other.modelComparisonEnabled, modelComparisonEnabled) || other.modelComparisonEnabled == modelComparisonEnabled));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppConfig&&(identical(other.llmGatewayUrl, llmGatewayUrl) || other.llmGatewayUrl == llmGatewayUrl)&&(identical(other.ragIngestionUrl, ragIngestionUrl) || other.ragIngestionUrl == ragIngestionUrl)&&(identical(other.objectStoreMgrUrl, objectStoreMgrUrl) || other.objectStoreMgrUrl == objectStoreMgrUrl)&&(identical(other.dbAdapterUrl, dbAdapterUrl) || other.dbAdapterUrl == dbAdapterUrl)&&(identical(other.qdrantAdapterUrl, qdrantAdapterUrl) || other.qdrantAdapterUrl == qdrantAdapterUrl)&&(identical(other.memoryControllerUrl, memoryControllerUrl) || other.memoryControllerUrl == memoryControllerUrl)&&(identical(other.grafanaUrl, grafanaUrl) || other.grafanaUrl == grafanaUrl)&&(identical(other.ragAdminApiUrl, ragAdminApiUrl) || other.ragAdminApiUrl == ragAdminApiUrl)&&(identical(other.skipTlsVerification, skipTlsVerification) || other.skipTlsVerification == skipTlsVerification)&&(identical(other.caCertPath, caCertPath) || other.caCertPath == caCertPath)&&(identical(other.darkMode, darkMode) || other.darkMode == darkMode)&&const DeepCollectionEquality().equals(other.availableModels, availableModels)&&(identical(other.memoryExplorerEnabled, memoryExplorerEnabled) || other.memoryExplorerEnabled == memoryExplorerEnabled)&&(identical(other.modelComparisonEnabled, modelComparisonEnabled) || other.modelComparisonEnabled == modelComparisonEnabled)&&(identical(other.promptTimeoutSeconds, promptTimeoutSeconds) || other.promptTimeoutSeconds == promptTimeoutSeconds));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,llmGatewayUrl,ragIngestionUrl,objectStoreMgrUrl,dbAdapterUrl,qdrantAdapterUrl,memoryControllerUrl,grafanaUrl,ragAdminApiUrl,skipTlsVerification,caCertPath,darkMode,const DeepCollectionEquality().hash(availableModels),memoryExplorerEnabled,modelComparisonEnabled);
+int get hashCode => Object.hash(runtimeType,llmGatewayUrl,ragIngestionUrl,objectStoreMgrUrl,dbAdapterUrl,qdrantAdapterUrl,memoryControllerUrl,grafanaUrl,ragAdminApiUrl,skipTlsVerification,caCertPath,darkMode,const DeepCollectionEquality().hash(availableModels),memoryExplorerEnabled,modelComparisonEnabled,promptTimeoutSeconds);
 
 @override
 String toString() {
-  return 'AppConfig(llmGatewayUrl: $llmGatewayUrl, ragIngestionUrl: $ragIngestionUrl, objectStoreMgrUrl: $objectStoreMgrUrl, dbAdapterUrl: $dbAdapterUrl, qdrantAdapterUrl: $qdrantAdapterUrl, memoryControllerUrl: $memoryControllerUrl, grafanaUrl: $grafanaUrl, ragAdminApiUrl: $ragAdminApiUrl, skipTlsVerification: $skipTlsVerification, caCertPath: $caCertPath, darkMode: $darkMode, availableModels: $availableModels, memoryExplorerEnabled: $memoryExplorerEnabled, modelComparisonEnabled: $modelComparisonEnabled)';
+  return 'AppConfig(llmGatewayUrl: $llmGatewayUrl, ragIngestionUrl: $ragIngestionUrl, objectStoreMgrUrl: $objectStoreMgrUrl, dbAdapterUrl: $dbAdapterUrl, qdrantAdapterUrl: $qdrantAdapterUrl, memoryControllerUrl: $memoryControllerUrl, grafanaUrl: $grafanaUrl, ragAdminApiUrl: $ragAdminApiUrl, skipTlsVerification: $skipTlsVerification, caCertPath: $caCertPath, darkMode: $darkMode, availableModels: $availableModels, memoryExplorerEnabled: $memoryExplorerEnabled, modelComparisonEnabled: $modelComparisonEnabled, promptTimeoutSeconds: $promptTimeoutSeconds)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $AppConfigCopyWith<$Res>  {
   factory $AppConfigCopyWith(AppConfig value, $Res Function(AppConfig) _then) = _$AppConfigCopyWithImpl;
 @useResult
 $Res call({
- String llmGatewayUrl, String ragIngestionUrl, String objectStoreMgrUrl, String dbAdapterUrl, String qdrantAdapterUrl, String memoryControllerUrl, String grafanaUrl, String ragAdminApiUrl, bool skipTlsVerification, String? caCertPath, bool darkMode, List<String> availableModels, bool memoryExplorerEnabled, bool modelComparisonEnabled
+ String llmGatewayUrl, String ragIngestionUrl, String objectStoreMgrUrl, String dbAdapterUrl, String qdrantAdapterUrl, String memoryControllerUrl, String grafanaUrl, String ragAdminApiUrl, bool skipTlsVerification, String? caCertPath, bool darkMode, List<String> availableModels, bool memoryExplorerEnabled, bool modelComparisonEnabled, int promptTimeoutSeconds
 });
 
 
@@ -65,7 +65,7 @@ class _$AppConfigCopyWithImpl<$Res>
 
 /// Create a copy of AppConfig
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? llmGatewayUrl = null,Object? ragIngestionUrl = null,Object? objectStoreMgrUrl = null,Object? dbAdapterUrl = null,Object? qdrantAdapterUrl = null,Object? memoryControllerUrl = null,Object? grafanaUrl = null,Object? ragAdminApiUrl = null,Object? skipTlsVerification = null,Object? caCertPath = freezed,Object? darkMode = null,Object? availableModels = null,Object? memoryExplorerEnabled = null,Object? modelComparisonEnabled = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? llmGatewayUrl = null,Object? ragIngestionUrl = null,Object? objectStoreMgrUrl = null,Object? dbAdapterUrl = null,Object? qdrantAdapterUrl = null,Object? memoryControllerUrl = null,Object? grafanaUrl = null,Object? ragAdminApiUrl = null,Object? skipTlsVerification = null,Object? caCertPath = freezed,Object? darkMode = null,Object? availableModels = null,Object? memoryExplorerEnabled = null,Object? modelComparisonEnabled = null,Object? promptTimeoutSeconds = null,}) {
   return _then(_self.copyWith(
 llmGatewayUrl: null == llmGatewayUrl ? _self.llmGatewayUrl : llmGatewayUrl // ignore: cast_nullable_to_non_nullable
 as String,ragIngestionUrl: null == ragIngestionUrl ? _self.ragIngestionUrl : ragIngestionUrl // ignore: cast_nullable_to_non_nullable
@@ -81,7 +81,8 @@ as String?,darkMode: null == darkMode ? _self.darkMode : darkMode // ignore: cas
 as bool,availableModels: null == availableModels ? _self.availableModels : availableModels // ignore: cast_nullable_to_non_nullable
 as List<String>,memoryExplorerEnabled: null == memoryExplorerEnabled ? _self.memoryExplorerEnabled : memoryExplorerEnabled // ignore: cast_nullable_to_non_nullable
 as bool,modelComparisonEnabled: null == modelComparisonEnabled ? _self.modelComparisonEnabled : modelComparisonEnabled // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,promptTimeoutSeconds: null == promptTimeoutSeconds ? _self.promptTimeoutSeconds : promptTimeoutSeconds // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 
@@ -166,10 +167,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String llmGatewayUrl,  String ragIngestionUrl,  String objectStoreMgrUrl,  String dbAdapterUrl,  String qdrantAdapterUrl,  String memoryControllerUrl,  String grafanaUrl,  String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String llmGatewayUrl,  String ragIngestionUrl,  String objectStoreMgrUrl,  String dbAdapterUrl,  String qdrantAdapterUrl,  String memoryControllerUrl,  String grafanaUrl,  String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppConfig() when $default != null:
-return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUrl,_that.dbAdapterUrl,_that.qdrantAdapterUrl,_that.memoryControllerUrl,_that.grafanaUrl,_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled);case _:
+return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUrl,_that.dbAdapterUrl,_that.qdrantAdapterUrl,_that.memoryControllerUrl,_that.grafanaUrl,_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds);case _:
   return orElse();
 
 }
@@ -187,10 +188,10 @@ return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUr
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String llmGatewayUrl,  String ragIngestionUrl,  String objectStoreMgrUrl,  String dbAdapterUrl,  String qdrantAdapterUrl,  String memoryControllerUrl,  String grafanaUrl,  String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String llmGatewayUrl,  String ragIngestionUrl,  String objectStoreMgrUrl,  String dbAdapterUrl,  String qdrantAdapterUrl,  String memoryControllerUrl,  String grafanaUrl,  String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds)  $default,) {final _that = this;
 switch (_that) {
 case _AppConfig():
-return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUrl,_that.dbAdapterUrl,_that.qdrantAdapterUrl,_that.memoryControllerUrl,_that.grafanaUrl,_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled);case _:
+return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUrl,_that.dbAdapterUrl,_that.qdrantAdapterUrl,_that.memoryControllerUrl,_that.grafanaUrl,_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -207,10 +208,10 @@ return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUr
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String llmGatewayUrl,  String ragIngestionUrl,  String objectStoreMgrUrl,  String dbAdapterUrl,  String qdrantAdapterUrl,  String memoryControllerUrl,  String grafanaUrl,  String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String llmGatewayUrl,  String ragIngestionUrl,  String objectStoreMgrUrl,  String dbAdapterUrl,  String qdrantAdapterUrl,  String memoryControllerUrl,  String grafanaUrl,  String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds)?  $default,) {final _that = this;
 switch (_that) {
 case _AppConfig() when $default != null:
-return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUrl,_that.dbAdapterUrl,_that.qdrantAdapterUrl,_that.memoryControllerUrl,_that.grafanaUrl,_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled);case _:
+return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUrl,_that.dbAdapterUrl,_that.qdrantAdapterUrl,_that.memoryControllerUrl,_that.grafanaUrl,_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds);case _:
   return null;
 
 }
@@ -222,7 +223,7 @@ return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUr
 @JsonSerializable()
 
 class _AppConfig implements AppConfig {
-  const _AppConfig({required this.llmGatewayUrl, required this.ragIngestionUrl, required this.objectStoreMgrUrl, required this.dbAdapterUrl, required this.qdrantAdapterUrl, required this.memoryControllerUrl, required this.grafanaUrl, required this.ragAdminApiUrl, this.skipTlsVerification = true, this.caCertPath, this.darkMode = false, final  List<String> availableModels = const ['llama3.1', 'granite3.1-dense:8b'], this.memoryExplorerEnabled = true, this.modelComparisonEnabled = true}): _availableModels = availableModels;
+  const _AppConfig({required this.llmGatewayUrl, required this.ragIngestionUrl, required this.objectStoreMgrUrl, required this.dbAdapterUrl, required this.qdrantAdapterUrl, required this.memoryControllerUrl, required this.grafanaUrl, required this.ragAdminApiUrl, this.skipTlsVerification = true, this.caCertPath, this.darkMode = false, final  List<String> availableModels = const ['llama3.1', 'granite3.1-dense:8b'], this.memoryExplorerEnabled = true, this.modelComparisonEnabled = true, this.promptTimeoutSeconds = 60}): _availableModels = availableModels;
   factory _AppConfig.fromJson(Map<String, dynamic> json) => _$AppConfigFromJson(json);
 
 @override final  String llmGatewayUrl;
@@ -245,6 +246,7 @@ class _AppConfig implements AppConfig {
 
 @override@JsonKey() final  bool memoryExplorerEnabled;
 @override@JsonKey() final  bool modelComparisonEnabled;
+@override@JsonKey() final  int promptTimeoutSeconds;
 
 /// Create a copy of AppConfig
 /// with the given fields replaced by the non-null parameter values.
@@ -259,16 +261,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppConfig&&(identical(other.llmGatewayUrl, llmGatewayUrl) || other.llmGatewayUrl == llmGatewayUrl)&&(identical(other.ragIngestionUrl, ragIngestionUrl) || other.ragIngestionUrl == ragIngestionUrl)&&(identical(other.objectStoreMgrUrl, objectStoreMgrUrl) || other.objectStoreMgrUrl == objectStoreMgrUrl)&&(identical(other.dbAdapterUrl, dbAdapterUrl) || other.dbAdapterUrl == dbAdapterUrl)&&(identical(other.qdrantAdapterUrl, qdrantAdapterUrl) || other.qdrantAdapterUrl == qdrantAdapterUrl)&&(identical(other.memoryControllerUrl, memoryControllerUrl) || other.memoryControllerUrl == memoryControllerUrl)&&(identical(other.grafanaUrl, grafanaUrl) || other.grafanaUrl == grafanaUrl)&&(identical(other.ragAdminApiUrl, ragAdminApiUrl) || other.ragAdminApiUrl == ragAdminApiUrl)&&(identical(other.skipTlsVerification, skipTlsVerification) || other.skipTlsVerification == skipTlsVerification)&&(identical(other.caCertPath, caCertPath) || other.caCertPath == caCertPath)&&(identical(other.darkMode, darkMode) || other.darkMode == darkMode)&&const DeepCollectionEquality().equals(other._availableModels, _availableModels)&&(identical(other.memoryExplorerEnabled, memoryExplorerEnabled) || other.memoryExplorerEnabled == memoryExplorerEnabled)&&(identical(other.modelComparisonEnabled, modelComparisonEnabled) || other.modelComparisonEnabled == modelComparisonEnabled));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppConfig&&(identical(other.llmGatewayUrl, llmGatewayUrl) || other.llmGatewayUrl == llmGatewayUrl)&&(identical(other.ragIngestionUrl, ragIngestionUrl) || other.ragIngestionUrl == ragIngestionUrl)&&(identical(other.objectStoreMgrUrl, objectStoreMgrUrl) || other.objectStoreMgrUrl == objectStoreMgrUrl)&&(identical(other.dbAdapterUrl, dbAdapterUrl) || other.dbAdapterUrl == dbAdapterUrl)&&(identical(other.qdrantAdapterUrl, qdrantAdapterUrl) || other.qdrantAdapterUrl == qdrantAdapterUrl)&&(identical(other.memoryControllerUrl, memoryControllerUrl) || other.memoryControllerUrl == memoryControllerUrl)&&(identical(other.grafanaUrl, grafanaUrl) || other.grafanaUrl == grafanaUrl)&&(identical(other.ragAdminApiUrl, ragAdminApiUrl) || other.ragAdminApiUrl == ragAdminApiUrl)&&(identical(other.skipTlsVerification, skipTlsVerification) || other.skipTlsVerification == skipTlsVerification)&&(identical(other.caCertPath, caCertPath) || other.caCertPath == caCertPath)&&(identical(other.darkMode, darkMode) || other.darkMode == darkMode)&&const DeepCollectionEquality().equals(other._availableModels, _availableModels)&&(identical(other.memoryExplorerEnabled, memoryExplorerEnabled) || other.memoryExplorerEnabled == memoryExplorerEnabled)&&(identical(other.modelComparisonEnabled, modelComparisonEnabled) || other.modelComparisonEnabled == modelComparisonEnabled)&&(identical(other.promptTimeoutSeconds, promptTimeoutSeconds) || other.promptTimeoutSeconds == promptTimeoutSeconds));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,llmGatewayUrl,ragIngestionUrl,objectStoreMgrUrl,dbAdapterUrl,qdrantAdapterUrl,memoryControllerUrl,grafanaUrl,ragAdminApiUrl,skipTlsVerification,caCertPath,darkMode,const DeepCollectionEquality().hash(_availableModels),memoryExplorerEnabled,modelComparisonEnabled);
+int get hashCode => Object.hash(runtimeType,llmGatewayUrl,ragIngestionUrl,objectStoreMgrUrl,dbAdapterUrl,qdrantAdapterUrl,memoryControllerUrl,grafanaUrl,ragAdminApiUrl,skipTlsVerification,caCertPath,darkMode,const DeepCollectionEquality().hash(_availableModels),memoryExplorerEnabled,modelComparisonEnabled,promptTimeoutSeconds);
 
 @override
 String toString() {
-  return 'AppConfig(llmGatewayUrl: $llmGatewayUrl, ragIngestionUrl: $ragIngestionUrl, objectStoreMgrUrl: $objectStoreMgrUrl, dbAdapterUrl: $dbAdapterUrl, qdrantAdapterUrl: $qdrantAdapterUrl, memoryControllerUrl: $memoryControllerUrl, grafanaUrl: $grafanaUrl, ragAdminApiUrl: $ragAdminApiUrl, skipTlsVerification: $skipTlsVerification, caCertPath: $caCertPath, darkMode: $darkMode, availableModels: $availableModels, memoryExplorerEnabled: $memoryExplorerEnabled, modelComparisonEnabled: $modelComparisonEnabled)';
+  return 'AppConfig(llmGatewayUrl: $llmGatewayUrl, ragIngestionUrl: $ragIngestionUrl, objectStoreMgrUrl: $objectStoreMgrUrl, dbAdapterUrl: $dbAdapterUrl, qdrantAdapterUrl: $qdrantAdapterUrl, memoryControllerUrl: $memoryControllerUrl, grafanaUrl: $grafanaUrl, ragAdminApiUrl: $ragAdminApiUrl, skipTlsVerification: $skipTlsVerification, caCertPath: $caCertPath, darkMode: $darkMode, availableModels: $availableModels, memoryExplorerEnabled: $memoryExplorerEnabled, modelComparisonEnabled: $modelComparisonEnabled, promptTimeoutSeconds: $promptTimeoutSeconds)';
 }
 
 
@@ -279,7 +281,7 @@ abstract mixin class _$AppConfigCopyWith<$Res> implements $AppConfigCopyWith<$Re
   factory _$AppConfigCopyWith(_AppConfig value, $Res Function(_AppConfig) _then) = __$AppConfigCopyWithImpl;
 @override @useResult
 $Res call({
- String llmGatewayUrl, String ragIngestionUrl, String objectStoreMgrUrl, String dbAdapterUrl, String qdrantAdapterUrl, String memoryControllerUrl, String grafanaUrl, String ragAdminApiUrl, bool skipTlsVerification, String? caCertPath, bool darkMode, List<String> availableModels, bool memoryExplorerEnabled, bool modelComparisonEnabled
+ String llmGatewayUrl, String ragIngestionUrl, String objectStoreMgrUrl, String dbAdapterUrl, String qdrantAdapterUrl, String memoryControllerUrl, String grafanaUrl, String ragAdminApiUrl, bool skipTlsVerification, String? caCertPath, bool darkMode, List<String> availableModels, bool memoryExplorerEnabled, bool modelComparisonEnabled, int promptTimeoutSeconds
 });
 
 
@@ -296,7 +298,7 @@ class __$AppConfigCopyWithImpl<$Res>
 
 /// Create a copy of AppConfig
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? llmGatewayUrl = null,Object? ragIngestionUrl = null,Object? objectStoreMgrUrl = null,Object? dbAdapterUrl = null,Object? qdrantAdapterUrl = null,Object? memoryControllerUrl = null,Object? grafanaUrl = null,Object? ragAdminApiUrl = null,Object? skipTlsVerification = null,Object? caCertPath = freezed,Object? darkMode = null,Object? availableModels = null,Object? memoryExplorerEnabled = null,Object? modelComparisonEnabled = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? llmGatewayUrl = null,Object? ragIngestionUrl = null,Object? objectStoreMgrUrl = null,Object? dbAdapterUrl = null,Object? qdrantAdapterUrl = null,Object? memoryControllerUrl = null,Object? grafanaUrl = null,Object? ragAdminApiUrl = null,Object? skipTlsVerification = null,Object? caCertPath = freezed,Object? darkMode = null,Object? availableModels = null,Object? memoryExplorerEnabled = null,Object? modelComparisonEnabled = null,Object? promptTimeoutSeconds = null,}) {
   return _then(_AppConfig(
 llmGatewayUrl: null == llmGatewayUrl ? _self.llmGatewayUrl : llmGatewayUrl // ignore: cast_nullable_to_non_nullable
 as String,ragIngestionUrl: null == ragIngestionUrl ? _self.ragIngestionUrl : ragIngestionUrl // ignore: cast_nullable_to_non_nullable
@@ -312,7 +314,8 @@ as String?,darkMode: null == darkMode ? _self.darkMode : darkMode // ignore: cas
 as bool,availableModels: null == availableModels ? _self._availableModels : availableModels // ignore: cast_nullable_to_non_nullable
 as List<String>,memoryExplorerEnabled: null == memoryExplorerEnabled ? _self.memoryExplorerEnabled : memoryExplorerEnabled // ignore: cast_nullable_to_non_nullable
 as bool,modelComparisonEnabled: null == modelComparisonEnabled ? _self.modelComparisonEnabled : modelComparisonEnabled // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,promptTimeoutSeconds: null == promptTimeoutSeconds ? _self.promptTimeoutSeconds : promptTimeoutSeconds // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 

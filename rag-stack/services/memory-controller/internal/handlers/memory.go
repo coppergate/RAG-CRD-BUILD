@@ -127,6 +127,8 @@ func (h *MemoryHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		h.listSessions(w, r)
+	case http.MethodPost:
+		h.createSession(w, r)
 	case http.MethodDelete:
 		h.deleteSession(w, r)
 	default:
@@ -145,6 +147,50 @@ func (h *MemoryHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sessions)
+}
+
+func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	builder := h.client.Session.Create().
+		SetName(req.Name).
+		SetLastActiveAt(time.Now())
+
+	if req.ID != "" {
+		if sid, err := uuid.Parse(req.ID); err == nil {
+			builder.SetID(sid)
+		}
+	}
+
+	// Use upsert to be safe
+	upserter := builder.OnConflictColumns(session.FieldID).
+		UpdateLastActiveAt().
+		UpdateName()
+
+	s, err := upserter.ID(ctx)
+	if err != nil {
+		http.Error(w, "Failed to create session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch the full session to return
+	fullSession, err := h.client.Session.Get(ctx, s)
+	if err != nil {
+		http.Error(w, "Failed to fetch created session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(fullSession)
 }
 
 func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {

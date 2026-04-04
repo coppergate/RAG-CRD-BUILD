@@ -69,15 +69,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               final name = nameController.text.trim();
               if (name.isNotEmpty) {
                 Navigator.pop(context);
-                setState(() {
-                  _currentSessionId = const Uuid().v4();
-                  _currentSessionName = name;
-                  _messages.clear();
-                });
+                final newId = const Uuid().v4();
+                final chatService = ref.read(chatServiceProvider);
+                
+                // Create session in backend
+                await chatService.createSession(newId, name);
+                
+                if (mounted) {
+                  setState(() {
+                    _currentSessionId = newId;
+                    _currentSessionName = name;
+                    _messages.clear();
+                  });
+                  // Refresh the list to show the new session
+                  _loadSessions();
+                }
               }
             },
             child: const Text('Create'),
