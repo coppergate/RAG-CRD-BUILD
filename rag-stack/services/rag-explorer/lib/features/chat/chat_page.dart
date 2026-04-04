@@ -27,6 +27,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _showLogs = false;
   bool _isStreaming = false;
   final ScrollController _logScrollController = ScrollController();
+  double _metadataPanelWidth = 300.0;
+  double _logPanelWidth = 400.0;
 
   @override
   void initState() {
@@ -142,16 +144,52 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             ),
           ),
           if (_showMetadata) ...[
-            const VerticalDivider(width: 1),
+            _buildResizableDivider(
+              isLogPanel: false,
+              onResizeUpdate: (delta) {
+                setState(() {
+                  _metadataPanelWidth -= delta;
+                  if (_metadataPanelWidth < 100) _metadataPanelWidth = 100;
+                  if (_metadataPanelWidth > 800) _metadataPanelWidth = 800;
+                });
+              },
+            ),
             // Right Sub-panel: Metadata
             _buildMetadataPanel(),
           ],
           if (_showLogs) ...[
-            const VerticalDivider(width: 1),
+            _buildResizableDivider(
+              isLogPanel: true,
+              onResizeUpdate: (delta) {
+                setState(() {
+                  _logPanelWidth -= delta;
+                  if (_logPanelWidth < 100) _logPanelWidth = 100;
+                  if (_logPanelWidth > 800) _logPanelWidth = 800;
+                });
+              },
+            ),
             // Right Sub-panel: Logs
             _buildLogPanel(),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildResizableDivider({
+    required bool isLogPanel,
+    required Function(double delta) onResizeUpdate,
+  }) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: (details) => onResizeUpdate(details.delta.dx),
+        child: Container(
+          width: 8,
+          color: Colors.transparent,
+          child: const VerticalDivider(width: 1),
+        ),
       ),
     );
   }
@@ -358,7 +396,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   Widget _buildMetadataPanel() {
     return SizedBox(
-      width: 300,
+      width: _metadataPanelWidth,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -391,58 +429,60 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     });
 
     return SizedBox(
-      width: 400,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('System Logs', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                IconButton(
-                  icon: const Icon(Icons.delete_sweep_outlined, size: 20),
-                  onPressed: () => ref.read(logProvider.notifier).clear(),
-                  tooltip: 'Clear Logs',
+      width: _logPanelWidth,
+      child: SelectionArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('System Logs', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon: const Icon(Icons.delete_sweep_outlined, size: 20),
+                    onPressed: () => ref.read(logProvider.notifier).clear(),
+                    tooltip: 'Clear Logs',
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: ListView.builder(
-                controller: _logScrollController,
-                padding: const EdgeInsets.all(8),
-                itemCount: logs.length,
-                itemBuilder: (context, index) {
-                  final log = logs[index];
-                  Color color = Colors.black87;
-                  if (log.level == 'ERROR') color = Colors.red;
-                  if (log.level == 'WARN') color = Colors.orange[800]!;
-                  if (log.level == 'DEBUG') color = Colors.blue[800]!;
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Text(
-                      log.toString(),
-                      style: TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 11,
-                        color: color,
+                child: ListView.builder(
+                  controller: _logScrollController,
+                  padding: const EdgeInsets.all(8),
+                  itemCount: logs.length,
+                  itemBuilder: (context, index) {
+                    final log = logs[index];
+                    Color color = Colors.black87;
+                    if (log.level == 'ERROR') color = Colors.red;
+                    if (log.level == 'WARN') color = Colors.orange[800]!;
+                    if (log.level == 'DEBUG') color = Colors.blue[800]!;
+  
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        log.toString(),
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: color,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
