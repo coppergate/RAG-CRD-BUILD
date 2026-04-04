@@ -15,6 +15,7 @@ import (
 	"app-builds/common/dlq"
 	"app-builds/common/ent"
 	"app-builds/common/ent/prompt"
+	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
 	"app-builds/common/health"
 	"app-builds/common/telemetry"
