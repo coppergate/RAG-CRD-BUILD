@@ -17,7 +17,7 @@ abstract class AppConfig with _$AppConfig {
     @Default(true) bool skipTlsVerification,
     String? caCertPath,
     @Default(true) bool darkMode,
-    @Default(['llama3.1', 'granite3.1-dense:8b']) List<String> availableModels,
+    @Default(['llama3.1:latest', 'granite3.1-dense:8b']) List<String> availableModels,
     @Default(true) bool memoryExplorerEnabled,
     @Default(true) bool modelComparisonEnabled,
     @Default(60) int promptTimeoutSeconds,

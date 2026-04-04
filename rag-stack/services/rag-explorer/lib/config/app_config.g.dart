@@ -22,7 +22,7 @@ _AppConfig _$AppConfigFromJson(Map<String, dynamic> json) => _AppConfig(
       (json['availableModels'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ??
-      const ['llama3.1', 'granite3.1-dense:8b'],
+      const ['llama3.1:latest', 'granite3.1-dense:8b'],
   memoryExplorerEnabled: json['memoryExplorerEnabled'] as bool? ?? true,
   modelComparisonEnabled: json['modelComparisonEnabled'] as bool? ?? true,
   promptTimeoutSeconds: (json['promptTimeoutSeconds'] as num?)?.toInt() ?? 60,

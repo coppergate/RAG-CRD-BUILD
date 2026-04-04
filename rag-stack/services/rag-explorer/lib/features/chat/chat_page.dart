@@ -20,8 +20,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   List<Session> _sessions = [];
   String? _currentSessionId;
   String? _currentSessionName;
-  String _selectedPlanner = 'llama3.1';
-  String _selectedExecutor = 'llama3.1';
+  String _selectedPlanner = 'llama3.1:latest';
+  String _selectedExecutor = 'llama3.1:latest';
   String _memoryMode = 'off';
   bool _showMetadata = true;
   bool _showLogs = false;

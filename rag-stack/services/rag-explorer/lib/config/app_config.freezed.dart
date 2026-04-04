@@ -223,7 +223,7 @@ return $default(_that.llmGatewayUrl,_that.ragIngestionUrl,_that.objectStoreMgrUr
 @JsonSerializable()
 
 class _AppConfig implements AppConfig {
-  const _AppConfig({required this.llmGatewayUrl, required this.ragIngestionUrl, required this.objectStoreMgrUrl, required this.dbAdapterUrl, required this.qdrantAdapterUrl, required this.memoryControllerUrl, required this.grafanaUrl, required this.ragAdminApiUrl, this.skipTlsVerification = true, this.caCertPath, this.darkMode = true, final  List<String> availableModels = const ['llama3.1', 'granite3.1-dense:8b'], this.memoryExplorerEnabled = true, this.modelComparisonEnabled = true, this.promptTimeoutSeconds = 60}): _availableModels = availableModels;
+  const _AppConfig({required this.llmGatewayUrl, required this.ragIngestionUrl, required this.objectStoreMgrUrl, required this.dbAdapterUrl, required this.qdrantAdapterUrl, required this.memoryControllerUrl, required this.grafanaUrl, required this.ragAdminApiUrl, this.skipTlsVerification = true, this.caCertPath, this.darkMode = true, final  List<String> availableModels = const ['llama3.1:latest', 'granite3.1-dense:8b'], this.memoryExplorerEnabled = true, this.modelComparisonEnabled = true, this.promptTimeoutSeconds = 60}): _availableModels = availableModels;
   factory _AppConfig.fromJson(Map<String, dynamic> json) => _$AppConfigFromJson(json);
 
 @override final  String llmGatewayUrl;
