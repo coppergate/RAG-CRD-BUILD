@@ -31,9 +31,9 @@ Every new session for the **Junie** agent MUST establish the operational context
 
 ## Current Focus (Iteration 8: Session Management & UI Polish)
 
-As of version 2.4.7, the project is focusing on **Iteration 8 (Session Management & UI Polish)**.
+As of version 2.4.8, the project is focusing on **Iteration 8 (Session Management & UI Polish)**.
 1.  **Session Management**: Implemented Session Deletion and History Retrieval in `db-adapter`. Added History loading to RAG Explorer.
-2.  **UI Polish**: Upgraded Flutter dependencies, implemented Flyout Menu with Pin feature. Integrated `appConfigProvider` for theme and endpoints. Fixed `llama3.1` model identifier mismatch by appending `:latest` tag in the front end.
+2.  **UI Polish**: Upgraded Flutter dependencies, implemented Flyout Menu with Pin feature. Integrated `appConfigProvider` for theme and endpoints. Fixed `llama3.1` model identifier mismatch by appending `:latest` tag in the front end. Updated log output colors for dark mode (bright red/yellow/white).
 3.  **Gateway Integration**: Centralized all RAG Explorer service calls through `rag-admin-api` proxying (S3, DB, Qdrant, Memory, Ingest, Chat).
 4.  **Persistence**: Fixed missing prompt persistence in `llm-gateway` for streaming and generic chat.
 
@@ -101,7 +101,7 @@ The RAG Pipeline Explorer is the new Flutter-based web application for managing 
 - **System Logging**:
     - **Flyout Log Panel**: A toggleable "System Logs" panel is available on the right side of the UI (Terminal icon in the AppBar).
     - **Log Persistence**: Logs are stored in-memory using `LogService` (Riverpod) and provide real-time feedback on WebSocket connectivity, request payloads, and API calls.
-    - **Level-based Highlighting**: ERROR (red), WARN (orange), INFO (black), and DEBUG (blue) levels are supported for easier diagnostics.
+    - **Level-based Highlighting**: ERROR (bright red), WARN (bright yellow), INFO (white/black), and DEBUG (blue) levels are supported for easier diagnostics, with specific highlights for dark mode.
     - **Source Location Propagation**: Logs now include the source file and line number (e.g., `[features/chat/chat_page.dart:531:12]`) to aid in debugging. This is achieved by capturing `StackTrace.current` and parsing the caller frame in `LogNotifier`.
       - **Performance**: Querying the stack trace involves a non-trivial performance cost due to address-to-symbol mapping and string parsing. To mitigate this, location capture is **disabled in release and profile modes** (shows `[release]`) and is only active during development (`kDebugMode`).
     - **Thread-safe Updates**: Log state updates are deferred using `Future.microtask` to prevent Riverpod "modifying provider during build" warnings when logs are triggered from widget lifecycles.

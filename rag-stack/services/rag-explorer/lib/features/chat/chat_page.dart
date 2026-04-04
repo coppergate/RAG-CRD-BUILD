@@ -420,6 +420,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   Widget _buildLogPanel() {
     final logs = ref.watch(logProvider);
+    final darkMode = ref.watch(appConfigProvider).darkMode;
     
     // Auto-scroll to bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -452,7 +453,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.05),
+                  color: darkMode ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: ListView.builder(
@@ -461,10 +462,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   itemCount: logs.length,
                   itemBuilder: (context, index) {
                     final log = logs[index];
-                    Color color = Colors.black87;
-                    if (log.level == 'ERROR') color = Colors.red;
-                    if (log.level == 'WARN') color = Colors.orange[800]!;
-                    if (log.level == 'DEBUG') color = Colors.blue[800]!;
+                    Color color = darkMode ? Colors.white : Colors.black87;
+                    if (log.level == 'ERROR') color = darkMode ? Colors.redAccent : Colors.red;
+                    if (log.level == 'WARN') color = darkMode ? Colors.yellowAccent : Colors.orange[800]!;
+                    if (log.level == 'DEBUG') color = darkMode ? Colors.blueAccent : Colors.blue[800]!;
   
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
