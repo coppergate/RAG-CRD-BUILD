@@ -45,9 +45,9 @@ func main() {
 	healthSrv.RegisterRoutes(mux)
 	
 	memoryHandler := handlers.NewMemoryHandler(entClient)
-	mux.HandleFunc("/api/memory/items", memoryHandler.HandleItems)
-	mux.HandleFunc("/api/memory/sessions", memoryHandler.HandleSessions)
-	mux.HandleFunc("/api/memory/sessions/", memoryHandler.HandleSessions)
+	mux.HandleFunc("/items", memoryHandler.HandleItems)
+	mux.HandleFunc("/sessions", memoryHandler.HandleSessions)
+	mux.HandleFunc("/sessions/", memoryHandler.HandleSessions)
 
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,

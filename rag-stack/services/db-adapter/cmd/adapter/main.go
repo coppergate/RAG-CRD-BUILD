@@ -192,8 +192,8 @@ func main() {
 	mux := http.NewServeMux()
 	healthSrv.RegisterRoutes(mux)
 
-	mux.HandleFunc("/api/db/sessions/", func(w http.ResponseWriter, r *http.Request) {
-		idStr := strings.TrimPrefix(r.URL.Path, "/api/db/sessions/")
+	mux.HandleFunc("/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		idStr := strings.TrimPrefix(r.URL.Path, "/sessions/")
 		if strings.HasSuffix(idStr, "/messages") {
 			sessionIDStr := strings.TrimSuffix(idStr, "/messages")
 			handleGetSessionMessages(w, r, entClient, sessionIDStr)
@@ -214,7 +214,7 @@ func main() {
 		http.Error(w, "Not found", http.StatusNotFound)
 	})
 
-	mux.HandleFunc("/api/db/sessions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
 		sessions, err := entClient.Session.Query().All(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -223,7 +223,7 @@ func main() {
 		json.NewEncoder(w).Encode(sessions)
 	})
 
-	mux.HandleFunc("/api/db/stats", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
 		sessionCount, _ := entClient.Session.Query().Count(r.Context())
 		promptCount, _ := entClient.Prompt.Query().Count(r.Context())
 		responseCount, _ := entClient.Response.Query().Count(r.Context())

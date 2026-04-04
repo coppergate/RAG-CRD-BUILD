@@ -66,7 +66,7 @@ func main() {
 	
 	healthSrv.RegisterRoutes(mux)
 	
-	mux.HandleFunc("/api/s3/buckets", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/buckets", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -79,8 +79,8 @@ func main() {
 		json.NewEncoder(w).Encode(resp.Buckets)
 	})
 
-	mux.HandleFunc("/api/s3/buckets/", func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/s3/buckets/"), "/")
+	mux.HandleFunc("/buckets/", func(w http.ResponseWriter, r *http.Request) {
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/buckets/"), "/")
 		if len(parts) < 1 {
 			http.Error(w, "Bucket name required", http.StatusBadRequest)
 			return

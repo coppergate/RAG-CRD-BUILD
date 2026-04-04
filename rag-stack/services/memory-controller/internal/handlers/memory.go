@@ -10,6 +10,7 @@ import (
 	"app-builds/common/ent/session"
 	"github.com/google/uuid"
 	"strings"
+	"time"
 )
 
 type MemoryHandler struct {
@@ -195,7 +196,7 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/memory/sessions/")
+	idStr := strings.TrimPrefix(r.URL.Path, "/sessions/")
 	if idStr == "" || idStr == r.URL.Path {
 		idStr = r.URL.Query().Get("id")
 	}

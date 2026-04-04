@@ -120,7 +120,7 @@ func main() {
 	mux := http.NewServeMux()
 	healthSrv.RegisterRoutes(mux)
 
-	mux.HandleFunc("/api/qdrant/collections", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/collections", func(w http.ResponseWriter, r *http.Request) {
 		res, err := adapter.qdrant.ListCollections()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -129,8 +129,8 @@ func main() {
 		json.NewEncoder(w).Encode(res)
 	})
 
-	mux.HandleFunc("/api/qdrant/collections/", func(w http.ResponseWriter, r *http.Request) {
-		name := strings.TrimPrefix(r.URL.Path, "/api/qdrant/collections/")
+	mux.HandleFunc("/collections/", func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/collections/")
 		res, err := adapter.qdrant.GetCollection(name)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

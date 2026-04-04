@@ -24,7 +24,7 @@ func TestMemoryHandler(t *testing.T) {
 	h := NewMemoryHandler(client)
 	ctx := context.Background()
 
-	// 2. Test POST /api/memory/items
+	// 2. Test POST /items
 	t.Run("WriteItems", func(t *testing.T) {
 		sessionID := uuid.New().String()
 		reqBody := contracts.MemoryWriteRequest{
@@ -42,7 +42,7 @@ func TestMemoryHandler(t *testing.T) {
 		}
 		
 		body, _ := json.Marshal(reqBody)
-		req := httptest.NewRequest(http.MethodPost, "/api/memory/items", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/items", bytes.NewReader(body))
 		w := httptest.NewRecorder()
 		
 		h.HandleItems(w, req)
@@ -58,9 +58,9 @@ func TestMemoryHandler(t *testing.T) {
 		}
 	})
 
-	// 3. Test GET /api/memory/items
+	// 3. Test GET /items
 	t.Run("ListItems", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/memory/items", nil)
+		req := httptest.NewRequest(http.MethodGet, "/items", nil)
 		w := httptest.NewRecorder()
 		
 		h.HandleItems(w, req)

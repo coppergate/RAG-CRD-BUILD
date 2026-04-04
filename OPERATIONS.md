@@ -108,12 +108,17 @@ The RAG Pipeline Explorer is the new Flutter-based web application for managing 
     - **Resizability & Selectability**: Both the "System Logs" and "Response Metadata" panels can be resized by dragging the dividers. The log panel content is wrapped in a `SelectionArea` to enable text selection and copying.
 - **BFF Connectivity**: Centralized via `rag-admin-api` proxying.
 
-### 2. Source and Build
+### 2. Backend Routing Standardization (Iteration 8+)
+- **Prefix Stripping**: The `rag-admin-api` now strips the `/api/service` prefix from incoming requests before proxying to backend services. 
+- **Backend Routes**: Backend services (`memory-controller`, `db-adapter`, `object-store-mgr`, `qdrant-adapter`) have been updated to listen on root-relative paths (e.g., `/sessions` instead of `/api/memory/sessions`).
+- **Consistency**: This standardizes the routing pattern across all Go and Python services in the RAG stack.
+
+### 3. Source and Build
 - **Source Directory**: `rag-stack/services/rag-explorer` (formerly `rag-flutter`).
 - **Dockerfile**: Multi-stage build (Flutter Web Build -> Alpine with Busybox HTTPD).
 - **Service Name**: `rag-explorer` in the build pipeline.
 
-### 2. Running for Development
+### 4. Running for Development
 #### Local Desktop (Linux/Chrome)
 To run the RAG Explorer as a Linux desktop application or in a web browser, follow these steps:
 

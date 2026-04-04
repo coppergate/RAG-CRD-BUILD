@@ -36,16 +36,16 @@ func main() {
 	healthSrv.RegisterRoutes(mux)
 	
 	// S3 Object Browser Proxy
-	mux.HandleFunc("/api/s3/", h.ProxyTo(cfg.S3ManagerURL, ""))
+	mux.HandleFunc("/api/s3/", h.ProxyTo(cfg.S3ManagerURL, "/api/s3"))
 	
 	// TimescaleDB Explorer Proxy
-	mux.HandleFunc("/api/db/", h.ProxyTo(cfg.DBAdapterURL, ""))
+	mux.HandleFunc("/api/db/", h.ProxyTo(cfg.DBAdapterURL, "/api/db"))
 	
 	// Qdrant Vector Explorer Proxy
-	mux.HandleFunc("/api/qdrant/", h.ProxyTo(cfg.QdrantAdapterURL, ""))
+	mux.HandleFunc("/api/qdrant/", h.ProxyTo(cfg.QdrantAdapterURL, "/api/qdrant"))
 	
 	// Memory Controller Proxy
-	mux.HandleFunc("/api/memory/", h.ProxyTo(cfg.MemoryControllerURL, ""))
+	mux.HandleFunc("/api/memory/", h.ProxyTo(cfg.MemoryControllerURL, "/api/memory"))
 	
 	// LLM Gateway Proxy (for chat and streaming)
 	mux.HandleFunc("/api/chat/", h.ProxyTo(cfg.LLMGatewayURL, "/api/chat"))
