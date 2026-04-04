@@ -3,6 +3,7 @@ package contracts
 type InternalRequest struct {
 	ID             string                 `json:"id"`
 	SessionID      string                 `json:"session_id"`
+	SessionName    string                 `json:"session_name,omitempty"`
 	Prompt         string                 `json:"prompt"`
 	SystemPrompt   string                 `json:"system_prompt,omitempty"`
 	PlannerModel   string                 `json:"planner_model,omitempty"`

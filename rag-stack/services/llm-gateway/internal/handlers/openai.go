@@ -164,6 +164,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	internalReq := contracts.InternalRequest{
 		ID:            correlationID,
 		SessionID:     sessionID,
+		SessionName:   req.SessionName,
 		Prompt:        prompt,
 		PlannerModel:  req.Model,
 		ExecutorModel: req.Model,
@@ -237,6 +238,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	internalReq := contracts.InternalRequest{
 		ID:            correlationID,
 		SessionID:     sessionID,
+		SessionName:   req.SessionName,
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
@@ -333,6 +335,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	internalReq := contracts.InternalRequest{
 		ID:            correlationID,
 		SessionID:     sessionID,
+		SessionName:   req.SessionName,
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
