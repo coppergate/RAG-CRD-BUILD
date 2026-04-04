@@ -98,6 +98,10 @@ The RAG Pipeline Explorer is the new Flutter-based web application for managing 
 - **LLM Interaction**:
     - **Waiting Indicator**: An animated `CircularProgressIndicator` is displayed while waiting for the LLM to start streaming the response.
     - **Configurable Timeout**: LLM prompt streaming has a configurable timeout (default: 60 seconds), defined in `AppConfig`.
+- **System Logging**:
+    - **Flyout Log Panel**: A toggleable "System Logs" panel is available on the right side of the UI (Terminal icon in the AppBar).
+    - **Log Persistence**: Logs are stored in-memory using `LogService` (Riverpod) and provide real-time feedback on WebSocket connectivity, request payloads, and API calls.
+    - **Level-based Highlighting**: ERROR (red), WARN (orange), INFO (black), and DEBUG (blue) levels are supported for easier diagnostics.
 - **BFF Connectivity**: Centralized via `rag-admin-api` proxying.
 
 ### 2. Source and Build

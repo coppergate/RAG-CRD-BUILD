@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
 import '../../core/models/session.dart';
 import '../../core/services/chat_service.dart';
+import '../../core/services/log_service.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
@@ -23,12 +24,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   String _selectedExecutor = 'llama3.1';
   String _memoryMode = 'off';
   bool _showMetadata = true;
+  bool _showLogs = false;
   bool _isStreaming = false;
+  final ScrollController _logScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadSessions();
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _logScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSessions() async {
@@ -104,6 +114,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         title: const Text('Chat Explorer'),
         actions: [
           IconButton(
+            icon: Icon(_showLogs ? Icons.terminal : Icons.terminal_outlined),
+            onPressed: () => setState(() => _showLogs = !_showLogs),
+            tooltip: 'Toggle Log Panel',
+          ),
+          IconButton(
             icon: Icon(_showMetadata ? Icons.info : Icons.info_outline),
             onPressed: () => setState(() => _showMetadata = !_showMetadata),
             tooltip: 'Toggle Metadata Panel',
@@ -130,6 +145,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             const VerticalDivider(width: 1),
             // Right Sub-panel: Metadata
             _buildMetadataPanel(),
+          ],
+          if (_showLogs) ...[
+            const VerticalDivider(width: 1),
+            // Right Sub-panel: Logs
+            _buildLogPanel(),
           ],
         ],
       ),
@@ -360,6 +380,73 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  Widget _buildLogPanel() {
+    final logs = ref.watch(logProvider);
+    
+    // Auto-scroll to bottom
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_logScrollController.hasClients) {
+        _logScrollController.jumpTo(_logScrollController.position.maxScrollExtent);
+      }
+    });
+
+    return SizedBox(
+      width: 400,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('System Logs', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                IconButton(
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 20),
+                  onPressed: () => ref.read(logProvider.notifier).clear(),
+                  tooltip: 'Clear Logs',
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: ListView.builder(
+                controller: _logScrollController,
+                padding: const EdgeInsets.all(8),
+                itemCount: logs.length,
+                itemBuilder: (context, index) {
+                  final log = logs[index];
+                  Color color = Colors.black87;
+                  if (log.level == 'ERROR') color = Colors.red;
+                  if (log.level == 'WARN') color = Colors.orange[800]!;
+                  if (log.level == 'DEBUG') color = Colors.blue[800]!;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      log.toString(),
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        color: color,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMetadataItem(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -397,6 +484,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (_messageController.text.isEmpty || _isStreaming || _currentSessionId == null) return;
 
     final userPrompt = _messageController.text;
+    final logger = ref.read(logProvider.notifier);
+    
+    logger.info('User sending prompt: ${userPrompt.substring(0, userPrompt.length > 20 ? 20 : userPrompt.length)}...');
+    
     setState(() {
       _messages.add(ResponseMessage(
         content: userPrompt,
@@ -415,6 +506,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     });
 
     final chatService = ref.read(chatServiceProvider);
+    logger.debug('Calling chatService.streamChat');
+    
     final stream = chatService.streamChat(
       prompt: userPrompt,
       sessionId: _currentSessionId!,
@@ -426,6 +519,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     stream.listen(
       (chunk) {
+        if (chunk.content.isNotEmpty) {
+           // We don't want to log every single chunk as it would be too much
+           // maybe just the first one?
+           if (_messages.last.content.isEmpty) {
+             logger.info('Received first chunk from LLM');
+           }
+        }
+
         setState(() {
           final lastIndex = _messages.length - 1;
           _messages[lastIndex] = _messages[lastIndex].copyWith(
@@ -435,12 +536,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         });
       },
       onDone: () {
+        logger.info('Chat stream completed successfully');
         setState(() {
           _isStreaming = false;
         });
         _loadSessions();
       },
       onError: (err) {
+        logger.error('Chat stream encountered an error: $err');
         setState(() {
           _isStreaming = false;
           _messages.add(ResponseMessage(
