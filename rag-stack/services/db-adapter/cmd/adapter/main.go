@@ -364,14 +364,13 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
 	}
 
 	// Skip streaming chunks - we only want the final aggregated results from the aggregator.
-	if payload.Result == "" && payload.Chunk != "" {
-		log.Printf("[%s] Ignoring stream chunk, waiting for aggregated result", payload.ID)
-		return dlq.Success, nil
-	}
-
-	// Also ignore the final chunk from worker if it's empty
-	if payload.Result == "" && payload.Chunk == "" {
-		log.Printf("[%s] Ignoring empty message", payload.ID)
+	// Aggregated results have 'result' populated. Stream chunks have 'chunk' populated.
+	if payload.Result == "" {
+		if payload.Chunk != "" {
+			// Silently ignore chunks, we expect them.
+			return dlq.Success, nil
+		}
+		// Also ignore errors or empty messages here; aggregator/gateway handle them.
 		return dlq.Success, nil
 	}
 

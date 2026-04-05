@@ -99,22 +99,29 @@ func main() {
 				continue
 			}
 
-			log.Printf("[%s] Received completion, aggregating chunks starting from %s", comp.ID, comp.StartTimestamp)
+	log.Printf("[%s] Received completion (Status: %s), aggregating chunks starting from %s", comp.ID, comp.Status, comp.StartTimestamp)
 
-			// Aggregate chunks
-			fullResult, err := aggregateChunks(ctx, client, cfg.PulsarResultsTopic, comp)
-			if err != nil {
-				log.Printf("[%s] Aggregation failed: %v", comp.ID, err)
-				consumer.Nack(msg)
-				continue
-			}
+	// Aggregate chunks
+	fullResult, err := aggregateChunks(ctx, client, cfg.PulsarResultsTopic, comp)
+	if err != nil {
+		log.Printf("[%s] Aggregation error: %v (Partial result: %d chars)", comp.ID, err, len(fullResult))
+		// We could send partial result or nack
+		consumer.Nack(msg)
+		continue
+	}
 
-			// Send final result to db-adapter topic
-			if err := sendFinalResult(ctx, producer, comp, fullResult); err != nil {
-				log.Printf("[%s] Failed to send final result: %v", comp.ID, err)
-				consumer.Nack(msg)
-				continue
-			}
+	if fullResult == "" {
+		log.Printf("[%s] Warning: Result was empty after aggregation, ignoring", comp.ID)
+		consumer.Ack(msg)
+		continue
+	}
+
+	// Send final result to db-adapter topic
+	if err := sendFinalResult(ctx, producer, comp, fullResult); err != nil {
+		log.Printf("[%s] Failed to send final result: %v", comp.ID, err)
+		consumer.Nack(msg)
+		continue
+	}
 
 			log.Printf("[%s] Successfully aggregated and sent result (%d chars)", comp.ID, len(fullResult))
 			consumer.Ack(msg)

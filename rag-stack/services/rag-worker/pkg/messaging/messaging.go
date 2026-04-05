@@ -142,31 +142,10 @@ func (c *Client) SendStatus(ctx context.Context, id, sessionID, state, details s
 	}
 }
 
-// SendResult sends a final result message to the results topic with tracing context.
+// SendResult sends a result message as a single chunk for consistency with the aggregator.
 func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model string) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"id":              id,
-		"session_id":      sessionID,
-		"result":          result,
-		"sequence_number": 1,
-		"model":           model,
-	})
-	if err != nil {
-		log.Printf("[%s] Failed to marshal result: %v", id, err)
-		return
-	}
-
-	msg := &pulsar.ProducerMessage{
-		Payload:    payload,
-		Properties: make(map[string]string),
-	}
-	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Properties))
-
-	if _, err := c.Producers.Results.Send(ctx, msg); err != nil {
-		log.Printf("[%s] Failed to send result to topic: %v", id, err)
-	} else {
-		log.Printf("[%s] Result sent", id)
-	}
+	log.Printf("[%s] Sending non-streaming result as final chunk", id)
+	c.SendStreamChunk(ctx, id, sessionID, result, 1, true, model, true)
 }
 
 // SendStreamChunk sends a streaming result chunk to the results topic.
@@ -214,6 +193,7 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 
 // SendCompletion sends a completion event to the completion topic.
 func (c *Client) SendCompletion(ctx context.Context, id, sessionID, startTS, model, status string) {
+	log.Printf("[%s] Sending completion event (status: %s)", id, status)
 	payload, err := json.Marshal(map[string]interface{}{
 		"id":               id,
 		"session_id":       sessionID,
