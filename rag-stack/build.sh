@@ -98,36 +98,51 @@ build_service() {
 }
 
 # --- Main Execution ---
+main() {
+    SELECTED_SERVICE=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --mode) MODE="$2"; shift ;;
+            --force) FORCE_BUILD="true" ;;
+            --service) SELECTED_SERVICE="$2"; shift ;;
+            --wait) WAIT_FOR_COMPLETION="true" ;;
+            *) usage ;;
+        esac
+        shift
+    done
+
+    if [[ -n "$SELECTED_SERVICE" ]]; then
+        build_service "$SELECTED_SERVICE"
+    else
+        # Parallel build for all services
+        log "Starting parallel build of all services (Parallelism: $PARALLELISM)"
+        
+        # Export functions and variables for subshells
+        export -f log hash_context is_built mark_built build_service
+        export REPO_DIR BASE_DIR KUBECTL KUBECONFIG VERSION MODE REGISTRY FORCE_BUILD SKIP_UNCHANGED JOURNAL_DIR
+        
+        # Determine the absolute path to this script for robust sourcing if needed, 
+        # though export -f should suffice for functions.
+        local SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
+        
+        printf "%s\n" "${SERVICES[@]}" | xargs -P "$PARALLELISM" -I{} bash -c "source \"$SCRIPT_PATH\" && build_service {}"
+    fi
+
+    if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
+        log "Waiting for cluster builds to complete..."
+        # Reuse wait logic from verify-registry-tags or similar
+        # Simple check: Wait for all jobs in build-pipeline to finish
+        $KUBECTL wait --for=condition=complete job -n build-pipeline --all --timeout=600s || true
+    fi
+
+    log "Build process finished."
+}
+
 usage() {
     echo "Usage: $0 [--mode cluster|local] [--force] [--service name] [--wait]"
     exit 1
 }
 
-SELECTED_SERVICE=""
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --mode) MODE="$2"; shift ;;
-        --force) FORCE_BUILD="true" ;;
-        --service) SELECTED_SERVICE="$2"; shift ;;
-        --wait) WAIT_FOR_COMPLETION="true" ;;
-        *) usage ;;
-    esac
-    shift
-done
-
-if [[ -n "$SELECTED_SERVICE" ]]; then
-    build_service "$SELECTED_SERVICE"
-else
-    # Parallel build for all services
-    log "Starting parallel build of all services (Parallelism: $PARALLELISM)"
-    printf "%s\n" "${SERVICES[@]}" | xargs -P "$PARALLELISM" -I{} bash -c "export MODE=$MODE; export VERSION=$VERSION; export FORCE_BUILD=$FORCE_BUILD; export SKIP_UNCHANGED=$SKIP_UNCHANGED; source $0 && build_service {}"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
 fi
-
-if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
-    log "Waiting for cluster builds to complete..."
-    # Reuse wait logic from verify-registry-tags or similar
-    # Simple check: Wait for all jobs in build-pipeline to finish
-    $KUBECTL wait --for=condition=complete job -n build-pipeline --all --timeout=600s || true
-fi
-
-log "Build process finished."
