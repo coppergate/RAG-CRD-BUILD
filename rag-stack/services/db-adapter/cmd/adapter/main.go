@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -464,12 +465,10 @@ func handleGetSessionMessages(w http.ResponseWriter, r *http.Request, entClient 
 		})
 	}
 
-	// Sort by timestamp
-	// (they are already mostly sorted since we fetched them ordered, but merge might need sort)
-	// For simplicity, we can just return them as is if we assume they are intercalated correctly by time
-	// But let's sort to be sure
-	// (Skipping actual sort code here for brevity, assuming append order is enough for now or 
-	//  we can just sort the slice)
+	// Sort by timestamp to interleave prompts and responses
+	sort.Slice(messages, func(i, j int) bool {
+		return messages[i].Timestamp.Before(messages[j].Timestamp)
+	})
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)

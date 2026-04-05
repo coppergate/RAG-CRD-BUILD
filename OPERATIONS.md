@@ -25,17 +25,20 @@ The following values have been externalized to environment variables and can be 
 
 Every new session for the **Junie** agent MUST establish the operational context by following these steps:
 1.  **Branch Check**: Ensure the local git branch `work-YYYY-MM-DD` exists for the current date. If not, create it.
-2.  **Versioning**: Verify the current project version in `setup-complete.sh` and ensure it reflects the latest entry in `changelog.json` (incremented for a new session).
+2.  **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` file at the root of the project. 
+    - Verify the current project version in `CURRENT_VERSION`.
+    - Ensure it reflects the latest entry in `changelog.json` (incremented for a new session).
+    - Scripts will read from this file by default, but you can override it with the `VERSION` environment variable.
 3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md` to ensure any new procedures are understood and recorded.
 
 ## Current Focus (Iteration 8: Session Management & UI Polish)
 
-As of version 2.4.9, the project is focusing on **Iteration 8 (Session Management & UI Polish)**.
+As of version 2.4.10, the project is focusing on **Iteration 8 (Session Management & UI Polish)**.
 1.  **Session Management**: Implemented Session Deletion and History Retrieval in `db-adapter`. Added History loading to RAG Explorer.
 2.  **UI Polish**: Upgraded Flutter dependencies, implemented Flyout Menu with Pin feature. Integrated `appConfigProvider` for theme and endpoints. Fixed `llama3.1` model identifier mismatch by appending `:latest` tag in the front end. Updated log output colors for dark mode (bright red/yellow/white).
 3.  **Gateway Integration**: Centralized all RAG Explorer service calls through `rag-admin-api` proxying (S3, DB, Qdrant, Memory, Ingest, Chat).
-4.  **Stability**: Resolved "Execution stream failed" error in `rag-worker` by correctly handling Ollama SSE stream (v1/chat/completions).
+4.  **Stability**: Enhanced error reporting for "Execution stream failed" in `rag-worker` to include specific underlying error messages (Ollama/HTTP). Resolved session chat history interleaving in `db-adapter` by sorting merged messages by timestamp.
 5.  **Persistence**: Fixed missing prompt persistence in `llm-gateway` for streaming and generic chat.
 
 ---
@@ -52,14 +55,27 @@ As of version 2.4.9, the project is focusing on **Iteration 8 (Session Managemen
 
 ### Triggering a Build
 1.  **Access Hierophant**: Use `./run-on-hierophant.sh` or SSH directly.
-2.  **Versioning**: Set the `VERSION` environment variable (e.g., `2.2.8`).
-3.  **Command**: Run `rag-stack/build-all-on-cluster.sh --wait` (the `--wait` flag polls the registry until all images are available).
-4.  **Example Command**:
-    ```bash
-    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-      "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && \
-       VERSION=2.2.8 bash ./build-all-on-cluster.sh --wait"
-    ```
+2.  **Versioning**: The version is read from `CURRENT_VERSION` at the project root. You can override it with the `VERSION` environment variable.
+3.  **Command**: Run `rag-stack/build.sh` (defaults to cluster-mode with change detection).
+4.  **Example Commands**:
+    - Build all changed services on cluster:
+      ```bash
+      ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+        "cd /mnt/hegemon-share/share/code/complete-build && \
+         bash ./rag-stack/build.sh --mode cluster"
+      ```
+    - Force rebuild a specific service locally:
+      ```bash
+      ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+        "cd /mnt/hegemon-share/share/code/complete-build && \
+         bash ./rag-stack/build.sh --mode local --service rag-worker --force"
+      ```
+    - Build and wait for completion on cluster:
+      ```bash
+      ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+        "cd /mnt/hegemon-share/share/code/complete-build && \
+         bash ./rag-stack/build.sh --mode cluster --wait"
+      ```
 
 ### Monitoring Builds
 - **Jobs**: Check Kaniko job status in the `build-pipeline` namespace:

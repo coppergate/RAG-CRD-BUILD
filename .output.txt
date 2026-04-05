@@ -1,0 +1,216 @@
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/:
+ ai-changes       mnt                  RAG-Flutter-UI-Design.md
+ changelog.json   object-store-mgr     rag-stack
+ common_config    OPERATIONS.md       'RAG Stack Architecture.md'
+ complete-build   qdrant-adapter       scripts
+ infrastructure   RAG-Build-Flow.mmd   setup-01-basic.sh
+ iteration-6.md   RAG-Diagram.mmd      setup-complete.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/ai-changes:
+changelog.json
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/common_config:
+k8s
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/common_config/k8s:
+talos
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/common_config/k8s/talos:
+config
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/common_config/k8s/talos/config:
+controlplane.yaml  worker.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build:
+infrastructure  iteration-4a.md  rag-stack  setup-complete.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build/infrastructure:
+APM  nvidia-gpu-exporter.sh  nvidia-operator.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build/infrastructure/APM:
+alloy  grafana
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build/infrastructure/APM/alloy:
+values.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build/infrastructure/APM/grafana:
+operator-manifests.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build/rag-stack:
+build-and-push.sh  infrastructure
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build/rag-stack/infrastructure:
+pulsar  timescaledb
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build/rag-stack/infrastructure/pulsar:
+install.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/complete-build/rag-stack/infrastructure/timescaledb:
+install.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/infrastructure:
+APM  headlamp  kubernetes-dashboard  registry  rook-ceph  vendor
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/infrastructure/APM:
+install.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/infrastructure/headlamp:
+headlamp.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/infrastructure/kubernetes-dashboard:
+dashboard.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/infrastructure/registry:
+talos-registry-patch.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/infrastructure/rook-ceph:
+wipe-disks.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/infrastructure/vendor:
+cert-manager-v1.19.2.yaml  olm.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/mnt:
+hegemon-share
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/mnt/hegemon-share:
+share
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/mnt/hegemon-share/share:
+code
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/mnt/hegemon-share/share/code:
+complete-build
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/mnt/hegemon-share/share/code/complete-build:
+INSTALLATION.md  OPERATIONS.md  setup-complete.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/object-store-mgr:
+cmd
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/object-store-mgr/cmd:
+manager
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/object-store-mgr/cmd/manager:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/qdrant-adapter:
+cmd
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/qdrant-adapter/cmd:
+adapter
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/qdrant-adapter/cmd/adapter:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack:
+build-all-on-cluster.sh  EXECUTIVE_SUMMARY.md  services      tests
+build-and-push.sh        infrastructure        setup-all.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/infrastructure:
+build-pipeline  ollama  pulsar  qdrant  timescaledb
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/infrastructure/build-pipeline:
+bootstrap-orchestrator.sh  orchestrator-deployment.yaml
+install.sh                 trigger-build.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/infrastructure/ollama:
+ollama.sh  values.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/infrastructure/pulsar:
+full-values.yaml  init-rag-pulsar.sh  install.sh
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/infrastructure/qdrant:
+qdrant-deploy.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/infrastructure/timescaledb:
+cnpg-1.25.0.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services:
+build-orchestrator      memory-controller            rag-ingestion
+common                  object-store-mgr             rag-web-ui
+db-adapter              object-store-mgr.Dockerfile  rag-web-ui.Dockerfile
+db-adapter.Dockerfile   qdrant-adapter               rag-worker
+k8s-resilience          qdrant-adapter.Dockerfile    rag-worker.Dockerfile
+llm-gateway             rag-admin-api
+llm-gateway.Dockerfile  rag-explorer
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/build-orchestrator:
+cmd  Dockerfile  go.mod  go.sum  main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/build-orchestrator/cmd:
+orchestrator
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/build-orchestrator/cmd/orchestrator:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/common:
+contracts  go.mod  go.sum  health  telemetry
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/common/contracts:
+requests.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/common/health:
+health.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/common/telemetry:
+otel.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/db-adapter:
+cmd  go.mod  go.sum  internal  k8s
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/db-adapter/cmd:
+adapter
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/db-adapter/cmd/adapter:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/db-adapter/internal:
+config
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/db-adapter/internal/config:
+config.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/db-adapter/k8s:
+deployment.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/k8s-resilience:
+horizontal-pod-autoscalers.yaml  network-policies.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/llm-gateway:
+cmd  internal  k8s
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/llm-gateway/cmd:
+gateway
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/llm-gateway/cmd/gateway:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/llm-gateway/internal:
+config  handlers  pulsar
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/llm-gateway/internal/config:
+config.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/llm-gateway/internal/handlers:
+openai.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/llm-gateway/internal/pulsar:
+client.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/llm-gateway/k8s:
+deployment.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/memory-controller:
+cmd  Dockerfile  internal
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/memory-controller/cmd:
+controller
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/memory-controller/cmd/controller:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/memory-controller/internal:
+handlers
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/memory-controller/internal/handlers:
+memory.go  memory_test.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/object-store-mgr:
+go.mod  go.sum  mgr-deployment.yaml  mgr-job.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/qdrant-adapter:
+cmd  go.mod  go.sum  internal  k8s
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/qdrant-adapter/cmd:
+adapter
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/qdrant-adapter/cmd/adapter:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/qdrant-adapter/internal:
+config  qdrant
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/qdrant-adapter/internal/config:
+config.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/qdrant-adapter/internal/qdrant:
+client.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/qdrant-adapter/k8s:
+deployment.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-admin-api:
+cmd  Dockerfile
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-admin-api/cmd:
+admin-api
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-admin-api/cmd/admin-api:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-explorer:
+lib
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-explorer/lib:
+config  core  features
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-explorer/lib/config:
+app_config.dart  app_config.g.dart
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-explorer/lib/core:
+services
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-explorer/lib/core/services:
+chat_service.dart  log_service.dart
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-explorer/lib/features:
+chat
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-explorer/lib/features/chat:
+chat_page.dart
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-ingestion:
+k8s  service.py
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-ingestion/k8s:
+deployment.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-web-ui:
+ui-deployment.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker:
+cmd  go.mod  go.sum  internal  k8s
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/cmd:
+worker
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/cmd/worker:
+main.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/internal:
+config  models  ollama
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/internal/config:
+config.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/internal/models:
+granite31  llama3
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/internal/models/granite31:
+executor.go  model.go  planner.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/internal/models/llama3:
+executor.go  model.go  planner.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/internal/ollama:
+client.go
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/services/rag-worker/k8s:
+deployment.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/rag-stack/tests:
+main.go  run-e2e-on-hierophant.sh  run-tests.sh  test-job.yaml
+/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/scripts:
+audit-image-sources.sh    install-image-plan.sh
+cache-registry-images.sh  mirror-all-images.sh

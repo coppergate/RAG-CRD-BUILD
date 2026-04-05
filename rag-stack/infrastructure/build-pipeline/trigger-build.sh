@@ -5,8 +5,18 @@
 set -Eeuo pipefail
 
 SERVICE="${1:-}"
-VERSION="${2:-2.4.9}"
+VERSION="${2:-${VERSION:-}}"
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
+
+# Source of truth for versioning
+if [[ -z "$VERSION" ]]; then
+    if [[ -f "$REPO_DIR/../CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$REPO_DIR/../CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
 NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"

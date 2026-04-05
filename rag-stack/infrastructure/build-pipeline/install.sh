@@ -9,8 +9,17 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
 REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
-# Default to current project version for consistency
-VERSION="${VERSION:-2.2.8}"
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$REPO_DIR/../../../CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$REPO_DIR/../../../CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
+
 ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
 
 source "$REPO_DIR/../../../scripts/journal-helper.sh"

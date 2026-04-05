@@ -139,7 +139,7 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	subQueries, err := planner.Plan(ctx, req.Prompt)
 	if err != nil {
 		log.Printf("[%s] Planning failed: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Planning failed")
+		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Planning failed: %v", err))
 		return dlq.TransientFailure, fmt.Errorf("planning: %w", err)
 	}
 
@@ -231,7 +231,7 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			case err := <-errCh:
 				if err != nil {
 					log.Printf("[%s] Execution stream failed: %v", req.ID, err)
-					h.msg.SendError(ctx, req.ID, "Execution stream failed")
+					h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution stream failed: %v", err))
 					return dlq.TransientFailure, fmt.Errorf("execution stream: %w", err)
 				}
 			case <-ctx.Done():
@@ -243,7 +243,7 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	result, err := executor.Execute(ctx, req.Prompt, contexts)
 	if err != nil {
 		log.Printf("[%s] Execution failed: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Execution failed")
+		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution failed: %v", err))
 		return dlq.TransientFailure, fmt.Errorf("execution: %w", err)
 	}
 

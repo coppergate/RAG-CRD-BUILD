@@ -5,10 +5,19 @@ set -Eeuo pipefail
 
 # Canonical registry reachable from hierophant (resolves to 172.20.1.26)
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-VERSION="${VERSION:-2.4.9}"
 TLS_VERIFY="${TLS_VERIFY:-false}"
 
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$REPO_DIR/../CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$REPO_DIR/../CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
 BUILD_DIR="${BUILD_DIR:-$HOME/build}"
 JOURNAL_DIR="${JOURNAL_DIR:-/home/junie/rag-build-journals}"
 ONLY="${ONLY:-}"

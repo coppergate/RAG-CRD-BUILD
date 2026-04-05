@@ -4,14 +4,25 @@
 
 set -Eeuo pipefail
 
-VERSION="${VERSION:-2.4.9}"
+BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export BASE_DIR
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$BASE_DIR/../CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$BASE_DIR/../CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
+
 WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
 TRIGGER_PARALLELISM="${TRIGGER_PARALLELISM:-4}"
 if [[ "${1:-}" == "--wait" ]]; then
     WAIT_FOR_COMPLETION="true"
 fi
 
-BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TRIGGER_SCRIPT="$BASE_DIR/infrastructure/build-pipeline/trigger-build.sh"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"

@@ -8,7 +8,17 @@ K="${K:-/home/k8s/kube/kubectl}"
 
 BOOTSTRAP_REGISTRY="${BOOTSTRAP_REGISTRY:-registry.hierocracy.home:5000}"
 CLUSTER_REGISTRY="${CLUSTER_REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
-VERSION="${VERSION:-1.5.8}"
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "CURRENT_VERSION" ]]; then
+        VERSION=$(cat "CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
+
 PARALLELISM="${PARALLELISM:-4}"
 
 echo "=== 1) Mirror missing OLM digest to bootstrap registry ==="
@@ -36,8 +46,7 @@ bash scripts/mirror-all-images.sh
 
 echo "=== 3) Build all service images to in-cluster registry ==="
 REGISTRY="${CLUSTER_REGISTRY}" \
-VERSION="${VERSION}" \
-bash rag-stack/build-all-on-cluster.sh --wait
+bash rag-stack/build.sh --mode cluster --wait
 
 echo "=== 4) Verify built service images in in-cluster registry ==="
 services=(

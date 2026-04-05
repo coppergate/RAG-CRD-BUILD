@@ -41,16 +41,8 @@ TARGET_REGISTRY=127.0.0.1:5000 bash $config_source_dir/scripts/mirror-all-images
 mark_step_done "bootstrap-mirror"
 fi
 
-if ! is_step_done "labels"; then
-$KUBECTL label nodes worker-0 role=storage-node
-$KUBECTL label nodes worker-1 role=storage-node
-$KUBECTL label nodes worker-2 role=storage-node
-$KUBECTL label nodes worker-3 role=storage-node
-
-$KUBECTL label nodes inference-0 role=inference-node
-$KUBECTL label nodes inference-1 role=inference-node
-mark_step_done "labels"
-fi
+echo "--- 3. Node Labeling (Idempotent) ---"
+bash "$config_source_dir/scripts/setup-node-labels.sh"
 
 # rook-ceph-image-prefetch removed in favor of hierophant registry mirror bootstrap
 # This avoids downloading the same image 9 times from the internet.

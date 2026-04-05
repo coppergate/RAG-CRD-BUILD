@@ -9,7 +9,17 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 NS="${NS:-build-pipeline}"
-VERSION="${VERSION:-1.5.8}"
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$BASE_DIR/CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$BASE_DIR/CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
+
 WAIT_ALL="${WAIT_ALL:-true}"
 CLEAR_PULSAR_BACKLOG="${CLEAR_PULSAR_BACKLOG:-true}"
 ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-latest}"
@@ -65,10 +75,10 @@ main() {
 
   if [[ "$WAIT_ALL" == "true" ]]; then
     log "Step 6/6: Building all services and waiting for registry artifacts"
-    VERSION="$VERSION" bash "$BASE_DIR/rag-stack/build-all-on-cluster.sh" --wait
+    bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
   else
     log "Step 6/6: Triggering all services without wait"
-    VERSION="$VERSION" bash "$BASE_DIR/rag-stack/build-all-on-cluster.sh"
+    bash "$BASE_DIR/rag-stack/build.sh" --mode cluster
   fi
 
   log "Rebuild complete."

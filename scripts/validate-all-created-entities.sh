@@ -4,7 +4,17 @@ set -Eeuo pipefail
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
-VERSION="${VERSION:-1.5.8}"
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$BASE_DIR/CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$BASE_DIR/CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
+
 SHOW_INVENTORY="${SHOW_INVENTORY:-true}"
 
 pass() { printf "[PASS] %s\n" "$1"; }

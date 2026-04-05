@@ -23,7 +23,15 @@ set -Eeuo pipefail
 #
 BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
-VERSION="${VERSION:-2.4.9}"
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$BASE_DIR/CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$BASE_DIR/CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
 export VERSION
 IMAGE_PREFETCH_ON_START="${IMAGE_PREFETCH_ON_START:-true}"
 IMAGE_PREFETCH_GROUPS="${IMAGE_PREFETCH_GROUPS:-bootstrap,storage,apm-core,pulsar-core,registry,data-services,ollama}"
@@ -109,26 +117,8 @@ if ! is_step_done "registry-trust-verified"; then
     log_step_timing "registry-trust-verified" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-echo "--- 0.5. Labeling Worker Nodes ---"
-if ! is_step_done "worker-labeling"; then
-    STEP_TS_START=$(date +%s)
-    echo "Labeling nodes starting with 'worker' as 'role=storage-node'..."
-    # Get all node names starting with worker
-    WORKER_NODES=$($KUBECTL get nodes -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^worker' || echo "")
-    
-    if [[ -n "$WORKER_NODES" ]]; then
-        for node in $WORKER_NODES; do
-            echo "  - Labeling $node..."
-            $KUBECTL label node "$node" role=storage-node --overwrite
-        done
-        echo "Worker nodes labeled successfully."
-    else
-        echo "No nodes matching 'worker*' found. Skipping labeling."
-    fi
-    mark_step_done "worker-labeling"
-    STEP_TS_END=$(date +%s)
-    log_step_timing "worker-labeling" "$STEP_TS_START" "$STEP_TS_END" "ok"
-fi
+echo "--- 0.5. Node Labeling (Idempotent) ---"
+bash "$BASE_DIR/scripts/setup-node-labels.sh"
 
 echo "===================================================="
 echo "Starting Complete Kubernetes Build and RAG Stack"
@@ -287,7 +277,7 @@ echo "----------------------------------------------------"
 # Use the new cluster-native build pipeline (Kaniko + S3 + Pulsar)
 # This prevents host resource exhaustion during builds
 # We wait for completion here to ensure Step 2 has the images it needs.
-    VERSION="$VERSION" bash $BASE_DIR/rag-stack/build-all-on-cluster.sh --wait
+    bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
 mark_step_done "rag-images"
 STEP_TS_END=$(date +%s)
 log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"
