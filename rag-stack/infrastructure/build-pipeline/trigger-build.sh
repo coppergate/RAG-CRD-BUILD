@@ -11,9 +11,13 @@ REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 # Source of truth for versioning
 if [[ -z "$VERSION" ]]; then
     if [[ -f "$REPO_DIR/../CURRENT_VERSION" ]]; then
-        VERSION=$(cat "$REPO_DIR/../CURRENT_VERSION" | tr -d '[:space:]')
+        if jq . "$REPO_DIR/../CURRENT_VERSION" >/dev/null 2>&1; then
+            VERSION=$(jq -r ".\"$SERVICE\".version // \"1.0.0\"" "$REPO_DIR/../CURRENT_VERSION")
+        else
+            VERSION=$(cat "$REPO_DIR/../CURRENT_VERSION" | tr -d '[:space:]')
+        fi
     else
-        VERSION="2.4.9"
+        VERSION="1.0.0"
     fi
 fi
 export VERSION

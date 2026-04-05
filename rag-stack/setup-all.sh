@@ -8,12 +8,19 @@ set -Eeuo pipefail
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export REPO_DIR
 
-# Source of truth for versioning
+# Versioning
+VERSION_FILE="$REPO_DIR/../CURRENT_VERSION"
+# Global fallback version
 if [[ -z "${VERSION:-}" ]]; then
-    if [[ -f "$REPO_DIR/../CURRENT_VERSION" ]]; then
-        VERSION=$(cat "$REPO_DIR/../CURRENT_VERSION" | tr -d '[:space:]')
+    if [[ -f "$VERSION_FILE" ]]; then
+        # Try to get a global version if it's still a simple file, or use a default
+        if jq . "$VERSION_FILE" >/dev/null 2>&1; then
+            VERSION="2.4.11"
+        else
+            VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+        fi
     else
-        VERSION="2.4.9"
+        VERSION="2.4.11"
     fi
 fi
 export VERSION
@@ -27,7 +34,20 @@ init_journal
 
 apply_manifest() {
   local manifest="$1"
-  sed -e "s#__VERSION__#${VERSION}#g" -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" "$manifest" | "$KUBECTL" apply -f -
+  local ver="$VERSION"
+  
+  # Try to extract service name from path to get per-service version
+  if [[ "$manifest" == *"/services/"* ]]; then
+      local svc=$(echo "$manifest" | sed -n 's#.*/services/\([^/]*\).*#\1#p' | cut -d/ -f1)
+      if [[ -f "$VERSION_FILE" ]] && jq . "$VERSION_FILE" >/dev/null 2>&1; then
+          local svc_ver=$(jq -r ".\"$svc\".version // empty" "$VERSION_FILE")
+          if [[ -n "$svc_ver" ]]; then
+              ver="$svc_ver"
+          fi
+      fi
+  fi
+
+  sed -e "s#__VERSION__#${ver}#g" -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" "$manifest" | "$KUBECTL" apply -f -
 }
 
 if ! is_step_done "namespace"; then
