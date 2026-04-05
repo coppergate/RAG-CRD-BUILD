@@ -26,6 +26,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _showMetadata = true;
   bool _showLogs = false;
   bool _isStreaming = false;
+  bool _inConversation = false;
   final ScrollController _logScrollController = ScrollController();
   double _metadataPanelWidth = 300.0;
   double _logPanelWidth = 400.0;
@@ -453,7 +454,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: darkMode ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                  color: darkMode ? Colors.white.withValues(alpha: .05) : Colors.black.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: ListView.builder(
@@ -537,6 +538,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ));
       _messageController.clear();
       _isStreaming = true;
+      _inConversation = false; // Reset for new message
       
       // Add empty assistant message for streaming
       _messages.add(ResponseMessage(
@@ -569,6 +571,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         }
 
         setState(() {
+          _inConversation = chunk.inConversation;
           final lastIndex = _messages.length - 1;
           _messages[lastIndex] = _messages[lastIndex].copyWith(
             content: _messages[lastIndex].content + chunk.content,
@@ -589,6 +592,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       },
       onError: (err) {
         logger.error('Chat stream encountered an error: $err');
+        
+        // Suppress timeout error if not in conversation
+        final isTimeout = err.toString().contains('TimeoutException');
+        if (isTimeout && !_inConversation) {
+          logger.warn('Suppressing idle timeout error');
+          setState(() {
+            _isStreaming = false;
+            // Remove the empty assistant message if it was never filled
+            if (_messages.isNotEmpty && _messages.last.content.isEmpty && _messages.last.role == 'assistant') {
+              _messages.removeLast();
+            }
+          });
+          return;
+        }
+
         setState(() {
           _isStreaming = false;
           _messages.add(ResponseMessage(

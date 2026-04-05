@@ -136,13 +136,14 @@ class ChatService {
             _logger.debug('Received chunk: $event');
             final data = jsonDecode(event);
             return ResponseMessage(
-              content: data['chunk'] ?? '',
+              content: data['chunk'] ?? (data['error'] ?? ''),
               sessionId: data['session_id'],
               messageId: data['id'],
               role: 'assistant',
               metadata: data['metadata'] ?? {},
               timestamp: DateTime.now(),
               isLast: data['is_last'] ?? false,
+              inConversation: data['in_conversation'] ?? false,
             );
           })
           .handleError((error) {

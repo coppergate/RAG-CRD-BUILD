@@ -13,6 +13,7 @@ abstract class ResponseMessage with _$ResponseMessage {
     Map<String, dynamic>? metadata,
     DateTime? timestamp,
     @Default(false) bool isLast,
+    @Default(false) bool inConversation,
   }) = _ResponseMessage;
 
   factory ResponseMessage.fromJson(Map<String, dynamic> json) => _$ResponseMessageFromJson(json);
