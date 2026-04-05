@@ -59,7 +59,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final success = await chatService.deleteSession(sessionId);
     if (success) {
       if (sessionId == _currentSessionId) {
-        _startNewSession();
+        setState(() {
+          _currentSessionId = null;
+          _currentSessionName = null;
+          _messages.clear();
+        });
       }
       _loadSessions();
     }
@@ -67,6 +71,29 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _startNewSession() {
     final nameController = TextEditingController();
+
+    Future<void> handleCreate() async {
+      final name = nameController.text.trim();
+      if (name.isNotEmpty) {
+        Navigator.pop(context);
+        final newId = const Uuid().v4();
+        final chatService = ref.read(chatServiceProvider);
+
+        // Create session in backend
+        await chatService.createSession(newId, name);
+
+        if (mounted) {
+          setState(() {
+            _currentSessionId = newId;
+            _currentSessionName = name;
+            _messages.clear();
+          });
+          // Refresh the list to show the new session
+          _loadSessions();
+        }
+      }
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -78,31 +105,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             labelText: 'Session Name',
           ),
           autofocus: true,
+          onSubmitted: (_) => handleCreate(),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              if (name.isNotEmpty) {
-                Navigator.pop(context);
-                final newId = const Uuid().v4();
-                final chatService = ref.read(chatServiceProvider);
-                
-                // Create session in backend
-                await chatService.createSession(newId, name);
-                
-                if (mounted) {
-                  setState(() {
-                    _currentSessionId = newId;
-                    _currentSessionName = name;
-                    _messages.clear();
-                  });
-                  // Refresh the list to show the new session
-                  _loadSessions();
-                }
-              }
-            },
+            onPressed: handleCreate,
             child: const Text('Create'),
           ),
         ],
@@ -313,6 +321,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildMessageList() {
+    if (_currentSessionId == null) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('Select or create a session to start chatting.', style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
     if (_messages.isEmpty) {
       return const Center(child: Text('No messages yet. Send a prompt to start.'));
     }
