@@ -1,1 +1,46 @@
-2.4.11
+{
+  "rag-worker": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "rag-ingestion": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "rag-web-ui": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "llm-gateway": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "db-adapter": {
+    "version": "2.4.12",
+    "last_build": "2026-04-05T16:19:12Z"
+  },
+  "qdrant-adapter": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "object-store-mgr": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "rag-test-runner": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "rag-admin-api": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "memory-controller": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  },
+  "build-orchestrator": {
+    "version": "2.4.11",
+    "last_build": "2026-04-05T09:55:00Z"
+  }
+}

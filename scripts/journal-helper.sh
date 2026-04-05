@@ -6,7 +6,7 @@
 # - Prefer per-user writable location, overridable via INSTALL_JOURNAL_DIR
 
 # Determine journal directory (override with INSTALL_JOURNAL_DIR, else global dir)
-GLOBAL_JOURNAL_ROOT="/var/lib/complete-build/journal"
+GLOBAL_JOURNAL_ROOT="$HOME/.complete-build/journal"
 JOURNAL_FILE_DIR="${INSTALL_JOURNAL_DIR:-$GLOBAL_JOURNAL_ROOT}"
 
 # Determine a safe temporary directory for the user (override with INSTALL_TMP_DIR)

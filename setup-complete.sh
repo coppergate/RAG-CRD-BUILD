@@ -25,11 +25,17 @@ BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
 
 # Source of truth for versioning
+VERSION_FILE="$BASE_DIR/CURRENT_VERSION"
 if [[ -z "${VERSION:-}" ]]; then
-    if [[ -f "$BASE_DIR/CURRENT_VERSION" ]]; then
-        VERSION=$(cat "$BASE_DIR/CURRENT_VERSION" | tr -d '[:space:]')
+    if [[ -f "$VERSION_FILE" ]]; then
+        if jq . "$VERSION_FILE" >/dev/null 2>&1; then
+            # Use a default version if we need a global one for tools
+            VERSION="2.4.11"
+        else
+            VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+        fi
     else
-        VERSION="2.4.9"
+        VERSION="2.4.11"
     fi
 fi
 export VERSION

@@ -25,10 +25,12 @@ The following values have been externalized to environment variables and can be 
 
 Every new session for the **Junie** agent MUST establish the operational context by following these steps:
 1.  **Branch Check**: Ensure the local git branch `work-YYYY-MM-DD` exists for the current date. If not, create it.
-2.  **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` file at the root of the project. 
-    - Verify the current project version in `CURRENT_VERSION`.
-    - Ensure it reflects the latest entry in `changelog.json` (incremented for a new session).
-    - Scripts will read from this file by default, but you can override it with the `VERSION` environment variable.
+2.  **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project. 
+    - Verify the current project version in `CURRENT_VERSION`. It contains per-service versions and `last_build` timestamps.
+    - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
+    - `build.sh` performs automatic version incrementing when code changes are detected via hashing.
+    - If a service version is updated, `last_build` is set to `null` until the build is successful.
+    - You can override it with the `VERSION` environment variable to force a specific version for all services.
 3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md` to ensure any new procedures are understood and recorded.
 
