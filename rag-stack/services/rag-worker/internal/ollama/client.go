@@ -1,6 +1,7 @@
 package ollama
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -106,8 +107,20 @@ func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, 
 			return
 		}
 
-		decoder := json.NewDecoder(resp.Body)
-		for {
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "" {
+				continue
+			}
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+			data := strings.TrimPrefix(line, "data: ")
+			if data == "[DONE]" {
+				break
+			}
+
 			var chunk struct {
 				Choices []struct {
 					Delta struct {
@@ -115,16 +128,16 @@ func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, 
 					} `json:"delta"`
 				} `json:"choices"`
 			}
-			if err := decoder.Decode(&chunk); err != nil {
-				if err.Error() == "EOF" {
-					break
-				}
-				errCh <- err
+			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+				errCh <- fmt.Errorf("failed to unmarshal chunk: %w (data: %s)", err, data)
 				return
 			}
 			if len(chunk.Choices) > 0 {
 				out <- chunk.Choices[0].Delta.Content
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			errCh <- err
 		}
 	}()
 
