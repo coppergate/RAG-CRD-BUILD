@@ -6,10 +6,19 @@
 set -Eeuo pipefail
 
 # --- Configuration & Defaults ---
+# Capture initial environment state BEFORE any defaults are set
+# to detect if the user provided VERSION on the command line.
+INITIAL_VERSION="${VERSION:-}"
+
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BASE_DIR=$(cd "$REPO_DIR/.." && pwd)
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
+
+# Detect if VERSION was provided in the environment (on command line)
+# BEFORE we load it from CURRENT_VERSION.
+# We only do this in main to avoid subshells in parallel mode inheriting it.
+# EXTERNAL_VERSION_OVERRIDE is no longer used, we use INITIAL_VERSION.
 
 # Source of truth for versioning
 if [[ -z "${VERSION:-}" ]]; then
@@ -32,10 +41,38 @@ JOURNAL_DIR="${JOURNAL_DIR:-$HOME/.complete-build/journal/build-hashing}"
 
 mkdir -p "$JOURNAL_DIR"
 
-SERVICES=("rag-worker" "rag-ingestion" "rag-web-ui" "llm-gateway" "db-adapter" "qdrant-adapter" "object-store-mgr" "rag-test-runner")
+SERVICES=(
+    "rag-worker" 
+    "rag-ingestion" 
+    "rag-web-ui" 
+    "llm-gateway" 
+    "db-adapter" 
+    "qdrant-adapter" 
+    "object-store-mgr" 
+    "rag-test-runner"
+    "rag-explorer"
+    "rag-admin-api"
+    "memory-controller"
+    "build-orchestrator"
+)
 
 # --- Helpers ---
 log() { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
+
+# Check if image exists in registry using skopeo
+image_exists() {
+    local svc="$1"
+    local ver="$2"
+    # Skip check if we are in force build mode
+    if [[ "$FORCE_BUILD" == "true" ]]; then return 1; fi
+    
+    if command -v skopeo >/dev/null 2>&1; then
+        if skopeo inspect "docker://$REGISTRY/$svc:$ver" --tls-verify=false >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    return 1
+}
 
 hash_context() {
     local svc="$1"
@@ -70,6 +107,13 @@ build_service() {
             log "SKIP: $svc unchanged (hash match) for version $VERSION"
             return 0
         fi
+        
+        # Check registry as requested by user
+        if image_exists "$svc" "$VERSION"; then
+            log "SKIP: $svc:$VERSION already exists in registry $REGISTRY"
+            mark_built "$svc" "$VERSION" "$current_hash"
+            return 0
+        fi
     fi
 
     log "BUILD: $svc version $VERSION (Mode: $MODE)"
@@ -99,11 +143,17 @@ build_service() {
 
 # --- Main Execution ---
 main() {
+    # If VERSION was already in env (INITIAL_VERSION), user provided it on command line
+    if [[ -n "$INITIAL_VERSION" ]]; then
+        FORCE_BUILD="true"
+    fi
+
     SELECTED_SERVICE=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --mode) MODE="$2"; shift ;;
             --force) FORCE_BUILD="true" ;;
+            --version) VERSION="$2"; shift; FORCE_BUILD="true" ;;
             --service) SELECTED_SERVICE="$2"; shift ;;
             --wait) WAIT_FOR_COMPLETION="true" ;;
             *) usage ;;
@@ -118,7 +168,7 @@ main() {
         log "Starting parallel build of all services (Parallelism: $PARALLELISM)"
         
         # Export functions and variables for subshells
-        export -f log hash_context is_built mark_built build_service
+        export -f log hash_context is_built mark_built build_service image_exists
         export REPO_DIR BASE_DIR KUBECTL KUBECONFIG VERSION MODE REGISTRY FORCE_BUILD SKIP_UNCHANGED JOURNAL_DIR
         
         # Determine the absolute path to this script for robust sourcing if needed, 
@@ -139,7 +189,7 @@ main() {
 }
 
 usage() {
-    echo "Usage: $0 [--mode cluster|local] [--force] [--service name] [--wait]"
+    echo "Usage: $0 [--mode cluster|local] [--force] [--version ver] [--service name] [--wait]"
     exit 1
 }
 

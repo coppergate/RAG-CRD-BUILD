@@ -465,7 +465,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     Color color = darkMode ? Colors.white : Colors.black87;
                     if (log.level == 'ERROR') color = darkMode ? Colors.redAccent : Colors.red;
                     if (log.level == 'WARN') color = darkMode ? Colors.yellowAccent : Colors.orange[800]!;
-                    if (log.level == 'DEBUG') color = darkMode ? Colors.blueAccent : Colors.blue[800]!;
+                    if (log.level == 'DEBUG') color = darkMode ? const Color.fromARGB(255, 237, 196, 250) : Colors.blue[800]!;
   
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -574,6 +574,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             content: _messages[lastIndex].content + chunk.content,
             metadata: chunk.metadata,
           );
+          if (chunk.isLast) {
+            _isStreaming = false;
+            logger.info('Received last chunk from LLM via isLast flag');
+          }
         });
       },
       onDone: () {

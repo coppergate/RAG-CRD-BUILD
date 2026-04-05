@@ -142,6 +142,7 @@ class ChatService {
               role: 'assistant',
               metadata: data['metadata'] ?? {},
               timestamp: DateTime.now(),
+              isLast: data['is_last'] ?? false,
             );
           })
           .handleError((error) {
