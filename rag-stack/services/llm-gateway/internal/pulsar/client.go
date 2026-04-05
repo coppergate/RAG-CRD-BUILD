@@ -33,6 +33,7 @@ type response struct {
 	Chunk          string `json:"chunk"`
 	SequenceNumber int    `json:"sequence_number"`
 	IsLast         bool   `json:"is_last"`
+	InConversation bool   `json:"in_conversation"`
 }
 
 type StreamChunk struct {
@@ -119,6 +120,7 @@ func (pc *pulsarClient) consumeResults() {
 					SequenceNumber: resp.SequenceNumber,
 					IsLast:         resp.IsLast,
 					Error:          resp.Error,
+					InConversation: resp.InConversation,
 				}
 			}
 		}
