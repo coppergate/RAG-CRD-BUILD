@@ -18,7 +18,7 @@ ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:${PAT
 
 # Prepare the application directory
 WORKDIR /app
-COPY . .
+COPY rag-explorer/ .
 
 # Fetch dependencies and build for web
 RUN flutter config --no-analytics
