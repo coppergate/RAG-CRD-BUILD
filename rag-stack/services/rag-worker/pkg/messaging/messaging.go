@@ -16,11 +16,12 @@ import (
 
 // Producers holds all Pulsar producers used by the worker.
 type Producers struct {
-	Results pulsar.Producer
-	Status  pulsar.Producer
-	Plan    pulsar.Producer
-	Exec    pulsar.Producer
-	QdrantOps pulsar.Producer
+	Results    pulsar.Producer
+	Status     pulsar.Producer
+	Plan       pulsar.Producer
+	Exec       pulsar.Producer
+	QdrantOps  pulsar.Producer
+	Completion pulsar.Producer
 }
 
 // Client wraps the Pulsar client and all producers/consumers for the worker.
@@ -83,14 +84,26 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		return nil, fmt.Errorf("could not create Qdrant ops producer: %w", err)
 	}
 
+	completion, err := client.CreateProducer(pulsar.ProducerOptions{Topic: cfg.PulsarCompletionTopic})
+	if err != nil {
+		qOps.Close()
+		exec.Close()
+		plan.Close()
+		status.Close()
+		results.Close()
+		client.Close()
+		return nil, fmt.Errorf("could not create completion producer: %w", err)
+	}
+
 	return &Client{
 		client: client,
 		Producers: Producers{
-			Results:   results,
-			Status:    status,
-			Plan:      plan,
-			Exec:      exec,
-			QdrantOps: qOps,
+			Results:    results,
+			Status:     status,
+			Plan:       plan,
+			Exec:       exec,
+			QdrantOps:  qOps,
+			Completion: completion,
 		},
 	}, nil
 }
@@ -102,6 +115,7 @@ func (c *Client) PulsarClient() pulsar.Client {
 
 // Close closes all producers and the client.
 func (c *Client) Close() {
+	c.Producers.Completion.Close()
 	c.Producers.QdrantOps.Close()
 	c.Producers.Exec.Close()
 	c.Producers.Plan.Close()
@@ -156,7 +170,7 @@ func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model st
 }
 
 // SendStreamChunk sends a streaming result chunk to the results topic.
-func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string) {
+func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string, inConversation bool) {
 	payload, err := json.Marshal(map[string]interface{}{
 		"id":              id,
 		"session_id":      sessionID,
@@ -164,6 +178,7 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk strin
 		"sequence_number": sequence,
 		"is_last":         isLast,
 		"model":           model,
+		"in_conversation": inConversation,
 	})
 	if err != nil {
 		log.Printf("[%s] Failed to marshal stream chunk: %v", id, err)
@@ -182,10 +197,11 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk strin
 }
 
 // SendError sends an error message to the results topic.
-func (c *Client) SendError(ctx context.Context, id, errMsg string) {
-	payload, err := json.Marshal(map[string]string{
-		"id":    id,
-		"error": errMsg,
+func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversation bool) {
+	payload, err := json.Marshal(map[string]interface{}{
+		"id":              id,
+		"error":           errMsg,
+		"in_conversation": inConversation,
 	})
 	if err != nil {
 		log.Printf("[%s] Failed to marshal error: %v", id, err)
@@ -193,6 +209,24 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string) {
 	}
 	if _, err := c.Producers.Results.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
 		log.Printf("[%s] Failed to send error to topic: %v", id, err)
+	}
+}
+
+// SendCompletion sends a completion event to the completion topic.
+func (c *Client) SendCompletion(ctx context.Context, id, sessionID, startTS, model, status string) {
+	payload, err := json.Marshal(map[string]interface{}{
+		"id":               id,
+		"session_id":       sessionID,
+		"start_timestamp":  startTS,
+		"model":            model,
+		"status":           status,
+	})
+	if err != nil {
+		log.Printf("[%s] Failed to marshal completion: %v", id, err)
+		return
+	}
+	if _, err := c.Producers.Completion.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
+		log.Printf("[%s] Failed to send completion message: %v", id, err)
 	}
 }
 

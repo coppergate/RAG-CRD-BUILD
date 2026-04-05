@@ -1,0 +1,407 @@
+diff --git a/rag-stack/services/common/contracts/requests.go b/rag-stack/services/common/contracts/requests.go
+index ee0913a..f4078e7 100644
+--- a/rag-stack/services/common/contracts/requests.go
++++ b/rag-stack/services/common/contracts/requests.go
+@@ -15,10 +15,19 @@ type InternalRequest struct {
+ }
+
+ type StreamChunk struct {
+-       ID        string `json:"id"`
+-       SessionID string `json:"session_id"`
+-       Chunk     string `json:"chunk"`
+-       Sequence  int    `json:"sequence"`
+-       IsLast    bool   `json:"is_last"`
+-       Model     string `json:"model,omitempty"`
++       ID             string `json:"id"`
++       SessionID      string `json:"session_id"`
++       Chunk          string `json:"chunk"`
++       Sequence       int    `json:"sequence"`
++       IsLast         bool   `json:"is_last"`
++       Model          string `json:"model,omitempty"`
++       InConversation bool   `json:"in_conversation"`
++}
++
++type ResponseCompletion struct {
++       ID             string `json:"id"`
++       SessionID      string `json:"session_id"`
++       StartTimestamp string `json:"start_timestamp"` // RFC3339
++       Model          string `json:"model"`
++       Status         string `json:"status"` // COMPLETED, FAILED
+ }
+diff --git a/rag-stack/services/rag-worker/pkg/pipeline/pipeline.go b/rag-stack/services/rag-worker/pkg/pipeline/pipeline.go
+index 2be9f9c..413fa6a 100644
+--- a/rag-stack/services/rag-worker/pkg/pipeline/pipeline.go
++++ b/rag-stack/services/rag-worker/pkg/pipeline/pipeline.go
+@@ -109,12 +109,12 @@ func (h *Handler) handleIngress(ctx context.Context, req *contracts.InternalRequ
+        payload, err := json.Marshal(req)
+        if err != nil {
+                log.Printf("[%s] Failed to marshal ingress data: %v", req.ID, err)
+-               h.msg.SendError(ctx, req.ID, "Internal serialization error")
++               h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
+                return dlq.PermanentFailure, fmt.Errorf("marshal ingress data: %w", err)
+        }
+        if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
+                log.Printf("[%s] Failed to send to plan topic: %v", req.ID, err)
+-               h.msg.SendError(ctx, req.ID, "Internal messaging error")
++               h.msg.SendError(ctx, req.ID, "Internal messaging error", false)
+                return dlq.TransientFailure, fmt.Errorf("send to plan topic: %w", err)
+        }
+
+@@ -132,14 +132,14 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
+        planner, err := h.registry.GetPlanner(modelID)
+        if err != nil {
+                log.Printf("[%s] Planner resolution error: %v", req.ID, err)
+-               h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model: %s", modelID))
++               h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model: %s", modelID), false)
+                return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
+        }
+
+        subQueries, err := planner.Plan(ctx, req.Prompt)
+        if err != nil {
+                log.Printf("[%s] Planning failed: %v", req.ID, err)
+-               h.msg.SendError(ctx, req.ID, fmt.Sprintf("Planning failed: %v", err))
++               h.msg.SendError(ctx, req.ID, fmt.Sprintf("Planning failed: %v", err), false)
+                return dlq.TransientFailure, fmt.Errorf("planning: %w", err)
+        }
+
+@@ -179,12 +179,12 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
+        payload, err := json.Marshal(req)
+        if err != nil {
+                log.Printf("[%s] Failed to marshal plan data: %v", req.ID, err)
+-               h.msg.SendError(ctx, req.ID, "Internal serialization error")
++               h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
+                return dlq.PermanentFailure, fmt.Errorf("marshal plan data: %w", err)
+        }
+        if _, err := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
+                log.Printf("[%s] Failed to send to exec topic: %v", req.ID, err)
+-               h.msg.SendError(ctx, req.ID, "Internal messaging error")
++               h.msg.SendError(ctx, req.ID, "Internal messaging error", false)
+                return dlq.TransientFailure, fmt.Errorf("send to exec topic: %w", err)
+        }
+
+@@ -207,14 +207,16 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
+        executor, err := h.registry.GetExecutor(modelID)
+        if err != nil {
+                log.Printf("[%s] Executor resolution error: %v", req.ID, err)
+-               h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported executor model: %s", modelID))
++               h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported executor model: %s", modelID), false)
+                return dlq.PermanentFailure, fmt.Errorf("executor resolution: %w", err)
+        }
+
+        if req.Stream {
++               startTime := time.Now().UTC().Format(time.RFC3339)
+                stream, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts)
+                var fullResult string
+                seq := 0
++               inConversation := false
+                for {
+                        select {
+                        case chunk, ok := <-stream:
+@@ -222,28 +224,34 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
+                                        // Stream closed, handle grounding/recursion check on fullResult if needed
+                                        // For now, just send completed status
+                                        h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
+-                                       h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID)
++                                       h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID, inConversation)
++                                       h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED")
+                                        return dlq.Success, nil
+                                }
+                                fullResult += chunk
+-                               h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID)
++                               inConversation = true
++                               h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID, inConversation)
+                                seq++
+                        case err := <-errCh:
+                                if err != nil {
+                                        log.Printf("[%s] Execution stream failed: %v", req.ID, err)
+-                                       h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution stream failed: %v", err))
++                                       h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution stream failed: %v", err), inConversation)
++                                       h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
+                                        return dlq.TransientFailure, fmt.Errorf("execution stream: %w", err)
+                                }
+                        case <-ctx.Done():
++                               h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
+                                return dlq.TransientFailure, ctx.Err()
+                        }
+                }
+        }
+
++       startTime := time.Now().UTC().Format(time.RFC3339)
+        result, err := executor.Execute(ctx, req.Prompt, contexts)
+        if err != nil {
+                log.Printf("[%s] Execution failed: %v", req.ID, err)
+-               h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution failed: %v", err))
++               h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution failed: %v", err), false)
++               h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
+                return dlq.TransientFailure, fmt.Errorf("execution: %w", err)
+        }
+
+@@ -256,12 +264,12 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
+                        payload, err := json.Marshal(req)
+                        if err != nil {
+                                log.Printf("[%s] Failed to marshal recursion data: %v", req.ID, err)
+-                               h.msg.SendError(ctx, req.ID, "Internal serialization error during recursion")
++                               h.msg.SendError(ctx, req.ID, "Internal serialization error during recursion", false)
+                                return dlq.PermanentFailure, fmt.Errorf("marshal recursion data: %w", err)
+                        }
+                        if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
+                                log.Printf("[%s] Failed to send recursion to plan topic: %v", req.ID, err)
+-                               h.msg.SendError(ctx, req.ID, "Internal messaging error during recursion")
++                               h.msg.SendError(ctx, req.ID, "Internal messaging error during recursion", false)
+                                return dlq.TransientFailure, fmt.Errorf("send recursion to plan: %w", err)
+                        }
+                        return dlq.Success, nil
+@@ -270,5 +278,6 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
+
+        h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
+        h.msg.SendResult(ctx, req.ID, req.SessionID, result, modelID)
++       h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED")
+        return dlq.Success, nil
+ }
+diff --git a/rag-stack/services/db-adapter/cmd/adapter/main.go b/rag-stack/services/db-adapter/cmd/adapter/main.go
+index 47c75d0..2801e5d 100644
+--- a/rag-stack/services/db-adapter/cmd/adapter/main.go
++++ b/rag-stack/services/db-adapter/cmd/adapter/main.go
+@@ -355,6 +355,7 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
+                ID             string `json:"id"`
+                SessionID      string `json:"session_id"`
+                Result         string `json:"result"`
++               Chunk          string `json:"chunk"`
+                SequenceNumber int    `json:"sequence_number"`
+                Model          string `json:"model"`
+        }
+@@ -362,6 +363,18 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
+                return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
+        }
+
++       // Skip streaming chunks - we only want the final aggregated results from the aggregator.
++       if payload.Result == "" && payload.Chunk != "" {
++               log.Printf("[%s] Ignoring stream chunk, waiting for aggregated result", payload.ID)
++               return dlq.Success, nil
++       }
++
++       // Also ignore the final chunk from worker if it's empty
++       if payload.Result == "" && payload.Chunk == "" {
++               log.Printf("[%s] Ignoring empty message", payload.ID)
++               return dlq.Success, nil
++       }
++
+        log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)
+
+        promptUUID, parseErr := uuid.Parse(payload.ID)
+diff --git a/rag-stack/infrastructure/rag-system-tls.yaml b/rag-stack/infrastructure/rag-system-tls.yaml
+index bb0ae34..2d2cd57 100644
+--- a/rag-stack/infrastructure/rag-system-tls.yaml
++++ b/rag-stack/infrastructure/rag-system-tls.yaml
+@@ -311,3 +311,34 @@ spec:
+     name: hierocracy-ca-issuer
+     kind: ClusterIssuer
+     group: cert-manager.io
++---
++apiVersion: cert-manager.io/v1
++kind: Certificate
++metadata:
++  name: prompt-aggregator-cert
++  namespace: rag-system
++spec:
++  secretName: prompt-aggregator-tls
++  duration: 8760h
++  renewBefore: 720h
++  subject:
++    organizations:
++      - Hierocracy
++  commonName: prompt-aggregator.rag-system.svc.cluster.local
++  isCA: false
++  privateKey:
++    algorithm: RSA
++    encoding: PKCS1
++    size: 2048
++  usages:
++    - server auth
++    - client auth
++  dnsNames:
++    - prompt-aggregator
++    - prompt-aggregator.rag-system
++    - prompt-aggregator.rag-system.svc
++    - prompt-aggregator.rag-system.svc.cluster.local
++  issuerRef:
++    name: hierocracy-ca-issuer
++    kind: ClusterIssuer
++    group: cert-manager.io
+diff --git a/rag-stack/setup-all.sh b/rag-stack/setup-all.sh
+index 582e880..dc751b3 100755
+--- a/rag-stack/setup-all.sh
++++ b/rag-stack/setup-all.sh
+@@ -70,6 +70,7 @@ $KUBECTL wait --for=condition=Ready certificate/object-store-mgr-cert -n $NAMESP
+ $KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMESPACE --timeout=60s
+ $KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=60s
+ $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
++$KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=60s
+ mark_step_done "rag-system-tls"
+ fi
+
+@@ -286,6 +287,12 @@ apply_manifest "$REPO_DIR/services/rag-worker/k8s/deployment.yaml"
+ mark_step_done "rag-worker"
+ fi
+
++if ! is_step_done "prompt-aggregator"; then
++echo "--- 7.5 Deploying Prompt Aggregator (Go) ---"
++apply_manifest "$REPO_DIR/services/prompt-aggregator/k8s/deployment.yaml"
++mark_step_done "prompt-aggregator"
++fi
++
+ if ! is_step_done "object-store-mgr"; then
+ echo "--- 8. Deploying Object Store Manager (Go) ---"
+ apply_manifest "$REPO_DIR/services/object-store-mgr/mgr-deployment.yaml"
+diff --git a/rag-stack/build.sh b/rag-stack/build.sh
+index 8463522..f2e5647 100755
+--- a/rag-stack/build.sh
++++ b/rag-stack/build.sh
+@@ -36,6 +36,7 @@ SERVICES=(
+     "rag-admin-api"
+     "memory-controller"
+     "build-orchestrator"
++    "prompt-aggregator"
+ )
+
+ log() { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
+diff --git a/rag-stack/services/rag-worker/pkg/messaging/messaging.go b/rag-stack/services/rag-worker/pkg/messaging/messaging.go
+index 7517d76..ab8f9ca 100644
+--- a/rag-stack/services/rag-worker/pkg/messaging/messaging.go
++++ b/rag-stack/services/rag-worker/pkg/messaging/messaging.go
+@@ -16,11 +16,12 @@ import (
+
+ // Producers holds all Pulsar producers used by the worker.
+ type Producers struct {
+-       Results pulsar.Producer
+-       Status  pulsar.Producer
+-       Plan    pulsar.Producer
+-       Exec    pulsar.Producer
+-       QdrantOps pulsar.Producer
++       Results    pulsar.Producer
++       Status     pulsar.Producer
++       Plan       pulsar.Producer
++       Exec       pulsar.Producer
++       QdrantOps  pulsar.Producer
++       Completion pulsar.Producer
+ }
+
+ // Client wraps the Pulsar client and all producers/consumers for the worker.
+@@ -83,14 +84,26 @@ func NewClient(cfg *config.Config) (*Client, error) {
+                return nil, fmt.Errorf("could not create Qdrant ops producer: %w", err)
+        }
+
++       completion, err := client.CreateProducer(pulsar.ProducerOptions{Topic: cfg.PulsarCompletionTopic})
++       if err != nil {
++               qOps.Close()
++               exec.Close()
++               plan.Close()
++               status.Close()
++               results.Close()
++               client.Close()
++               return nil, fmt.Errorf("could not create completion producer: %w", err)
++       }
++
+        return &Client{
+                client: client,
+                Producers: Producers{
+-                       Results:   results,
+-                       Status:    status,
+-                       Plan:      plan,
+-                       Exec:      exec,
+-                       QdrantOps: qOps,
++                       Results:    results,
++                       Status:     status,
++                       Plan:       plan,
++                       Exec:       exec,
++                       QdrantOps:  qOps,
++                       Completion: completion,
+                },
+        }, nil
+ }
+@@ -102,6 +115,7 @@ func (c *Client) PulsarClient() pulsar.Client {
+
+ // Close closes all producers and the client.
+ func (c *Client) Close() {
++       c.Producers.Completion.Close()
+        c.Producers.QdrantOps.Close()
+        c.Producers.Exec.Close()
+        c.Producers.Plan.Close()
+@@ -156,7 +170,7 @@ func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model st
+ }
+
+ // SendStreamChunk sends a streaming result chunk to the results topic.
+-func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string) {
++func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string, inConversation bool) {
+        payload, err := json.Marshal(map[string]interface{}{
+                "id":              id,
+                "session_id":      sessionID,
+@@ -164,6 +178,7 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk strin
+                "sequence_number": sequence,
+                "is_last":         isLast,
+                "model":           model,
++               "in_conversation": inConversation,
+        })
+        if err != nil {
+                log.Printf("[%s] Failed to marshal stream chunk: %v", id, err)
+@@ -182,10 +197,11 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk strin
+ }
+
+ // SendError sends an error message to the results topic.
+-func (c *Client) SendError(ctx context.Context, id, errMsg string) {
+-       payload, err := json.Marshal(map[string]string{
+-               "id":    id,
+-               "error": errMsg,
++func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversation bool) {
++       payload, err := json.Marshal(map[string]interface{}{
++               "id":              id,
++               "error":           errMsg,
++               "in_conversation": inConversation,
+        })
+        if err != nil {
+                log.Printf("[%s] Failed to marshal error: %v", id, err)
+@@ -196,6 +212,24 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string) {
+        }
+ }
+
++// SendCompletion sends a completion event to the completion topic.
++func (c *Client) SendCompletion(ctx context.Context, id, sessionID, startTS, model, status string) {
++       payload, err := json.Marshal(map[string]interface{}{
++               "id":               id,
++               "session_id":       sessionID,
++               "start_timestamp":  startTS,
++               "model":            model,
++               "status":           status,
++       })
++       if err != nil {
++               log.Printf("[%s] Failed to marshal completion: %v", id, err)
++               return
++       }
++       if _, err := c.Producers.Completion.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
++               log.Printf("[%s] Failed to send completion message: %v", id, err)
++       }
++}
++
+ // Ping checks if the client is healthy.
+ func (c *Client) Ping() error {
+        if c.client == nil {
+diff --git a/rag-stack/services/rag-worker/internal/config/config.go b/rag-stack/services/rag-worker/internal/config/config.go
+index faea307..a7a4e98 100644
+--- a/rag-stack/services/rag-worker/internal/config/config.go
++++ b/rag-stack/services/rag-worker/internal/config/config.go
+@@ -14,6 +14,7 @@ type Config struct {
+        PulsarExecTopic    string
+        PulsarStatusTopic  string
+        PulsarResultsTopic string
++       PulsarCompletionTopic string
+        PulsarSubscription string
+        QdrantHost         string
+        QdrantPort         string
+@@ -56,6 +57,7 @@ func LoadConfig() *Config {
+                PulsarExecTopic:    envutil.GetEnv("PULSAR_EXEC_TOPIC", "persistent://rag-pipeline/stage/exec"),
+                PulsarStatusTopic:  envutil.GetEnv("PULSAR_STATUS_TOPIC", "persistent://rag-pipeline/stage/status"),
+                PulsarResultsTopic: envutil.GetEnv("PULSAR_RESULTS_TOPIC", "persistent://rag-pipeline/stage/results"),
++               PulsarCompletionTopic: envutil.GetEnv("PULSAR_COMPLETION_TOPIC", "persistent://rag-pipeline/stage/completion"),
+                PulsarSubscription: envutil.GetEnv("PULSAR_SUBSCRIPTION", "rag-worker-sub"),
+                QdrantHost:         envutil.GetEnv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local"),
+                QdrantPort:         envutil.GetEnv("QDRANT_PORT", "6333"),

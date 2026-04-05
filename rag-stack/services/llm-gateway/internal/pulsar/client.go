@@ -41,6 +41,7 @@ type StreamChunk struct {
 	SequenceNumber int    `json:"sequence_number"`
 	IsLast         bool   `json:"is_last"`
 	Error          string `json:"error,omitempty"`
+	InConversation bool   `json:"in_conversation"`
 }
 
 func NewPulsarClient(cfg *config.Config) (Client, error) {

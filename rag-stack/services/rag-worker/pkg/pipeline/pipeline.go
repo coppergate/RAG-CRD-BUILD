@@ -109,12 +109,12 @@ func (h *Handler) handleIngress(ctx context.Context, req *contracts.InternalRequ
 	payload, err := json.Marshal(req)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal ingress data: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal serialization error")
+		h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
 		return dlq.PermanentFailure, fmt.Errorf("marshal ingress data: %w", err)
 	}
 	if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
 		log.Printf("[%s] Failed to send to plan topic: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal messaging error")
+		h.msg.SendError(ctx, req.ID, "Internal messaging error", false)
 		return dlq.TransientFailure, fmt.Errorf("send to plan topic: %w", err)
 	}
 
@@ -132,14 +132,14 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	planner, err := h.registry.GetPlanner(modelID)
 	if err != nil {
 		log.Printf("[%s] Planner resolution error: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model: %s", modelID))
+		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model: %s", modelID), false)
 		return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
 	}
 
 	subQueries, err := planner.Plan(ctx, req.Prompt)
 	if err != nil {
 		log.Printf("[%s] Planning failed: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Planning failed: %v", err))
+		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Planning failed: %v", err), false)
 		return dlq.TransientFailure, fmt.Errorf("planning: %w", err)
 	}
 
@@ -179,12 +179,12 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	payload, err := json.Marshal(req)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal plan data: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal serialization error")
+		h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
 		return dlq.PermanentFailure, fmt.Errorf("marshal plan data: %w", err)
 	}
 	if _, err := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
 		log.Printf("[%s] Failed to send to exec topic: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal messaging error")
+		h.msg.SendError(ctx, req.ID, "Internal messaging error", false)
 		return dlq.TransientFailure, fmt.Errorf("send to exec topic: %w", err)
 	}
 
@@ -207,14 +207,16 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	executor, err := h.registry.GetExecutor(modelID)
 	if err != nil {
 		log.Printf("[%s] Executor resolution error: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported executor model: %s", modelID))
+		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported executor model: %s", modelID), false)
 		return dlq.PermanentFailure, fmt.Errorf("executor resolution: %w", err)
 	}
 
 	if req.Stream {
+		startTime := time.Now().UTC().Format(time.RFC3339)
 		stream, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts)
 		var fullResult string
 		seq := 0
+		inConversation := false
 		for {
 			select {
 			case chunk, ok := <-stream:
@@ -222,28 +224,34 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 					// Stream closed, handle grounding/recursion check on fullResult if needed
 					// For now, just send completed status
 					h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
-					h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID)
+					h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID, inConversation)
+					h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED")
 					return dlq.Success, nil
 				}
 				fullResult += chunk
-				h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID)
+				inConversation = true
+				h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID, inConversation)
 				seq++
 			case err := <-errCh:
 				if err != nil {
 					log.Printf("[%s] Execution stream failed: %v", req.ID, err)
-					h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution stream failed: %v", err))
+					h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution stream failed: %v", err), inConversation)
+					h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
 					return dlq.TransientFailure, fmt.Errorf("execution stream: %w", err)
 				}
 			case <-ctx.Done():
+				h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
 				return dlq.TransientFailure, ctx.Err()
 			}
 		}
 	}
 
+	startTime := time.Now().UTC().Format(time.RFC3339)
 	result, err := executor.Execute(ctx, req.Prompt, contexts)
 	if err != nil {
 		log.Printf("[%s] Execution failed: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution failed: %v", err))
+		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution failed: %v", err), false)
+		h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
 		return dlq.TransientFailure, fmt.Errorf("execution: %w", err)
 	}
 
@@ -256,12 +264,12 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			payload, err := json.Marshal(req)
 			if err != nil {
 				log.Printf("[%s] Failed to marshal recursion data: %v", req.ID, err)
-				h.msg.SendError(ctx, req.ID, "Internal serialization error during recursion")
+				h.msg.SendError(ctx, req.ID, "Internal serialization error during recursion", false)
 				return dlq.PermanentFailure, fmt.Errorf("marshal recursion data: %w", err)
 			}
 			if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
 				log.Printf("[%s] Failed to send recursion to plan topic: %v", req.ID, err)
-				h.msg.SendError(ctx, req.ID, "Internal messaging error during recursion")
+				h.msg.SendError(ctx, req.ID, "Internal messaging error during recursion", false)
 				return dlq.TransientFailure, fmt.Errorf("send recursion to plan: %w", err)
 			}
 			return dlq.Success, nil
@@ -270,5 +278,6 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 
 	h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
 	h.msg.SendResult(ctx, req.ID, req.SessionID, result, modelID)
+	h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED")
 	return dlq.Success, nil
 }

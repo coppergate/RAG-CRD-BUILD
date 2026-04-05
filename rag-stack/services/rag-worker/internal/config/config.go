@@ -14,6 +14,7 @@ type Config struct {
 	PulsarExecTopic    string
 	PulsarStatusTopic  string
 	PulsarResultsTopic string
+	PulsarCompletionTopic string
 	PulsarSubscription string
 	QdrantHost         string
 	QdrantPort         string
@@ -56,6 +57,7 @@ func LoadConfig() *Config {
 		PulsarExecTopic:    envutil.GetEnv("PULSAR_EXEC_TOPIC", "persistent://rag-pipeline/stage/exec"),
 		PulsarStatusTopic:  envutil.GetEnv("PULSAR_STATUS_TOPIC", "persistent://rag-pipeline/stage/status"),
 		PulsarResultsTopic: envutil.GetEnv("PULSAR_RESULTS_TOPIC", "persistent://rag-pipeline/stage/results"),
+		PulsarCompletionTopic: envutil.GetEnv("PULSAR_COMPLETION_TOPIC", "persistent://rag-pipeline/stage/completion"),
 		PulsarSubscription: envutil.GetEnv("PULSAR_SUBSCRIPTION", "rag-worker-sub"),
 		QdrantHost:         envutil.GetEnv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local"),
 		QdrantPort:         envutil.GetEnv("QDRANT_PORT", "6333"),

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prompt-aggregator
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prompt-aggregator
+  template:
+    metadata:
+      labels:
+        app: prompt-aggregator
+    spec:
+      nodeSelector:
+        role: storage-node
+      containers:
+      - name: aggregator
+        image: registry.hierocracy.home:5000/prompt-aggregator:__VERSION__
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          periodSeconds: 5
+          failureThreshold: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        env:
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: PULSAR_RESULTS_TOPIC
+          value: "persistent://rag-pipeline/stage/results"
+        - name: PULSAR_COMPLETION_TOPIC
+          value: "persistent://rag-pipeline/stage/completion"
+        - name: PULSAR_SUBSCRIPTION
+          value: "prompt-aggregator-sub"
+        - name: AGGREGATION_TIMEOUT
+          value: "60s"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm

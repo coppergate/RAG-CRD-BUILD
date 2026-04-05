@@ -36,6 +36,7 @@ SERVICES=(
     "rag-admin-api"
     "memory-controller"
     "build-orchestrator"
+    "prompt-aggregator"
 )
 
 log() { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }

@@ -355,11 +355,24 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
 		ID             string `json:"id"`
 		SessionID      string `json:"session_id"`
 		Result         string `json:"result"`
+		Chunk          string `json:"chunk"`
 		SequenceNumber int    `json:"sequence_number"`
 		Model          string `json:"model"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
+	}
+
+	// Skip streaming chunks - we only want the final aggregated results from the aggregator.
+	if payload.Result == "" && payload.Chunk != "" {
+		log.Printf("[%s] Ignoring stream chunk, waiting for aggregated result", payload.ID)
+		return dlq.Success, nil
+	}
+
+	// Also ignore the final chunk from worker if it's empty
+	if payload.Result == "" && payload.Chunk == "" {
+		log.Printf("[%s] Ignoring empty message", payload.ID)
+		return dlq.Success, nil
 	}
 
 	log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)

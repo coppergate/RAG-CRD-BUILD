@@ -15,10 +15,19 @@ type InternalRequest struct {
 }
 
 type StreamChunk struct {
-	ID        string `json:"id"`
-	SessionID string `json:"session_id"`
-	Chunk     string `json:"chunk"`
-	Sequence  int    `json:"sequence"`
-	IsLast    bool   `json:"is_last"`
-	Model     string `json:"model,omitempty"`
+	ID             string `json:"id"`
+	SessionID      string `json:"session_id"`
+	Chunk          string `json:"chunk"`
+	Sequence       int    `json:"sequence"`
+	IsLast         bool   `json:"is_last"`
+	Model          string `json:"model,omitempty"`
+	InConversation bool   `json:"in_conversation"`
+}
+
+type ResponseCompletion struct {
+	ID             string `json:"id"`
+	SessionID      string `json:"session_id"`
+	StartTimestamp string `json:"start_timestamp"` // RFC3339
+	Model          string `json:"model"`
+	Status         string `json:"status"` // COMPLETED, FAILED
 }

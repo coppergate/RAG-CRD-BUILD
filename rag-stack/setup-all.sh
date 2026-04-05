@@ -70,6 +70,7 @@ $KUBECTL wait --for=condition=Ready certificate/object-store-mgr-cert -n $NAMESP
 $KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=60s
 mark_step_done "rag-system-tls"
 fi
 
@@ -284,6 +285,12 @@ if ! is_step_done "rag-worker"; then
 echo "--- 7. Deploying RAG Worker (Go) ---"
 apply_manifest "$REPO_DIR/services/rag-worker/k8s/deployment.yaml"
 mark_step_done "rag-worker"
+fi
+
+if ! is_step_done "prompt-aggregator"; then
+echo "--- 7.5 Deploying Prompt Aggregator (Go) ---"
+apply_manifest "$REPO_DIR/services/prompt-aggregator/k8s/deployment.yaml"
+mark_step_done "prompt-aggregator"
 fi
 
 if ! is_step_done "object-store-mgr"; then

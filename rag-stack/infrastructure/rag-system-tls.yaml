@@ -311,3 +311,34 @@ spec:
     name: hierocracy-ca-issuer
     kind: ClusterIssuer
     group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: prompt-aggregator-cert
+  namespace: rag-system
+spec:
+  secretName: prompt-aggregator-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: prompt-aggregator.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - prompt-aggregator
+    - prompt-aggregator.rag-system
+    - prompt-aggregator.rag-system.svc
+    - prompt-aggregator.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
