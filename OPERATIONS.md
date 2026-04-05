@@ -68,6 +68,14 @@ As of version 2.4.9, the project is focusing on **Iteration 8 (Session Managemen
       "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
        /home/k8s/kube/kubectl get jobs -n build-pipeline"
     ```
+- **Cleanup**: Delete completed or failed Kaniko build jobs:
+    ```bash
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+       /home/k8s/kube/kubectl get jobs -n build-pipeline -o json | \
+       jq -r '.items[] | select(.metadata.labels[\"batch.kubernetes.io/job-name\"] // \"\" | startswith(\"kaniko-build-\")) | select(.status.succeeded > 0 or .status.failed > 0) | .metadata.name' | \
+       xargs -r /home/k8s/kube/kubectl delete job -n build-pipeline"
+    ```
 - **Build Orchestrator Logs**:
     ```bash
     ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
@@ -146,11 +154,11 @@ To run the RAG Explorer as a Linux desktop application or in a web browser, foll
 ### 3. Deploying to Cluster
 1. **Build**: Trigger the Kaniko build on **hierophant**:
    ```bash
-   ssh junie@hierophant "VERSION=2.4.4 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
+   ssh junie@hierophant "VERSION=2.4.9 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
    ```
 2. **Deploy**: The UI is automatically deployed by `setup-all.sh` in Iteration 7:
    ```bash
-   ssh junie@hierophant "VERSION=2.4.4 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
+   ssh junie@hierophant "VERSION=2.4.9 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
    ```
 3. **Verification**:
    - **Endpoint**: `https://rag-explorer.rag.hierocracy.home`
