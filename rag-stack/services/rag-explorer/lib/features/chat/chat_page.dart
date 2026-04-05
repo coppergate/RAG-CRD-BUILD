@@ -75,7 +75,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     Future<void> handleCreate() async {
       final name = nameController.text.trim();
       if (name.isNotEmpty) {
-        Navigator.pop(context);
+        
         final newId = const Uuid().v4();
         final chatService = ref.read(chatServiceProvider);
 
@@ -90,6 +90,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           });
           // Refresh the list to show the new session
           _loadSessions();
+          //Navigator.pop(context);
         }
       }
     }
@@ -399,6 +400,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             child: TextField(
               controller: _messageController,
               enabled: isEnabled,
+              minLines: 1,
+              maxLines: 5,
+              keyboardType: TextInputType.multiline,
               decoration: InputDecoration(
                 hintText: _currentSessionId == null ? 'Select or create a session to chat...' : 'Type a message...',
                 border: InputBorder.none,
