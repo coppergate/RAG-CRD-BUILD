@@ -105,6 +105,23 @@ As of version 2.4.10, the project is focusing on **Iteration 8 (Session Manageme
     - **Health Checks**: `/healthz` and `/readyz` endpoints on port **8081**.
     Both use HTTPS and require the `build-orchestrator-tls` secret.
 
+### Registry Maintenance (Pruning)
+To keep the registry clean and free up disk space, use the `registry-prune.sh` script to remove old image versions. This script keeps only the versions currently listed in `CURRENT_VERSION` and the `latest` tag.
+
+```bash
+# On hierophant:
+cd /mnt/hegemon-share/share/code/complete-build
+bash scripts/registry-prune.sh
+```
+
+After pruning manifests, you must run garbage collection on the in-cluster registry pod to actually free up space:
+
+```bash
+# On hierophant:
+export KUBECONFIG=/home/k8s/kube/config/kubeconfig
+/home/k8s/kube/kubectl exec -n container-registry deployment/registry -- registry garbage-collect /etc/docker/registry/config.yml
+```
+
 ### Verifying Images in Registry
 ```bash
 ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
