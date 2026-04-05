@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:rag_explorer/features/settings/settings_page.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
@@ -27,6 +29,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _showLogs = false;
   bool _isStreaming = false;
   bool _inConversation = false;
+  StreamSubscription<ResponseMessage>? _chatSubscription;
   final ScrollController _logScrollController = ScrollController();
   double _metadataPanelWidth = 300.0;
   double _logPanelWidth = 400.0;
@@ -39,6 +42,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   @override
   void dispose() {
+    _chatSubscription?.cancel();
     _messageController.dispose();
     _logScrollController.dispose();
     super.dispose();
@@ -90,7 +94,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           });
           // Refresh the list to show the new session
           _loadSessions();
-          //Navigator.pop(context);
+          Navigator.pop(context);
         }
       }
     }
@@ -233,12 +237,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     subtitle: Text('Last active: ${_formatTime(session.lastActiveAt)}'),
                     selected: isSelected,
                     onTap: () async {
+                      _chatSubscription?.cancel();
                       final chatService = ref.read(chatServiceProvider);
                       final msgs = await chatService.getMessages(session.id);
                       setState(() {
                         _currentSessionId = session.id;
                         _currentSessionName = session.name;
                         _messages = msgs;
+                        _isStreaming = false;
                       });
                     },
                     trailing: IconButton(
@@ -377,6 +383,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else if (!isUser)
+              MarkdownBody(
+                data: msg.content,
+                selectable: true,
+                styleSheet: MarkdownStyleSheet(
+                  p: const TextStyle(color: Colors.black87),
+                  code: TextStyle(backgroundColor: Colors.grey[300], fontFamily: 'monospace'),
+                ),
               )
             else
               Text(msg.content, style: const TextStyle(color: Colors.black87)),
@@ -575,6 +590,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final chatService = ref.read(chatServiceProvider);
     logger.debug('Calling chatService.streamChat');
     
+    _chatSubscription?.cancel();
     final stream = chatService.streamChat(
       prompt: userPrompt,
       sessionId: _currentSessionId!,
@@ -584,7 +600,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       tags: ['general'], // Default tag
     );
 
-    stream.listen(
+    _chatSubscription = stream.listen(
       (chunk) {
         if (chunk.content.isNotEmpty) {
            // We don't want to log every single chunk as it would be too much
