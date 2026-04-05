@@ -466,7 +466,7 @@ func handleGetSessionMessages(w http.ResponseWriter, r *http.Request, entClient 
 	}
 
 	// Sort by timestamp to interleave prompts and responses
-	sort.Slice(messages, func(i, j int) bool {
+	sort.SliceStable(messages, func(i, j int) bool {
 		return messages[i].Timestamp.Before(messages[j].Timestamp)
 	})
 	
