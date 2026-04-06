@@ -29,9 +29,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _showLogs = false;
   bool _isStreaming = false;
   bool _inConversation = false;
-  List<String> _tags = ['general'];
+  final List<String> _tags = ['general'];
   StreamSubscription<ResponseMessage>? _chatSubscription;
   final ScrollController _logScrollController = ScrollController();
+  final ScrollController _chatScrollController = ScrollController();
+  bool _isChatSelected = false;
+  bool _isLogSelected = false;
   double _metadataPanelWidth = 300.0;
   double _logPanelWidth = 400.0;
 
@@ -46,6 +49,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _chatSubscription?.cancel();
     _messageController.dispose();
     _logScrollController.dispose();
+    _chatScrollController.dispose();
     super.dispose();
   }
 
@@ -342,13 +346,32 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (_messages.isEmpty) {
       return const Center(child: Text('No messages yet. Send a prompt to start.'));
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _messages.length,
-      itemBuilder: (context, index) {
-        final msg = _messages[index];
-        return _buildMessageBubble(msg);
+
+    // Auto-scroll chat to bottom
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients && !_isChatSelected) {
+        _chatScrollController.jumpTo(_chatScrollController.position.maxScrollExtent);
+      }
+    });
+
+    return SelectionArea(
+      onSelectionChanged: (content) {
+        final isSelected = content != null && content.plainText.isNotEmpty;
+        if (isSelected != _isChatSelected) {
+          setState(() {
+            _isChatSelected = isSelected;
+          });
+        }
       },
+      child: ListView.builder(
+        controller: _chatScrollController,
+        padding: const EdgeInsets.all(16),
+        itemCount: _messages.length,
+        itemBuilder: (context, index) {
+          final msg = _messages[index];
+          return _buildMessageBubble(msg);
+        },
+      ),
     );
   }
 
@@ -386,7 +409,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             else if (!isUser)
               MarkdownBody(
                 data: msg.content,
-                selectable: true,
+                selectable: false, // Changed to false as it is now inside SelectionArea
                 styleSheet: MarkdownStyleSheet(
                   p: const TextStyle(color: Colors.black87),
                   code: TextStyle(backgroundColor: Colors.grey[300], fontFamily: 'monospace'),
@@ -463,7 +486,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     
     // Auto-scroll to bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_logScrollController.hasClients) {
+      if (_logScrollController.hasClients && !_isLogSelected) {
         _logScrollController.jumpTo(_logScrollController.position.maxScrollExtent);
       }
     });
@@ -471,6 +494,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return SizedBox(
       width: _logPanelWidth,
       child: SelectionArea(
+        onSelectionChanged: (content) {
+          final isSelected = content != null && content.plainText.isNotEmpty;
+          if (isSelected != _isLogSelected) {
+            setState(() {
+              _isLogSelected = isSelected;
+            });
+          }
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -564,7 +595,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withOpacity(0.5),
+        color: Theme.of(context).cardColor.withValues(alpha: 0.5),
         border: Border(top: BorderSide(color: Colors.grey[300]!)),
       ),
       child: Row(
