@@ -38,7 +38,7 @@ Every new session for the **Junie** agent MUST establish the operational context
 
 As of version 2.4.10, the project is focusing on **Iteration 8 (Session Management & UI Polish)**.
 1.  **Session Management**: Implemented Session Deletion and History Retrieval in `db-adapter`. Added History loading to RAG Explorer.
-2.  **UI Polish**: Upgraded Flutter dependencies, implemented Flyout Menu with Pin feature. Integrated `appConfigProvider` for theme and endpoints. Fixed `llama3.1` model identifier mismatch by appending `:latest` tag in the front end. Updated log output colors for dark mode (bright red/yellow/white).
+2.  **UI Polish**: Upgraded Flutter dependencies, implemented Flyout Menu with Pin feature. Integrated `appConfigProvider` for theme and endpoints. Fixed `llama3.1` model identifier mismatch by appending `:latest` tag in the front end. Updated log output colors for dark mode (bright red/yellow/white). Implemented conditional auto-scroll for chat and log windows (disabled when text is selected).
 3.  **Gateway Integration**: Centralized all RAG Explorer service calls through `rag-admin-api` proxying (S3, DB, Qdrant, Memory, Ingest, Chat).
 4.  **Stability**: Enhanced error reporting for "Execution stream failed" in `rag-worker` to include specific underlying error messages (Ollama/HTTP). Resolved session chat history interleaving in `db-adapter` by sorting merged messages by timestamp.
 5.  **Persistence**: Fixed missing prompt persistence in `llm-gateway` for streaming and generic chat.
