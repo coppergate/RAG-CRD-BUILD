@@ -76,7 +76,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void _startNewSession() {
     final nameController = TextEditingController();
 
-    Future<void> handleCreate() async {
+    Future<void> handleCreate(BuildContext dialogContext) async {
       final name = nameController.text.trim();
       if (name.isNotEmpty) {
         
@@ -94,14 +94,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           });
           // Refresh the list to show the new session
           _loadSessions();
-          Navigator.pop(context);
+          Navigator.pop(dialogContext);
         }
       }
     }
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('New Chat Session'),
         content: TextField(
           controller: nameController,
@@ -110,12 +110,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             labelText: 'Session Name',
           ),
           autofocus: true,
-          onSubmitted: (_) => handleCreate(),
+          onSubmitted: (_) => handleCreate(dialogContext),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           TextButton(
-            onPressed: handleCreate,
+            onPressed: () => handleCreate(dialogContext),
             child: const Text('Create'),
           ),
         ],

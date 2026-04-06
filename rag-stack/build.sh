@@ -55,9 +55,18 @@ get_svc_last_build() {
 update_svc_info() {
     local svc="$1"; local ver="$2"; local build_time="$3"
     local tmp=$(mktemp)
-    jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp"
-    cat "$tmp" > "$VERSION_FILE"
+    if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
+    jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" && mv "$tmp" "$VERSION_FILE"
     rm -f "$tmp"
+}
+
+cleanup_old_jobs() {
+    if [[ "$MODE" == "cluster" ]]; then
+        log "Cleaning up old completed/failed build jobs..."
+        "$KUBECTL" get jobs -n build-pipeline -o json | \
+            jq -r '.items[] | select(.status.succeeded > 0 or .status.failed > 0) | .metadata.name' | \
+            xargs -r "$KUBECTL" delete job -n build-pipeline
+    fi
 }
 
 increment_version() {
@@ -113,6 +122,7 @@ deploy_update() {
     case "$svc" in
         "rag-web-ui") manifest="$REPO_DIR/services/rag-web-ui/ui-deployment.yaml" ;;
         "object-store-mgr") manifest="$REPO_DIR/services/object-store-mgr/mgr-deployment.yaml" ;;
+        "build-orchestrator") manifest="$REPO_DIR/infrastructure/build-pipeline/orchestrator-deployment.yaml" ;;
         "rag-test-runner") manifest="" ;; # No deployment for test-runner
         *) manifest="$REPO_DIR/services/$svc/k8s/deployment.yaml" ;;
     esac
@@ -219,6 +229,8 @@ main() {
         shift
     done
 
+    cleanup_old_jobs
+
     if [[ -n "$SELECTED_SERVICE" ]]; then
         build_service "$SELECTED_SERVICE"
     else
@@ -241,7 +253,8 @@ main() {
 
     if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
         log "Waiting for cluster builds to complete..."
-        $KUBECTL wait --for=condition=complete job -n build-pipeline --all --timeout=600s || true
+        # Wait for all jobs with the app=kaniko-build label
+        "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l app=kaniko-build --timeout=900s || true
         # After wait, we update timestamps for all services that were built
         for svc in "${SERVICES[@]}"; do
              local ver=$(get_svc_version "$svc")

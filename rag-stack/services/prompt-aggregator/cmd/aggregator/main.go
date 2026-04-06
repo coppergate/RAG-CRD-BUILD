@@ -135,7 +135,7 @@ func main() {
 func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, comp contracts.ResponseCompletion) (string, error) {
 	reader, err := client.CreateReader(pulsar.ReaderOptions{
 		Topic:          topic,
-		StartMessageID: pulsar.EarliestMessageID,
+		StartMessageID: pulsar.EarliestMessageID(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("create reader: %w", err)

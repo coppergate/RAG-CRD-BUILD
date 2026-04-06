@@ -625,6 +625,11 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: namespace,
+			Labels: map[string]string{
+				"app":     "kaniko-build",
+				"service": sanitizeNamePart(task.ServiceName),
+				"version": sanitizeNamePart(task.Version),
+			},
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
