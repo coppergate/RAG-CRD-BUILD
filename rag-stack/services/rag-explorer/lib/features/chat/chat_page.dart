@@ -375,8 +375,58 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  MarkdownStyleSheet _getMarkdownStyle(bool isDarkMode) {
+    return isDarkMode
+        ? MarkdownStyleSheet(
+            p: const TextStyle(color: Colors.white70),
+            listBullet: const TextStyle(color: Colors.white70),
+            h1: const TextStyle(color: Colors.white, fontSize: 24, fontFamily: "Roboto"),
+            h2: const TextStyle(color: Colors.white, fontSize: 20, fontFamily: "Roboto"),
+            h3: const TextStyle(color: Colors.white, fontSize: 16, fontFamily: "Roboto"),
+            h4: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: "Roboto"),
+            h5: const TextStyle(color: Colors.white, fontSize: 8, fontFamily: "Roboto"),
+            code: TextStyle(
+              color: Colors.orangeAccent,
+              backgroundColor: Colors.white12,
+              fontFamily: 'monospace',
+              fontSize: 14,
+            ),
+            codeblockDecoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E), // Darker code block
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.white10),
+            ),
+            codeblockPadding: const EdgeInsets.all(8),
+          )
+        : MarkdownStyleSheet(
+            p: const TextStyle(
+              color: Colors.black87,
+              backgroundColor: Color.fromARGB(5, 1, 10, 10),
+            ),
+            listBullet: const TextStyle(color: Colors.black),
+            h1: const TextStyle(color: Colors.black, fontSize: 24, fontFamily: "Roboto"),
+            h2: const TextStyle(color: Colors.black, fontSize: 20, fontFamily: "Roboto"),
+            h3: const TextStyle(color: Colors.black, fontSize: 16, fontFamily: "Roboto"),
+            h4: const TextStyle(color: Colors.black, fontSize: 12, fontFamily: "Roboto"),
+            h5: const TextStyle(color: Colors.black, fontSize: 8, fontFamily: "Roboto"),
+            code: TextStyle(
+              color: Colors.redAccent,
+              backgroundColor: const Color.fromARGB(5, 10, 20, 20),
+              fontFamily: 'monospace',
+              fontSize: 14,
+            ),
+            codeblockDecoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            codeblockPadding: const EdgeInsets.all(8),
+          );
+  }
+
   Widget _buildMessageBubble(ResponseMessage msg) {
     final isUser = msg.role == 'user';
+    final darkMode = ref.watch(appConfigProvider).darkMode;
+    
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -384,7 +434,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isUser ? Colors.blue[100] : Colors.grey[200],
+          color: isUser 
+              ? (darkMode ? Colors.blue[900] : Colors.blue[100])
+              : (darkMode ? Colors.grey[850] : Colors.grey[200]),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(12),
             topRight: const Radius.circular(12),
@@ -397,7 +449,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           children: [
             Text(
               isUser ? 'User' : 'Assistant',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 10, 
+                fontWeight: FontWeight.bold, 
+                color: darkMode ? Colors.grey[400] : Colors.grey[600]
+              ),
             ),
             const SizedBox(height: 4),
             if (msg.content.isEmpty && !isUser && _isStreaming)
@@ -410,13 +466,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               MarkdownBody(
                 data: msg.content,
                 selectable: false, // Changed to false as it is now inside SelectionArea
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(color: Colors.black87),
-                  code: TextStyle(backgroundColor: Colors.grey[300], fontFamily: 'monospace'),
-                ),
+                styleSheet: _getMarkdownStyle(darkMode),
               )
             else
-              Text(msg.content, style: const TextStyle(color: Colors.black87)),
+              Text(
+                msg.content, 
+                style: TextStyle(color: darkMode ? Colors.white70 : Colors.black87)
+              ),
           ],
         ),
       ),
