@@ -194,7 +194,7 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 
 			if chunk.Chunk != "" {
 				// Deduplicate by sequence number
-				chunks[chunk.Sequence] = chunk
+				chunks[chunk.SequenceNumber] = chunk
 			}
 
 			if chunk.IsLast {
@@ -221,11 +221,12 @@ func assemble(chunkMap map[int]contracts.StreamChunk) string {
 
 func sendFinalResult(ctx context.Context, producer pulsar.Producer, comp contracts.ResponseCompletion, result string) error {
 	payload, err := json.Marshal(map[string]interface{}{
-		"id":         comp.ID,
-		"session_id": comp.SessionID,
-		"result":     result,
-		"model":      comp.Model,
-		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"id":              comp.ID,
+		"session_id":      comp.SessionID,
+		"result":          result,
+		"model":           comp.Model,
+		"sequence_number": 0, // Final aggregated result is always seq 0
+		"timestamp":       time.Now().UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		return err

@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"app-builds/common/contracts"
 	"app-builds/common/dlq"
 	"app-builds/common/ent"
 	"app-builds/common/ent/prompt"
@@ -352,12 +353,8 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
 	defer span.End()
 
 	var payload struct {
-		ID             string `json:"id"`
-		SessionID      string `json:"session_id"`
-		Result         string `json:"result"`
-		Chunk          string `json:"chunk"`
-		SequenceNumber int    `json:"sequence_number"`
-		Model          string `json:"model"`
+		contracts.StreamChunk
+		Result string `json:"result"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)

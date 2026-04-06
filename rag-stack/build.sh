@@ -56,7 +56,7 @@ update_svc_info() {
     local svc="$1"; local ver="$2"; local build_time="$3"
     local tmp=$(mktemp)
     if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
-    jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" && mv "$tmp" "$VERSION_FILE"
+    jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" && cat "$tmp" > "$VERSION_FILE"
     rm -f "$tmp"
 }
 

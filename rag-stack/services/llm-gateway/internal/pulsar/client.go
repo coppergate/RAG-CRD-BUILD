@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"app-builds/common/contracts"
 	"app-builds/common/tlsutil"
 	"app-builds/llm-gateway/internal/config"
 )
@@ -22,7 +23,7 @@ type pulsarClient struct {
 	promptProducer pulsar.Producer
 	consumer       pulsar.Consumer
 	pending        sync.Map // correlationID -> chan response
-	streams        sync.Map // correlationID -> chan StreamChunk
+	streams        sync.Map // correlationID -> chan contracts.StreamChunk
 	requestTimeout time.Duration
 }
 
@@ -33,15 +34,6 @@ type response struct {
 	Chunk          string `json:"chunk"`
 	SequenceNumber int    `json:"sequence_number"`
 	IsLast         bool   `json:"is_last"`
-	InConversation bool   `json:"in_conversation"`
-}
-
-type StreamChunk struct {
-	ID             string `json:"id"`
-	Chunk          string `json:"chunk"`
-	SequenceNumber int    `json:"sequence_number"`
-	IsLast         bool   `json:"is_last"`
-	Error          string `json:"error,omitempty"`
 	InConversation bool   `json:"in_conversation"`
 }
 
@@ -114,7 +106,7 @@ func (pc *pulsarClient) consumeResults() {
 				ch.(chan response) <- resp
 			}
 			if ch, ok := pc.streams.Load(resp.ID); ok {
-				ch.(chan StreamChunk) <- StreamChunk{
+				ch.(chan contracts.StreamChunk) <- contracts.StreamChunk{
 					ID:             resp.ID,
 					Chunk:          resp.Chunk,
 					SequenceNumber: resp.SequenceNumber,
@@ -187,7 +179,7 @@ func (pc *pulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, cont
 	return err
 }
 
-func (pc *pulsarClient) SubscribeStream(id string, ch chan StreamChunk) {
+func (pc *pulsarClient) SubscribeStream(id string, ch chan contracts.StreamChunk) {
 	pc.streams.Store(id, ch)
 }
 

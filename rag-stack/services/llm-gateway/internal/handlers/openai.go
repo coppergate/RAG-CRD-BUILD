@@ -251,7 +251,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Channel to receive chunks from Pulsar
-	chunkChan := make(chan pulsar.StreamChunk, 10)
+	chunkChan := make(chan contracts.StreamChunk, 10)
 	h.Pulsar.SubscribeStream(correlationID, chunkChan)
 	defer h.Pulsar.UnsubscribeStream(correlationID)
 

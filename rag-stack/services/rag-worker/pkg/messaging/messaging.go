@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"app-builds/common/contracts"
 	"app-builds/common/tlsutil"
 	"app-builds/rag-worker/internal/config"
 )
@@ -145,20 +146,22 @@ func (c *Client) SendStatus(ctx context.Context, id, sessionID, state, details s
 // SendResult sends a result message as a single chunk for consistency with the aggregator.
 func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model string) {
 	log.Printf("[%s] Sending non-streaming result as final chunk", id)
-	c.SendStreamChunk(ctx, id, sessionID, result, 1, true, model, true)
+	c.SendStreamChunk(ctx, id, sessionID, result, 0, true, model, true)
 }
 
 // SendStreamChunk sends a streaming result chunk to the results topic.
 func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string, inConversation bool) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"id":              id,
-		"session_id":      sessionID,
-		"chunk":           chunk,
-		"sequence_number": sequence,
-		"is_last":         isLast,
-		"model":           model,
-		"in_conversation": inConversation,
-	})
+	msgPayload := contracts.StreamChunk{
+		ID:             id,
+		SessionID:      sessionID,
+		Chunk:          chunk,
+		SequenceNumber: sequence,
+		IsLast:         isLast,
+		Model:          model,
+		InConversation: inConversation,
+	}
+
+	payload, err := json.Marshal(msgPayload)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal stream chunk: %v", id, err)
 		return
@@ -177,11 +180,13 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk strin
 
 // SendError sends an error message to the results topic.
 func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversation bool) {
-	payload, err := json.Marshal(map[string]interface{}{
-		"id":              id,
-		"error":           errMsg,
-		"in_conversation": inConversation,
-	})
+	msgPayload := contracts.StreamChunk{
+		ID:             id,
+		Error:          errMsg,
+		InConversation: inConversation,
+	}
+
+	payload, err := json.Marshal(msgPayload)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal error: %v", id, err)
 		return
