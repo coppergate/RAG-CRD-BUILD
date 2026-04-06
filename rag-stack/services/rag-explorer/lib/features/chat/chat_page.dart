@@ -29,6 +29,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _showLogs = false;
   bool _isStreaming = false;
   bool _inConversation = false;
+  List<String> _tags = ['general'];
   StreamSubscription<ResponseMessage>? _chatSubscription;
   final ScrollController _logScrollController = ScrollController();
   double _metadataPanelWidth = 300.0;
@@ -153,6 +154,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               children: [
                 _buildConfigBar(),
                 Expanded(child: _buildMessageList()),
+                _buildTagsPanel(),
                 _buildInputArea(),
               ],
             ),
@@ -300,9 +302,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           _buildDropdown('Executor', _selectedExecutor, (val) => setState(() => _selectedExecutor = val!)),
           const SizedBox(width: 16),
           _buildDropdown('Memory', _memoryMode, (val) => setState(() => _memoryMode = val!), items: ['off', 'session', 'full']),
-          const Spacer(),
-          const Text('Tags: ', style: TextStyle(fontSize: 12)),
-          const Chip(label: Text('general'), deleteIcon: Icon(Icons.close, size: 12), onDeleted: null),
         ],
       ),
     );
@@ -561,6 +560,83 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  Widget _buildTagsPanel() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor.withOpacity(0.5),
+        border: Border(top: BorderSide(color: Colors.grey[300]!)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.tag, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          const Text('Tags: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ..._tags.map((tag) => Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Chip(
+                      label: Text(tag, style: const TextStyle(fontSize: 11)),
+                      onDeleted: () => setState(() => _tags.remove(tag)),
+                      deleteIcon: const Icon(Icons.close, size: 12),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    ),
+                  )),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, size: 18),
+                    onPressed: _showAddTagDialog,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Add Tag',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddTagDialog() {
+    final tagController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Tag'),
+        content: TextField(
+          controller: tagController,
+          decoration: const InputDecoration(hintText: 'Enter tag name'),
+          autofocus: true,
+          onSubmitted: (val) {
+            if (val.trim().isNotEmpty) {
+              setState(() => _tags.add(val.trim()));
+              Navigator.pop(context);
+            }
+          },
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              if (tagController.text.trim().isNotEmpty) {
+                setState(() => _tags.add(tagController.text.trim()));
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _sendMessage() {
     if (_messageController.text.isEmpty || _isStreaming || _currentSessionId == null) return;
 
@@ -597,7 +673,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       sessionName: _currentSessionName,
       planner: _selectedPlanner,
       executor: _selectedExecutor,
-      tags: ['general'], // Default tag
+      tags: _tags,
     );
 
     _chatSubscription = stream.listen(
