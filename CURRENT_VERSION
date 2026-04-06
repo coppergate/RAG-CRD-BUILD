@@ -40,11 +40,11 @@
     "last_build": "2026-04-05T09:55:00Z"
   },
   "build-orchestrator": {
-    "version": "2.4.11",
-    "last_build": "2026-04-05T09:55:00Z"
+    "version": "2.4.12",
+    "last_build": null
   },
   "prompt-aggregator": {
-    "version": "2.4.13",
-    "last_build": null
+    "version": "2.4.15",
+    "last_build": "2026-04-05T19:01:33Z"
   }
 }

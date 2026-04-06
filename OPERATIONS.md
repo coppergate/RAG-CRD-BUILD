@@ -59,7 +59,11 @@ As of version 2.4.10, the project is focusing on **Iteration 8 (Session Manageme
 1.  **Access Hierophant**: Use `./run-on-hierophant.sh` or SSH directly.
 2.  **Versioning**: The version is read from `CURRENT_VERSION` at the project root. You can override it with the `VERSION` environment variable.
 3.  **Command**: Run `rag-stack/build.sh` (defaults to cluster-mode with change detection).
-4.  **Example Commands**:
+4.  **Wait Mode**: Use the `--wait` flag to wait for build completion. The script automatically handles:
+    - Pre-build cleanup of old completed/failed Kaniko jobs.
+    - Targeted waiting using the `app=kaniko-build` label.
+    - Accurate post-build timestamp updates in `CURRENT_VERSION`.
+5.  **Example Commands**:
     - Build all changed services on cluster:
       ```bash
       ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
