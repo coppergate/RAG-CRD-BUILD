@@ -43,6 +43,27 @@ As of version 2.4.10, the project is focusing on **Iteration 8 (Session Manageme
 4.  **Stability**: Enhanced error reporting for "Execution stream failed" in `rag-worker` to include specific underlying error messages (Ollama/HTTP). Resolved session chat history interleaving in `db-adapter` by sorting merged messages by timestamp.
 5.  **Persistence**: Fixed missing prompt persistence in `llm-gateway` for streaming and generic chat.
 
+## Prompt Aggregation (Session Topics)
+
+As of version 2.5.4, the prompt aggregation architecture has been migrated to session-specific topics to eliminate linear scanning of global topics.
+
+### 1. Topic Naming Convention
+- **Session Topics**: `persistent://rag-pipeline/sessions/<correlation_id>`
+- **Global Completion Topic**: `persistent://rag-pipeline/stage/completion`
+- **Global Results Topic**: `persistent://rag-pipeline/stage/results` (used only for final results).
+
+### 2. Service Roles
+- **LLM Gateway**: Subscribes to the session topic for the request's `correlation_id` to receive and stream chunks to the client.
+- **RAG Worker**: Dynamically creates a Pulsar producer for the session topic of each request and sends all `StreamChunk` messages there.
+- **Prompt Aggregator**: Subscribes to the global `completion` topic. When a completion event arrives, it creates a Pulsar **Reader** for the session topic, aggregates all chunks, and publishes the final result to the global `results` topic.
+
+### 3. Infrastructure (Pulsar)
+- A dedicated Pulsar namespace `rag-pipeline/sessions` MUST exist.
+- **Policies**:
+    - **Inactive Topic Deletion**: Enabled, with a 5-minute timeout.
+    - **Message TTL**: 30 minutes.
+- Use `rag-stack/infrastructure/pulsar/init-rag-pulsar.sh` to ensure the namespace and policies are correctly applied.
+
 ---
 
 **IMPORTANT**: All RAG service image builds MUST go through the in-cluster Kaniko build pipeline. Do NOT use `podman build` or `docker build` on the host to build service images. The host-based `build-and-push.sh` is only for bootstrapping when the cluster is not available.
@@ -82,6 +103,25 @@ As of version 2.4.10, the project is focusing on **Iteration 8 (Session Manageme
         "cd /mnt/hegemon-share/share/code/complete-build && \
          bash ./rag-stack/build.sh --mode cluster --wait"
       ```
+
+### Monitoring & Observability
+
+#### Grafana Dashboards
+The RAG stack uses the following Grafana dashboards for monitoring:
+- **RAG Stack Operational Overview** (`uid: rag-operations`): Main dashboard for high-level monitoring.
+  - **Prompts & Responses (Rate)**: Monitors incoming user requests and worker completions.
+  - **Avg Prompt/Response Size**: Tracks data volume in characters/bytes for prompts and responses.
+  - **Pipeline Latency (P95)**: Tracks End-to-End (Gateway) and per-stage (Worker) P95 latency.
+  - **Pulsar Bus Health**: Monitors message throughput across the pipeline.
+  - **GPU Utilization (%)**: Displays cluster-wide GPU and memory utilization.
+  - **System Errors**: Aggregates error rates from Gateway, Worker, DB, and Qdrant.
+- **RAG Stack Performance Overview** (`uid: rag-performance`): Detailed performance and error metrics per service.
+- **RAG Stack Logs & Errors** (`uid: rag-logs`): Loki-based dashboard for real-time log analysis and error tracking.
+
+#### Custom Metrics
+New metrics introduced in Iteration 9 for operational tracking:
+- `gateway_prompt_size_bytes`: Histogram of incoming prompt sizes in `llm-gateway`.
+- `worker_response_size_bytes`: Histogram of outgoing response sizes in `rag-worker`.
 
 ### Monitoring Builds
 - **Jobs**: Check Kaniko job status in the `build-pipeline` namespace:
@@ -338,6 +378,57 @@ If services fail with `no partitioned metadata for topic` or `Namespace not foun
 - `setup-all.sh` will **exit with an error** if Pulsar brokers are not running. This is intentional — RAG services depend on Pulsar and will fail at runtime without it.
 - The Pulsar `install.sh` journal is NOT cleared on success (to prevent redundant re-runs when called from multiple parent scripts).
 - Use `FRESH_INSTALL=true` with `setup-complete.sh` to clear all journals and re-run from scratch.
+
+## Cluster Maintenance (Rebooting the Host)
+
+When performing a full host reboot on **hierophant**, use the following procedures to ensure a clean cluster shutdown and graceful recovery.
+
+### 1. Graceful Shutdown
+Before rebooting the host, execute the `cluster-shutdown.sh` script to drain nodes and scale down stateful services (Pulsar, Ceph, DB).
+
+- **Script Location**: `../kubernetes-setup/cluster-shutdown.sh`
+- **Execution**: MUST be run on **hierophant**.
+```bash
+# On hierophant:
+cd /mnt/hegemon-share/share/code/kubernetes-setup
+bash ./cluster-shutdown.sh
+```
+- **What it does**:
+    0.  **Admission Controller Cleanup**: Deletes the `k8tz` `MutatingWebhookConfiguration` to prevent it from blocking the next cluster startup.
+    1.  Scales down all non-system resources in a prioritized order (Apps -> Bus -> Infrastructure).
+    2.  Waits for all pods in the scaled namespaces to fully terminate to ensure clean unmounting.
+    3.  Quiesces Ceph cluster (sets maintenance flags like `noout`).
+    4.  Drains all Kubernetes nodes (control-plane and worker/inference) while storage is still available.
+    5.  Scales down Rook-Ceph components (mgr -> others -> osd -> mon).
+    6.  Shuts down all cluster VMs via `virsh`.
+    7.  Saves the original replica counts to `cluster-replicas.state`.
+
+### 2. Rebooting
+Once the script confirms all VMs have shut down, you can safely reboot the host.
+```bash
+sudo reboot
+```
+
+### 3. Graceful Startup
+After the host is back up, execute the `cluster-startup.sh` script to restore the cluster state.
+
+- **Script Location**: `../kubernetes-setup/cluster-startup.sh`
+- **Execution**: MUST be run on **hierophant**.
+```bash
+# On hierophant:
+cd /mnt/hegemon-share/share/code/kubernetes-setup
+bash ./cluster-startup.sh
+```
+- **What it does**:
+    1.  Detaches GPUs from the host PCI bus.
+    2.  Starts all cluster VMs.
+    3.  Waits for the Kubernetes API and all nodes to be Ready.
+    4.  **Admission Controller Cleanup**: Deletes the `k8tz` `MutatingWebhookConfiguration` (if present) as a safeguard to ensure core networking (Flannel) can start without mutation deadlocks.
+    5.  Uncordons all nodes.
+    6.  Restores Rook-Ceph in order (mon -> osd -> others).
+    7.  Unfreezes Ceph state (unsets maintenance flags).
+    8.  Restores all other resources from `cluster-replicas.state` in the correct reverse-shutdown order (Infrastructure -> Bus -> Apps).
+    9.  **Admission Controller Restoration**: Reinstalls the `k8tz` admission controller via `helm upgrade --install` once the cluster is stable.
 
 ## TLS and Security
 1.  **Management Guide**: Refer to [TLS-GUIDE.md](TLS-GUIDE.md) for step-by-step instructions on creating certificates, adding SANs, and managing trust.
