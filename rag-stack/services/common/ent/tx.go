@@ -24,6 +24,8 @@ type Tx struct {
 	Response *ResponseClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
+	// Tag is the client for interacting with the Tag builders.
+	Tag *TagClient
 
 	// lazily loaded.
 	client     *Client
@@ -161,6 +163,7 @@ func (tx *Tx) init() {
 	tx.Prompt = NewPromptClient(tx.config)
 	tx.Response = NewResponseClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
+	tx.Tag = NewTagClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

@@ -54,7 +54,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: orchestrator
-        image: registry.container-registry.svc.cluster.local:5000/build-orchestrator:2.2.8
+        image: registry.hierocracy.home:5000/build-orchestrator:__VERSION__
         imagePullPolicy: Always
         ports:
         - name: http

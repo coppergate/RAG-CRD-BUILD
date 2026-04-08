@@ -6,11 +6,12 @@ WORKDIR /app
 RUN apk add --no-cache gcc musl-dev git
 
 # Cache modules layer
-COPY common/ /common/
+COPY common/go.mod common/go.sum /common/
 COPY object-store-mgr/go.mod object-store-mgr/go.sum ./
 RUN CGO_ENABLED=0 go mod download
 
 # Copy sources and build
+COPY common/ /common/
 COPY object-store-mgr/ .
 RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o manager cmd/manager/main.go
 

@@ -6,9 +6,11 @@ graph TD
 
     subgraph "Kubernetes: rag-system namespace: TLS-SSL"
         UI[rag-web-ui]
+        Explorer[rag-explorer]
         Gateway[llm-gateway]
         Worker[rag-worker]
         DBAdapter[db-adapter]
+        Aggregator[prompt-aggregator]
         Ingestor[rag-ingestion-service]
         QAdapter[qdrant-adapter]
         OSMgr[object-store-mgr]
@@ -40,8 +42,9 @@ graph TD
         Plan[stage/plan]
         Exec[stage/exec]
         Results[stage/results]
+        Completion[stage/completion]
         Prompts[data/chat-prompts]
-        Responses[data/chat-responses]
+        Sessions[sessions/UUID-topic]
         Ops[operations/db-ops]
         QOps[operations/qdrant-ops]
         QRes[operations/qdrant-ops-results]
@@ -54,17 +57,13 @@ graph TD
         Reg[Local Registry]
     end
 
-    %% Interaction Flows: HTTPS
-    Browser <-->|HTTPS/443| UI
-    Browser -->|HTTPS/443| Gateway
-
     %% Registry Flow
-    UI & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
+    UI & Explorer & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
     S3 & Qdrant & TDB & Ollama & OllamaCode -.->|Pull TLS| Reg
 
     %% Ingestion Flow
-    UI -->|Upload: S3 API| S3
-    UI -->|Trigger: HTTPS| Ingestor
+    Explorer -->|Upload: S3 API| S3
+    Explorer -->|Trigger: HTTPS| Ingestor
     Ingestor -->|Store Metadata: TLS| TDB
     Ingestor -.->|1- Publish: Pulsar+SSL| QOps
     QAdapter -.->|2- Consume: Pulsar+SSL| QOps
@@ -72,7 +71,10 @@ graph TD
     Ingestor -->|Read Files: S3 API| S3
     Ingestor -->|Embeddings: HTTP| Ollama
 
-    %% Chat Flow: Asynchronous Pulsar+SSL
+    %% Chat Flow: Isolated Session Streaming
+    Explorer <-->|Websocket/HTTPS| Gateway
+    Browser <-->|HTTPS/443| UI
+
     Gateway -.->|1- Publish| Prompts
     Gateway -.->|2- Publish| Ingress
 
@@ -89,17 +91,22 @@ graph TD
     Worker -.->|11- Publish| Exec
     Exec -.->|12- Consume| Worker
 
-    Worker -->|13- Inference: Planner| Ollama
-    Worker -->|14- Inference: Executor| OllamaCode
-    Worker -.->|15- Publish| Responses
-    Worker -.->|15- Publish| Results
+    Worker -->|13- Inference| Ollama
+    Worker -->|14- Inference| OllamaCode
+    Worker -.->|15- Stream Chunks| Sessions
+    Worker -.->|16- Completion Signal| Completion
 
-    Results -.->|16- Consume| Gateway
-    Gateway -->|17- HTTPS Response| Browser
+    Sessions -.->|17- Read Stream| Gateway
+    Completion -.->|18- Trigger| Aggregator
+    Aggregator -.->|19- Read Session Data| Sessions
+    Aggregator -.->|20- Publish| Results
+
+    Results -.->|21- Consume| DBAdapter
+    Gateway -->|22- Final Response| Explorer
 
     %% Persistent Flow: DB Adapter
     Prompts -.->|Consume| DBAdapter
-    Responses -.->|Consume| DBAdapter
+    Results -.->|Consume| DBAdapter
     Ops -.->|Consume| DBAdapter
     DBAdapter -->|Persist: TLS| TDB
 

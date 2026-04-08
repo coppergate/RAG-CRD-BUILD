@@ -31,6 +31,10 @@ type Client struct {
 	Producers Producers
 }
 
+func (c *Client) SessionTopic(id string) string {
+	return fmt.Sprintf("persistent://rag-pipeline/sessions/%s", id)
+}
+
 // NewClient creates a Pulsar client and all required producers.
 func NewClient(cfg *config.Config) (*Client, error) {
 	opts := pulsar.ClientOptions{
@@ -144,13 +148,22 @@ func (c *Client) SendStatus(ctx context.Context, id, sessionID, state, details s
 }
 
 // SendResult sends a result message as a single chunk for consistency with the aggregator.
-func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model string) {
+func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model string, metadata map[string]interface{}) {
 	log.Printf("[%s] Sending non-streaming result as final chunk", id)
-	c.SendStreamChunk(ctx, id, sessionID, result, 0, true, model, true)
+	c.SendStreamChunk(ctx, id, sessionID, result, 0, true, model, true, metadata)
 }
 
-// SendStreamChunk sends a streaming result chunk to the results topic.
-func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string, inConversation bool) {
+func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string, inConversation bool, metadata map[string]interface{}) {
+	topic := c.SessionTopic(id)
+	producer, err := c.client.CreateProducer(pulsar.ProducerOptions{
+		Topic: topic,
+	})
+	if err != nil {
+		log.Printf("[%s] Failed to create session producer for %s: %v", id, topic, err)
+		return
+	}
+	defer producer.Close()
+
 	msgPayload := contracts.StreamChunk{
 		ID:             id,
 		SessionID:      sessionID,
@@ -159,6 +172,7 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk strin
 		IsLast:         isLast,
 		Model:          model,
 		InConversation: inConversation,
+		Metadata:       metadata,
 	}
 
 	payload, err := json.Marshal(msgPayload)
@@ -173,13 +187,22 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk strin
 	}
 	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Properties))
 
-	if _, err := c.Producers.Results.Send(ctx, msg); err != nil {
-		log.Printf("[%s] Failed to send stream chunk to topic: %v", id, err)
+	if _, err := producer.Send(ctx, msg); err != nil {
+		log.Printf("[%s] Failed to send stream chunk to topic %s: %v", id, topic, err)
 	}
 }
 
-// SendError sends an error message to the results topic.
 func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversation bool) {
+	topic := c.SessionTopic(id)
+	producer, err := c.client.CreateProducer(pulsar.ProducerOptions{
+		Topic: topic,
+	})
+	if err != nil {
+		log.Printf("[%s] Failed to create session producer for error %s: %v", id, topic, err)
+		return
+	}
+	defer producer.Close()
+
 	msgPayload := contracts.StreamChunk{
 		ID:             id,
 		Error:          errMsg,
@@ -191,8 +214,8 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 		log.Printf("[%s] Failed to marshal error: %v", id, err)
 		return
 	}
-	if _, err := c.Producers.Results.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
-		log.Printf("[%s] Failed to send error to topic: %v", id, err)
+	if _, err := producer.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
+		log.Printf("[%s] Failed to send error to topic %s: %v", id, topic, err)
 	}
 }
 

@@ -22,11 +22,12 @@ import (
 )
 
 var (
-	meter          = telemetry.Meter("rag-worker")
-	taskCounter    metric.Int64Counter
-	errorCounter   metric.Int64Counter
-	taskLatency    metric.Float64Histogram
-	llmLatency     metric.Float64Histogram
+	meter            = telemetry.Meter("rag-worker")
+	taskCounter      metric.Int64Counter
+	errorCounter     metric.Int64Counter
+	taskLatency      metric.Float64Histogram
+	llmLatency       metric.Float64Histogram
+	responseSizeHist metric.Int64Histogram
 )
 
 func init() {
@@ -46,6 +47,10 @@ func init() {
 	llmLatency, err = meter.Float64Histogram("worker_llm_duration_ms", metric.WithUnit("ms"))
 	if err != nil {
 		log.Printf("Warning: failed to create llm latency metric: %v", err)
+	}
+	responseSizeHist, err = meter.Int64Histogram("worker_response_size_bytes", metric.WithUnit("By"))
+	if err != nil {
+		log.Printf("Warning: failed to create response size histogram: %v", err)
 	}
 }
 
@@ -222,15 +227,18 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			case chunk, ok := <-stream:
 				if !ok {
 					// Stream closed, handle grounding/recursion check on fullResult if needed
+					// Record response size
+					responseSizeHist.Record(ctx, int64(len(fullResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
+
 					// For now, just send completed status
 					h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
-					h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID, inConversation)
+					h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID, inConversation, req.Metadata)
 					h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED")
 					return dlq.Success, nil
 				}
 				fullResult += chunk
 				inConversation = true
-				h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID, inConversation)
+				h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID, inConversation, req.Metadata)
 				seq++
 			case err := <-errCh:
 				if err != nil {
@@ -277,7 +285,11 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	}
 
 	h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
-	h.msg.SendResult(ctx, req.ID, req.SessionID, result, modelID)
+	h.msg.SendResult(ctx, req.ID, req.SessionID, result, modelID, req.Metadata)
 	h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED")
+
+	// Record response size
+	responseSizeHist.Record(ctx, int64(len(result)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
+
 	return dlq.Success, nil
 }

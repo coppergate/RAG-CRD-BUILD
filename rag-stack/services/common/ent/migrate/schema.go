@@ -164,6 +164,43 @@ var (
 		Columns:    SessionsColumns,
 		PrimaryKey: []*schema.Column{SessionsColumns[0]},
 	}
+	// TagsColumns holds the columns for the "tags" table.
+	TagsColumns = []*schema.Column{
+		{Name: "tag_id", Type: field.TypeUUID},
+		{Name: "tag_name", Type: field.TypeString, Unique: true, Size: 2147483647},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// TagsTable holds the schema information for the "tags" table.
+	TagsTable = &schema.Table{
+		Name:       "tags",
+		Columns:    TagsColumns,
+		PrimaryKey: []*schema.Column{TagsColumns[0]},
+	}
+	// SessionTagColumns holds the columns for the "session_tag" table.
+	SessionTagColumns = []*schema.Column{
+		{Name: "session_id", Type: field.TypeUUID},
+		{Name: "tag_id", Type: field.TypeUUID},
+	}
+	// SessionTagTable holds the schema information for the "session_tag" table.
+	SessionTagTable = &schema.Table{
+		Name:       "session_tag",
+		Columns:    SessionTagColumns,
+		PrimaryKey: []*schema.Column{SessionTagColumns[0], SessionTagColumns[1]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "session_tag_session_id",
+				Columns:    []*schema.Column{SessionTagColumns[0]},
+				RefColumns: []*schema.Column{SessionsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "session_tag_tag_id",
+				Columns:    []*schema.Column{SessionTagColumns[1]},
+				RefColumns: []*schema.Column{TagsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		MemoryEventsTable,
@@ -172,8 +209,12 @@ var (
 		PromptsTable,
 		ResponsesTable,
 		SessionsTable,
+		TagsTable,
+		SessionTagTable,
 	}
 )
 
 func init() {
+	SessionTagTable.ForeignKeys[0].RefTable = SessionsTable
+	SessionTagTable.ForeignKeys[1].RefTable = TagsTable
 }

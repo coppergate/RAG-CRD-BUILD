@@ -3,11 +3,12 @@ WORKDIR /app
 RUN apk add --no-cache gcc musl-dev git
 
 # Cache modules layer
-COPY common/ /common/
+COPY common/go.mod common/go.sum /common/
 COPY build-orchestrator/go.mod build-orchestrator/go.sum ./
 RUN CGO_ENABLED=0 go mod download
 
 # Copy sources and build
+COPY common/ /common/
 COPY build-orchestrator/ .
 RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o build-orchestrator cmd/orchestrator/main.go
 

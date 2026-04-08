@@ -1,0 +1,8 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: rag-ingestion-bucket
+  namespace: rag-system
+spec:
+  generateBucketName: rag-ingestion
+  storageClassName: rook-ceph-bucket

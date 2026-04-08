@@ -17,6 +17,8 @@ _AppConfig _$AppConfigFromJson(Map<String, dynamic> json) => _AppConfig(
   ragAdminApiUrl: json['ragAdminApiUrl'] as String,
   skipTlsVerification: json['skipTlsVerification'] as bool? ?? true,
   caCertPath: json['caCertPath'] as String?,
+  defaultBucketName:
+      json['defaultBucketName'] as String? ?? 'rag-codebase-bucket',
   darkMode: json['darkMode'] as bool? ?? true,
   availableModels:
       (json['availableModels'] as List<dynamic>?)
@@ -40,6 +42,7 @@ Map<String, dynamic> _$AppConfigToJson(_AppConfig instance) =>
       'ragAdminApiUrl': instance.ragAdminApiUrl,
       'skipTlsVerification': instance.skipTlsVerification,
       'caCertPath': instance.caCertPath,
+      'defaultBucketName': instance.defaultBucketName,
       'darkMode': instance.darkMode,
       'availableModels': instance.availableModels,
       'memoryExplorerEnabled': instance.memoryExplorerEnabled,

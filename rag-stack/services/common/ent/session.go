@@ -33,7 +33,28 @@ type Session struct {
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// LastActiveAt holds the value of the "last_active_at" field.
 	LastActiveAt time.Time `json:"last_active_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the SessionQuery when eager-loading is set.
+	Edges        SessionEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// SessionEdges holds the relations/edges for other nodes in the graph.
+type SessionEdges struct {
+	// Tags holds the value of the tags edge.
+	Tags []*Tag `json:"tags,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// TagsOrErr returns the Tags value or an error if the edge
+// was not loaded in eager-loading.
+func (e SessionEdges) TagsOrErr() ([]*Tag, error) {
+	if e.loadedTypes[0] {
+		return e.Tags, nil
+	}
+	return nil, &NotLoadedError{edge: "tags"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -125,6 +146,11 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *Session) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryTags queries the "tags" edge of the Session entity.
+func (_m *Session) QueryTags() *TagQuery {
+	return NewSessionClient(_m.config).QueryTags(_m)
 }
 
 // Update returns a builder for updating this Session.

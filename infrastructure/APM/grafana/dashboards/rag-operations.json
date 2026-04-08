@@ -1,0 +1,99 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Graphics --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Prompts & Responses (Rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(gateway_requests_total[5m])) by (path)", "legendFormat": "Prompt {{path}}" },
+        { "expr": "sum(rate(worker_tasks_total{stage=\"exec\"}[5m]))", "legendFormat": "Responses" }
+      ]
+    },
+    {
+      "title": "Avg Prompt/Response Size (Bytes/Chars)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "rate(gateway_prompt_size_bytes_sum[5m]) / rate(gateway_prompt_size_bytes_count[5m])", "legendFormat": "Avg Prompt Size" },
+        { "expr": "rate(worker_response_size_bytes_sum[5m]) / rate(worker_response_size_bytes_count[5m])", "legendFormat": "Avg Response Size" }
+      ]
+    },
+    {
+      "title": "Pipeline Latency (P95 ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(gateway_request_duration_ms_bucket[5m])) by (le))", "legendFormat": "E2E P95" },
+        { "expr": "histogram_quantile(0.95, sum(rate(worker_task_duration_ms_bucket[5m])) by (le, stage))", "legendFormat": "Worker {{stage}} P95" }
+      ]
+    },
+    {
+      "title": "Pulsar Bus Health",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "sum(rate(pulsar_messages_published_total[5m]))", "legendFormat": "Published" },
+        { "expr": "sum(rate(pulsar_messages_consumed_total[5m]))", "legendFormat": "Consumed" }
+      ]
+    },
+    {
+      "title": "GPU Utilization (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        { "expr": "avg(DCGM_FI_DEV_GPU_UTIL)", "legendFormat": "GPU Util" },
+        { "expr": "avg(DCGM_FI_DEV_MEM_COPY_UTIL)", "legendFormat": "GPU Mem Util" }
+      ]
+    },
+    {
+      "title": "System Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        { "expr": "sum(rate(gateway_errors_total[5m]))", "legendFormat": "Gateway" },
+        { "expr": "sum(rate(worker_errors_total[5m]))", "legendFormat": "Worker" },
+        { "expr": "sum(rate(db_errors_total[5m]))", "legendFormat": "DB" },
+        { "expr": "sum(rate(qdrant_errors_total[5m]))", "legendFormat": "Qdrant" }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["rag-stack", "operations"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "RAG Stack Operational Overview",
+  "uid": "rag-operations",
+  "version": 1,
+  "weekStart": ""
+}

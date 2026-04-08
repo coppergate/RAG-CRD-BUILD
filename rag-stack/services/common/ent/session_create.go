@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/session"
+	"app-builds/common/ent/tag"
 	"context"
 	"errors"
 	"fmt"
@@ -128,6 +129,21 @@ func (_c *SessionCreate) SetNillableID(v *uuid.UUID) *SessionCreate {
 	return _c
 }
 
+// AddTagIDs adds the "tags" edge to the Tag entity by IDs.
+func (_c *SessionCreate) AddTagIDs(ids ...uuid.UUID) *SessionCreate {
+	_c.mutation.AddTagIDs(ids...)
+	return _c
+}
+
+// AddTags adds the "tags" edges to the Tag entity.
+func (_c *SessionCreate) AddTags(v ...*Tag) *SessionCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddTagIDs(ids...)
+}
+
 // Mutation returns the SessionMutation object of the builder.
 func (_c *SessionCreate) Mutation() *SessionMutation {
 	return _c.mutation
@@ -248,6 +264,22 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LastActiveAt(); ok {
 		_spec.SetField(session.FieldLastActiveAt, field.TypeTime, value)
 		_node.LastActiveAt = value
+	}
+	if nodes := _c.mutation.TagsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   session.TagsTable,
+			Columns: session.TagsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

@@ -34,14 +34,26 @@ Every new session for the **Junie** agent MUST establish the operational context
 3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md` to ensure any new procedures are understood and recorded.
 
-## Current Focus (Iteration 8: Session Management & UI Polish)
+## Current Focus (Iteration 9: Ingestion & Observability)
 
-As of version 2.4.10, the project is focusing on **Iteration 8 (Session Management & UI Polish)**.
-1.  **Session Management**: Implemented Session Deletion and History Retrieval in `db-adapter`. Added History loading to RAG Explorer.
-2.  **UI Polish**: Upgraded Flutter dependencies, implemented Flyout Menu with Pin feature. Integrated `appConfigProvider` for theme and endpoints. Fixed `llama3.1` model identifier mismatch by appending `:latest` tag in the front end. Updated log output colors for dark mode (bright red/yellow/white). Implemented conditional auto-scroll for chat and log windows (disabled when text is selected).
-3.  **Gateway Integration**: Centralized all RAG Explorer service calls through `rag-admin-api` proxying (S3, DB, Qdrant, Memory, Ingest, Chat).
-4.  **Stability**: Enhanced error reporting for "Execution stream failed" in `rag-worker` to include specific underlying error messages (Ollama/HTTP). Resolved session chat history interleaving in `db-adapter` by sorting merged messages by timestamp.
-5.  **Persistence**: Fixed missing prompt persistence in `llm-gateway` for streaming and generic chat.
+As of version 2.5.5, the project is focusing on **Iteration 9 (Ingestion & Observability)**.
+1.  **Ingestion Pipeline**: 
+    - **S3 Browser**: Implemented prefix-based object browsing for the default `rag-codebase-bucket` in `rag-explorer`.
+    - **Knowledge Tags**: Added a full CRUD interface for managing vector-store partitions (tags) in TimescaleDB.
+    - **Targeted Ingestion**: Enabled prefix-based filtering and tag assignment for new ingestion jobs.
+    - **File Upload**: Multi-file and folder upload support via `object-store-mgr` (Go) and `rag-explorer` (Flutter).
+2.  **Prompt Aggregation (Session Topics)**:
+    - Migrated the architecture from a shared global topic to isolated, per-session Pulsar topics.
+    - Eliminated O(N) scanning in `prompt-aggregator`, replaced with O(M) sequential reads.
+    - Integrated with `llm-gateway` for real-time streaming directly from session topics.
+3.  **Observability & Telemetry**:
+    - **Custom Metrics**: Added prompt/response volume tracking to `llm-gateway` and `rag-worker`.
+    - **Grafana Dashboards**: Deployed "RAG Stack Operational Overview" (`uid: rag-operations`) for tracking health, latency, and GPU utilization.
+4.  **Build System Optimization**:
+    - **Shared Context**: Implemented single-upload source context for batch builds.
+    - **Parallel Kaniko**: Concurrent build orchestration reducing full stack update latency by ~95%.
+    - **Kaniko Caching**: Optimized Dockerfiles for Go dependency layer caching.
+5.  **Stability**: Resolved `k8tz` admission controller deadlocks and Rook-Ceph IO hangs during cluster shutdown/startup.
 
 ## Prompt Aggregation (Session Topics)
 

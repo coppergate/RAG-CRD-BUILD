@@ -28,6 +28,7 @@ import (
 	"app-builds/rag-worker/pkg/search"
 )
 
+// main is the entry point for the rag-worker service.
 func main() {
 	cfg := config.LoadConfig()
 

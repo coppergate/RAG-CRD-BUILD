@@ -55,8 +55,13 @@ get_svc_last_build() {
 update_svc_info() {
     local svc="$1"; local ver="$2"; local build_time="$3"
     local tmp=$(mktemp)
-    if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
-    jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" && cat "$tmp" > "$VERSION_FILE"
+    local lockfile="/tmp/rag-stack-version.lock"
+    
+    (
+        flock -x 200
+        if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
+        jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" && cat "$tmp" > "$VERSION_FILE"
+    ) 200>"$lockfile"
     rm -f "$tmp"
 }
 
@@ -158,14 +163,21 @@ build_service() {
         mark_unchanged "$svc" "$current_hash"
         needs_build=true
     # 3. Previous build failed or not completed
-    elif [[ "$last_build" == "null" || -z "$last_build" ]]; then
-        log "RESUMING: $svc (last build was not recorded as successful)"
-        needs_build=true
+    elif [[ "$last_build" == "null" || -z "$last_build" || "$last_build" == *"(triggered)"* ]]; then
+        # Check if a build job is already running to avoid redundant triggers
+        local ver_safe="${ver//./-}"
+        if [[ "$MODE" == "cluster" ]] && "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" 2>/dev/null | grep -E '0/1|1/1' >/dev/null 2>&1; then
+            log "STILL BUILDING: $svc version $ver (job is currently active in cluster)"
+            needs_build=false
+        else
+            log "RESUMING: $svc (last build was not recorded as successful)"
+            needs_build=true
+        fi
     fi
 
     if [[ "$needs_build" == "true" ]]; then
         # 4. Registry check (only skip if image is already there and we are not forcing)
-        if [[ "$FORCE_BUILD" != "true" && -z "$OVERRIDE_VERSION" ]] && image_exists "$svc" "$ver"; then
+        if [[ "$FORCE_BUILD" != "true" ]] && image_exists "$svc" "$ver"; then
             log "SKIP: $svc:$ver already exists in registry"
             update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
             deploy_update "$svc" "$ver"
@@ -241,14 +253,55 @@ main() {
         # Actually, if we do the versioning/hash check sequentially first, then parallelize the builds, it's safer.
         
         log "Pre-build check and versioning..."
+        SERVICES_TO_BUILD=()
         for svc in "${SERVICES[@]}"; do
-             # This will increment version if hash changed and set last_build=null
-             # But it currently also triggers the build.
-             # Let's separate them.
-             # No, let's just use a lock or do it sequentially if it's fast enough.
-             # Hashing is fast. Let's do versioning sequentially.
-             build_service "$svc"
+             # Check if we need build (we reuse the logic but don't trigger yet)
+             local ver=$(get_svc_version "$svc")
+             local last_build=$(get_svc_last_build "$svc")
+             local current_hash=$(hash_context "$svc")
+             local needs_build=false
+             
+             if [[ -n "$OVERRIDE_VERSION" ]] || [[ "$FORCE_BUILD" == "true" ]]; then
+                 needs_build=true
+             elif ! is_unchanged "$svc" "$current_hash"; then
+                 needs_build=true
+             elif [[ "$last_build" == "null" || -z "$last_build" ]]; then
+                 needs_build=true
+             fi
+
+             if [[ "$needs_build" == "true" ]]; then
+                 # Check registry before confirming build
+                 local target_ver="$ver"
+                 [[ -n "$OVERRIDE_VERSION" ]] && target_ver="$OVERRIDE_VERSION"
+                 if ! is_unchanged "$svc" "$current_hash" && [[ -z "$OVERRIDE_VERSION" ]]; then
+                     target_ver=$(increment_version "$ver")
+                 fi
+
+                 if [[ "$FORCE_BUILD" != "true" ]] && image_exists "$svc" "$target_ver"; then
+                     # Service already exists in registry, skip build but update version/deploy
+                     build_service "$svc"
+                 else
+                     SERVICES_TO_BUILD+=("$svc")
+                 fi
+             fi
         done
+
+        if [[ ${#SERVICES_TO_BUILD[@]} -gt 0 && "$MODE" == "cluster" ]]; then
+            log "Preparing shared source context for ${#SERVICES_TO_BUILD[@]} services..."
+            # Capture both stdout (URLs) and stderr (logging)
+            local UPLOAD_OUT=$(bash "$REPO_DIR/infrastructure/build-pipeline/trigger-build.sh" --upload-only 2>&1)
+            export SOURCE_URL=$(echo "$UPLOAD_OUT" | grep "SOURCE_URL=" | cut -d= -f2-)
+            export SOURCE_TARBALL=$(echo "$UPLOAD_OUT" | grep "SOURCE_TARBALL=" | cut -d= -f2-)
+            log "Shared Context: $SOURCE_TARBALL"
+        fi
+
+        log "Building services: ${SERVICES_TO_BUILD[*]:-none}"
+        for svc in "${SERVICES_TO_BUILD[@]}"; do
+             build_service "$svc" &
+             # Manage parallelism (simple implementation)
+             while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
+        done
+        wait
     fi
 
     if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then

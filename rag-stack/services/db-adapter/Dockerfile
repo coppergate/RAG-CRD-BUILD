@@ -6,11 +6,12 @@ WORKDIR /app
 RUN apk add --no-cache gcc musl-dev git
 
 # Cache modules layer
-COPY common/ /common/
+COPY common/go.mod common/go.sum /common/
 COPY db-adapter/go.mod db-adapter/go.sum ./
 RUN CGO_ENABLED=0 go mod download
 
 # Copy sources and build
+COPY common/ /common/
 COPY db-adapter/ .
 RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o db-adapter cmd/adapter/main.go
 

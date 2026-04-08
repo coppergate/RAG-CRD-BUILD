@@ -6,14 +6,17 @@ Based on the current implementation of the RAG stack (Iteration 6 planning + Ite
 graph TD
     subgraph "External Clients"
         Browser[Web Browser]
+        Explorer[RAG Explorer - Desktop]
         DevDB[Dev Database Tools]
     end
 
     subgraph "Kubernetes: rag-system namespace: TLS-SSL"
         UI[rag-web-ui]
+        Flutter[rag-explorer]
         Gateway[llm-gateway]
         Worker[rag-worker]
         DBAdapter[db-adapter]
+        Aggregator[prompt-aggregator]
         Ingestor[rag-ingestion-service]
         QAdapter[qdrant-adapter]
         OSMgr[object-store-mgr]
@@ -45,8 +48,9 @@ graph TD
         Plan[stage/plan]
         Exec[stage/exec]
         Results[stage/results]
+        Completion[stage/completion]
         Prompts[data/chat-prompts]
-        Responses[data/chat-responses]
+        Sessions[sessions/UUID-topic]
         Ops[operations/db-ops]
         QOps[operations/qdrant-ops]
         QRes[operations/qdrant-ops-results]
@@ -61,15 +65,15 @@ graph TD
 
     %% Interaction Flows: HTTPS
     Browser <-->|HTTPS/443| UI
-    Browser -->|HTTPS/443| Gateway
+    Explorer <-->|Websocket/HTTPS| Gateway
 
     %% Registry Flow
-    UI & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
+    UI & Flutter & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
     S3 & Qdrant & TDB & Ollama & OllamaCode -.->|Pull TLS| Reg
 
     %% Ingestion Flow
-    UI -->|Upload: S3 API| S3
-    UI -->|Trigger: HTTPS| Ingestor
+    Flutter -->|Upload: S3 API| S3
+    Flutter -->|Trigger: HTTPS| Ingestor
     Ingestor -->|Store Metadata: TLS| TDB
     Ingestor -.->|1- Publish: Pulsar+SSL| QOps
     QAdapter -.->|2- Consume: Pulsar+SSL| QOps
@@ -77,7 +81,7 @@ graph TD
     Ingestor -->|Read Files: S3 API| S3
     Ingestor -->|Embeddings: HTTP| Ollama
 
-    %% Chat Flow: Asynchronous Pulsar+SSL
+    %% Chat Flow: Isolated Session Streaming
     Gateway -.->|1- Publish| Prompts
     Gateway -.->|2- Publish| Ingress
 
@@ -94,17 +98,22 @@ graph TD
     Worker -.->|11- Publish| Exec
     Exec -.->|12- Consume| Worker
 
-    Worker -->|13- Inference: Planner| Ollama
-    Worker -->|14- Inference: Executor| OllamaCode
-    Worker -.->|15- Publish| Responses
-    Worker -.->|15- Publish| Results
+    Worker -->|13- Inference| Ollama
+    Worker -->|14- Inference| OllamaCode
+    Worker -.->|15- Stream Chunks| Sessions
+    Worker -.->|16- Completion Signal| Completion
 
-    Results -.->|16- Consume| Gateway
-    Gateway -->|17- HTTPS Response| Browser
+    Sessions -.->|17- Read Stream| Gateway
+    Completion -.->|18- Trigger| Aggregator
+    Aggregator -.->|19- Read Session Data| Sessions
+    Aggregator -.->|20- Publish| Results
+
+    Results -.->|21- Consume| DBAdapter
+    Gateway -->|22- Final Response| Explorer
 
     %% Persistent Flow: DB Adapter
     Prompts -.->|Consume| DBAdapter
-    Responses -.->|Consume| DBAdapter
+    Results -.->|Consume| DBAdapter
     Ops -.->|Consume| DBAdapter
     DBAdapter -->|Persist: TLS| TDB
 
@@ -125,13 +134,16 @@ graph TD
 
 #### 2. Component Descriptions
 
-- `rag-web-ui`: Front-end for data ingestion and interactive chat; secured via Traefik HTTPS.
-- `llm-gateway`: OpenAI-compatible entry point; manages session lifecycle and asynchronous task delegation.
+- `rag-web-ui`: Legacy front-end for data ingestion and interactive chat; secured via Traefik HTTPS.
+- `rag-explorer`: Advanced Flutter-based management UI for the RAG pipeline. Supports granular ingestion control, metadata inspection, and real-time session monitoring.
+- `llm-gateway`: OpenAI-compatible entry point; manages session lifecycle and asynchronous task delegation. Now supports isolated session topics for streaming.
 - `rag-worker`: Core orchestration engine with modular LLM support (Llama/Granite); integrates multi-stage RAG logic (ingress/plan/exec).
 - `qdrant-adapter`: Centralized vector DB adapter ensuring consistent tag-filtered search and upsert logic.
 - `db-adapter`: Async persistence layer for audit logs, session state, and chat history.
+- `prompt-aggregator`: High-performance aggregation service that assembles streaming chunks from session-specific Pulsar topics into final results.
 - `rag-ingestion-service`: Persistent Python service for multi-source data ingestion and embedding generation.
 - `common/telemetry`: Shared OTLP package for distributed tracing and Prometheus metrics; services export to local `Alloy` instances.
+- `Grafana Dashboards`: Targeted observability including the "RAG Stack Operational Overview" dashboard for tracking throughput, latency, and GPU utilization.
 - `TLS/Security`: end-to-end encryption using `cert-manager` and internal Root CA; all inter-service traffic uses HTTPS, GRPC+TLS, or Pulsar+SSL. Monitoring (Loki/Mimir/Tempo) uses NGINX-based TLS gateways.
 - `k8tz`: Cluster-wide timezone injection (`Europe/London`) for consistent log/metric timestamps.
 - `metrics-generator`: Tempo module for generating RED metrics from traces, remote-writing to Mimir.
@@ -162,10 +174,11 @@ flowchart TD
         RegistryNode --> OrchDeploy[Deploy Build Orchestrator]
     end
 
-    subgraph "Phase 2 - RAG Service Builds - Cluster-Native"
-        Trigger[trigger-build-sh] --> S3_2[Build S3-OBC]
-        Trigger -.->|Pulsar Msg| Orch[Build Orchestrator]
-        Orch --> Kaniko[Kaniko K8s Job]
+    subgraph "Phase 2 - RAG Service Builds - Optimized Parallel"
+        Trigger[trigger-build-sh] --> Package[Shared Source Context Packaging]
+        Package --> S3_2[Upload Batch to S3]
+        S3_2 -.->|Pulsar Msg| Orch[Build Orchestrator]
+        Orch --> Kaniko[Parallel Kaniko K8s Jobs]
         S3_2 --> Kaniko
         Kaniko --> RegistryNode
     end
@@ -190,7 +203,10 @@ flowchart TD
 ```
 
 - **Zero-host build architecture**: Source packaging + in-cluster Kaniko builds.
-- **Registry Isolation**: All components (Infra + RAG) pull from `registry.hierocracy.home:5000` after prefetch.
+- **Shared Context Optimization**: All services in a batch share a single source tarball, reducing S3 IO and upload time.
+- **Parallel Orchestration**: Concurrent Kaniko jobs significantly reduce end-to-end build latency for the full stack.
+- **Go Layer Caching**: Dockerfiles optimized to cache dependency downloads separately from source compilation.
+- **Registry Isolation**: All components pull from `registry.hierocracy.home:5000` after prefetch.
 - **Resumable Setup**: `setup-complete.sh` uses a journal to track progress across these phases.
 
 #### 4. Topology & Node Affinity

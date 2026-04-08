@@ -15,14 +15,15 @@ type InternalRequest struct {
 }
 
 type StreamChunk struct {
-	ID             string `json:"id"`
-	SessionID      string `json:"session_id"`
-	Chunk          string `json:"chunk"`
-	SequenceNumber int    `json:"sequence_number"`
-	IsLast         bool   `json:"is_last"`
-	Model          string `json:"model,omitempty"`
-	Error          string `json:"error,omitempty"`
-	InConversation bool   `json:"in_conversation"`
+	ID             string                 `json:"id"`
+	SessionID      string                 `json:"session_id"`
+	Chunk          string                 `json:"chunk"`
+	SequenceNumber int                    `json:"sequence_number"`
+	IsLast         bool                   `json:"is_last"`
+	Model          string                 `json:"model,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Error          string                 `json:"error,omitempty"`
+	InConversation bool                   `json:"in_conversation"`
 }
 
 type ResponseCompletion struct {

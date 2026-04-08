@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:rag_explorer/config/app_config.dart';
+import 'package:rag_explorer/app_config_provider.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/response_message.dart';
 import '../models/session.dart';
-import '../../features/settings/settings_page.dart';
 import 'log_service.dart';
 
 final chatServiceProvider = Provider((ref) {
@@ -85,6 +85,7 @@ class ChatService {
             content: e['content'],
             role: e['role'],
             timestamp: DateTime.parse(e['timestamp']),
+            metadata: e['metadata'],
           );
         }).toList();
       }

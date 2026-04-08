@@ -31,6 +31,7 @@ var (
 	requestCounter metric.Int64Counter
 	errorCounter   metric.Int64Counter
 	latencyHist    metric.Float64Histogram
+	promptSizeHist metric.Int64Histogram
 )
 
 func init() {
@@ -46,6 +47,10 @@ func init() {
 	latencyHist, err = meter.Float64Histogram("gateway_request_duration_ms", metric.WithUnit("ms"))
 	if err != nil {
 		log.Printf("Warning: failed to create latency histogram metric: %v", err)
+	}
+	promptSizeHist, err = meter.Int64Histogram("gateway_prompt_size_bytes", metric.WithUnit("By"))
+	if err != nil {
+		log.Printf("Warning: failed to create prompt size histogram: %v", err)
 	}
 }
 
@@ -145,6 +150,13 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Record prompt size
+	var prompt string
+	if len(req.Messages) > 0 {
+		prompt = req.Messages[len(req.Messages)-1].Content
+	}
+	promptSizeHist.Record(ctx, int64(len(prompt)), metric.WithAttributes(attrs...))
+
 	correlationID := uuid.New().String()
 
 	// Save user message to DB via Pulsar event
@@ -156,7 +168,6 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	// Map to InternalRequest for Pulsar
-	var prompt string
 	if len(req.Messages) > 0 {
 		prompt = req.Messages[len(req.Messages)-1].Content
 	}
@@ -227,6 +238,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		log.Printf("Failed to ensure session: %v", err)
 		return
 	}
+
+	// Record prompt size
+	promptSizeHist.Record(ctx, int64(len(req.Prompt)), metric.WithAttributes(attribute.String("method", "WS"), attribute.String("path", "/v1/rag/stream")))
 
 	correlationID := uuid.New().String()
 
@@ -323,6 +337,9 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		http.Error(w, fmt.Sprintf("Failed to ensure session: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// Record prompt size
+	promptSizeHist.Record(ctx, int64(len(req.Prompt)), metric.WithAttributes(attrs...))
 
 	correlationID := uuid.New().String()
 

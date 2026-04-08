@@ -18,53 +18,53 @@ import (
 	"github.com/google/uuid"
 )
 
-// SessionQuery is the builder for querying Session entities.
-type SessionQuery struct {
+// TagQuery is the builder for querying Tag entities.
+type TagQuery struct {
 	config
-	ctx        *QueryContext
-	order      []session.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Session
-	withTags   *TagQuery
+	ctx          *QueryContext
+	order        []tag.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.Tag
+	withSessions *SessionQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the SessionQuery builder.
-func (_q *SessionQuery) Where(ps ...predicate.Session) *SessionQuery {
+// Where adds a new predicate for the TagQuery builder.
+func (_q *TagQuery) Where(ps ...predicate.Tag) *TagQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *SessionQuery) Limit(limit int) *SessionQuery {
+func (_q *TagQuery) Limit(limit int) *TagQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *SessionQuery) Offset(offset int) *SessionQuery {
+func (_q *TagQuery) Offset(offset int) *TagQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *SessionQuery) Unique(unique bool) *SessionQuery {
+func (_q *TagQuery) Unique(unique bool) *TagQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *SessionQuery) Order(o ...session.OrderOption) *SessionQuery {
+func (_q *TagQuery) Order(o ...tag.OrderOption) *TagQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// QueryTags chains the current query on the "tags" edge.
-func (_q *SessionQuery) QueryTags() *TagQuery {
-	query := (&TagClient{config: _q.config}).Query()
+// QuerySessions chains the current query on the "sessions" edge.
+func (_q *TagQuery) QuerySessions() *SessionQuery {
+	query := (&SessionClient{config: _q.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := _q.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -74,9 +74,9 @@ func (_q *SessionQuery) QueryTags() *TagQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(session.Table, session.FieldID, selector),
-			sqlgraph.To(tag.Table, tag.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, false, session.TagsTable, session.TagsPrimaryKey...),
+			sqlgraph.From(tag.Table, tag.FieldID, selector),
+			sqlgraph.To(session.Table, session.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, tag.SessionsTable, tag.SessionsPrimaryKey...),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -84,21 +84,21 @@ func (_q *SessionQuery) QueryTags() *TagQuery {
 	return query
 }
 
-// First returns the first Session entity from the query.
-// Returns a *NotFoundError when no Session was found.
-func (_q *SessionQuery) First(ctx context.Context) (*Session, error) {
+// First returns the first Tag entity from the query.
+// Returns a *NotFoundError when no Tag was found.
+func (_q *TagQuery) First(ctx context.Context) (*Tag, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{session.Label}
+		return nil, &NotFoundError{tag.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *SessionQuery) FirstX(ctx context.Context) *Session {
+func (_q *TagQuery) FirstX(ctx context.Context) *Tag {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -106,22 +106,22 @@ func (_q *SessionQuery) FirstX(ctx context.Context) *Session {
 	return node
 }
 
-// FirstID returns the first Session ID from the query.
-// Returns a *NotFoundError when no Session ID was found.
-func (_q *SessionQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
+// FirstID returns the first Tag ID from the query.
+// Returns a *NotFoundError when no Tag ID was found.
+func (_q *TagQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
 	var ids []uuid.UUID
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{session.Label}
+		err = &NotFoundError{tag.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *SessionQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *TagQuery) FirstIDX(ctx context.Context) uuid.UUID {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -129,10 +129,10 @@ func (_q *SessionQuery) FirstIDX(ctx context.Context) uuid.UUID {
 	return id
 }
 
-// Only returns a single Session entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one Session entity is found.
-// Returns a *NotFoundError when no Session entities are found.
-func (_q *SessionQuery) Only(ctx context.Context) (*Session, error) {
+// Only returns a single Tag entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one Tag entity is found.
+// Returns a *NotFoundError when no Tag entities are found.
+func (_q *TagQuery) Only(ctx context.Context) (*Tag, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -141,14 +141,14 @@ func (_q *SessionQuery) Only(ctx context.Context) (*Session, error) {
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{session.Label}
+		return nil, &NotFoundError{tag.Label}
 	default:
-		return nil, &NotSingularError{session.Label}
+		return nil, &NotSingularError{tag.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *SessionQuery) OnlyX(ctx context.Context) *Session {
+func (_q *TagQuery) OnlyX(ctx context.Context) *Tag {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -156,10 +156,10 @@ func (_q *SessionQuery) OnlyX(ctx context.Context) *Session {
 	return node
 }
 
-// OnlyID is like Only, but returns the only Session ID in the query.
-// Returns a *NotSingularError when more than one Session ID is found.
+// OnlyID is like Only, but returns the only Tag ID in the query.
+// Returns a *NotSingularError when more than one Tag ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *SessionQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
+func (_q *TagQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
 	var ids []uuid.UUID
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -168,15 +168,15 @@ func (_q *SessionQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{session.Label}
+		err = &NotFoundError{tag.Label}
 	default:
-		err = &NotSingularError{session.Label}
+		err = &NotSingularError{tag.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *SessionQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *TagQuery) OnlyIDX(ctx context.Context) uuid.UUID {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -184,18 +184,18 @@ func (_q *SessionQuery) OnlyIDX(ctx context.Context) uuid.UUID {
 	return id
 }
 
-// All executes the query and returns a list of Sessions.
-func (_q *SessionQuery) All(ctx context.Context) ([]*Session, error) {
+// All executes the query and returns a list of Tags.
+func (_q *TagQuery) All(ctx context.Context) ([]*Tag, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*Session, *SessionQuery]()
-	return withInterceptors[[]*Session](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*Tag, *TagQuery]()
+	return withInterceptors[[]*Tag](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *SessionQuery) AllX(ctx context.Context) []*Session {
+func (_q *TagQuery) AllX(ctx context.Context) []*Tag {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -203,20 +203,20 @@ func (_q *SessionQuery) AllX(ctx context.Context) []*Session {
 	return nodes
 }
 
-// IDs executes the query and returns a list of Session IDs.
-func (_q *SessionQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+// IDs executes the query and returns a list of Tag IDs.
+func (_q *TagQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(session.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(tag.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *SessionQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *TagQuery) IDsX(ctx context.Context) []uuid.UUID {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -225,16 +225,16 @@ func (_q *SessionQuery) IDsX(ctx context.Context) []uuid.UUID {
 }
 
 // Count returns the count of the given query.
-func (_q *SessionQuery) Count(ctx context.Context) (int, error) {
+func (_q *TagQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*SessionQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*TagQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *SessionQuery) CountX(ctx context.Context) int {
+func (_q *TagQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -243,7 +243,7 @@ func (_q *SessionQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *SessionQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *TagQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -256,7 +256,7 @@ func (_q *SessionQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *SessionQuery) ExistX(ctx context.Context) bool {
+func (_q *TagQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -264,33 +264,33 @@ func (_q *SessionQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the SessionQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the TagQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *SessionQuery) Clone() *SessionQuery {
+func (_q *TagQuery) Clone() *TagQuery {
 	if _q == nil {
 		return nil
 	}
-	return &SessionQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]session.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.Session{}, _q.predicates...),
-		withTags:   _q.withTags.Clone(),
+	return &TagQuery{
+		config:       _q.config,
+		ctx:          _q.ctx.Clone(),
+		order:        append([]tag.OrderOption{}, _q.order...),
+		inters:       append([]Interceptor{}, _q.inters...),
+		predicates:   append([]predicate.Tag{}, _q.predicates...),
+		withSessions: _q.withSessions.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
 }
 
-// WithTags tells the query-builder to eager-load the nodes that are connected to
-// the "tags" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *SessionQuery) WithTags(opts ...func(*TagQuery)) *SessionQuery {
-	query := (&TagClient{config: _q.config}).Query()
+// WithSessions tells the query-builder to eager-load the nodes that are connected to
+// the "sessions" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TagQuery) WithSessions(opts ...func(*SessionQuery)) *TagQuery {
+	query := (&SessionClient{config: _q.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	_q.withTags = query
+	_q.withSessions = query
 	return _q
 }
 
@@ -300,19 +300,19 @@ func (_q *SessionQuery) WithTags(opts ...func(*TagQuery)) *SessionQuery {
 // Example:
 //
 //	var v []struct {
-//		ProjectID uuid.UUID `json:"project_id,omitempty"`
+//		Name string `json:"name,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.Session.Query().
-//		GroupBy(session.FieldProjectID).
+//	client.Tag.Query().
+//		GroupBy(tag.FieldName).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *SessionQuery) GroupBy(field string, fields ...string) *SessionGroupBy {
+func (_q *TagQuery) GroupBy(field string, fields ...string) *TagGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &SessionGroupBy{build: _q}
+	grbuild := &TagGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = session.Label
+	grbuild.label = tag.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -323,26 +323,26 @@ func (_q *SessionQuery) GroupBy(field string, fields ...string) *SessionGroupBy 
 // Example:
 //
 //	var v []struct {
-//		ProjectID uuid.UUID `json:"project_id,omitempty"`
+//		Name string `json:"name,omitempty"`
 //	}
 //
-//	client.Session.Query().
-//		Select(session.FieldProjectID).
+//	client.Tag.Query().
+//		Select(tag.FieldName).
 //		Scan(ctx, &v)
-func (_q *SessionQuery) Select(fields ...string) *SessionSelect {
+func (_q *TagQuery) Select(fields ...string) *TagSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &SessionSelect{SessionQuery: _q}
-	sbuild.label = session.Label
+	sbuild := &TagSelect{TagQuery: _q}
+	sbuild.label = tag.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a SessionSelect configured with the given aggregations.
-func (_q *SessionQuery) Aggregate(fns ...AggregateFunc) *SessionSelect {
+// Aggregate returns a TagSelect configured with the given aggregations.
+func (_q *TagQuery) Aggregate(fns ...AggregateFunc) *TagSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *SessionQuery) prepareQuery(ctx context.Context) error {
+func (_q *TagQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -354,7 +354,7 @@ func (_q *SessionQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !session.ValidColumn(f) {
+		if !tag.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -368,19 +368,19 @@ func (_q *SessionQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *SessionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Session, error) {
+func (_q *TagQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Tag, error) {
 	var (
-		nodes       = []*Session{}
+		nodes       = []*Tag{}
 		_spec       = _q.querySpec()
 		loadedTypes = [1]bool{
-			_q.withTags != nil,
+			_q.withSessions != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*Session).scanValues(nil, columns)
+		return (*Tag).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &Session{config: _q.config}
+		node := &Tag{config: _q.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -394,20 +394,20 @@ func (_q *SessionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Sess
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := _q.withTags; query != nil {
-		if err := _q.loadTags(ctx, query, nodes,
-			func(n *Session) { n.Edges.Tags = []*Tag{} },
-			func(n *Session, e *Tag) { n.Edges.Tags = append(n.Edges.Tags, e) }); err != nil {
+	if query := _q.withSessions; query != nil {
+		if err := _q.loadSessions(ctx, query, nodes,
+			func(n *Tag) { n.Edges.Sessions = []*Session{} },
+			func(n *Tag, e *Session) { n.Edges.Sessions = append(n.Edges.Sessions, e) }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*Session, init func(*Session), assign func(*Session, *Tag)) error {
+func (_q *TagQuery) loadSessions(ctx context.Context, query *SessionQuery, nodes []*Tag, init func(*Tag), assign func(*Tag, *Session)) error {
 	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[uuid.UUID]*Session)
-	nids := make(map[uuid.UUID]map[*Session]struct{})
+	byID := make(map[uuid.UUID]*Tag)
+	nids := make(map[uuid.UUID]map[*Tag]struct{})
 	for i, node := range nodes {
 		edgeIDs[i] = node.ID
 		byID[node.ID] = node
@@ -416,11 +416,11 @@ func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*
 		}
 	}
 	query.Where(func(s *sql.Selector) {
-		joinT := sql.Table(session.TagsTable)
-		s.Join(joinT).On(s.C(tag.FieldID), joinT.C(session.TagsPrimaryKey[1]))
-		s.Where(sql.InValues(joinT.C(session.TagsPrimaryKey[0]), edgeIDs...))
+		joinT := sql.Table(tag.SessionsTable)
+		s.Join(joinT).On(s.C(session.FieldID), joinT.C(tag.SessionsPrimaryKey[0]))
+		s.Where(sql.InValues(joinT.C(tag.SessionsPrimaryKey[1]), edgeIDs...))
 		columns := s.SelectedColumns()
-		s.Select(joinT.C(session.TagsPrimaryKey[0]))
+		s.Select(joinT.C(tag.SessionsPrimaryKey[1]))
 		s.AppendSelect(columns...)
 		s.SetDistinct(false)
 	})
@@ -442,7 +442,7 @@ func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*
 				outValue := *values[0].(*uuid.UUID)
 				inValue := *values[1].(*uuid.UUID)
 				if nids[inValue] == nil {
-					nids[inValue] = map[*Session]struct{}{byID[outValue]: {}}
+					nids[inValue] = map[*Tag]struct{}{byID[outValue]: {}}
 					return assign(columns[1:], values[1:])
 				}
 				nids[inValue][byID[outValue]] = struct{}{}
@@ -450,14 +450,14 @@ func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*
 			}
 		})
 	})
-	neighbors, err := withInterceptors[[]*Tag](ctx, query, qr, query.inters)
+	neighbors, err := withInterceptors[[]*Session](ctx, query, qr, query.inters)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
 		nodes, ok := nids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected "tags" node returned %v`, n.ID)
+			return fmt.Errorf(`unexpected "sessions" node returned %v`, n.ID)
 		}
 		for kn := range nodes {
 			assign(kn, n)
@@ -466,7 +466,7 @@ func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*
 	return nil
 }
 
-func (_q *SessionQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *TagQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
@@ -475,8 +475,8 @@ func (_q *SessionQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *SessionQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(session.Table, session.Columns, sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID))
+func (_q *TagQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(tag.Table, tag.Columns, sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -485,9 +485,9 @@ func (_q *SessionQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, session.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, tag.FieldID)
 		for i := range fields {
-			if fields[i] != session.FieldID {
+			if fields[i] != tag.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
@@ -515,12 +515,12 @@ func (_q *SessionQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *SessionQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *TagQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(session.Table)
+	t1 := builder.Table(tag.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = session.Columns
+		columns = tag.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -547,28 +547,28 @@ func (_q *SessionQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	return selector
 }
 
-// SessionGroupBy is the group-by builder for Session entities.
-type SessionGroupBy struct {
+// TagGroupBy is the group-by builder for Tag entities.
+type TagGroupBy struct {
 	selector
-	build *SessionQuery
+	build *TagQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *SessionGroupBy) Aggregate(fns ...AggregateFunc) *SessionGroupBy {
+func (_g *TagGroupBy) Aggregate(fns ...AggregateFunc) *TagGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *SessionGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *TagGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SessionQuery, *SessionGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*TagQuery, *TagGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *SessionGroupBy) sqlScan(ctx context.Context, root *SessionQuery, v any) error {
+func (_g *TagGroupBy) sqlScan(ctx context.Context, root *TagQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -595,28 +595,28 @@ func (_g *SessionGroupBy) sqlScan(ctx context.Context, root *SessionQuery, v any
 	return sql.ScanSlice(rows, v)
 }
 
-// SessionSelect is the builder for selecting fields of Session entities.
-type SessionSelect struct {
-	*SessionQuery
+// TagSelect is the builder for selecting fields of Tag entities.
+type TagSelect struct {
+	*TagQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *SessionSelect) Aggregate(fns ...AggregateFunc) *SessionSelect {
+func (_s *TagSelect) Aggregate(fns ...AggregateFunc) *TagSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *SessionSelect) Scan(ctx context.Context, v any) error {
+func (_s *TagSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*SessionQuery, *SessionSelect](ctx, _s.SessionQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*TagQuery, *TagSelect](ctx, _s.TagQuery, _s, _s.inters, v)
 }
 
-func (_s *SessionSelect) sqlScan(ctx context.Context, root *SessionQuery, v any) error {
+func (_s *TagSelect) sqlScan(ctx context.Context, root *TagQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

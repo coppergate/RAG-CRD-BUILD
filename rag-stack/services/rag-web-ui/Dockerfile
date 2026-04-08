@@ -6,11 +6,12 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 # Cache modules layer
-COPY common/ /common/
+COPY common/go.mod common/go.sum /common/
 COPY rag-web-ui/go.mod rag-web-ui/go.sum ./
 RUN CGO_ENABLED=0 go mod download
 
 # Copy sources and build
+COPY common/ /common/
 COPY rag-web-ui/ .
 RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o rag-web-ui cmd/ui/main.go
 

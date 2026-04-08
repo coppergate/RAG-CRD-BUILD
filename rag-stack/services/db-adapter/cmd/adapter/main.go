@@ -19,6 +19,7 @@ import (
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
+	"app-builds/common/ent/tag"
 	"app-builds/common/health"
 	"app-builds/common/telemetry"
 	"app-builds/common/tlsutil"
@@ -226,6 +227,55 @@ func main() {
 		json.NewEncoder(w).Encode(sessions)
 	})
 
+	mux.HandleFunc("/tags", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			tags, err := entClient.Tag.Query().Order(ent.Asc(tag.FieldName)).All(r.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			json.NewEncoder(w).Encode(tags)
+		case http.MethodPost:
+			var payload struct {
+				Name string `json:"name"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			t, err := entClient.Tag.Create().
+				SetName(payload.Name).
+				Save(r.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			json.NewEncoder(w).Encode(t)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/tags/", func(w http.ResponseWriter, r *http.Request) {
+		idStr := strings.TrimPrefix(r.URL.Path, "/tags/")
+		if r.Method == http.MethodDelete && idStr != "" {
+			tagID, err := uuid.Parse(idStr)
+			if err != nil {
+				http.Error(w, "Invalid tag ID", http.StatusBadRequest)
+				return
+			}
+			err = entClient.Tag.DeleteOneID(tagID).Exec(r.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(w, "Not found or method not allowed", http.StatusNotFound)
+	})
+
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
 		sessionCount, _ := entClient.Session.Query().Count(r.Context())
 		promptCount, _ := entClient.Prompt.Query().Count(r.Context())
@@ -354,10 +404,16 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
 
 	var payload struct {
 		contracts.StreamChunk
-		Result string `json:"result"`
+		Result   string                 `json:"result"`
+		Metadata map[string]interface{} `json:"metadata"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
+	}
+
+	// Use metadata from payload if StreamChunk.Metadata is nil
+	if payload.StreamChunk.Metadata == nil && payload.Metadata != nil {
+		payload.StreamChunk.Metadata = payload.Metadata
 	}
 
 	// Skip streaming chunks - we only want the final aggregated results from the aggregator.
@@ -408,6 +464,7 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
 		SetContent(payload.Result).
 		SetSequenceNumber(payload.SequenceNumber).
 		SetNillableModelName(modelName).
+		SetMetadata(payload.StreamChunk.Metadata).
 		Save(ctx)
 	if err != nil {
 		return dlq.TransientFailure, fmt.Errorf("insert response for prompt %s: %w", payload.ID, err)
@@ -418,10 +475,11 @@ func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Clie
 }
 
 type ChatMessage struct {
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
-	Model     string    `json:"model,omitempty"`
+	Role      string                 `json:"role"`
+	Content   string                 `json:"content"`
+	Timestamp time.Time              `json:"timestamp"`
+	Model     string                 `json:"model,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 func handleGetSessionMessages(w http.ResponseWriter, r *http.Request, entClient *ent.Client, sessionIDStr string) {
@@ -471,6 +529,7 @@ func handleGetSessionMessages(w http.ResponseWriter, r *http.Request, entClient 
 			Content:   res.Content,
 			Timestamp: res.CreatedAt,
 			Model:     model,
+			Metadata:  res.Metadata,
 		})
 	}
 

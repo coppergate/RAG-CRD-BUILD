@@ -13,10 +13,11 @@ flowchart TD
         RegistryNode --> OrchDeploy[Deploy Build Orchestrator]
     end
 
-    subgraph "Phase 2 - RAG Service Builds - Cluster-Native"
-        Trigger[trigger-build-sh] --> S3_2[Build S3-OBC]
-        Trigger -.->|Pulsar+SSL| Orch[Build Orchestrator]
-        Orch --> Kaniko[Kaniko K8s Job]
+    subgraph "Phase 2 - RAG Service Builds - Optimized Parallel"
+        Trigger[trigger-build-sh] --> Package[Shared Source Context Packaging]
+        Package --> S3_2[Upload Batch to S3]
+        S3_2 -.->|Pulsar+SSL| Orch[Build Orchestrator]
+        Orch --> Kaniko[Parallel Kaniko K8s Jobs]
         S3_2 --> Kaniko
         Kaniko --> RegistryNode
     end

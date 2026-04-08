@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 	"time"
@@ -38,5 +39,8 @@ func (Session) Fields() []ent.Field {
 
 // Edges of the Session.
 func (Session) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.To("tags", Tag.Type).
+			StorageKey(edge.Table("session_tag"), edge.Columns("session_id", "tag_id")),
+	}
 }

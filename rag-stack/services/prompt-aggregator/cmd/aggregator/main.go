@@ -20,6 +20,10 @@ import (
 	"app-builds/prompt-aggregator/internal/config"
 )
 
+func SessionTopic(id string) string {
+	return fmt.Sprintf("persistent://rag-pipeline/sessions/%s", id)
+}
+
 func main() {
 	cfg := config.LoadConfig()
 	log.Printf("Starting prompt-aggregator for topic: %s", cfg.PulsarCompletionTopic)
@@ -99,12 +103,13 @@ func main() {
 				continue
 			}
 
-	log.Printf("[%s] Received completion (Status: %s), aggregating chunks starting from %s", comp.ID, comp.Status, comp.StartTimestamp)
+	log.Printf("[%s] Received completion (Status: %s), aggregating chunks from session topic", comp.ID, comp.Status)
 
-	// Aggregate chunks
-	fullResult, err := aggregateChunks(ctx, client, cfg.PulsarResultsTopic, comp)
+	// Aggregate chunks from session topic
+	sessionTopic := SessionTopic(comp.ID)
+	fullResult, metadata, err := aggregateChunks(ctx, client, sessionTopic, comp)
 	if err != nil {
-		log.Printf("[%s] Aggregation error: %v (Partial result: %d chars)", comp.ID, err, len(fullResult))
+		log.Printf("[%s] Aggregation error on %s: %v (Partial result: %d chars)", comp.ID, sessionTopic, err, len(fullResult))
 		// We could send partial result or nack
 		consumer.Nack(msg)
 		continue
@@ -117,7 +122,7 @@ func main() {
 	}
 
 	// Send final result to db-adapter topic
-	if err := sendFinalResult(ctx, producer, comp, fullResult); err != nil {
+	if err := sendFinalResult(ctx, producer, comp, fullResult, metadata); err != nil {
 		log.Printf("[%s] Failed to send final result: %v", comp.ID, err)
 		consumer.Nack(msg)
 		continue
@@ -132,53 +137,43 @@ func main() {
 	log.Printf("Shutting down...")
 }
 
-func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, comp contracts.ResponseCompletion) (string, error) {
+func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, comp contracts.ResponseCompletion) (string, map[string]interface{}, error) {
 	reader, err := client.CreateReader(pulsar.ReaderOptions{
 		Topic:          topic,
 		StartMessageID: pulsar.EarliestMessageID(),
 	})
 	if err != nil {
-		return "", fmt.Errorf("create reader: %w", err)
+		return "", nil, fmt.Errorf("create reader for %s: %w", topic, err)
 	}
 	defer reader.Close()
 
-	startTS, err := time.Parse(time.RFC3339, comp.StartTimestamp)
-	if err != nil {
-		return "", fmt.Errorf("parse timestamp: %w", err)
-	}
-
-	// Seek back to start of sequence (with a bit of buffer)
-	if err := reader.SeekByTime(startTS.Add(-5 * time.Second)); err != nil {
-		return "", fmt.Errorf("seek by time: %w", err)
-	}
-
 	var chunks = make(map[int]contracts.StreamChunk)
+	var lastMetadata map[string]interface{}
 	timeout := time.After(30 * time.Second) // Safety timeout for the scan
 
 	for {
 		select {
 		case <-timeout:
-			return "", fmt.Errorf("timed out scanning for chunks")
+			return "", nil, fmt.Errorf("timed out scanning for chunks in %s", topic)
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return "", nil, ctx.Err()
 		default:
 			if !reader.HasNext() {
-				// We reached the end of the topic but didn't find the 'is_last' chunk?
-				// Maybe wait a bit or return what we have?
+				// Wait a bit for more chunks
 				time.Sleep(100 * time.Millisecond)
 				if !reader.HasNext() {
 					// Check if we have anything
 					if len(chunks) > 0 {
-						return assemble(chunks), nil
+						return assemble(chunks), lastMetadata, nil
 					}
-					return "", fmt.Errorf("reached end of topic without finding chunks")
+					return "", nil, fmt.Errorf("reached end of topic %s without finding chunks", topic)
 				}
 				continue
 			}
 
 			msg, err := reader.Next(ctx)
 			if err != nil {
-				return "", fmt.Errorf("reader next: %w", err)
+				return "", nil, fmt.Errorf("reader next: %w", err)
 			}
 
 			var chunk contracts.StreamChunk
@@ -192,13 +187,17 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 				continue
 			}
 
+			if chunk.Metadata != nil {
+				lastMetadata = chunk.Metadata
+			}
+
 			if chunk.Chunk != "" {
 				// Deduplicate by sequence number
 				chunks[chunk.SequenceNumber] = chunk
 			}
 
 			if chunk.IsLast {
-				return assemble(chunks), nil
+				return assemble(chunks), lastMetadata, nil
 			}
 		}
 	}
@@ -219,7 +218,7 @@ func assemble(chunkMap map[int]contracts.StreamChunk) string {
 	return sb.String()
 }
 
-func sendFinalResult(ctx context.Context, producer pulsar.Producer, comp contracts.ResponseCompletion, result string) error {
+func sendFinalResult(ctx context.Context, producer pulsar.Producer, comp contracts.ResponseCompletion, result string, metadata map[string]interface{}) error {
 	payload, err := json.Marshal(map[string]interface{}{
 		"id":              comp.ID,
 		"session_id":      comp.SessionID,
@@ -227,6 +226,7 @@ func sendFinalResult(ctx context.Context, producer pulsar.Producer, comp contrac
 		"model":           comp.Model,
 		"sequence_number": 0, // Final aggregated result is always seq 0
 		"timestamp":       time.Now().UTC().Format(time.RFC3339),
+		"metadata":        metadata,
 	})
 	if err != nil {
 		return err

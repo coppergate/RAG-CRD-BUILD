@@ -9,6 +9,7 @@ import (
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
+	"app-builds/common/ent/tag"
 	"context"
 	"errors"
 	"fmt"
@@ -84,6 +85,7 @@ func checkColumn(t, c string) error {
 			prompt.Table:      prompt.ValidColumn,
 			response.Table:    response.ValidColumn,
 			session.Table:     session.ValidColumn,
+			tag.Table:         tag.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

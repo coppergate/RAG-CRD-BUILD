@@ -23,18 +23,19 @@ type pulsarClient struct {
 	promptProducer pulsar.Producer
 	consumer       pulsar.Consumer
 	pending        sync.Map // correlationID -> chan response
-	streams        sync.Map // correlationID -> chan contracts.StreamChunk
+	streams        sync.Map // correlationID -> context.CancelFunc
 	requestTimeout time.Duration
 }
 
 type response struct {
-	ID             string `json:"id"`
-	Result         string `json:"result"`
-	Error          string `json:"error"`
-	Chunk          string `json:"chunk"`
-	SequenceNumber int    `json:"sequence_number"`
-	IsLast         bool   `json:"is_last"`
-	InConversation bool   `json:"in_conversation"`
+	ID             string                 `json:"id"`
+	Result         string                 `json:"result"`
+	Error          string                 `json:"error"`
+	Chunk          string                 `json:"chunk"`
+	SequenceNumber int                    `json:"sequence_number"`
+	IsLast         bool                   `json:"is_last"`
+	InConversation bool                   `json:"in_conversation"`
+	Metadata       map[string]interface{} `json:"metadata"`
 }
 
 func NewPulsarClient(cfg *config.Config) (Client, error) {
@@ -105,16 +106,6 @@ func (pc *pulsarClient) consumeResults() {
 			if ch, ok := pc.pending.Load(resp.ID); ok {
 				ch.(chan response) <- resp
 			}
-			if ch, ok := pc.streams.Load(resp.ID); ok {
-				ch.(chan contracts.StreamChunk) <- contracts.StreamChunk{
-					ID:             resp.ID,
-					Chunk:          resp.Chunk,
-					SequenceNumber: resp.SequenceNumber,
-					IsLast:         resp.IsLast,
-					Error:          resp.Error,
-					InConversation: resp.InConversation,
-				}
-			}
 		}
 		pc.consumer.Ack(msg)
 	}
@@ -179,12 +170,55 @@ func (pc *pulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, cont
 	return err
 }
 
+func (pc *pulsarClient) SessionTopic(id string) string {
+	return fmt.Sprintf("persistent://rag-pipeline/sessions/%s", id)
+}
+
 func (pc *pulsarClient) SubscribeStream(id string, ch chan contracts.StreamChunk) {
-	pc.streams.Store(id, ch)
+	ctx, cancel := context.WithCancel(context.Background())
+	pc.streams.Store(id, cancel)
+
+	go func() {
+		defer cancel()
+		topic := pc.SessionTopic(id)
+		consumer, err := pc.client.Subscribe(pulsar.ConsumerOptions{
+			Topic:            topic,
+			SubscriptionName: fmt.Sprintf("gateway-%s", id),
+			Type:             pulsar.Exclusive,
+		})
+		if err != nil {
+			log.Printf("[%s] Failed to subscribe to session topic %s: %v", id, topic, err)
+			return
+		}
+		defer consumer.Close()
+
+		for {
+			msg, err := consumer.Receive(ctx)
+			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				log.Printf("[%s] Consumer receive error: %v", id, err)
+				return
+			}
+
+			var chunk contracts.StreamChunk
+			if err := json.Unmarshal(msg.Payload(), &chunk); err == nil {
+				ch <- chunk
+				if chunk.IsLast {
+					consumer.Ack(msg)
+					return
+				}
+			}
+			consumer.Ack(msg)
+		}
+	}()
 }
 
 func (pc *pulsarClient) UnsubscribeStream(id string) {
-	pc.streams.Delete(id)
+	if cancel, ok := pc.streams.LoadAndDelete(id); ok {
+		cancel.(context.CancelFunc)()
+	}
 }
 
 func (pc *pulsarClient) SendRawRequest(ctx context.Context, payload interface{}) error {

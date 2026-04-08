@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:rag_explorer/features/settings/settings_page.dart';
+import 'package:rag_explorer/app_config_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
 import '../../core/models/session.dart';
@@ -35,7 +36,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final ScrollController _chatScrollController = ScrollController();
   bool _isChatSelected = false;
   bool _isLogSelected = false;
-  double _metadataPanelWidth = 300.0;
+  int? _selectedMessageIndex;
+  double _metadataPanelWidth = 350.0;
   double _logPanelWidth = 400.0;
 
   @override
@@ -369,7 +371,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         itemCount: _messages.length,
         itemBuilder: (context, index) {
           final msg = _messages[index];
-          return _buildMessageBubble(msg);
+          return _buildMessageBubble(msg, index);
         },
       ),
     );
@@ -423,57 +425,62 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           );
   }
 
-  Widget _buildMessageBubble(ResponseMessage msg) {
+  Widget _buildMessageBubble(ResponseMessage msg, int index) {
     final isUser = msg.role == 'user';
     final darkMode = ref.watch(appConfigProvider).darkMode;
+    final isSelected = _selectedMessageIndex == index;
     
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isUser 
-              ? (darkMode ? Colors.blue[900] : Colors.blue[100])
-              : (darkMode ? Colors.grey[850] : Colors.grey[200]),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(12),
-            topRight: const Radius.circular(12),
-            bottomLeft: Radius.circular(isUser ? 12 : 0),
-            bottomRight: Radius.circular(isUser ? 0 : 12),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isUser ? 'User' : 'Assistant',
-              style: TextStyle(
-                fontSize: 10, 
-                fontWeight: FontWeight.bold, 
-                color: darkMode ? Colors.grey[400] : Colors.grey[600]
-              ),
+    return GestureDetector(
+      onTap: () => setState(() => _selectedMessageIndex = index),
+      child: Align(
+        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isUser 
+                ? (darkMode ? Colors.blue[900] : Colors.blue[100])
+                : (darkMode ? Colors.grey[850] : Colors.grey[200]),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(12),
+              topRight: const Radius.circular(12),
+              bottomLeft: Radius.circular(isUser ? 12 : 0),
+              bottomRight: Radius.circular(isUser ? 0 : 12),
             ),
-            const SizedBox(height: 4),
-            if (msg.content.isEmpty && !isUser && _isStreaming)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            else if (!isUser)
-              MarkdownBody(
-                data: msg.content,
-                selectable: false, // Changed to false as it is now inside SelectionArea
-                styleSheet: _getMarkdownStyle(darkMode),
-              )
-            else
+            border: isSelected ? Border.all(color: Colors.blueAccent, width: 2) : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                msg.content, 
-                style: TextStyle(color: darkMode ? Colors.white70 : Colors.black87)
+                isUser ? 'User' : 'Assistant',
+                style: TextStyle(
+                  fontSize: 10, 
+                  fontWeight: FontWeight.bold, 
+                  color: darkMode ? Colors.grey[400] : Colors.grey[600]
+                ),
               ),
-          ],
+              const SizedBox(height: 4),
+              if (msg.content.isEmpty && !isUser && _isStreaming)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (!isUser)
+                MarkdownBody(
+                  data: msg.content,
+                  selectable: false, // Changed to false as it is now inside SelectionArea
+                  styleSheet: _getMarkdownStyle(darkMode),
+                )
+              else
+                Text(
+                  msg.content, 
+                  style: TextStyle(color: darkMode ? Colors.white70 : Colors.black87)
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -513,24 +520,62 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildMetadataPanel() {
+    final ResponseMessage? selectedMsg = (_selectedMessageIndex != null && _selectedMessageIndex! < _messages.length) 
+        ? _messages[_selectedMessageIndex!] 
+        : null;
+    
+    final metadata = selectedMsg?.metadata ?? {};
+    final List<dynamic> contexts = (metadata['contexts'] as List<dynamic>?) ?? [];
+    final darkMode = ref.watch(appConfigProvider).darkMode;
+
     return SizedBox(
       width: _metadataPanelWidth,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Response Metadata', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Response Metadata', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              if (selectedMsg != null)
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => setState(() => _selectedMessageIndex = null),
+                ),
+            ],
+          ),
           const SizedBox(height: 16),
-          _buildMetadataItem('Latency', '452ms'),
-          _buildMetadataItem('Prompt Tokens', '124'),
-          _buildMetadataItem('Completion Tokens', '256'),
-          const Divider(),
-          const Text('Memory Trace', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Recalled 2 items from session memory.', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
-          const SizedBox(height: 16),
-          const Text('Retrieved Context', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          _buildContextSnippet('doc1.pdf', 'Found similarity 0.89 in collection vectors-384...'),
+          if (selectedMsg == null)
+            const Text('Select a message to view its metadata and retrieved context.', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic))
+          else ...[
+            _buildMetadataItem('Role', selectedMsg.role?.toUpperCase() ?? 'UNKNOWN'),
+            _buildMetadataItem('Time', selectedMsg.timestamp?.toIso8601String().split('T').last.substring(0, 8) ?? 'N/A'),
+            if (metadata['latency_ms'] != null) _buildMetadataItem('Latency', '${metadata['latency_ms']}ms'),
+            if (metadata['prompt_tokens'] != null) _buildMetadataItem('Prompt Tokens', metadata['prompt_tokens'].toString()),
+            if (metadata['completion_tokens'] != null) _buildMetadataItem('Completion Tokens', metadata['completion_tokens'].toString()),
+            if (metadata['model'] != null) _buildMetadataItem('Model', metadata['model'].toString()),
+            
+            const Divider(),
+            const Text('Memory Trace', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            if (metadata['recursion_budget'] != null) 
+              _buildMetadataItem('Recursion Budget', metadata['recursion_budget'].toString()),
+            if (metadata['memories_recalled'] != null)
+              Text('Recalled ${metadata['memories_recalled']} items from session memory.', style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic)),
+            
+            const SizedBox(height: 16),
+            Text('Retrieved Context (${contexts.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            if (contexts.isEmpty)
+              const Text('No context was retrieved for this message.', style: TextStyle(fontSize: 12, color: Colors.grey))
+            else
+              ...contexts.map((c) {
+                final text = c.toString();
+                // Context is usually a string, but it might contain source info if we structured it.
+                // For now, let's assume it's a string from the pipeline.
+                return _buildContextSnippet('Source', text, darkMode);
+              }),
+          ],
         ],
       ),
     );
@@ -627,21 +672,30 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
-  Widget _buildContextSnippet(String source, String snippet) {
+  Widget _buildContextSnippet(String source, String snippet, bool darkMode) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.yellow[50],
-        border: Border.all(color: Colors.yellow[200]!),
+        color: darkMode ? Colors.blueGrey[900] : Colors.yellow[50],
+        border: Border.all(color: darkMode ? Colors.blueGrey[700]! : Colors.yellow[200]!),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(source, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(source, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: darkMode ? Colors.blueAccent : Colors.black87)),
+              const Icon(Icons.copy, size: 12, color: Colors.grey),
+            ],
+          ),
           const SizedBox(height: 4),
-          Text(snippet, style: const TextStyle(fontSize: 10, overflow: TextOverflow.ellipsis), maxLines: 3),
+          Text(
+            snippet, 
+            style: TextStyle(fontSize: 11, color: darkMode ? Colors.white70 : Colors.black87),
+          ),
         ],
       ),
     );

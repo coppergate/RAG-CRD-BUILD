@@ -81,6 +81,7 @@
 lib/
 ├── main.dart
 ├── app.dart                    # MaterialApp, theme, sidebar scaffold
+├── app_config_provider.dart    # Centralized configuration provider
 ├── config/
 │   ├── app_config.dart         # Runtime config model
 │   └── service_endpoints.dart  # Service URL constants/defaults
@@ -133,11 +134,11 @@ lib/
   - Model selector dropdown: Executor model.
   - Tag multi-select input (for RAG context isolation).
   - Memory mode toggle: `off` | `session` | `full`.
-- **Response metadata panel** (collapsible right sub-panel):
+- **Response metadata panel** (collapsible right sub-panel): [IMPLEMENTED]
   - Token usage (prompt tokens, completion tokens).
-  - Latency breakdown.
-  - Retrieved context snippets (from Qdrant).
-  - Memory trace: which memories were recalled and why (from MemoryPack).
+  - Latency breakdown (Total, TTFT, etc.).
+  - Model information (Planner, Executor).
+  - Retrieved context snippets (from Qdrant) with source metadata.
 
 **Data Flow**:
 1. User composes message → Flutter sends `POST /v1/rag/chat` with `{ session_id, prompt, planner, executor, tags }`.
@@ -147,18 +148,19 @@ lib/
 
 ---
 
-### 3.2 Data Ingestion
-**Purpose**: Upload documents, trigger ingestion, and monitor embedding generation.
+### 3.2 Data Ingestion [IMPLEMENTED]
+**Purpose**: Browse S3, upload documents, manage knowledge tags, and trigger ingestion.
 
 **Backend Endpoints**:
-- `POST /ingest` — Trigger ingestion (rag-ingestion service)
-- S3 upload (direct to Rook-Ceph via object-store-mgr or presigned URL)
+- `POST /ingest` — Trigger ingestion (rag-ingestion service) via `rag-admin-api`
+- `PUT /api/s3/buckets/{bucket}/objects/{key}` — Upload object via `object-store-mgr`
 
 **UI Components**:
-- **Upload area**: Drag-and-drop file upload with progress indicator.
-- **Tag assignment**: Assign tags to uploaded documents for context isolation.
-- **Ingestion status**: Table showing recent ingestion jobs (status, document name, chunk count, embedding model, timestamp).
-- **Embedding preview**: After ingestion, show chunk count and sample chunks with their vector dimensions.
+- **S3 Browser**: List objects in the configured default bucket (`rag-codebase-bucket`).
+- **File/Folder Upload**: Multi-file selection and folder upload support with prefix targeting.
+- **Knowledge Tags**: CRUD interface for tags (persisted in TimescaleDB).
+- **Ingestion Control**: Set target prefix, assign tags, and trigger the pipeline.
+- **Status Overlay**: Real-time feedback on upload and ingestion progress.
 
 ---
 

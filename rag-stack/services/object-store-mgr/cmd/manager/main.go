@@ -88,8 +88,10 @@ func main() {
 		bucketName := parts[0]
 
 		if len(parts) == 1 { // List objects
+			prefix := r.URL.Query().Get("prefix")
 			resp, err := client.ListObjectsV2(r.Context(), &s3.ListObjectsV2Input{
 				Bucket: aws.String(bucketName),
+				Prefix: aws.String(prefix),
 			})
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -113,6 +115,17 @@ func main() {
 			}
 			defer resp.Body.Close()
 			io.Copy(w, resp.Body)
+		case http.MethodPut:
+			_, err = client.PutObject(r.Context(), &s3.PutObjectInput{
+				Bucket: aws.String(bucketName),
+				Key:    aws.String(objectKey),
+				Body:   r.Body,
+			})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
 		case http.MethodDelete:
 			_, err := client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
 				Bucket: aws.String(bucketName),
