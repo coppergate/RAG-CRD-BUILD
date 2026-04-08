@@ -82,27 +82,34 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _startNewSession() {
     final nameController = TextEditingController();
+    bool isCreating = false;
 
-    Future<void> handleCreate(BuildContext dialogContext) async {
+    void handleCreate(BuildContext dialogContext) {
+      if (isCreating) return;
       final name = nameController.text.trim();
       if (name.isNotEmpty) {
-        
+        isCreating = true;
+        // Close dialog immediately to feel responsive
+        Navigator.pop(dialogContext);
+
         final newId = const Uuid().v4();
         final chatService = ref.read(chatServiceProvider);
 
-        // Create session in backend
-        await chatService.createSession(newId, name);
-
+        // Update UI state locally immediately
         if (mounted) {
           setState(() {
             _currentSessionId = newId;
             _currentSessionName = name;
             _messages.clear();
           });
-          // Refresh the list to show the new session
-          _loadSessions();
-          Navigator.pop(dialogContext);
         }
+
+        // Backend sync in background
+        chatService.createSession(newId, name).then((_) {
+          if (mounted) {
+            _loadSessions();
+          }
+        });
       }
     }
 
@@ -117,6 +124,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             labelText: 'Session Name',
           ),
           autofocus: true,
+          textInputAction: TextInputAction.go,
           onSubmitted: (_) => handleCreate(dialogContext),
         ),
         actions: [
@@ -755,6 +763,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           controller: tagController,
           decoration: const InputDecoration(hintText: 'Enter tag name'),
           autofocus: true,
+          textInputAction: TextInputAction.done,
           onSubmitted: (val) {
             if (val.trim().isNotEmpty) {
               setState(() => _tags.add(val.trim()));

@@ -155,32 +155,42 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
 
   void _showCreateTagDialog() {
     final controller = TextEditingController();
+    bool isCreating = false;
+
+    void handleCreate(BuildContext dialogContext) {
+      if (isCreating) return;
+      final name = controller.text.trim();
+      if (name.isNotEmpty) {
+        isCreating = true;
+        Navigator.pop(dialogContext);
+
+        final service = ref.read(ingestionServiceProvider.notifier);
+        service.createTag(name).then((newTag) {
+          if (newTag != null && mounted) {
+            setState(() {
+              _tags.add(newTag);
+              _selectedTag = newTag;
+            });
+          }
+        });
+      }
+    }
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Create New Tag'),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(labelText: 'Tag Name', hintText: 'e.g., technical-docs'),
           autofocus: true,
+          textInputAction: TextInputAction.go,
+          onSubmitted: (_) => handleCreate(dialogContext),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () async {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                final service = ref.read(ingestionServiceProvider.notifier);
-                final newTag = await service.createTag(name);
-                if (newTag != null && mounted) {
-                  setState(() {
-                    _tags.add(newTag);
-                    _selectedTag = newTag;
-                  });
-                }
-                if (mounted) Navigator.pop(context);
-              }
-            },
+            onPressed: () => handleCreate(dialogContext),
             child: const Text('Create'),
           ),
         ],
@@ -286,6 +296,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
               onChanged: (val) {
                 _prefix = val;
               },
+              textInputAction: TextInputAction.search,
               onSubmitted: (_) => _loadObjects(),
             ),
           ],
