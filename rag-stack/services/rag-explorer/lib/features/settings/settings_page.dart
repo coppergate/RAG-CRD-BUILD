@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../config/app_config.dart';
-import '../../config/service_endpoints.dart';
 import '../../app_config_provider.dart';
 
 class SettingsPage extends ConsumerWidget {

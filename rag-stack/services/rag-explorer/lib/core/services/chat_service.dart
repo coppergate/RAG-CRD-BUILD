@@ -10,8 +10,9 @@ import 'log_service.dart';
 
 final chatServiceProvider = Provider((ref) {
   final config = ref.watch(appConfigProvider);
+  final dio = ref.watch(dioProvider);
   final logNotifier = ref.watch(logProvider.notifier);
-  return ChatService(Dio(), config, logNotifier);
+  return ChatService(dio, config, logNotifier);
 });
 
 class ChatService {

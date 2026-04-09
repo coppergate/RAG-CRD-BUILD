@@ -13,7 +13,6 @@ import 'features/models/models_page.dart';
 import 'features/observability/observability_page.dart';
 import 'features/settings/settings_page.dart';
 import 'app_config_provider.dart';
-import 'config/app_config.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();

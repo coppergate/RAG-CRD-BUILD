@@ -161,6 +161,20 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if name already exists for a DIFFERENT session ID
+	if req.Name != "" {
+		existing, err := h.client.Session.Query().
+			Where(session.Name(req.Name)).
+			First(ctx)
+		if err == nil && existing != nil {
+			// If name exists and ID is either not provided or different from existing
+			if req.ID == "" || existing.ID.String() != req.ID {
+				http.Error(w, "Session name already exists", http.StatusConflict)
+				return
+			}
+		}
+	}
+
 	builder := h.client.Session.Create().
 		SetName(req.Name).
 		SetLastActiveAt(time.Now())
@@ -171,14 +185,14 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Use upsert to be safe
+	// Use upsert to be safe for ID conflict
 	upserter := builder.OnConflictColumns(session.FieldID).
 		UpdateLastActiveAt().
 		UpdateName()
 
 	s, err := upserter.ID(ctx)
 	if err != nil {
-		http.Error(w, "Failed to create session: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to create/update session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

@@ -8,10 +8,11 @@ The system uses a dual-registry topology to ensure high availability, fast pulls
 
 ### 1.1 Host Registry (Bootstrap)
 - **Address**: `https://10.0.0.1:5000` (`hierophant:5000`)
-- **DNS Alias**: `https://registry.hierocracy.home:5000`
+- **DNS Alias**: `https://hierophant.hierocracy.home:5000`
+- **Note**: `https://registry.hierocracy.home:5000` points to the in-cluster registry (LoadBalancer) once deployed.
 - **Purpose**: Acts as the primary mirror for all nodes in the cluster and the initial entry point for bootstrapping the in-cluster registry.
 - **Service**: Runs as a Podman container directly on the `hierophant` host.
-- **Security**: TLS-enabled using a custom Root CA (trust distributed via Talos).
+- **Security**: TLS-enabled using the common Root CA (trust distributed via Talos).
 
 ### 1.2 In-Cluster Registry (Cluster-Native)
 - **Namespace**: `container-registry`
@@ -28,16 +29,21 @@ All nodes (control plane, workers, and inference) are patched with `infrastructu
 
 ### 2.1 Host Resolution & Trust
 The following entries are added to the `/etc/hosts` of all Talos nodes:
-- `10.0.0.1` -> `hierophant.hierocracy.home`, `registry.hierocracy.home`, `hierophant`
+- `10.0.0.1` -> `hierophant.hierocracy.home`, `hierophant`
+- `172.20.1.26` -> `registry.hierocracy.home`, `registry.container-registry.svc.cluster.local`
 
 The **Root CA** is added to the machine configuration trust store to allow verified HTTPS pulls from both registries.
 
 ### 2.2 Registry Mirrors
-To optimize image pulls and support air-gapped environments, public registries are mirrored to the local registry:
-- `docker.io` -> `https://10.0.0.1:5000`
-- `quay.io` -> `https://10.0.0.1:5000`
-- `registry.k8s.io` -> `https://10.0.0.1:5000`
-- `ghcr.io` -> `https://10.0.0.1:5000`
+To optimize image pulls and support air-gapped environments, public registries are mirrored to the host registry with upstream fallbacks:
+- `docker.io` -> `https://hierophant.hierocracy.home:5000` (fallback: `https://registry-1.docker.io`)
+- `quay.io` -> `https://hierophant.hierocracy.home:5000` (fallback: `https://quay.io`)
+- `registry.k8s.io` -> `https://hierophant.hierocracy.home:5000` (fallback: `https://registry.k8s.io`)
+- `ghcr.io` -> `https://hierophant.hierocracy.home:5000` (fallback: `https://ghcr.io`)
+- `*` -> `https://hierophant.hierocracy.home:5000`
+
+Additionally, verified mirrors are configured for the following endpoints to ensure all nodes use the local cached layers:
+- `10.0.0.1:5000`, `hierophant.hierocracy.home:5000`, `registry.hierocracy.home:5000`, `registry.container-registry.svc.cluster.local:5000`.
 
 ### 2.3 Secure Registry Access
 The cluster now uses verified TLS for all registry communication. The `insecureSkipVerify` flag has been removed across the stack.
@@ -60,6 +66,9 @@ Prefetching ensures that critical images are available in the node-local `contai
 
 The following image groups are defined in `scripts/install-image-plan.sh`:
 
+### 4.0 registry
+- `registry:2`
+
 ### 4.1 bootstrap
 - `busybox:1.37.0`, `busybox:1.36`
 - `amazon/aws-cli:2.34.4`
@@ -69,9 +78,10 @@ The following image groups are defined in `scripts/install-image-plan.sh`:
 - `quay.io/operatorhubio/catalog:latest`
 - `quay.io/jetstack/cert-manager-cainjector:v1.19.2`, `...-controller`, `...-acmesolver`, `...-webhook`
 - `registry.k8s.io/metrics-server/metrics-server:v0.8.1`
-- `kubernetesui/dashboard:v2.7.0`, `kubernetesui/metrics-scraper:v1.0.8`
+- `ghcr.io/headlamp-k8s/headlamp:v0.25.0`
 
 ### 4.2 storage
+- `busybox:1.36`
 - `docker.io/rook/ceph:v1.18.8`
 - `quay.io/ceph/ceph:v19.2.3`, `quay.io/ceph/ceph:v19`
 - `quay.io/cephcsi/ceph-csi-operator:v0.4.1`, `quay.io/cephcsi/cephcsi:v3.15.0`
@@ -92,15 +102,26 @@ The following image groups are defined in `scripts/install-image-plan.sh`:
 - `ghcr.io/cloudnative-pg/cloudnative-pg:1.25.0`, `ghcr.io/imusmanmalik/timescaledb-postgis:16-3.5`
 
 ### 4.6 helm-runtime
-- `docker.io/grafana/alloy:v1.13.2`, `.../loki:3.6.5`, `.../tempo:2.9.0`
+- `curlimages/curl:7.78.0`
+- `docker.io/grafana/alloy:v1.13.2`, `.../loki:3.6.5`, `.../loki-canary:3.6.5`, `.../tempo:2.9.0`
+- `docker.io/kiwigrid/k8s-sidecar:1.30.9`
+- `docker.io/nginxinc/nginx-unprivileged:1.29-alpine`
 - `docker.io/traefik:v3.6.10`
 - `ghcr.io/grafana/grafana-operator:v5.22.0`
-- `nvcr.io/nvidia/gpu-operator:v25.10.1`, `.../k8s/dcgm-exporter:4.4.2-4.7.0-distroless`, `.../k8s-device-plugin:v0.18.1`
+- `grafana/mimir:3.0.1`, `grafana/rollout-operator:v0.32.0`
+- `memcached:1.6.39-alpine`, `prom/memcached-exporter:v0.15.4`
+- `quay.io/k8tz/k8tz:0.19.0`
+- `quay.io/prometheus-operator/prometheus-config-reloader:v0.81.0`
 - `registry.gitlab.com/purelb/purelb/allocator:v0.13.0`, `.../lbnodeagent:v0.13.0`
+- `registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.18.0`, `.../nfd/node-feature-discovery:v0.18.2`
+- `nvcr.io/nvidia/gpu-operator:v25.10.1`, `.../k8s/dcgm-exporter:4.4.2-4.7.0-distroless`, `.../k8s-device-plugin:v0.18.1`
 
-### 4.7 local-build-output (RAG Stack Services)
+### 4.7 ollama
+- `ollama/ollama:0.15.6`
+
+### 4.8 local-build-output (RAG Stack Services)
 These images are built in-cluster and pushed directly to `registry.hierocracy.home:5000`:
-- `db-adapter`, `llm-gateway`, `object-store-mgr`, `qdrant-adapter`, `rag-worker`, `rag-web-ui`, `rag-ingestion`, `rag-test-runner`
+- `db-adapter`, `llm-gateway`, `object-store-mgr`, `qdrant-adapter`, `rag-worker`, `rag-web-ui`, `rag-ingestion`, `rag-test-runner`, `build-orchestrator`
 
 ## 5. Operations & Maintenance
 
@@ -108,7 +129,7 @@ These images are built in-cluster and pushed directly to `registry.hierocracy.ho
 To push an image manually to the local registry from a node or `hierophant`:
 ```bash
 podman tag <image> registry.hierocracy.home:5000/<image>:<tag>
-podman push --tls-verify=false registry.hierocracy.home:5000/<image>:<tag>
+podman push --tls-verify=true registry.hierocracy.home:5000/<image>:<tag>
 ```
 
 ### 5.2 Backup and Restore

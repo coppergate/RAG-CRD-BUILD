@@ -75,7 +75,7 @@ if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
     fi
     tar $EXCLUDE_EXPLORER \
         --exclude="*/build" --exclude="*/.dart_tool" \
-        --exclude="*/bin" --exclude="*/*.exe" --exclude="*/main" --exclude="*/orchestrator" \
+        --exclude="*/bin" --exclude="*/*.exe" --exclude="*/main" \
         -czf "$SAFE_TMP_DIR/$TARBALL" .
     cd - > /dev/null
 

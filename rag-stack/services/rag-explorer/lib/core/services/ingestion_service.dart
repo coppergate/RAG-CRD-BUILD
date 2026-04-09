@@ -16,7 +16,7 @@ class IngestionService extends _$IngestionService {
 
   @override
   FutureOr<void> build() {
-    _dio = Dio();
+    _dio = ref.watch(dioProvider);
     _config = ref.watch(appConfigProvider);
     _logger = ref.read(logProvider.notifier);
   }

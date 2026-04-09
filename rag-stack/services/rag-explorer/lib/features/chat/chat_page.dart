@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:rag_explorer/features/settings/settings_page.dart';
 import 'package:rag_explorer/app_config_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
@@ -82,34 +81,29 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _startNewSession() {
     final nameController = TextEditingController();
-    bool isCreating = false;
 
-    void handleCreate(BuildContext dialogContext) {
-      if (isCreating) return;
+    Future<void> handleCreate(BuildContext dialogContext) async {
       final name = nameController.text.trim();
       if (name.isNotEmpty) {
-        isCreating = true;
-        // Close dialog immediately to feel responsive
-        Navigator.pop(dialogContext);
-
         final newId = const Uuid().v4();
         final chatService = ref.read(chatServiceProvider);
 
-        // Update UI state locally immediately
-        if (mounted) {
-          setState(() {
-            _currentSessionId = newId;
-            _currentSessionName = name;
-            _messages.clear();
-          });
-        }
+        // Create session in backend
+        final session = await chatService.createSession(newId, name);
 
-        // Backend sync in background
-        chatService.createSession(newId, name).then((_) {
-          if (mounted) {
-            _loadSessions();
+        if (mounted) {
+          if (session != null) {
+            setState(() {
+              _currentSessionId = newId;
+              _currentSessionName = name;
+              _messages.clear();
+            });
           }
-        });
+          // Close dialog as soon as backend call is done
+          Navigator.pop(dialogContext);
+          // Refresh list in background (don't await it before popping)
+          _loadSessions();
+        }
       }
     }
 
@@ -124,7 +118,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             labelText: 'Session Name',
           ),
           autofocus: true,
-          textInputAction: TextInputAction.go,
           onSubmitted: (_) => handleCreate(dialogContext),
         ),
         actions: [
@@ -763,7 +756,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           controller: tagController,
           decoration: const InputDecoration(hintText: 'Enter tag name'),
           autofocus: true,
-          textInputAction: TextInputAction.done,
           onSubmitted: (val) {
             if (val.trim().isNotEmpty) {
               setState(() => _tags.add(val.trim()));

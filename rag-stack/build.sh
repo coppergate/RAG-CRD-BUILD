@@ -11,6 +11,8 @@ BASE_DIR=$(cd "$REPO_DIR/.." && pwd)
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 
+LOCKFILE="/tmp/rag-stack-build.lock"
+
 VERSION_FILE="$BASE_DIR/CURRENT_VERSION"
 MODE="${MODE:-cluster}" # cluster | local
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
@@ -23,6 +25,22 @@ WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
 JOURNAL_DIR="${JOURNAL_DIR:-$HOME/.complete-build/journal/build-hashing}"
 
 mkdir -p "$JOURNAL_DIR"
+
+acquire_lock() {
+    if [[ -f "$LOCKFILE" ]]; then
+        local pid=$(cat "$LOCKFILE")
+        if kill -0 "$pid" 2>/dev/null; then
+            log "ERROR: Another build process (PID $pid) is already running."
+            exit 1
+        fi
+    fi
+    echo $$ > "$LOCKFILE"
+}
+
+release_lock() {
+    rm -f "$LOCKFILE"
+}
+trap release_lock EXIT
 
 SERVICES=(
     "rag-worker" 
@@ -166,9 +184,16 @@ build_service() {
     elif [[ "$last_build" == "null" || -z "$last_build" || "$last_build" == *"(triggered)"* ]]; then
         # Check if a build job is already running to avoid redundant triggers
         local ver_safe="${ver//./-}"
-        if [[ "$MODE" == "cluster" ]] && "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" 2>/dev/null | grep -E '0/1|1/1' >/dev/null 2>&1; then
-            log "STILL BUILDING: $svc version $ver (job is currently active in cluster)"
-            needs_build=false
+        if [[ "$MODE" == "cluster" ]]; then
+            # Look for ANY job (running, completed, or failed) to avoid duplicates if it's still present in the system
+            # We specifically avoid re-triggering if a job exists and it's not successful.
+            if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" 2>/dev/null | grep -E '0/1|1/1' >/dev/null 2>&1; then
+                log "STILL BUILDING: $svc version $ver (job exists in cluster)"
+                needs_build=false
+            else
+                log "RESUMING: $svc (last build was not recorded as successful and no active job found)"
+                needs_build=true
+            fi
         else
             log "RESUMING: $svc (last build was not recorded as successful)"
             needs_build=true
@@ -242,6 +267,7 @@ main() {
     done
 
     cleanup_old_jobs
+    acquire_lock
 
     if [[ -n "$SELECTED_SERVICE" ]]; then
         build_service "$SELECTED_SERVICE"

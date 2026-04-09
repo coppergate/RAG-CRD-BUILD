@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -155,47 +154,53 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
 
   void _showCreateTagDialog() {
     final controller = TextEditingController();
-    bool isCreating = false;
-
-    void handleCreate(BuildContext dialogContext) {
-      if (isCreating) return;
-      final name = controller.text.trim();
-      if (name.isNotEmpty) {
-        isCreating = true;
-        Navigator.pop(dialogContext);
-
-        final service = ref.read(ingestionServiceProvider.notifier);
-        service.createTag(name).then((newTag) {
-          if (newTag != null && mounted) {
-            setState(() {
-              _tags.add(newTag);
-              _selectedTag = newTag;
-            });
-          }
-        });
-      }
-    }
-
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Text('Create New Tag'),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(labelText: 'Tag Name', hintText: 'e.g., technical-docs'),
           autofocus: true,
-          textInputAction: TextInputAction.go,
-          onSubmitted: (_) => handleCreate(dialogContext),
+          onSubmitted: (_) {
+            final name = controller.text.trim();
+            if (name.isNotEmpty) {
+              _createTag(name, context);
+            }
+          },
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () => handleCreate(dialogContext),
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                _createTag(name, context);
+              }
+            },
             child: const Text('Create'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _createTag(String name, BuildContext dialogContext) async {
+    final service = ref.read(ingestionServiceProvider.notifier);
+    
+    // Create tag synchronously
+    final newTag = await service.createTag(name);
+    
+    if (mounted) {
+      if (newTag != null) {
+        setState(() {
+          _tags.add(newTag);
+          _selectedTag = newTag;
+        });
+      }
+      // Close dialog as soon as creation attempt is done
+      Navigator.pop(dialogContext);
+    }
   }
 
   @override
@@ -296,7 +301,6 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
               onChanged: (val) {
                 _prefix = val;
               },
-              textInputAction: TextInputAction.search,
               onSubmitted: (_) => _loadObjects(),
             ),
           ],
@@ -331,7 +335,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<Tag>(
-              value: _selectedTag,
+              initialValue: _selectedTag,
               isExpanded: true,
               decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12)),
               items: _tags.map((t) => DropdownMenuItem(value: t, child: Text(t.name))).toList(),
@@ -460,7 +464,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Objects in ${_selectedBucket}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text('Objects in $_selectedBucket', style: const TextStyle(fontWeight: FontWeight.bold)),
             Text('${_objects.length} files found', style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
