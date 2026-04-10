@@ -46,6 +46,7 @@ graph TD
         direction LR
         Ingress[stage/ingress]
         Plan[stage/plan]
+        Search[stage/search]
         Exec[stage/exec]
         Results[stage/results]
         Completion[stage/completion]
@@ -95,21 +96,22 @@ graph TD
     %% Worker transitions
     Worker -.->|9- Publish| Plan
     Plan -.->|10- Consume| Worker
-    Worker -.->|11- Publish| Exec
-    Exec -.->|12- Consume| Worker
+    Worker -.->|11- Publish| Search
+    Search -.->|12- Consume| Worker
+    Worker -.->|13- Publish| Exec
+    Exec -.->|14- Consume| Worker
 
-    Worker -->|13- Inference| Ollama
-    Worker -->|14- Inference| OllamaCode
-    Worker -.->|15- Stream Chunks| Sessions
-    Worker -.->|16- Completion Signal| Completion
+    Worker -->|15- Inference| Ollama
+    Worker -->|16- Inference| OllamaCode
+    Worker -.->|17- Stream Chunks| Sessions
+    Worker -.->|18- Completion Signal| Completion
 
-    Sessions -.->|17- Read Stream| Gateway
-    Completion -.->|18- Trigger| Aggregator
-    Aggregator -.->|19- Read Session Data| Sessions
-    Aggregator -.->|20- Publish| Results
-
-    Results -.->|21- Consume| DBAdapter
-    Gateway -->|22- Final Response| Explorer
+    Sessions -.->|19- Read Stream| Gateway
+    Completion -.->|20- Trigger| Aggregator
+    Aggregator -.->|21- Read Session Data| Sessions
+    Aggregator -.->|22- Publish| Results
+    Results -.->|23- Consume| DBAdapter
+    Gateway -->|24- Final Response| Explorer
 
     %% Persistent Flow: DB Adapter
     Prompts -.->|Consume| DBAdapter
@@ -137,7 +139,7 @@ graph TD
 - `rag-web-ui`: Legacy front-end for data ingestion and interactive chat; secured via Traefik HTTPS.
 - `rag-explorer`: Advanced Flutter-based management UI for the RAG pipeline. Supports granular ingestion control, metadata inspection, and real-time session monitoring.
 - `llm-gateway`: OpenAI-compatible entry point; manages session lifecycle and asynchronous task delegation. Now supports isolated session topics for streaming.
-- `rag-worker`: Core orchestration engine with modular LLM support (Llama/Granite); integrates multi-stage RAG logic (ingress/plan/exec).
+- `rag-worker`: Core orchestration engine with modular LLM support (Llama/Granite); integrates multi-stage RAG logic (ingress/plan/search/exec).
 - `qdrant-adapter`: Centralized vector DB adapter ensuring consistent tag-filtered search and upsert logic.
 - `db-adapter`: Async persistence layer for audit logs, session state, and chat history.
 - `prompt-aggregator`: High-performance aggregation service that assembles streaming chunks from session-specific Pulsar topics into final results.
