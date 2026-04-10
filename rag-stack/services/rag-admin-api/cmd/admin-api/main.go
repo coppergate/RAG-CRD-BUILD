@@ -53,6 +53,12 @@ func main() {
 	// RAG Ingestion Proxy
 	mux.HandleFunc("/api/ingest/", h.ProxyTo(cfg.IngestionURL, "/api/ingest"))
 	
+	// Qdrant Direct Proxy
+	mux.HandleFunc("/api/qdrant-direct/", h.ProxyTo(cfg.QdrantDirectURL, "/api/qdrant-direct"))
+	
+	// Grafana Proxy
+	mux.HandleFunc("/api/grafana/", h.ProxyTo(cfg.GrafanaURL, "/api/grafana"))
+	
 	// Health Aggregation
 	mux.HandleFunc("/api/health/all", h.HandleHealthAggregation)
 
