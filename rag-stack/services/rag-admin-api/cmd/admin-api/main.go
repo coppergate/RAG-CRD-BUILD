@@ -62,7 +62,23 @@ func main() {
 	// Health Aggregation
 	mux.HandleFunc("/api/health/all", h.HandleHealthAggregation)
 
-	otelHandler := otelhttp.NewHandler(mux, "rag-admin-api")
+	// Simple CORS Middleware
+	corsHandler := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+			
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	otelHandler := otelhttp.NewHandler(corsHandler(mux), "rag-admin-api")
 
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,

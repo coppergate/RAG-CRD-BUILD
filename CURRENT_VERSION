@@ -1,7 +1,7 @@
 {
   "rag-worker": {
-    "version": "2.5.7",
-    "last_build": null
+    "version": "2.5.6",
+    "last_build": "2026-04-10T06:40:00Z"
   },
   "rag-ingestion": {
     "version": "2.5.5",
@@ -12,8 +12,8 @@
     "last_build": "2026-04-08T19:40:25Z"
   },
   "llm-gateway": {
-    "version": "2.5.5",
-    "last_build": "2026-04-08T19:33:29Z"
+    "version": "2.5.6",
+    "last_build": null
   },
   "db-adapter": {
     "version": "2.5.5",
@@ -32,16 +32,16 @@
     "last_build": "2026-04-08T19:40:28Z"
   },
   "rag-admin-api": {
-    "version": "2.5.6",
+    "version": "2.5.8",
     "last_build": null
   },
   "memory-controller": {
-    "version": "2.5.3",
-    "last_build": "2026-04-08T19:33:04Z"
+    "version": "2.5.4",
+    "last_build": "2026-04-10T19:01:24Z"
   },
   "build-orchestrator": {
     "version": "2.5.6",
-    "last_build": "2026-04-10T18:39:57Z"
+    "last_build": "2026-04-10T19:01:26Z"
   },
   "prompt-aggregator": {
     "version": "2.5.5",

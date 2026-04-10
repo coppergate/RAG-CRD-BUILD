@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"app-builds/common/contracts"
@@ -125,6 +126,7 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 func (h *MemoryHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[MEMCTRL] %s %s", r.Method, r.URL.Path)
 	switch r.Method {
 	case http.MethodGet:
 		h.listSessions(w, r)

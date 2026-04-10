@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -33,6 +34,7 @@ func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.Hand
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[PROXY] %s %s -> %s", r.Method, r.URL.Path, targetURL)
 		proxy.ServeHTTP(w, r)
 	}
 }
