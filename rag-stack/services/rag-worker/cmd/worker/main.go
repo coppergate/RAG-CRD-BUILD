@@ -174,6 +174,7 @@ func subscribeToStageTopics(cfg *config.Config, msgClient *messaging.Client) pul
 		Topics: []string{
 			cfg.PulsarIngressTopic,
 			cfg.PulsarPlanTopic,
+			cfg.PulsarSearchTopic,
 			cfg.PulsarExecTopic,
 		},
 		SubscriptionName: cfg.PulsarSubscription,
@@ -192,6 +193,8 @@ func classifyStage(topic string) string {
 		return "ingress"
 	case strings.HasSuffix(topic, "plan"):
 		return "plan"
+	case strings.HasSuffix(topic, "search"):
+		return "search"
 	case strings.HasSuffix(topic, "exec"):
 		return "exec"
 	default:

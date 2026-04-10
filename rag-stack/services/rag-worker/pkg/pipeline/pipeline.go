@@ -101,6 +101,8 @@ func (h *Handler) HandleStageMessage(ctx context.Context, stage string, msg puls
 		return h.handleIngress(ctx, &req)
 	case "plan":
 		return h.handlePlan(ctx, &req)
+	case "search":
+		return h.handleSearch(ctx, &req)
 	case "exec":
 		return h.handleExec(ctx, &req)
 	default:
@@ -152,7 +154,52 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 		subQueries = []string{req.Prompt}
 	}
 
+	if req.Metadata == nil {
+		req.Metadata = make(map[string]interface{})
+	}
+	req.Metadata["sub_queries"] = subQueries
+
+	payload, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("[%s] Failed to marshal plan data: %v", req.ID, err)
+		h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
+		return dlq.PermanentFailure, fmt.Errorf("marshal plan data: %w", err)
+	}
+	if _, err := h.msg.Producers.Search.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
+		log.Printf("[%s] Failed to send to search topic: %v", req.ID, err)
+		h.msg.SendError(ctx, req.ID, "Internal messaging error", false)
+		return dlq.TransientFailure, fmt.Errorf("send to search topic: %w", err)
+	}
+
+	return dlq.Success, nil
+}
+
+func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
+	var subQueries []string
+	if sq, ok := req.Metadata["sub_queries"].([]interface{}); ok {
+		for _, q := range sq {
+			if s, ok := q.(string); ok {
+				subQueries = append(subQueries, s)
+			}
+		}
+	}
+	if len(subQueries) == 0 {
+		subQueries = []string{req.Prompt}
+	}
+
 	h.msg.SendStatus(ctx, req.ID, req.SessionID, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
+
+	modelID := req.PlannerModel
+	if modelID == "" {
+		modelID = h.cfg.PlannerModel
+	}
+
+	planner, err := h.registry.GetPlanner(modelID)
+	if err != nil {
+		log.Printf("[%s] Planner resolution error in search: %v", req.ID, err)
+		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model for embeddings: %s", modelID), false)
+		return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
+	}
 
 	tags := req.Tags
 	var allContexts []string
@@ -183,9 +230,9 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 
 	payload, err := json.Marshal(req)
 	if err != nil {
-		log.Printf("[%s] Failed to marshal plan data: %v", req.ID, err)
+		log.Printf("[%s] Failed to marshal search result data: %v", req.ID, err)
 		h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
-		return dlq.PermanentFailure, fmt.Errorf("marshal plan data: %w", err)
+		return dlq.PermanentFailure, fmt.Errorf("marshal search result data: %w", err)
 	}
 	if _, err := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
 		log.Printf("[%s] Failed to send to exec topic: %v", req.ID, err)

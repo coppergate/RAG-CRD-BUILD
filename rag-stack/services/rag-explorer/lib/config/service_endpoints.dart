@@ -6,6 +6,6 @@ class ServiceEndpoints {
   static const String dbAdapter = '$ragAdminApi/api/db';
   static const String qdrantAdapter = '$ragAdminApi/api/qdrant';
   static const String memoryController = '$ragAdminApi/api/memory';
-  static const String qdrantDirect = 'https://qdrant.rag.hierocracy.home';
-  static const String grafana = 'https://grafana.rag.hierocracy.home';
+  static const String qdrantDirect = '$ragAdminApi/api/qdrant-direct';
+  static const String grafana = '$ragAdminApi/api/grafana';
 }

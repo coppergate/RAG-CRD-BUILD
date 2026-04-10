@@ -20,6 +20,7 @@ type Producers struct {
 	Results    pulsar.Producer
 	Status     pulsar.Producer
 	Plan       pulsar.Producer
+	Search     pulsar.Producer
 	Exec       pulsar.Producer
 	QdrantOps  pulsar.Producer
 	Completion pulsar.Producer
@@ -69,9 +70,19 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		client.Close()
 		return nil, fmt.Errorf("could not create Plan producer: %w", err)
 	}
+	
+	search, err := client.CreateProducer(pulsar.ProducerOptions{Topic: cfg.PulsarSearchTopic})
+	if err != nil {
+		plan.Close()
+		status.Close()
+		results.Close()
+		client.Close()
+		return nil, fmt.Errorf("could not create Search producer: %w", err)
+	}
 
 	exec, err := client.CreateProducer(pulsar.ProducerOptions{Topic: cfg.PulsarExecTopic})
 	if err != nil {
+		search.Close()
 		plan.Close()
 		status.Close()
 		results.Close()
@@ -106,6 +117,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 			Results:    results,
 			Status:     status,
 			Plan:       plan,
+			Search:     search,
 			Exec:       exec,
 			QdrantOps:  qOps,
 			Completion: completion,
@@ -123,6 +135,7 @@ func (c *Client) Close() {
 	c.Producers.Completion.Close()
 	c.Producers.QdrantOps.Close()
 	c.Producers.Exec.Close()
+	c.Producers.Search.Close()
 	c.Producers.Plan.Close()
 	c.Producers.Status.Close()
 	c.Producers.Results.Close()
