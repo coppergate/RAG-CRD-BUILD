@@ -442,6 +442,30 @@ bash ./cluster-startup.sh
     8.  Restores all other resources from `cluster-replicas.state` in the correct reverse-shutdown order (Infrastructure -> Bus -> Apps).
     9.  **Admission Controller Restoration**: Reinstalls the `k8tz` admission controller via `helm upgrade --install` once the cluster is stable.
 
+### 4. Host Reboot Recovery (Network & Routing)
+If the host (**hierophant**) has been rebooted, the volatile IPTables rules and bridge configurations for external routing are lost. This manifests as a **Connection Timeout** or **No route to host** error when accessing cluster services (like `rag-admin-api`) from external VMs.
+
+To recover the network state:
+1. **Initialize Network**: Run the idempotent network initialization script to restore bridges and IPTables.
+   ```bash
+   # On hierophant:
+   sudo /mnt/hegemon-share/share/code/kubernetes-setup/new-setup/00-init-network.sh
+   ```
+2. **Restore VM Connectivity**: If the network was initialized *after* VMs were already running, their interfaces may be detached from the bridge. Run the restoration script to perform a safe, ordered restart of the cluster.
+   ```bash
+   # On hierophant:
+   sudo /mnt/hegemon-share/share/code/kubernetes-setup/new-setup/05-restore-vms.sh
+   ```
+   *Note: `05-restore-vms.sh` now automatically calls `00-init-network.sh` at the start.*
+
+#### Prevention (Boot-time Automation)
+To prevent routing issues after future reboots, ensure `00-init-network.sh` runs on every boot.
+- **Recommended**: Add a `@reboot` entry to the `root` crontab on hierophant:
+  ```text
+  @reboot /mnt/hegemon-share/share/code/kubernetes-setup/new-setup/00-init-network.sh >> /var/log/network-init.log 2>&1
+  ```
+- **Alternative**: Create a systemd unit file (e.g., `rag-network-init.service`) that runs the script before `libvirtd.service`.
+
 ## TLS and Security
 1.  **Management Guide**: Refer to [TLS-GUIDE.md](TLS-GUIDE.md) for step-by-step instructions on creating certificates, adding SANs, and managing trust.
 2.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
