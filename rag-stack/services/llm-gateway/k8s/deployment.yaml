@@ -110,7 +110,9 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: skip-verify@kubernetescrd
 spec:
+  ingressClassName: traefik
   tls:
   - hosts:
     - gateway.hierocracy.home
