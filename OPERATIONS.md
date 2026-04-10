@@ -2,447 +2,18 @@
 
 This document tracks basic tasks and procedures determined during development to ensure efficiency and avoid redundant logic parsing. These instructions are designed for the **Junie** agent to follow directly.
 
-## Configuration and Hardcoded Values (Externalized)
+## 1. Cluster Fundamentals & Infrastructure
 
-The following values have been externalized to environment variables and can be configured in the Kubernetes deployment manifests:
+### 1.1 Storage Layout on Hierophant
+- **Podman storage**: `/mnt/storage/containers/storage` — configured via `~/.config/containers/storage.conf`
+- **Registry data**: `/mnt/storage/registry-data` — Docker registry image layers and manifests
+- **VM disk images**: `/var/lib/libvirt/images/` — Talos ISOs (symlinked from shared mount)
+- **Talos/kubectl configs**: `/home/k8s/kube/` — kubeconfig, kubectl binary
+- **Registry TLS/config**: `/mnt/storage/registry-config/` — config.yml, tls.crt, tls.key
+- **Pre-pulled LLM models**: `/mnt/storage/ollama-models/` — Ollama model blobs and manifests
+- **DO NOT** store large data (container images, registry) on `/home` — it has limited capacity (~143G shared with system)
 
-### RAG Ingestion Service (`rag-ingestion`)
-- `QDRANT_COLLECTION`: Qdrant collection name (default: `vectors`).
-- `INGEST_BATCH_SIZE`: Number of points to upsert to Qdrant in a single batch (default: `20`).
-- `CHUNK_SIZE`: Size of text chunks for embedding (default: `1000`).
-- `CHUNK_OVERLAP`: Overlap between text chunks (default: `200`).
-
-### RAG Worker (`rag-worker`)
-- `QDRANT_COLLECTION`: Qdrant collection name for search (default: `vectors`).
-- `QDRANT_SEARCH_LIMIT`: Maximum number of results to return from a vector search (default: `5`).
-- `QDRANT_SEARCH_TIMEOUT`: Timeout for Qdrant search operations (default: `30s`).
-- `RECURSION_BUDGET`: Maximum recursion depth for agentic reasoning (default: `2.0`).
-
-### LLM Gateway (`llm-gateway`)
-- `REQUEST_TIMEOUT`: Timeout for Pulsar-based inference requests (default: `120s`).
-
-## Session Establishment (Operational Context)
-
-Every new session for the **Junie** agent MUST establish the operational context by following these steps:
-1.  **Branch Check**: Ensure the local git branch `work-YYYY-MM-DD` exists for the current date. If not, create it.
-2.  **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project. 
-    - Verify the current project version in `CURRENT_VERSION`. It contains per-service versions and `last_build` timestamps.
-    - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
-    - `build.sh` performs automatic version incrementing when code changes are detected via hashing.
-    - If a service version is updated, `last_build` is set to `null` until the build is successful.
-    - You can override it with the `VERSION` environment variable to force a specific version for all services.
-3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
-4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md` to ensure any new procedures are understood and recorded.
-
-## Current Focus (Iteration 9: Ingestion & Observability)
-
-As of version 2.5.5, the project is focusing on **Iteration 9 (Ingestion & Observability)**.
-1.  **Ingestion Pipeline**: 
-    - **S3 Browser**: Implemented prefix-based object browsing for the default `rag-codebase-bucket` in `rag-explorer`.
-    - **Knowledge Tags**: Added a full CRUD interface for managing vector-store partitions (tags) in TimescaleDB.
-    - **Targeted Ingestion**: Enabled prefix-based filtering and tag assignment for new ingestion jobs.
-    - **File Upload**: Multi-file and folder upload support via `object-store-mgr` (Go) and `rag-explorer` (Flutter).
-2.  **Prompt Aggregation (Session Topics)**:
-    - Migrated the architecture from a shared global topic to isolated, per-session Pulsar topics.
-    - Eliminated O(N) scanning in `prompt-aggregator`, replaced with O(M) sequential reads.
-    - Integrated with `llm-gateway` for real-time streaming directly from session topics.
-3.  **Observability & Telemetry**:
-    - **Custom Metrics**: Added prompt/response volume tracking to `llm-gateway` and `rag-worker`.
-    - **Grafana Dashboards**: Deployed "RAG Stack Operational Overview" (`uid: rag-operations`) for tracking health, latency, and GPU utilization.
-4.  **Build System Optimization**:
-    - **Shared Context**: Implemented single-upload source context for batch builds.
-    - **Parallel Kaniko**: Concurrent build orchestration reducing full stack update latency by ~95%.
-    - **Kaniko Caching**: Optimized Dockerfiles for Go dependency layer caching.
-5.  **Stability**: Resolved `k8tz` admission controller deadlocks and Rook-Ceph IO hangs during cluster shutdown/startup.
-
-## Prompt Aggregation (Session Topics)
-
-As of version 2.5.4, the prompt aggregation architecture has been migrated to session-specific topics to eliminate linear scanning of global topics.
-
-### 1. Topic Naming Convention
-- **Session Topics**: `persistent://rag-pipeline/sessions/<correlation_id>`
-- **Global Completion Topic**: `persistent://rag-pipeline/stage/completion`
-- **Global Results Topic**: `persistent://rag-pipeline/stage/results` (used only for final results).
-
-### 2. Service Roles
-- **LLM Gateway**: Subscribes to the session topic for the request's `correlation_id` to receive and stream chunks to the client.
-- **RAG Worker**: Dynamically creates a Pulsar producer for the session topic of each request and sends all `StreamChunk` messages there.
-- **Prompt Aggregator**: Subscribes to the global `completion` topic. When a completion event arrives, it creates a Pulsar **Reader** for the session topic, aggregates all chunks, and publishes the final result to the global `results` topic.
-
-### 3. Infrastructure (Pulsar)
-- A dedicated Pulsar namespace `rag-pipeline/sessions` MUST exist.
-- **Policies**:
-    - **Inactive Topic Deletion**: Enabled, with a 5-minute timeout.
-    - **Message TTL**: 30 minutes.
-- Use `rag-stack/infrastructure/pulsar/init-rag-pulsar.sh` to ensure the namespace and policies are correctly applied.
-
----
-
-**IMPORTANT**: All RAG service image builds MUST go through the in-cluster Kaniko build pipeline. Do NOT use `podman build` or `docker build` on the host to build service images. The host-based `build-and-push.sh` is only for bootstrapping when the cluster is not available.
-
-### How the Build Pipeline Works
-1. `build-all-on-cluster.sh` packages the `services/` directory into a tarball.
-2. The tarball is uploaded to the Ceph S3 object store via a temporary uploader pod.
-3. A pre-signed S3 URL is generated for each service.
-4. Build tasks (JSON messages with service name, version, dockerfile path, source URL) are published to the Pulsar `build-tasks` topic.
-5. The `build-orchestrator` (running in `build-pipeline` namespace) consumes these messages and launches Kaniko `Job` resources.
-6. Kaniko pulls the source tarball from S3, builds the Docker image, and pushes it directly to the in-cluster registry.
-
-### Triggering a Build
-1.  **Access Hierophant**: Use `./run-on-hierophant.sh` or SSH directly.
-2.  **Versioning**: The version is read from `CURRENT_VERSION` at the project root. You can override it with the `VERSION` environment variable.
-3.  **Command**: Run `rag-stack/build.sh` (defaults to cluster-mode with change detection).
-4.  **Wait Mode**: Use the `--wait` flag to wait for build completion. The script automatically handles:
-    - Pre-build cleanup of old completed/failed Kaniko jobs.
-    - Targeted waiting using the `app=kaniko-build` label.
-    - Accurate post-build timestamp updates in `CURRENT_VERSION`.
-5.  **Example Commands**:
-    - Build all changed services on cluster:
-      ```bash
-      ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-        "cd /mnt/hegemon-share/share/code/complete-build && \
-         bash ./rag-stack/build.sh --mode cluster"
-      ```
-    - Force rebuild a specific service locally:
-      ```bash
-      ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-        "cd /mnt/hegemon-share/share/code/complete-build && \
-         bash ./rag-stack/build.sh --mode local --service rag-worker --force"
-      ```
-    - Build and wait for completion on cluster:
-      ```bash
-      ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-        "cd /mnt/hegemon-share/share/code/complete-build && \
-         bash ./rag-stack/build.sh --mode cluster --wait"
-      ```
-
-### Monitoring & Observability
-
-#### Grafana Dashboards
-The RAG stack uses the following Grafana dashboards for monitoring:
-- **RAG Stack Operational Overview** (`uid: rag-operations`): Main dashboard for high-level monitoring.
-  - **Prompts & Responses (Rate)**: Monitors incoming user requests and worker completions.
-  - **Avg Prompt/Response Size**: Tracks data volume in characters/bytes for prompts and responses.
-  - **Pipeline Latency (P95)**: Tracks End-to-End (Gateway) and per-stage (Worker) P95 latency.
-  - **Pulsar Bus Health**: Monitors message throughput across the pipeline.
-  - **GPU Utilization (%)**: Displays cluster-wide GPU and memory utilization.
-  - **System Errors**: Aggregates error rates from Gateway, Worker, DB, and Qdrant.
-- **RAG Stack Performance Overview** (`uid: rag-performance`): Detailed performance and error metrics per service.
-- **RAG Stack Logs & Errors** (`uid: rag-logs`): Loki-based dashboard for real-time log analysis and error tracking.
-
-#### Custom Metrics
-New metrics introduced in Iteration 9 for operational tracking:
-- `gateway_prompt_size_bytes`: Histogram of incoming prompt sizes in `llm-gateway`.
-- `worker_response_size_bytes`: Histogram of outgoing response sizes in `rag-worker`.
-
-### Monitoring Builds
-- **Jobs**: Check Kaniko job status in the `build-pipeline` namespace:
-    ```bash
-    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-      "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
-       /home/k8s/kube/kubectl get jobs -n build-pipeline"
-    ```
-- **Cleanup**: Delete completed or failed Kaniko build jobs:
-    ```bash
-    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-      "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
-       /home/k8s/kube/kubectl get jobs -n build-pipeline -o json | \
-       jq -r '.items[] | select(.metadata.labels[\"batch.kubernetes.io/job-name\"] // \"\" | startswith(\"kaniko-build-\")) | select(.status.succeeded > 0 or .status.failed > 0) | .metadata.name' | \
-       xargs -r /home/k8s/kube/kubectl delete job -n build-pipeline"
-    ```
-- **Build Orchestrator Logs**:
-    ```bash
-    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-      "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
-       /home/k8s/kube/kubectl logs -n build-pipeline deploy/build-orchestrator --tail=100"
-    ```
-- **Build Status Dashboard & Health**: The `build-orchestrator` exposes two separate servers to avoid port conflicts:
-    - **Status Dashboard**: Web UI and SSE-based live updates on port **8080**.
-    - **Health Checks**: `/healthz` and `/readyz` endpoints on port **8081**.
-    Both use HTTPS and require the `build-orchestrator-tls` secret.
-
-### Registry Maintenance (Pruning)
-To keep the registry clean and free up disk space, use the `registry-prune.sh` script to remove old image versions. This script keeps only the versions currently listed in `CURRENT_VERSION` and the `latest` tag.
-
-```bash
-# On hierophant:
-cd /mnt/hegemon-share/share/code/complete-build
-bash scripts/registry-prune.sh
-```
-
-After pruning manifests, you must run garbage collection on the in-cluster registry pod to actually free up space:
-
-```bash
-# On hierophant:
-export KUBECONFIG=/home/k8s/kube/config/kubeconfig
-/home/k8s/kube/kubectl exec -n container-registry deployment/registry -- registry garbage-collect /etc/docker/registry/config.yml
-```
-
-### Verifying Images in Registry
-```bash
-ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-  "for svc in rag-worker llm-gateway db-adapter qdrant-adapter \
-              rag-ingestion rag-web-ui object-store-mgr rag-test-runner \
-              rag-admin-api memory-controller; do \
-     echo \"\$svc: \$(curl -sk https://registry.hierocracy.home:5000/v2/\$svc/tags/list)\"; \
-   done"
-```
-
-## RAG Pipeline Explorer (Flutter UI)
-The RAG Pipeline Explorer is the new Flutter-based web application for managing the RAG cluster. It replaces the legacy `rag-web-ui`.
-
-### 1. Key Features (Iteration 8+)
-- **Session Management**: 
-    - **Friendly Names**: Users are prompted for a friendly name when creating a new session. This name is persisted in the database via the `name` field in the session record.
-    - **Selective Chat**: The chat interface is disabled until a session is selected from the sidebar.
-- **LLM Interaction**:
-    - **Waiting Indicator**: An animated `CircularProgressIndicator` is displayed while waiting for the LLM to start streaming the response.
-    - **Configurable Timeout**: LLM prompt streaming has a configurable timeout (default: 60 seconds), defined in `AppConfig`.
-- **System Logging**:
-    - **Flyout Log Panel**: A toggleable "System Logs" panel is available on the right side of the UI (Terminal icon in the AppBar).
-    - **Log Persistence**: Logs are stored in-memory using `LogService` (Riverpod) and provide real-time feedback on WebSocket connectivity, request payloads, and API calls.
-    - **Level-based Highlighting**: ERROR (bright red), WARN (bright yellow), INFO (white/black), and DEBUG (blue) levels are supported for easier diagnostics, with specific highlights for dark mode.
-    - **Source Location Propagation**: Logs now include the source file and line number (e.g., `[features/chat/chat_page.dart:531:12]`) to aid in debugging. This is achieved by capturing `StackTrace.current` and parsing the caller frame in `LogNotifier`.
-      - **Performance**: Querying the stack trace involves a non-trivial performance cost due to address-to-symbol mapping and string parsing. To mitigate this, location capture is **disabled in release and profile modes** (shows `[release]`) and is only active during development (`kDebugMode`).
-    - **Thread-safe Updates**: Log state updates are deferred using `Future.microtask` to prevent Riverpod "modifying provider during build" warnings when logs are triggered from widget lifecycles.
-    - **Resizability & Selectability**: Both the "System Logs" and "Response Metadata" panels can be resized by dragging the dividers. The log panel content is wrapped in a `SelectionArea` to enable text selection and copying.
-- **BFF Connectivity**: Centralized via `rag-admin-api` proxying.
-
-### 2. Backend Routing Standardization (Iteration 8+)
-- **Prefix Stripping**: The `rag-admin-api` now strips the `/api/service` prefix from incoming requests before proxying to backend services. 
-- **Backend Routes**: Backend services (`memory-controller`, `db-adapter`, `object-store-mgr`, `qdrant-adapter`) have been updated to listen on root-relative paths (e.g., `/sessions` instead of `/api/memory/sessions`).
-- **Consistency**: This standardizes the routing pattern across all Go and Python services in the RAG stack.
-
-### 3. Source and Build
-- **Source Directory**: `rag-stack/services/rag-explorer` (formerly `rag-flutter`).
-- **Dockerfile**: Multi-stage build (Flutter Web Build -> Alpine with Busybox HTTPD).
-- **Service Name**: `rag-explorer` in the build pipeline.
-
-### 4. Running for Development
-#### Local Desktop (Linux/Chrome)
-To run the RAG Explorer as a Linux desktop application or in a web browser, follow these steps:
-
-1.  **Install Flutter SDK and Dependencies**:
-    Run the setup script to install Flutter and its Linux desktop development dependencies on this VM:
-    ```bash
-    bash ./scripts/setup-flutter-linux.sh
-    ```
-    *Note: The script will prompt you to manually run `sudo dnf install` commands for system-level dependencies.*
-
-2.  **Add Flutter to PATH**:
-    Ensure `flutter` is in your `PATH` (add to `~/.bashrc` for persistence):
-    ```bash
-    export PATH="$HOME/flutter/bin:$PATH"
-    ```
-
-3.  **Run the Application**:
-    ```bash
-    cd rag-stack/services/rag-explorer
-    flutter run -d linux # For desktop app
-    flutter run -d chrome # For web browser
-    ```
-
-### 3. Deploying to Cluster
-1. **Build**: Trigger the Kaniko build on **hierophant**:
-   ```bash
-   ssh junie@hierophant "VERSION=2.4.9 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
-   ```
-2. **Deploy**: The UI is automatically deployed by `setup-all.sh` in Iteration 7:
-   ```bash
-   ssh junie@hierophant "VERSION=2.4.9 bash /mnt/hegemon-share/share/code/complete-build/rag-stack/setup-all.sh"
-   ```
-3. **Verification**:
-   - **Endpoint**: `https://rag-explorer.rag.hierocracy.home`
-   - **Status**: `kubectl get pods -n rag-system -l app=rag-explorer`
-
-### 4. Configuration (BFF Connectivity)
-The UI connects to the cluster via `rag-admin-api` (BFF) at `https://rag-admin-api.rag.hierocracy.home`.
-- **CORS**: Ensure `rag-admin-api` allows requests from `rag-explorer.rag.hierocracy.home`.
-- **WebSockets**: Streaming chat uses `wss://rag-admin-api.rag.hierocracy.home/api/llm/chat/stream`.
-
-## Local/Bootstrap Build and Push (Host-Based)
-Use this only for bootstrapping or when the cluster-native pipeline is unavailable.
-1.  **Script**: `rag-stack/build-and-push.sh`.
-2.  **Journaling**: Use a local directory for journaling to avoid shared mount permission issues.
-    -   Default: `/home/junie/rag-build-journals`
-    -   Override: `JOURNAL_DIR=/tmp/.rag-build`
-3.  **Force Build**: Use `FORCE_BUILD=true` to ensure fresh builds when code is modified.
-4.  **Example Command**:
-    ```bash
-    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z FORCE_BUILD=true ./build-and-push.sh"
-    ```
-
-## Running End-to-End Tests
-To execute the full RAG stack E2E test suite:
-1.  **Preparation**: Ensure services are deployed and running with the correct version and domain configuration (`*.hierocracy.home`).
-2.  **Execution**: Run the `run-e2e-on-hierophant.sh` script via the remote access script.
-    -   **Important**: If the mount has `noexec`, explicitly call the script with `bash`.
-3.  **Verification**: The script performs:
-    -   Connectivity checks.
-    -   ConfigMap refresh for Python tests.
-    -   Kubernetes Job launch (`rag-integration-test`).
-    -   Go E2E driver execution via Podman (local to hierophant).
-4.  **Example Command**:
-    ```bash
-    ./run-on-hierophant.sh "export VERSION=X.Y.Z && bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-e2e-on-hierophant.sh"
-    ```
-
-## Cross-Model Verification (Automated)
-To verify multiple LLM model combinations (e.g., Scenario A: Llama+Granite, Scenario B: Granite+Llama):
-1.  **Script**: `rag-stack/tests/run-cross-model-tests.sh`.
-2.  **Execution**: Run on **hierophant**.
-    ```bash
-    ./run-on-hierophant.sh "export VERSION=X.Y.Z && cd /mnt/hegemon-share/share/code/complete-build/rag-stack/tests && bash ./run-cross-model-tests.sh"
-    ```
-3.  **Mechanism**: This script automatically updates the `rag-worker` deployment's environment variables (`PLANNER_MODEL`, `EXECUTOR_MODEL`), waits for rollout, and runs the standard integration tests for each scenario.
-
-## Journaling and Permissions
-To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
-1.  **Log/State Storage**: Redirect any script that writes state files, locks, or persistent journals to local storage on **hierophant**.
-2.  **Preferred Paths**: Use `/tmp` (for transient state) or `/home/junie` (for persistent user state).
-3.  **Implementation**: Pass environment variables like `JOURNAL_DIR` or use `sh -c` to set context before running the target script.
-
-## Storage and Collection Naming
-- **Base Name**: Use `vectors` as the base collection name.
-- **Dimension-Based Identification**: Collections are automatically identified by their vector dimensions using the format `vectors-<dim>` (e.g., `vectors-384`, `vectors-4096`).
-- **Isolation**: Tag-based filtering uses a strict `must` match to ensure context isolation.
-- **Tag Matching**: Filtering and storage must use UUID `tag_ids` for consistency. Human-readable `tag_names` are for display only.
-
-## Health and Readiness Checks
-All RAG services implement standardized health and readiness endpoints for Kubernetes probes and external monitoring.
-1.  **Endpoints**:
-    -   `/healthz`: Liveness probe. Returns `200 OK` if the process is running.
-    -   `/readyz`: Readiness probe. Returns `200 OK` only if all critical dependencies (DB, Pulsar, Ollama, S3) are reachable.
-    -   `/health`: Legacy endpoint (maps to `/healthz`).
-2.  **Implementation**:
-    -   **Go Services**: Use the `app-builds/common/health` package.
-    -   **Python Services**: Use FastAPI with explicit `/healthz` and `/readyz` decorators.
-3.  **Dependency Checks**:
-    -   `readyz` performs deep checks:
-        -   `database`: `SELECT 1` or lightweight query.
-        -   `pulsar`: Client/Producer/Consumer connectivity.
-        -   `ollama`: `/api/tags` connectivity.
-        -   `s3`: `ListBuckets` or similar.
-4.  **Monitoring**: The `rag-admin-api` (BFF) aggregates these checks for the UI.
-
-## Pre-deployment Go Dependency Check
-
-To ensure that all Go services are synchronized with their dependencies and compile correctly before launching a cluster-native build:
-
-1.  **Manual Check Procedure**:
-    ```bash
-    for svc in rag-stack/services/*; do
-      if [ -d "$svc" ] && [ -f "$svc/go.mod" ]; then
-        echo "--- Checking $svc ---"
-        (cd "$svc" && go mod tidy && go build ./...)
-      fi
-    done
-    ```
-2.  **Requirements**:
-    -   `go` version 1.25+ installed on the build machine.
-    -   The `common` module MUST be tidied FIRST if any shared types have changed.
-3.  **Verification**: The check passes if `go build` exits with code 0 for all services.
-    -   Common failure points include missing `replace` directives or unused imports in generated/edited code.
-
-## Pulsar Installation
-Pulsar is installed by `setup-complete.sh` (Step 1.5.8) — NOT by `setup-all.sh`.
-`setup-all.sh` only deploys RAG services and **verifies** that Pulsar is already running.
-
-### Prerequisites
-- **Rook-Ceph**: The `rook-ceph-block` StorageClass must exist (Pulsar PVCs depend on it).
-- **cert-manager**: Must be running for Pulsar TLS certificates.
-- Both are installed by `setup-01-basic.sh` (Step 1 of `setup-complete.sh`).
-
-### Installation Flow
-1. `setup-complete.sh` → Step 1.5.8 calls `rag-stack/infrastructure/pulsar/install.sh`
-2. `install.sh` creates namespace, labels nodes, adds Helm repo, runs `helm upgrade --install` with `--wait --timeout 60m`
-3. Post-install verification checks all 4 component types (ZK, BK, Broker, Proxy) are running
-4. `setup-complete.sh` → Step 1.5.8.1 calls `init-rag-pulsar.sh` to create tenant `rag-pipeline` and namespaces (`stage`, `data`, `operations`)
-
-### Standalone Pulsar Install (without full setup)
-```bash
-ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
-   bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/install.sh && \
-   bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh"
-```
-
-### Verifying Pulsar Health
-```bash
-ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
-   /home/k8s/kube/kubectl get pods -n apache-pulsar && \
-   /home/k8s/kube/kubectl exec -n apache-pulsar pulsar-toolset-0 -- \
-     /pulsar/bin/pulsar-admin tenants list"
-```
-
-### Pulsar Initialization (Tenants and Namespaces)
-If services fail with `no partitioned metadata for topic` or `Namespace not found`, ensure the RAG tenants and namespaces are provisioned:
-1. **Script**: `rag-stack/infrastructure/pulsar/init-rag-pulsar.sh`
-2. **Namespaces Created**: `rag-pipeline/stage`, `rag-pipeline/data`, `rag-pipeline/operations`, `rag-pipeline/dlq`.
-3. **Run Command**:
-   ```bash
-   ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-     "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh"
-   ```
-
-### Important Notes
-- `setup-all.sh` will **exit with an error** if Pulsar brokers are not running. This is intentional — RAG services depend on Pulsar and will fail at runtime without it.
-- The Pulsar `install.sh` journal is NOT cleared on success (to prevent redundant re-runs when called from multiple parent scripts).
-- Use `FRESH_INSTALL=true` with `setup-complete.sh` to clear all journals and re-run from scratch.
-
-## Cluster Maintenance (Rebooting the Host)
-
-When performing a full host reboot on **hierophant**, use the following procedures to ensure a clean cluster shutdown and graceful recovery.
-
-### 1. Graceful Shutdown
-Before rebooting the host, execute the `cluster-shutdown.sh` script to drain nodes and scale down stateful services (Pulsar, Ceph, DB).
-
-- **Script Location**: `../kubernetes-setup/cluster-shutdown.sh`
-- **Execution**: MUST be run on **hierophant**.
-```bash
-# On hierophant:
-cd /mnt/hegemon-share/share/code/kubernetes-setup
-bash ./cluster-shutdown.sh
-```
-- **What it does**:
-    0.  **Admission Controller Cleanup**: Deletes the `k8tz` `MutatingWebhookConfiguration` to prevent it from blocking the next cluster startup.
-    1.  Scales down all non-system resources in a prioritized order (Apps -> Bus -> Infrastructure).
-    2.  Waits for all pods in the scaled namespaces to fully terminate to ensure clean unmounting.
-    3.  Quiesces Ceph cluster (sets maintenance flags like `noout`).
-    4.  Drains all Kubernetes nodes (control-plane and worker/inference) while storage is still available.
-    5.  Scales down Rook-Ceph components (mgr -> others -> osd -> mon).
-    6.  Shuts down all cluster VMs via `virsh`.
-    7.  Saves the original replica counts to `cluster-replicas.state`.
-
-### 2. Rebooting
-Once the script confirms all VMs have shut down, you can safely reboot the host.
-```bash
-sudo reboot
-```
-
-### 3. Graceful Startup
-After the host is back up, execute the `cluster-startup.sh` script to restore the cluster state.
-
-- **Script Location**: `../kubernetes-setup/cluster-startup.sh`
-- **Execution**: MUST be run on **hierophant**.
-```bash
-# On hierophant:
-cd /mnt/hegemon-share/share/code/kubernetes-setup
-bash ./cluster-startup.sh
-```
-- **What it does**:
-    1.  Detaches GPUs from the host PCI bus.
-    2.  Starts all cluster VMs.
-    3.  Waits for the Kubernetes API and all nodes to be Ready.
-    4.  **Admission Controller Cleanup**: Deletes the `k8tz` `MutatingWebhookConfiguration` (if present) as a safeguard to ensure core networking (Flannel) can start without mutation deadlocks.
-    5.  Uncordons all nodes.
-    6.  Restores Rook-Ceph in order (mon -> osd -> others).
-    7.  Unfreezes Ceph state (unsets maintenance flags).
-    8.  Restores all other resources from `cluster-replicas.state` in the correct reverse-shutdown order (Infrastructure -> Bus -> Apps).
-    9.  **Admission Controller Restoration**: Reinstalls the `k8tz` admission controller via `helm upgrade --install` once the cluster is stable.
-
-### 4. Host Reboot Recovery (Network & Routing)
+### 1.2 Host Reboot Recovery (Network & Routing)
 If the host (**hierophant**) has been rebooted, the volatile IPTables rules and bridge configurations for external routing are lost. This manifests as a **Connection Timeout** or **No route to host** error when accessing cluster services (like `rag-admin-api`) from external VMs.
 
 To recover the network state:
@@ -466,27 +37,324 @@ To prevent routing issues after future reboots, ensure `00-init-network.sh` runs
   ```
 - **Alternative**: Create a systemd unit file (e.g., `rag-network-init.service`) that runs the script before `libvirtd.service`.
 
-## TLS and Security
+### 1.3 Cluster Maintenance (Rebooting the Host)
+When performing a full host reboot on **hierophant**, use the following procedures to ensure a clean cluster shutdown and graceful recovery.
+
+#### Graceful Shutdown
+Before rebooting the host, execute the `cluster-shutdown.sh` script to drain nodes and scale down stateful services (Pulsar, Ceph, DB).
+
+- **Script Location**: `../kubernetes-setup/cluster-shutdown.sh`
+- **Execution**: MUST be run on **hierophant**.
+```bash
+# On hierophant:
+cd /mnt/hegemon-share/share/code/kubernetes-setup
+bash ./cluster-shutdown.sh
+```
+- **What it does**:
+    0.  **Admission Controller Cleanup**: Deletes the `k8tz` `MutatingWebhookConfiguration` to prevent it from blocking the next cluster startup.
+    1.  Scales down all non-system resources in a prioritized order (Apps -> Bus -> Infrastructure).
+    2.  Waits for all pods in the scaled namespaces to fully terminate to ensure clean unmounting.
+    3.  Quiesces Ceph cluster (sets maintenance flags like `noout`).
+    4.  Drains all Kubernetes nodes (control-plane and worker/inference) while storage is still available.
+    5.  Scales down Rook-Ceph components (mgr -> others -> osd -> mon).
+    6.  Shuts down all cluster VMs via `virsh`.
+    7.  Saves the original replica counts to `cluster-replicas.state`.
+
+#### Rebooting
+Once the script confirms all VMs have shut down, you can safely reboot the host.
+```bash
+sudo reboot
+```
+
+#### Graceful Startup
+After the host is back up, execute the `cluster-startup.sh` script to restore the cluster state.
+
+- **Script Location**: `../kubernetes-setup/cluster-startup.sh`
+- **Execution**: MUST be run on **hierophant**.
+```bash
+# On hierophant:
+cd /mnt/hegemon-share/share/code/kubernetes-setup
+bash ./cluster-startup.sh
+```
+- **What it does**:
+    1.  Detaches GPUs from the host PCI bus.
+    2.  Starts all cluster VMs.
+    3.  Waits for the Kubernetes API and all nodes to be Ready.
+    4.  **Admission Controller Cleanup**: Deletes the `k8tz` `MutatingWebhookConfiguration` (if present) as a safeguard to ensure core networking (Flannel) can start without mutation deadlocks.
+    5.  Uncordons all nodes.
+    6.  Restores Rook-Ceph in order (mon -> osd -> others).
+    7.  Unfreezes Ceph state (unsets maintenance flags).
+    8.  Restores all other resources from `cluster-replicas.state` in the correct reverse-shutdown order (Infrastructure -> Bus -> Apps).
+    9.  **Admission Controller Restoration**: Reinstalls the `k8tz` admission controller via `helm upgrade --install` once the cluster is stable.
+
+### 1.4 Pulsar Infrastructure & Health
+Pulsar is installed by `setup-complete.sh` (Step 1.5.8) — NOT by `setup-all.sh`.
+`setup-all.sh` only deploys RAG services and **verifies** that Pulsar is already running.
+
+#### Prerequisites
+- **Rook-Ceph**: The `rook-ceph-block` StorageClass must exist (Pulsar PVCs depend on it).
+- **cert-manager**: Must be running for Pulsar TLS certificates.
+- Both are installed by `setup-01-basic.sh` (Step 1 of `setup-complete.sh`).
+
+#### Installation Flow
+1. `setup-complete.sh` → Step 1.5.8 calls `rag-stack/infrastructure/pulsar/install.sh`
+2. `install.sh` creates namespace, labels nodes, adds Helm repo, runs `helm upgrade --install` with `--wait --timeout 60m`
+3. Post-install verification checks all 4 component types (ZK, BK, Broker, Proxy) are running
+4. `setup-complete.sh` → Step 1.5.8.1 calls `init-rag-pulsar.sh` to create tenant `rag-pipeline` and namespaces (`stage`, `data`, `operations`)
+
+#### Standalone Pulsar Install (without full setup)
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/install.sh && \
+   bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh"
+```
+
+#### Verifying Pulsar Health
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   /home/k8s/kube/kubectl get pods -n apache-pulsar && \
+   /home/k8s/kube/kubectl exec -n apache-pulsar pulsar-toolset-0 -- \
+     /pulsar/bin/pulsar-admin tenants list"
+```
+
+#### Pulsar Initialization (Tenants and Namespaces)
+If services fail with `no partitioned metadata for topic` or `Namespace not found`, ensure the RAG tenants and namespaces are provisioned:
+1. **Script**: `rag-stack/infrastructure/pulsar/init-rag-pulsar.sh`
+2. **Namespaces Created**: `rag-pipeline/stage`, `rag-pipeline/data`, `rag-pipeline/operations`, `rag-pipeline/dlq`.
+3. **Run Command**:
+   ```bash
+   ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+     "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh"
+   ```
+
+### 1.5 APM Stack (Monitoring & Observability)
+
+#### Grafana Dashboards
+The RAG stack uses the following Grafana dashboards for monitoring:
+- **RAG Stack Operational Overview** (`uid: rag-operations`): Main dashboard for high-level monitoring.
+  - **Prompts & Responses (Rate)**: Monitors incoming user requests and worker completions.
+  - **Avg Prompt/Response Size**: Tracks data volume in characters/bytes for prompts and responses.
+  - **Pipeline Latency (P95)**: Tracks End-to-End (Gateway) and per-stage (Worker) P95 latency.
+  - **Pulsar Bus Health**: Monitors message throughput across the pipeline.
+  - **GPU Utilization (%)**: Displays cluster-wide GPU and memory utilization.
+  - **System Errors**: Aggregates error rates from Gateway, Worker, DB, and Qdrant.
+- **RAG Stack Performance Overview** (`uid: rag-performance`): Detailed performance and error metrics per service.
+- **RAG Stack Logs & Errors** (`uid: rag-logs`): Loki-based dashboard for real-time log analysis and error tracking.
+
+#### Custom Metrics
+New metrics introduced in Iteration 9 for operational tracking:
+- `gateway_prompt_size_bytes`: Histogram of incoming prompt sizes in `llm-gateway`.
+- `worker_response_size_bytes`: Histogram of outgoing response sizes in `rag-worker`.
+
+#### APM Stack TLS Configuration
+As of version `2.2.11`, the APM stack is configured with TLS for internal communication:
+1.  **Loki & Mimir (Gateways)**:
+    -   Exposed on port **443** (HTTPS) via their respective gateway services.
+    -   Gateways use NGINX with SSL enabled on port **8443**.
+    -   Alloy and Grafana connect via `https://loki-gateway.monitoring.svc.cluster.local` and `https://mimir-gateway.monitoring.svc.cluster.local`.
+    -   Trust is managed via the `registry-ca-cm` ConfigMap (mounted as `/etc/ssl/certs/ca.crt`).
+2.  **Tempo**:
+    -   **Push API (OTLP)**: Exposed on port **4318** (HTTPS). Alloy pushes traces securely.
+    -   **Query API (REST)**: Exposed on port **3200** (HTTP). Grafana queries traces via plain HTTP to avoid handshake issues.
+3.  **Grafana**:
+    -   The `central-grafana` instance trusts the internal CA by mounting the `registry-ca-cm`.
+    -   Datasources for Loki and Prometheus/Mimir use `https` with `tlsSkipVerify: true`.
+    -   Datasource for Tempo uses `http://tempo.monitoring.svc.cluster.local:3200`.
+4.  **Tempo Metrics Generator**:
+    -   **Enabled**: As of version `2.2.13`, Tempo's `metrics_generator` is enabled to support TraceQL features like `rate()`.
+    -   **Storage**: Uses `/var/tempo/generator/wal` on the `storage` volume.
+    -   **Remote Write**: Pushes generated metrics back to Mimir via `https://mimir-gateway.monitoring.svc.cluster.local/api/v1/push`.
+
+#### Alloy Scraping Strategy (Out-of-Order Prevention)
+As of version `2.2.11`, Alloy (DaemonSet) uses **local pod discovery** for cluster-wide services (Pulsar, DCGM) to avoid `err-mimir-sample-out-of-order` errors.
+-   **Mechanism**: Uses `discovery.kubernetes` with `role = "pod"`.
+-   **Filter**: Relabels targets to `keep` only those where `__meta_kubernetes_pod_node_name` matches the local node (using `sys.env("HOSTNAME")`).
+-   **Effect**: Each Alloy instance only scrapes pods on its own node, preventing duplicate series from being pushed to Mimir from multiple nodes.
+
+### 1.6 TLS and Security
 1.  **Management Guide**: Refer to [TLS-GUIDE.md](TLS-GUIDE.md) for step-by-step instructions on creating certificates, adding SANs, and managing trust.
 2.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
 3.  **Trust Distribution**: The combined CA certificate is managed via the `registry-ca-cm` ConfigMap in target namespaces.
-4.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`) for CA trust.
+4.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`).
 5.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.
 6.  **Service TLS**: All RAG services (adapters, gateway, admin-api) now use TLS for their REST APIs (port 8080 or 443).
     -   Certificates and keys are mounted from secrets named `<service>-tls`.
     -   Probes use `scheme: HTTPS`.
 
-## Standardized Health and Readiness Checks
-All RAG services now implement standardized endpoints for Kubernetes probes and management:
--   `/healthz` (Liveness): Always returns `OK` (200) if the process is running.
--   `/readyz` (Readiness): Returns JSON with `{"status": "ready"}` (200) only if all downstream dependencies are reachable.
-    -   `db-adapter`: Checks TimescaleDB connectivity.
-    -   `qdrant-adapter`: Checks Qdrant connectivity.
-    -   `object-store-mgr`: Checks S3/Ceph connectivity.
-    -   `memory-controller`: Checks database connectivity.
+### 1.7 Timezone (k8tz) Configuration
+The cluster uses `k8tz` to inject the `Europe/London` (BST) timezone into all pods.
+-   **Injection**: Pods receive a `k8tz` init container and a `TZ` environment variable.
+-   **Inclusion**: All namespaces except `k8tz` itself are included (including `kube-system`).
+-   **Verification**: `date` inside pods should show `BST`.
+
+## 2. Operational Procedures & Session Management
+
+### 2.1 Session Establishment (Operational Context)
+Every new session for the **Junie** agent MUST establish the operational context by following these steps:
+1.  **Branch Check**: Ensure the local git branch `work-YYYY-MM-DD` exists for the current date. If not, create it.
+2.  **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project. 
+    - Verify the current project version in `CURRENT_VERSION`.
+    - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
+    - `build.sh` performs automatic version incrementing when code changes are detected via hashing.
+3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
+4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
+
+### 2.2 Current Focus (Iteration 9)
+As of version 2.5.5, the project is focusing on **Iteration 9 (Ingestion & Observability)**.
+1.  **Ingestion Pipeline**: Prefix-based browsing, knowledge tags, targeted ingestion, and multi-file upload.
+2.  **Prompt Aggregation**: Session-specific Pulsar topics to eliminate linear scanning.
+3.  **Observability**: Custom metrics and Grafana dashboards for tracking health and GPU utilization.
+4.  **Build System Optimization**: Shared context and parallel Kaniko builds.
+5.  **Stability**: Resolved `k8tz` admission controller deadlocks and Rook-Ceph IO hangs.
+
+### 2.3 Change Logs
+- **Location**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json`
+- **Frequency**: Update at the conclusion of each prompting session when changes are made.
+- **Format**: Structured JSON with datetime stamp and brief description (most recent at the top).
+- **Git Policy**: The changelog does NOT need to be committed to git.
+
+### 2.4 Journaling and Permissions
+To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
+1.  **Log/State Storage**: Redirect any script that writes state files, locks, or persistent journals to local storage on **hierophant**.
+2.  **Preferred Paths**: Use `/tmp` (for transient state) or `/home/junie` (for persistent user state).
+3.  **Implementation**: Pass environment variables like `JOURNAL_DIR` or use `sh -c` to set context before running the target script.
+
+## 3. Build & Deployment System
+
+### 3.1 Cluster-Native Build Pipeline (Kaniko)
+All RAG service image builds MUST go through the in-cluster Kaniko build pipeline. Do NOT use `podman build` or `docker build` on the host to build service images except for bootstrapping.
+
+#### How the Build Pipeline Works
+1. `build-all-on-cluster.sh` packages the `services/` directory into a tarball.
+2. The tarball is uploaded to the Ceph S3 object store.
+3. Build tasks (JSON messages) are published to the Pulsar `build-tasks` topic.
+4. The `build-orchestrator` launches Kaniko `Job` resources.
+5. Kaniko pulls the source, builds the image, and pushes it to the in-cluster registry.
+
+#### Triggering a Build
+1.  **Access Hierophant**: Use `./run-on-hierophant.sh` or SSH.
+2.  **Versioning**: The version is read from `CURRENT_VERSION` at the project root.
+3.  **Command**: Run `rag-stack/build.sh` (defaults to cluster-mode).
+4.  **Wait Mode**: Use the `--wait` flag to wait for build completion.
+5.  **Example Command**:
+    ```bash
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "cd /mnt/hegemon-share/share/code/complete-build && \
+       bash ./rag-stack/build.sh --mode cluster --wait"
+    ```
+
+### 3.2 Build Monitoring & Registry Maintenance
+
+#### Monitoring Builds
+- **Jobs**: Check Kaniko job status in the `build-pipeline` namespace: `kubectl get jobs -n build-pipeline`
+- **Logs**: `kubectl logs -n build-pipeline deploy/build-orchestrator --tail=100`
+- **Build Status Dashboard**: SSE-based live updates on port **8080**.
+
+#### Registry Maintenance (Pruning)
+To keep the registry clean, use the `registry-prune.sh` script to remove old image versions.
+```bash
+# On hierophant:
+bash scripts/registry-prune.sh
+```
+After pruning, run garbage collection on the in-cluster registry pod:
+```bash
+/home/k8s/kube/kubectl exec -n container-registry deployment/registry -- registry garbage-collect /etc/docker/registry/config.yml
+```
+
+#### Verifying Images in Registry
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "for svc in rag-worker llm-gateway db-adapter qdrant-adapter \
+              rag-ingestion rag-web-ui object-store-mgr rag-test-runner \
+              rag-admin-api memory-controller; do \
+     echo \"\$svc: \$(curl -sk https://registry.hierocracy.home:5000/v2/\$svc/tags/list)\"; \
+   done"
+```
+
+### 3.3 Host-Based Bootstrap Build
+Use this only for bootstrapping or when the cluster-native pipeline is unavailable.
+1.  **Script**: `rag-stack/build-and-push.sh`.
+2.  **Journaling**: Use `/home/junie/rag-build-journals` or `/tmp/.rag-build`.
+3.  **Example Command**:
+    ```bash
+    ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z FORCE_BUILD=true ./build-and-push.sh"
+    ```
+
+### 3.4 Pre-deployment Go Dependency Check
+To ensure all Go services compile correctly before launching a cluster-native build:
+```bash
+for svc in rag-stack/services/*; do
+  if [ -d "$svc" ] && [ -f "$svc/go.mod" ]; then
+    echo "--- Checking $svc ---"
+    (cd "$svc" && go mod tidy && go build ./...)
+  fi
+done
+```
+
+## 4. Data & Model Management
+
+### 4.1 Database Migrations & Secrets (TimescaleDB)
+Manual schema updates should be applied from **hierophant** using the provided SQL files.
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   export DB_PASS=\$(/home/k8s/kube/kubectl get secret timescaledb-app -n timescaledb -o jsonpath='{.data.password}' | base64 -d) && \
+   /home/k8s/kube/kubectl exec -it -n timescaledb timescaledb-rw-0 -- \
+   env PGPASSWORD=\$DB_PASS psql -U app -d app -f /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql"
+```
+
+#### TimescaleDB Secret
+The `timescaledb-secret` in rag-system is created dynamically during install by `setup-all.sh`.
+It fetches the real password from the `timescaledb-app` secret. **Do NOT use the hardcoded template file**.
+
+### 4.2 Ent ORM Management (Shared)
+Centralized in the **common** module.
+1.  **Schema Definition**: `rag-stack/services/common/ent/schema/`.
+2.  **Code Generation**: `go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert ./ent/schema`
+3.  **Service Integration**: Use client from `app-builds/common/ent`.
+
+### 4.3 Storage and Collection Naming
+- **Base Name**: Use `vectors`.
+- **Dimension-Based**: Collections are named `vectors-<dim>` (e.g., `vectors-384`).
+- **Isolation**: Tag-based filtering uses strict `must` match with UUID `tag_ids`.
+
+### 4.4 LLM Model Management (Ollama)
+
+#### Pre-Pulling and Caching Models
+Models are cached at `/mnt/storage/ollama-models/` and pushed to the local registry.
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "cd /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/ollama && \
+   bash ./push-models-to-cluster.sh"
+```
+
+#### Model Seeding (During Install)
+`seed-models.sh` creates temporary seeder pods that pull models from the local registry into the PVCs. This is automatic if models are in the registry.
+
+## 5. RAG Stack Architecture & Services
+
+### 5.1 Service Configuration (Externalized Values)
+- **RAG Ingestion**: `QDRANT_COLLECTION`, `INGEST_BATCH_SIZE`, `CHUNK_SIZE`, `CHUNK_OVERLAP`.
+- **RAG Worker**: `QDRANT_COLLECTION`, `QDRANT_SEARCH_LIMIT`, `RECURSION_BUDGET`.
+- **LLM Gateway**: `REQUEST_TIMEOUT` (Pulsar inference).
+
+### 5.2 Prompt Aggregation (Session Topics)
+Migrated to session-specific Pulsar topics to eliminate linear scanning.
+- **Session Topics**: `persistent://rag-pipeline/sessions/<correlation_id>`
+- **LLM Gateway**: Subscribes to the session topic for streaming.
+- **RAG Worker**: Produces `StreamChunk` messages to the session topic.
+- **Prompt Aggregator**: Aggregates all chunks from the session topic after completion.
+- **Pulsar Namespace**: `rag-pipeline/sessions` (policies: 5m deletion, 30m TTL).
+
+### 5.3 Health and Readiness Checks
+All RAG services implement standardized endpoints:
+-   `/healthz` (Liveness): Returns `200 OK` if the process is running.
+-   `/readyz` (Readiness): Returns `200 OK` only if downstream dependencies are reachable.
 -   `/api/health/all` (Admin API): Aggregates results from all services into a single JSON report.
 
-To manually verify health via `kubectl exec`:
+#### Manual Verification
 ```bash
 ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
   "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
@@ -494,185 +362,60 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
    curl -sk https://localhost:8080/api/health/all"
 ```
 
-## Adding Support for New LLMs (Rag-Worker)
-The `rag-worker` service is refactored for multi-model modularity.
-1.  **Define Implementation**: Create a new package under `rag-stack/services/rag-worker/internal/models/` (e.g., `internal/models/newmodel`).
-2.  **Implement Interfaces**: Implement the `Planner` and `Executor` interfaces defined in `internal/models/interfaces.go`.
-3.  **Factory Integration**: Update the factory logic in `rag-stack/services/rag-worker/cmd/worker/main.go` to instantiate the new model based on the `PLANNER_MODEL` or `EXECUTOR_MODEL` environment variables.
-4.  **Configuration**: Set the respective environment variables in the Kubernetes deployment or via `setup-complete.sh`.
+### 5.4 Adding Support for New LLMs (Rag-Worker)
+1.  Define implementation in `internal/models/<newmodel>`.
+2.  Implement `Planner` and `Executor` interfaces.
+3.  Update factory logic in `cmd/worker/main.go`.
+4.  Set `PLANNER_MODEL`/`EXECUTOR_MODEL` environment variables.
 
-## Running Tests
-1.  **Unit Tests**: In `rag-stack/services/rag-worker`, run `go test ./...`.
-2.  **Integration Tests**:
-    - Build and push images using `VERSION=x.y.z ./build-and-push.sh` in `rag-stack/`.
-    - Run on **hierophant**: `cd rag-stack/tests && VERSION=x.y.z bash ./run-tests.sh`.
-3.  **Cross-Model Verification**:
-    -   Use the automated script: `bash ./run-cross-model-tests.sh` (as documented above).
-    -   Supported models: `llama3.1`, `granite3.1-dense:8b`.
+## 6. Frontend Development (RAG Explorer)
 
-## Change Logs
-- **Location**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json`
-- **Frequency**: Update at the conclusion of each prompting session when changes are made.
-- **Format**: Structured JSON with datetime stamp and brief description (most recent at the top).
-- **Git Policy**: The changelog does NOT need to be committed to git.
+### 6.1 Features and Routing
+The RAG Explorer is the Flutter-based web application for managing the cluster.
+- **Session Management**: Friendly names, selective chat.
+- **LLM Interaction**: Waiting indicators, streaming chunks.
+- **System Logging**: Flyout log panel with real-time feedback and source location propagation.
+- **BFF Connectivity**: Proxied via `rag-admin-api` with standardized root-relative paths.
 
-## Database Migrations (TimescaleDB)
+### 6.2 Local Development & Troubleshooting
 
-Manual schema updates should be applied from **hierophant** using the provided SQL files.
-
-1.  **Iteration 7 Phase 1 (Memory)**:
-    ```bash
-    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-      "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
-       export DB_PASS=\$(/home/k8s/kube/kubectl get secret timescaledb-app -n timescaledb -o jsonpath='{.data.password}' | base64 -d) && \
-       /home/k8s/kube/kubectl exec -it -n timescaledb timescaledb-rw-0 -- \
-       env PGPASSWORD=\$DB_PASS psql -U app -d app -f /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/timescaledb/iteration-7-phase1-memory.sql"
-    ```
-
-## Ent ORM Management (Shared)
-The RAG stack uses the **Ent ORM** for type-safe database access, centralized in the **common** module.
-1.  **Schema Definition**: Schemas are located in `rag-stack/services/common/ent/schema/`.
-2.  **Code Generation**: If schemas are modified, regenerate the Ent client in the `common` module with the `sql/upsert` feature:
-    -   **Command**: 
-        ```bash
-        cd rag-stack/services/common && go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert ./ent/schema
-        ```
-3.  **Service Integration**:
-    -   All services (e.g., `db-adapter`, `llm-gateway`) should import and use the client from `app-builds/common/ent`.
-    -   Ensure `go mod tidy` is run in both `common` and the consuming service after changes.
-
-## APM Stack (Monitoring) TLS Configuration
-
-As of version `2.2.11`, the APM stack is configured with TLS for internal communication:
-
-1.  **Loki & Mimir (Gateways)**:
-    -   Exposed on port **443** (HTTPS) via their respective gateway services.
-    -   Gateways use NGINX with SSL enabled on port **8443**.
-    -   Alloy and Grafana connect via `https://loki-gateway.monitoring.svc.cluster.local` and `https://mimir-gateway.monitoring.svc.cluster.local`.
-    -   Trust is managed via the `registry-ca-cm` ConfigMap (mounted as `/etc/ssl/certs/ca.crt`).
-
-2.  **Tempo**:
-    -   **Push API (OTLP)**: Exposed on port **4318** (HTTPS). Alloy pushes traces securely.
-    -   **Query API (REST)**: Exposed on port **3200** (HTTP). Grafana queries traces via plain HTTP to avoid handshake issues.
-    -   **Note**: If enabling TLS on port 3200, ensure the client supports the specific cipher suites/protocols used by Tempo.
-
-3.  **Grafana**:
-    -   The `central-grafana` instance trusts the internal CA by mounting the `registry-ca-cm`.
-    -   Datasources for Loki and Prometheus/Mimir use `https` with `tlsSkipVerify: true` (as the internal hostname might not match the certificate SAN).
-    -   Datasource for Tempo uses `http://tempo.monitoring.svc.cluster.local:3200`.
-4.  **Tempo Metrics Generator**:
-    -   **Enabled**: As of version `2.2.13`, Tempo's `metrics_generator` is enabled to support TraceQL features like `rate()`.
-    -   **Storage**: Uses `/var/tempo/generator/wal` on the `storage` volume.
-    -   **Remote Write**: Pushes generated metrics back to Mimir via `https://mimir-gateway.monitoring.svc.cluster.local/api/v1/push`.
-    -   **Ring**: Registers itself in the `metrics-generator` hash ring (internally via `memberlist`).
-### Manual Patching (if templates are not applied)
-If a fresh install is not performed, the gateways can be manually patched:
-```bash
-# Example for Loki Gateway
-kubectl patch cm loki-gateway -n monitoring --type=merge --patch-file=patch-loki-nginx.yaml
-kubectl patch deploy loki-gateway -n monitoring --patch-file=patch-loki-deploy.yaml
-```
-Refer to the `infrastructure/APM` templates for the exact `nginx.conf` and deployment structures.
-
-### Alloy Scraping Strategy (Out-of-Order Prevention)
-As of version `2.2.11`, Alloy (DaemonSet) uses **local pod discovery** for cluster-wide services (Pulsar, DCGM) to avoid `err-mimir-sample-out-of-order` errors.
-
--   **Mechanism**: Uses `discovery.kubernetes` with `role = "pod"`.
--   **Filter**: Relabels targets to `keep` only those where `__meta_kubernetes_pod_node_name` matches the local node (using `sys.env("HOSTNAME")`).
--   **Effect**: Each Alloy instance only scrapes pods on its own node, preventing duplicate series from being pushed to Mimir from multiple nodes.
-
-### Timezone (k8tz) Configuration
-The cluster uses `k8tz` to inject the `Europe/London` (BST) timezone into all pods.
--   **Injection**: Pods receive a `k8tz` init container and a `TZ` environment variable.
--   **Inclusion**: All namespaces except `k8tz` itself are included (including `kube-system`).
--   **Verification**: `date` inside pods should show `BST`.
-
-## Storage Layout on Hierophant
-- **Podman storage**: `/mnt/storage/containers/storage` — configured via `~/.config/containers/storage.conf`
-- **Registry data**: `/mnt/storage/registry-data` — Docker registry image layers and manifests
-- **VM disk images**: `/var/lib/libvirt/images/` — Talos ISOs (symlinked from shared mount)
-- **Talos/kubectl configs**: `/home/k8s/kube/` — kubeconfig, kubectl binary
-- **Registry TLS/config**: `/mnt/storage/registry-config/` — config.yml, tls.crt, tls.key
-- **Pre-pulled LLM models**: `/mnt/storage/ollama-models/` — Ollama model blobs and manifests
-- **DO NOT** store large data (container images, registry) on `/home` — it has limited capacity (~143G shared with system)
-
-## LLM Model Management
-
-### Pre-Pulling and Caching Models
-Models are downloaded and pushed to the local registry to avoid internet dependency during cluster installation.
-
-1. **Script**: `rag-stack/infrastructure/ollama/pre-pull-models.sh` (for host cache) or `push-models-to-cluster.sh` (for registry sync).
-2. **Local Cache**: Models are cached at `/mnt/storage/ollama-models/` on hierophant. This directory is mounted into the temporary Ollama container to avoid redundant downloads.
-3. **Registry**: Models are pushed as OCI artifacts to the local registry (`registry.hierocracy.home:5000`).
-4. **TLS Trust**: The in-cluster registry uses a private CA. The scripts automatically extract this CA from the cluster and create a combined bundle at `/mnt/storage/registry-config/combined-ca-bundle.crt` which is mounted into the container to ensure both local registry and internet (`ollama.com`) connectivity.
-5. **Base Image Fallback**: If the base `ollama/ollama:0.15.6` image is missing from the local registry, the scripts will fallback to `docker.io`, tag it, and push it to the local registry (using `--tls-verify=false` for the bootstrap push).
-6. **Command**:
-    ```bash
-    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
-      "cd /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/ollama && \
-       bash ./push-models-to-cluster.sh"
-    ```
-
-### Model Seeding (During Install)
-During install, `ollama.sh` deploys Ollama pods WITHOUT model pulling, then calls `seed-models.sh`
-which creates temporary seeder pods that pull models from the local registry into the PVCs.
-This is automatic and requires no manual intervention if models are already in the registry.
-
-### TimescaleDB Secret
-The `timescaledb-secret` in rag-system is created dynamically during install by `setup-all.sh`.
-It fetches the real password from the CloudNativePG-managed `timescaledb-app` secret in the
-`timescaledb` namespace. **Do NOT use the hardcoded `timescaledb-secret.yaml` file** — it exists
-only as a template reference and its password will not match after a cluster rebuild.
-
-## Flutter Development (RAG Explorer)
-
-The RAG Explorer is a Flutter-based UI that can run as a Linux Desktop application or a Web application.
-
-### 1. Environment Setup (Fedora)
-To install the Flutter SDK and system-level dependencies (clang, cmake, ninja, gtk3):
+#### Environment Setup (Fedora)
 ```bash
 bash scripts/setup-flutter-linux.sh
 ```
-This script will:
-- Install missing Fedora packages via `sudo dnf`.
-- Clone the Flutter SDK to `~/flutter`.
-- Enable Linux desktop support.
-- Initialize platform-specific files for the RAG Explorer.
-- **Perform code generation** (Freezed/JsonSerializable).
 
-### 2. Code Generation (Manual)
-If you modify models or Riverpod providers, you must regenerate the supporting code:
+#### Running Locally
 ```bash
 cd rag-stack/services/rag-explorer
-flutter pub get
-flutter pub run build_runner build --delete-conflicting-outputs
+flutter run -d linux # Desktop app
+flutter run -d chrome # Web browser
 ```
 
-### 3. Running the Application
-- **Linux Desktop**:
-  ```bash
-  cd rag-stack/services/rag-explorer
-  flutter run -d linux
-  ```
-- **Web Browser**:
-  ```bash
-  cd rag-stack/services/rag-explorer
-  flutter run -d chrome
-  ```
+#### Troubleshooting (Flutter)
+- **CMake Error**: Run `flutter clean` to resolve stale `CMAKE_INSTALL_PREFIX` issues.
+- **Code Generation**: `flutter pub run build_runner build --delete-conflicting-outputs`
 
-### 4. Build and Deployment
-The RAG Explorer is built as a container using Kaniko in the cluster-native pipeline.
-- **Dockerfile**: `rag-stack/services/rag-explorer/Dockerfile`
-- **Kubernetes**: `rag-stack/services/rag-explorer/k8s/deployment.yaml`
-- **Ingress**: `https://rag-explorer.rag.hierocracy.home`
+### 6.3 Cluster Deployment
+1. **Build**: Trigger Kaniko build on hierophant.
+2. **Deploy**: UI is deployed by `setup-all.sh`.
+3. **Verification**: `https://rag-explorer.rag.hierocracy.home`
 
-### 5. Troubleshooting (Flutter)
+## 7. Testing & Verification
 
-#### CMake Error: "cannot set permissions on /usr/local/rag_explorer"
-This error occurs if the CMake build cache (`CMakeCache.txt`) contains a stale `CMAKE_INSTALL_PREFIX` pointing to `/usr/local`. This usually happens if a build was interrupted or if `cmake` was run manually without the correct Flutter flags.
-- **Solution**: Run `flutter clean` in the `rag-explorer` directory and then try `flutter run` or `flutter build` again.
-  ```bash
-  cd rag-stack/services/rag-explorer
-  flutter clean
-  flutter run -d linux
-  ```
+### 7.1 End-to-End Testing (E2E)
+Full RAG stack E2E test suite.
+```bash
+./run-on-hierophant.sh "export VERSION=X.Y.Z && bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-e2e-on-hierophant.sh"
+```
+The script performs connectivity checks, refreshes ConfigMaps, and launches the `rag-integration-test` Kubernetes Job.
+
+### 7.2 Cross-Model Verification
+Verifies multiple LLM model combinations (e.g., Llama + Granite).
+```bash
+./run-on-hierophant.sh "export VERSION=X.Y.Z && cd /mnt/hegemon-share/share/code/complete-build/rag-stack/tests && bash ./run-cross-model-tests.sh"
+```
+
+### 7.3 Unit and Integration Tests
+- **Unit Tests**: `go test ./...` in the respective service directory.
+- **Integration Tests**: `cd rag-stack/tests && VERSION=x.y.z bash ./run-tests.sh` (on hierophant).
+- **Manual Verification**: Use `kubectl exec` and `curl` to check `/healthz` and `/readyz` endpoints.
