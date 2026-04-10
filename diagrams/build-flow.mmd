@@ -16,14 +16,14 @@ flowchart TD
     subgraph "Phase 2 - RAG Service Builds - Optimized Parallel"
         Trigger[trigger-build-sh] --> Package[Shared Source Context Packaging]
         Package --> S3_2[Upload Batch to S3]
-        S3_2 -.->|Pulsar+SSL| Orch[Build Orchestrator]
+        S3_2 -.->|Pulsar Msg| Orch[Build Orchestrator]
         Orch --> Kaniko[Parallel Kaniko K8s Jobs]
         S3_2 --> Kaniko
         Kaniko --> RegistryNode
     end
 
-    subgraph "Phase 3: RAG Stack Deployment"
-    RegistryNode --> Deploy
+    subgraph "Phase 3 - RAG Stack Deployment"
+        RegistryNode --> Deploy[Deploy RAG Services]
         Deploy --> Migrate[Apply TimescaleDB schema updates]
         Migrate --> TopicInit[Create Pulsar topics]
     end

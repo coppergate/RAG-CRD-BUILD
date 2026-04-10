@@ -1,0 +1,36 @@
+graph TD
+    subgraph "RAG Explorer (Flutter)"
+        Sidebar[Sidebar Navigation]
+        Content[Content Area]
+        
+        subgraph "Sidebar Tabs"
+            Chat[Chat]
+            Ingest[Ingestion]
+            Memory[Memory Explorer]
+            S3[S3 Browser]
+            Timescale[TimescaleDB]
+            Qdrant[Qdrant Explorer]
+            Models[Model Comparison]
+            Observability[Observability]
+            Settings[Settings/Config]
+        end
+        
+        Sidebar -.-> Chat & Ingest & Memory & S3 & Timescale & Qdrant & Models & Observability & Settings
+        Chat & Ingest & Memory & S3 & Timescale & Qdrant & Models & Observability & Settings -.-> Content
+    end
+    
+    Content <-->|HTTPS / WebSockets| BFF[rag-admin-api]
+    
+    subgraph "Backend Services (K8s)"
+        direction LR
+        BFF --> Gateway[llm-gateway]
+        BFF --> Ingestion[rag-ingestion]
+        BFF --> OSMgr[object-store-mgr]
+        BFF --> DBAdapter[db-adapter]
+        BFF --> QAdapter[qdrant-adapter]
+        BFF --> MemCtrl[memory-controller]
+    end
+
+    %% Service Links
+    Gateway --- Ingestion --- OSMgr
+    DBAdapter --- QAdapter --- MemCtrl
