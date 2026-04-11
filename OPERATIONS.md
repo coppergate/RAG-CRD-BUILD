@@ -58,7 +58,7 @@ bash ./cluster-shutdown.sh
     4.  Drains all Kubernetes nodes (control-plane and worker/inference) while storage is still available.
     5.  Scales down Rook-Ceph components (mgr -> others -> osd -> mon).
     6.  Shuts down all cluster VMs via `virsh`.
-    7.  Saves the original replica counts to `cluster-replicas.state`.
+    7.  Saves the original replica counts to `/home/k8s/kube/cluster-replicas.state`.
 
 #### Rebooting
 Once the script confirms all VMs have shut down, you can safely reboot the host.
@@ -84,7 +84,7 @@ bash ./cluster-startup.sh
     5.  Uncordons all nodes.
     6.  Restores Rook-Ceph in order (mon -> osd -> others).
     7.  Unfreezes Ceph state (unsets maintenance flags).
-    8.  Restores all other resources from `cluster-replicas.state` in the correct reverse-shutdown order (Infrastructure -> Bus -> Apps).
+    8.  Restores all other resources from `/home/k8s/kube/cluster-replicas.state` in the correct reverse-shutdown order (Infrastructure -> Bus -> Apps).
     9.  **Admission Controller Restoration**: Reinstalls the `k8tz` admission controller via `helm upgrade --install` once the cluster is stable.
 
 ### 1.4 Pulsar Infrastructure & Health
