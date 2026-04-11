@@ -183,13 +183,32 @@ As of version `2.2.11`, Alloy (DaemonSet) uses **local pod discovery** for clust
     -   Certificates and keys are mounted from secrets named `<service>-tls`.
     -   Probes use `scheme: HTTPS`.
 
-### 1.7 Timezone (k8tz) Configuration
-The cluster uses `k8tz` to inject the `Europe/London` (BST) timezone into all pods.
--   **Injection**: Pods receive a `k8tz` init container and a `TZ` environment variable.
--   **Inclusion**: All namespaces except `k8tz` itself are included (including `kube-system`).
--   **Verification**: `date` inside pods should show `BST`.
+### 1.8 Cluster Installation & Build Orchestration
+If you need to build the cluster from scratch, use the orchestration script on **hierophant**. This script handles disk formatting, network setup, bootstrap registry creation, and VM building in the correct order.
 
-## 2. Operational Procedures & Session Management
+- **Script Location**: `../kubernetes-setup/new-setup/config-cluster.sh`
+- **Execution**: MUST be run on **hierophant**.
+```bash
+# On hierophant:
+cd /mnt/hegemon-share/share/code/kubernetes-setup/new-setup
+export FRESH_INSTALL=true # Bypass interactive prompts
+bash ./config-cluster.sh
+```
+
+- **What it does**:
+    1.  Formats NVMe partitions with specific UUIDs.
+    2.  Initializes host networking (br-mgmt, br-app, VLAN 20, IPTables).
+    3.  Defines Libvirt networks (talos-nat, lb-net).
+    4.  Starts and seeds the bootstrap registry (Podman) with Talos installer images.
+    5.  Builds Control Plane VMs and waits for maintenance mode.
+    6.  Generates and applies Talos configuration (with registry patches).
+    7.  Bootstraps the Kubernetes control plane.
+    8.  Builds all Worker and Inference VMs.
+    9.  Applies configuration and labels nodes (GPU Operator, etc.).
+
+- **Monitoring Progress**:
+    - The script uses a persistent journal. If interrupted, it will resume from the last successful step.
+    - Check the journal with: `cat /home/k8s/talos/config/journal.log` (if configured in `scripts/journal-helper.sh`).
 
 ### 2.1 Session Establishment (Operational Context)
 Every new session for the **Junie** agent MUST establish the operational context by following these steps:
