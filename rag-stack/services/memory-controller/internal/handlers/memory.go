@@ -188,13 +188,17 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use upsert to be safe for ID conflict
-	upserter := builder.OnConflictColumns(session.FieldID).
+	s, err := builder.OnConflictColumns(session.FieldID).
 		UpdateLastActiveAt().
-		UpdateName()
-
-	s, err := upserter.ID(ctx)
+		UpdateName().
+		ID(ctx)
 	if err != nil {
-		http.Error(w, "Failed to create/update session: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("[MEMCTRL] Error creating/updating session: %v", err)
+		if strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "duplicate key") {
+			http.Error(w, "Session name already exists", http.StatusConflict)
+		} else {
+			http.Error(w, "Failed to create/update session: "+err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 

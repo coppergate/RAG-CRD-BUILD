@@ -79,4 +79,80 @@ func TestMemoryHandler(t *testing.T) {
 			t.Errorf("Expected summary 'Coffee preference', got %s", items[0].Summary)
 		}
 	})
+
+	// 4. Test POST /sessions
+	t.Run("CreateSession", func(t *testing.T) {
+		reqBody := struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}{
+			ID:   uuid.New().String(),
+			Name: "test session",
+		}
+
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/sessions", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		h.HandleSessions(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected status 201, got %v: %s", w.Code, w.Body.String())
+		}
+	})
+
+	// 5. Test POST /sessions conflict (Duplicate name, different ID)
+	t.Run("CreateSessionDuplicateName", func(t *testing.T) {
+		reqBody := struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}{
+			ID:   uuid.New().String(),
+			Name: "test session", // Same name as before
+		}
+
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/sessions", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		h.HandleSessions(w, req)
+
+		if w.Code != http.StatusConflict {
+			t.Errorf("Expected status 409, got %v: %s", w.Code, w.Body.String())
+		}
+	})
+
+	// 6. Test POST /sessions update (Same ID, same name)
+	t.Run("CreateSessionUpdate", func(t *testing.T) {
+		// First get the existing session
+		sessions, _ := client.Session.Query().All(ctx)
+		if len(sessions) == 0 {
+			t.Fatal("No sessions found")
+		}
+		existingID := sessions[0].ID.String()
+
+		reqBody := struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}{
+			ID:   existingID,
+			Name: "updated session name",
+		}
+
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/sessions", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+
+		h.HandleSessions(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected status 201, got %v: %s", w.Code, w.Body.String())
+		}
+		
+		// Verify name updated
+		updated, _ := client.Session.Get(ctx, sessions[0].ID)
+		if updated.Name != "updated session name" {
+			t.Errorf("Expected name 'updated session name', got %s", updated.Name)
+		}
+	})
 }
