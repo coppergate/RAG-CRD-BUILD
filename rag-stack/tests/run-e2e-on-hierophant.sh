@@ -6,7 +6,7 @@ set -euo pipefail
 # - Runs Go E2E driver via Podman
 # - Stores logs under /mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/logs
 
-LOG_ROOT="${LOG_ROOT:-/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/logs}"
+LOG_ROOT="${LOG_ROOT:-/tmp/rag-logs}"
 TS=$(date +%Y%m%d-%H%M%S)
 OUT_DIR="${LOG_ROOT}/e2e-${TS}"
 mkdir -p "$OUT_DIR"

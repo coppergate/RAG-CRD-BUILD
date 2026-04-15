@@ -167,7 +167,7 @@ def test_pulsar_db_crud():
         "session_id": session_id,
         "type": "chat_completion",
         "payload": {
-            "model": "llama3",
+            "model": "llama3.1:latest",
             "messages": [{"role": "user", "content": prompt_content}]
         },
         "timestamp": datetime.now().isoformat()

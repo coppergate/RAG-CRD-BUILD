@@ -24,6 +24,16 @@ COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
 rm -f "$COMBINED_CA"
 touch "$COMBINED_CA"
 
+# 0. Include system roots
+HOST_CA_BUNDLE="/etc/pki/tls/certs/ca-bundle.crt"
+if [ ! -f "$HOST_CA_BUNDLE" ]; then
+    HOST_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+fi
+if [ -f "$HOST_CA_BUNDLE" ]; then
+    echo "Including system CA roots from $HOST_CA_BUNDLE..."
+    cat "$HOST_CA_BUNDLE" >> "$COMBINED_CA"
+fi
+
 # 1. Extract Registry CA
 if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
     echo "Extracting Registry CA from container-registry/in-cluster-registry-tls..."

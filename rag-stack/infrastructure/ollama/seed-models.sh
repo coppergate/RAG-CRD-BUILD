@@ -35,6 +35,7 @@ for MODEL in "${!MODEL_PVC_MAP[@]}"; do
   fi
 
   # Check if model is already present by looking for manifests
+  # Models are stored in models/ subdirectory in the PVC
   EXISTING=$($KUBECTL run "$SEEDER_NAME-check" \
     --image="${REGISTRY}/ollama/ollama:0.15.6" \
     --restart=Never \
@@ -42,11 +43,11 @@ for MODEL in "${!MODEL_PVC_MAP[@]}"; do
     -n "$NAMESPACE" \
     --overrides="{
       \"spec\": {
-        \"nodeSelector\": {\"node-role.kubernetes.io/storage-node\": \"\"},
+        \"nodeSelector\": {\"role\": \"storage-node\"},
         \"containers\": [{
           \"name\": \"check\",
           \"image\": \"${REGISTRY}/ollama/ollama:0.15.6\",
-          \"command\": [\"sh\", \"-c\", \"find /ollama-models/manifests -type f 2>/dev/null | head -1 || echo EMPTY\"],
+          \"command\": [\"sh\", \"-c\", \"find /ollama-models/models/manifests -type f 2>/dev/null | head -1 || echo EMPTY\"],
           \"volumeMounts\": [{\"name\": \"models\", \"mountPath\": \"/ollama-models\"}]
         }],
         \"volumes\": [{\"name\": \"models\", \"persistentVolumeClaim\": {\"claimName\": \"$PVC_NAME\"}}]
@@ -78,38 +79,81 @@ spec:
         - -c
         - |
           echo "Starting Ollama for model seeding..."
-          OLLAMA_MODELS=/ollama-models ollama serve &
-          OLLAMA_PID=\$!
+          # Models are stored in the 'models' subdirectory of the PVC
+          OLLAMA_MODELS=/ollama-models/models
+          mkdir -p $OLLAMA_MODELS
+          ollama serve &
+          OLLAMA_PID=$!
           # Wait for ollama to be ready (max 60s)
-          for i in \$(seq 1 60); do
-            if OLLAMA_MODELS=/ollama-models ollama list >/dev/null 2>&1; then
-              echo "Ollama ready after \${i}s"
+          for i in $(seq 1 60); do
+            if ollama list >/dev/null 2>&1; then
+              echo "Ollama ready after ${i}s"
               break
             fi
-            if [ "\$i" -eq 60 ]; then
+            if [ "$i" -eq 60 ]; then
               echo "ERROR: Ollama did not start"
-              kill \$OLLAMA_PID 2>/dev/null
+              kill $OLLAMA_PID 2>/dev/null
               exit 1
             fi
             sleep 1
           done
-          echo "Pulling ${REGISTRY}/ollama/${MODEL}..."
-          if OLLAMA_MODELS=/ollama-models ollama pull "${REGISTRY}/ollama/${MODEL}"; then
+          
+          FULL_MODEL_NAME="${REGISTRY}/ollama/${MODEL}"
+          echo "Pulling ${FULL_MODEL_NAME}..."
+          if ollama pull "${FULL_MODEL_NAME}"; then
             echo "SUCCESS: ${MODEL} seeded from local registry"
             # Tag it as the short name so Ollama pods can find it easily
-            OLLAMA_MODELS=/ollama-models ollama cp "${REGISTRY}/ollama/${MODEL}" "${MODEL}"
+            ollama cp "${FULL_MODEL_NAME}" "${MODEL}"
           else
-            echo "ERROR: Failed to pull ${MODEL} from local registry"
-            kill \$OLLAMA_PID 2>/dev/null
-            exit 1
+            echo "WARNING: ollama pull failed. Falling back to manual seed with curl..."
+            # Manual fallback logic using curl (bypassing ollama pull location header bugs)
+            # 1. Parse repo and tag
+            REPO="ollama/$(echo "$MODEL" | cut -d: -f1)"
+            TAG="$(echo "$MODEL" | cut -s -d: -f2)"
+            TAG="${TAG:-latest}"
+            
+            MANIFEST_DIR="$OLLAMA_MODELS/manifests/${REGISTRY}/${REPO}"
+            MANIFEST_PATH="${MANIFEST_DIR}/${TAG}"
+            SHORT_MANIFEST_DIR="$OLLAMA_MODELS/manifests/registry.ollama.ai/library/$(echo "$MODEL" | cut -d: -f1)"
+            SHORT_MANIFEST_PATH="${SHORT_MANIFEST_DIR}/${TAG}"
+            BLOBS_DIR="$OLLAMA_MODELS/blobs"
+            
+            mkdir -p "$MANIFEST_DIR" "$SHORT_MANIFEST_DIR" "$BLOBS_DIR"
+            
+            echo "Fetching manifest for ${REPO}:${TAG}..."
+            if curl -skL "https://${REGISTRY}/v2/${REPO}/manifests/${TAG}" \
+                 -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+                 -o "${MANIFEST_PATH}"; then
+               
+               echo "Parsing layers..."
+               LAYERS=$(grep -o 'sha256:[a-f0-9]*' "${MANIFEST_PATH}" | sort -u)
+               
+               for LAYER in $LAYERS; do
+                 BLOB_FILE="${BLOBS_DIR}/${LAYER//:/-}"
+                 if [ -f "$BLOB_FILE" ] && [ -s "$BLOB_FILE" ]; then
+                   echo "  Blob $LAYER already exists. Skipping."
+                   continue
+                 fi
+                 echo "  Downloading blob $LAYER..."
+                 curl -skL "https://${REGISTRY}/v2/${REPO}/blobs/${LAYER}" -o "${BLOB_FILE}"
+               done
+               
+               echo "Creating short-name manifest..."
+               cp "${MANIFEST_PATH}" "${SHORT_MANIFEST_PATH}"
+               echo "SUCCESS: Manual seeding complete for ${MODEL}"
+            else
+               echo "ERROR: Manual seeding failed for ${MODEL}"
+               kill $OLLAMA_PID 2>/dev/null
+               exit 1
+            fi
           fi
-          kill \$OLLAMA_PID 2>/dev/null
+          kill $OLLAMA_PID 2>/dev/null
           echo "Seeding complete."
       env:
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OLLAMA_MODELS
-          value: "/ollama-models"
+          value: "/ollama-models/models"
       volumeMounts:
         - name: models
           mountPath: /ollama-models

@@ -351,7 +351,10 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 ```
 
 #### Model Seeding (During Install)
-`seed-models.sh` creates temporary seeder pods that pull models from the local registry into the PVCs. This is automatic if models are in the registry.
+`seed-models.sh` creates temporary seeder pods that pull models from the local registry into the PVCs. 
+- **Storage Path**: Models are seeded into the `models/` subdirectory of the PVC (e.g., `/root/.ollama/models/`) to match the default Ollama runtime configuration.
+- **Robustness**: If `ollama pull` fails (e.g., due to registry protocol issues like "no Location header"), the script automatically falls back to a `curl`-based manual seed.
+- **Automation**: This is automatic if models are in the registry.
 
 ## 5. RAG Stack Architecture & Services
 

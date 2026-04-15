@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	baseURL = "https://172.20.1.24" // rag-web-ui LoadBalancer
+	baseURL = "https://172.20.1.22" // rag-web-ui LoadBalancer
 	client  = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},

@@ -9,7 +9,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 # In-cluster endpoints
-BASE_URL = "https://172.20.1.24" # rag-web-ui LoadBalancer (internal)
+BASE_URL = "https://rag-web-ui.rag-system.svc.cluster.local" # rag-web-ui Service Name (internal)
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 QDRANT_USE_TLS = os.getenv("QDRANT_USE_TLS", "true") == "true"
