@@ -155,6 +155,7 @@ As of version `2.2.11`, the APM stack is configured with TLS for internal commun
     -   Gateways use NGINX with SSL enabled on port **8443**.
     -   Alloy and Grafana connect via `https://loki-gateway.monitoring.svc.cluster.local` and `https://mimir-gateway.monitoring.svc.cluster.local`.
     -   Trust is managed via the `registry-ca-cm` ConfigMap (mounted as `/etc/ssl/certs/ca.crt`).
+    -   **Configuration Update (v2.5.5)**: Updated `values.yaml.template` for Loki and Mimir to use the `nginxConfig.file` map structure (required by Loki Helm chart v6.55.0+) instead of a direct string for `gateway.nginxConfig`.
 2.  **Tempo**:
     -   **Push API (OTLP)**: Exposed on port **4318** (HTTPS). Alloy pushes traces securely.
     -   **Query API (REST)**: Exposed on port **3200** (HTTP). Grafana queries traces via plain HTTP to avoid handshake issues.
@@ -176,7 +177,7 @@ As of version `2.2.11`, Alloy (DaemonSet) uses **local pod discovery** for clust
 ### 1.6 TLS and Security
 1.  **Management Guide**: Refer to [TLS-GUIDE.md](TLS-GUIDE.md) for step-by-step instructions on creating certificates, adding SANs, and managing trust.
 2.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
-3.  **Trust Distribution**: The combined CA certificate is managed via the `registry-ca-cm` ConfigMap in target namespaces.
+3.  **Trust Distribution**: The Root CA is distributed to all Talos nodes via the `machine.install.extraCerts` configuration in `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml`, and managed in-cluster via the `registry-ca-cm` ConfigMap in target namespaces.
 4.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`).
 5.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.
 6.  **Service TLS**: All RAG services (adapters, gateway, admin-api) now use TLS for their REST APIs (port 8080 or 443).
@@ -201,7 +202,7 @@ bash ./config-cluster.sh
     3.  Defines Libvirt networks (talos-nat, lb-net).
     4.  Starts and seeds the bootstrap registry (Podman) with Talos installer images.
     5.  Builds Control Plane VMs and waits for maintenance mode.
-    6.  Generates and applies Talos configuration (with registry patches).
+    6.  Generates and applies Talos configuration (using the registry patch at `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml`).
     7.  Bootstraps the Kubernetes control plane.
     8.  Builds all Worker and Inference VMs.
     9.  Applies configuration and labels nodes (GPU Operator, etc.).

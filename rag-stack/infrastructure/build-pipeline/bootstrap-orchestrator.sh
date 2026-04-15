@@ -86,7 +86,7 @@ if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 
     $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
 else
     echo "Fallback: Extracting Registry CA from Talos registry patch..."
-    CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+    CA_B64=$(grep "ca: " "/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
     if [ -n "$CA_B64" ]; then
         echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
     fi

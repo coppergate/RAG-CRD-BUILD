@@ -1,7 +1,7 @@
 #!/bin/bash
 TALOS_BIN="/home/k8s/talos/talosctl"
 TALOS_CONFIG="/home/k8s/talos/config/talosconfig"
-PATCH_FILE="/mnt/hegemon-share/share/code/complete-build/infrastructure/registry/talos-registry-patch.yaml"
+PATCH_FILE="/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml"
 
 # Standard nodes to patch (Control Plane + Workers + Inference)
 NODES=("10.0.0.200" "10.0.0.201" "10.0.0.202" "10.0.0.110" "10.0.0.111" "10.0.0.112" "10.0.0.113" "10.0.0.120" "10.0.0.121")

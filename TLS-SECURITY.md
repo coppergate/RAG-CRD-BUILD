@@ -8,7 +8,7 @@ The entire cluster's security is anchored on a custom **Root Certificate Authori
 
 - **Subject**: `CN=Hierocracy Root CA, O=Hierocracy, C=US`
 - **Location (Host)**: `/etc/pki/ca-trust/source/anchors/hierocracy-root-ca.crt`
-- **Host-Level Distribution**: The Root CA is added to the system trust store on `hierophant` and distributed to all Talos nodes via the `machine.install.extraCerts` configuration in `infrastructure/registry/talos-registry-patch.yaml`.
+- **Host-Level Distribution**: The Root CA is added to the system trust store on `hierophant` and distributed to all Talos nodes via the `machine.install.extraCerts` configuration in `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml`.
 
 ## 2. In-Cluster Certificate Management
 

@@ -71,7 +71,7 @@ if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 
     $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
 else
     echo "Fallback: Extracting Registry CA from Talos registry patch..."
-    CA_B64=$(grep "ca: " "$REPO_DIR/../registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+    CA_B64=$(grep "ca: " "/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
     if [ -n "$CA_B64" ]; then
         echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
     fi
@@ -147,20 +147,23 @@ function deploy_lgtm_component() {
         export S3_ENDPOINT BUCKET_NAME AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
         
         # Additional bucket extraction for Mimir dedicated storage
+        VAR_LIST='$S3_ENDPOINT,$BUCKET_NAME,$AWS_ACCESS_KEY_ID,$AWS_SECRET_ACCESS_KEY'
+
         if [[ "$name" == "mimir" ]]; then
-            RULER_BUCKET_NAME=$($KUBECTL get configmap mimir-ruler-s3-bucket -n $NAMESPACE -o jsonpath='{.data.BUCKET_NAME}')
-            ALERTMANAGER_BUCKET_NAME=$($KUBECTL get configmap mimir-alertmanager-s3-bucket -n $NAMESPACE -o jsonpath='{.data.BUCKET_NAME}')
+            RULER_BUCKET_NAME=$($KUBECTL get configmap mimir-ruler-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.BUCKET_NAME}')
+            ALERTMANAGER_BUCKET_NAME=$($KUBECTL get configmap mimir-alertmanager-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.BUCKET_NAME}')
             
-            RULER_ACCESS_KEY=$($KUBECTL get secret mimir-ruler-s3-bucket -n $NAMESPACE -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
-            RULER_SECRET_KEY=$($KUBECTL get secret mimir-ruler-s3-bucket -n $NAMESPACE -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
+            RULER_ACCESS_KEY=$($KUBECTL get secret mimir-ruler-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
+            RULER_SECRET_KEY=$($KUBECTL get secret mimir-ruler-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
             
-            ALERTMANAGER_ACCESS_KEY=$($KUBECTL get secret mimir-alertmanager-s3-bucket -n $NAMESPACE -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
-            ALERTMANAGER_SECRET_KEY=$($KUBECTL get secret mimir-alertmanager-s3-bucket -n $NAMESPACE -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
+            ALERTMANAGER_ACCESS_KEY=$($KUBECTL get secret mimir-alertmanager-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
+            ALERTMANAGER_SECRET_KEY=$($KUBECTL get secret mimir-alertmanager-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
             
             export RULER_BUCKET_NAME ALERTMANAGER_BUCKET_NAME RULER_ACCESS_KEY RULER_SECRET_KEY ALERTMANAGER_ACCESS_KEY ALERTMANAGER_SECRET_KEY
+            VAR_LIST="${VAR_LIST},\$RULER_BUCKET_NAME,\$ALERTMANAGER_BUCKET_NAME,\$RULER_ACCESS_KEY,\$RULER_SECRET_KEY,\$ALERTMANAGER_ACCESS_KEY,\$ALERTMANAGER_SECRET_KEY"
         fi
         
-        envsubst < "$REPO_DIR/$name/values.yaml.template" > "$SAFE_TMP_DIR/$name-values.yaml"
+        envsubst "$VAR_LIST" < "$REPO_DIR/$name/values.yaml.template" > "$SAFE_TMP_DIR/$name-values.yaml"
         
         echo "Adding Helm repo $repo_url..."
         helm repo add grafana $repo_url

@@ -11,7 +11,7 @@ BASE_DIR=$(cd "$REPO_DIR/.." && pwd)
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 
-LOCKFILE="/tmp/rag-stack-build.lock"
+LOCKFILE="/tmp/rag-stack-build-${USER:-shared}.lock"
 
 VERSION_FILE="$BASE_DIR/CURRENT_VERSION"
 MODE="${MODE:-cluster}" # cluster | local
@@ -28,13 +28,13 @@ mkdir -p "$JOURNAL_DIR"
 
 acquire_lock() {
     if [[ -f "$LOCKFILE" ]]; then
-        local pid=$(cat "$LOCKFILE")
-        if kill -0 "$pid" 2>/dev/null; then
+        local pid=$(cat "$LOCKFILE" 2>/dev/null || echo "")
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
             log "ERROR: Another build process (PID $pid) is already running."
             exit 1
         fi
     fi
-    echo $$ > "$LOCKFILE"
+    echo $$ > "$LOCKFILE" || { log "ERROR: Failed to write to lockfile $LOCKFILE"; exit 1; }
 }
 
 release_lock() {
@@ -73,13 +73,13 @@ get_svc_last_build() {
 update_svc_info() {
     local svc="$1"; local ver="$2"; local build_time="$3"
     local tmp=$(mktemp)
-    local lockfile="/tmp/rag-stack-version.lock"
+    local lockfile="/tmp/rag-stack-version-${USER:-shared}.lock"
     
     (
         flock -x 200
         if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
         jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" && cat "$tmp" > "$VERSION_FILE"
-    ) 200>"$lockfile"
+    ) 200>"$lockfile" || { log "ERROR: Failed to acquire lock on $lockfile"; rm -f "$tmp"; exit 1; }
     rm -f "$tmp"
 }
 

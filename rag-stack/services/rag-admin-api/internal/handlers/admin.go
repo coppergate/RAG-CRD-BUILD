@@ -33,6 +33,11 @@ func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.Hand
 		}
 	}
 
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("[PROXY] Error proxying %s %s to %s: %v", r.Method, r.URL.Path, targetURL, err)
+		http.Error(w, "Proxy error: "+err.Error(), http.StatusBadGateway)
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[PROXY] %s %s -> %s", r.Method, r.URL.Path, targetURL)
 		proxy.ServeHTTP(w, r)

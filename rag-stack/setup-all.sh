@@ -87,7 +87,7 @@ if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 
     $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
 else
     echo "Fallback: Extracting Registry CA from Talos registry patch..."
-    CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+    CA_B64=$(grep "ca: " "/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
     if [ -n "$CA_B64" ]; then
         echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
     fi
@@ -110,11 +110,11 @@ fi
 rm -f "$COMBINED_CA"
 mark_step_done "registry-ca"
 
-# if ! is_step_done "ollama"; then
-# echo "--- 1.5. Deploying LLM: Ollama ---"
-# bash "$REPO_DIR/infrastructure/ollama/ollama.sh"
-# mark_step_done "ollama"
-# fi
+if ! is_step_done "ollama"; then
+  echo "--- 1.5. Deploying LLM: Ollama ---"
+  bash "$REPO_DIR/infrastructure/ollama/ollama.sh"
+  mark_step_done "ollama"
+fi
 
 if ! is_step_done "timescaledb"; then
 echo "--- 2. Deploying Infrastructure: TimescaleDB ---"

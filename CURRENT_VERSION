@@ -32,12 +32,12 @@
     "last_build": "2026-04-08T19:40:28Z"
   },
   "rag-admin-api": {
-    "version": "2.5.8",
+    "version": "2.5.9",
     "last_build": null
   },
   "memory-controller": {
-    "version": "2.5.4",
-    "last_build": "2026-04-10T19:01:24Z"
+    "version": "2.5.6",
+    "last_build": null
   },
   "build-orchestrator": {
     "version": "2.5.6",

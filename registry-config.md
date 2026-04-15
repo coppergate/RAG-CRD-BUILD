@@ -25,7 +25,7 @@ The system uses a dual-registry topology to ensure high availability, fast pulls
 
 ## 2. Talos Node Configuration
 
-All nodes (control plane, workers, and inference) are patched with `infrastructure/registry/talos-registry-patch.yaml` during the cluster installation to ensure they trust and use the local registry. This patch is applied automatically by `config-cluster.sh` as part of the machine configuration.
+All nodes (control plane, workers, and inference) are patched with `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml` during the cluster installation to ensure they trust and use the local registry. This patch is applied automatically by `config-cluster.sh` as part of the machine configuration.
 
 ### 2.1 Host Resolution & Trust
 The following entries are added to the `/etc/hosts` of all Talos nodes:

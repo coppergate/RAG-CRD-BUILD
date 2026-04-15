@@ -160,18 +160,8 @@ gateway:
     enabled: true
     secretName: mimir-gateway-tls
 
-nginx:
-  nodeSelector:
-    role: storage-node
-  extraVolumes:
-    - name: service-tls
-      secret:
-        secretName: mimir-gateway-tls
-  extraVolumeMounts:
-    - name: service-tls
-      mountPath: /etc/nginx/certs
-      readOnly: true
-  config: |
+nginxConfig:
+  file: |
     worker_processes  5;  ## Default: 1
     error_log  /dev/stderr error;
     pid        /tmp/nginx.pid;
@@ -194,10 +184,9 @@ nginx:
       tcp_nopush         on;
       proxy_http_version 1.1;
       resolver kube-dns.kube-system.svc.cluster.local.;
-      # Ensure that X-Scope-OrgID is always present, default to the no_auth_tenant for backwards compatibility when multi-tenancy was turned off.
       map $http_x_scope_orgid $ensured_x_scope_orgid {
-        default $http_x_scope_orgid;
-        "" "anonymous";
+        default "$http_x_scope_orgid";
+        "" anonymous;
       }
       map $http_x_scope_orgid $has_multiple_orgid_headers {
         default 0;
@@ -208,6 +197,7 @@ nginx:
         listen 8443 ssl;
         ssl_certificate /etc/nginx/certs/tls.crt;
         ssl_certificate_key /etc/nginx/certs/tls.key;
+        listen 8080;
         listen [::]:8080;
         client_max_body_size 540M;
         if ($has_multiple_orgid_headers = 1) {

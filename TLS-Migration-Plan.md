@@ -19,7 +19,7 @@ This document outlines the end-to-end changes to move the RAG cluster registry f
 
 ## Phase 3: Talos Node Trust Chain
 
-- **Machineconfig Patch**: Update `infrastructure/registry/talos-registry-patch.yaml`.
+- **Machineconfig Patch**: Update `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml`.
 - **Changes**:
   - Add the base64-encoded Root CA to `machine.install.extraCerts`.
   - Replace `insecureSkipVerify: true` with `ca: <BASE64_CERT>` for all mirrors (`docker.io`, `quay.io`, etc.).

@@ -3,7 +3,7 @@
 # To be executed on host: hierophant
 
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-PATCH_FILE="$REPO_DIR/infrastructure/registry/talos-registry-patch.yaml"
+PATCH_FILE="/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml"
 
 if [[ ! -f "$PATCH_FILE" ]]; then
   echo "ERROR: Patch file not found at $PATCH_FILE" >&2

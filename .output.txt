@@ -1,0 +1,430 @@
+[
+  {
+    "datetime": "2026-04-14T10:48:00Z",
+    "description": "Fixed 500 error in memory-controller when creating a session with a duplicate name. 1) Enhanced 'createSession' handler to catch unique constraint violations from the database and return 409 Conflict instead of 500 Internal Server Error. 2) Improved error logging in memory-controller for better diagnostics. 3) Added unit tests for duplicate session name and session update scenarios in memory_test.go. 4) Incremented memory-controller version to 2.5.5 in CURRENT_VERSION."
+  },
+  {
+    "datetime": "2026-04-13T16:25:00Z",
+    "description": "Fixed 'namespaces llms-ollama not found' error during application of Kubernetes resilience primitives. Identified that several core namespaces (llms-ollama, rag-system, apache-pulsar, timescaledb) were missing the 'kubernetes.io/metadata.name' label, which is required for NetworkPolicy namespaceSelectors. 1) Created the missing 'llms-ollama' namespace. 2) Labeled all relevant namespaces with 'kubernetes.io/metadata.name'. 3) Successfully re-applied all PodDisruptionBudgets, HorizontalPodAutoscalers, and NetworkPolicies from rag-stack/services/k8s-resilience/."
+  },
+  {
+    "datetime": "2026-04-13T11:15:00Z",
+    "description": "Fixed 'Permission denied' error in rag-stack/build.sh during parallel builds. Modified the script to use user-specific lockfiles (/tmp/rag-stack-build-${USER:-shared}.lock and /tmp/rag-stack-version-${USER:-shared}.lock) instead of a single global path. This prevents permission conflicts when multiple users or different execution contexts (e.g., sudo vs. regular user) run the build script. Added explicit error handling and logging for lock acquisition and lockfile writes."
+  },
+  {
+    "datetime": "2026-04-13T10:20:00Z",
+    "description": "Fixed readiness probe failures for Loki and Mimir gateways by enabling IPv4 listening on port 8080. Previously, the NGINX configuration only used 'listen [::]:8080', which on the current cluster nodes only bound to IPv6. Since the Kubernetes readiness probe uses the IPv4 pod IP, connections were being refused (dial tcp ... connect: connection refused). Added 'listen 8080;' explicitly to both Loki and Mimir values.yaml.template files to ensure dual-stack or IPv4-only compatibility for the non-SSL port."
+  },
+  {
+    "datetime": "2026-04-13T09:45:00Z",
+    "description": "Implemented robust fix for NGINX 'invalid number of arguments' error in Loki and Mimir gateways. 1) Updated infrastructure/APM/install.sh to restrict envsubst expansion to a specific list of environment variables (S3 credentials, bucket names). 2) Removed backslash escaping from NGINX variables in Loki and Mimir values.yaml.template files, as they are now automatically ignored by the restricted envsubst call. This approach eliminates the fragile escaping mechanism and ensures NGINX variables (e.g., $http_x_query_tags, $request_uri) are preserved correctly for runtime use."
+  },
+  {
+    "datetime": "2026-04-13T09:05:00Z",
+    "description": "Fixed NGINX 'invalid number of arguments' error caused by envsubst expansion. Escaped all NGINX variables (e.g., \\$http_x_query_tags, \\$request_uri, \\$status) in Loki and Mimir values.yaml.template files using backslashes. This ensures that envsubst preserves these variables for NGINX to handle at runtime instead of expanding them to empty strings during the Helm deployment process."
+  },
+  {
+    "datetime": "2026-04-13T08:56:00Z",
+    "description": "Hardened NGINX 'map' directive syntax in Loki and Mimir gateway templates. Wrapped NGINX variable references ($http_x_query_tags, $http_x_scope_orgid) in double quotes within the 'map' blocks to prevent potential parsing ambiguities or 'invalid number of arguments' errors. Removed unnecessary comments within the mapping section to further reduce parsing noise."
+  },
+  {
+    "datetime": "2026-04-13T08:45:00Z",
+    "description": "Fixed NGINX configuration syntax error in Loki gateway. Corrected variable interpolation from '${variable}' to '$variable' in 'proxy_set_header X-Query-Tags'. NGINX does not support the curly brace syntax for variables in this context, which caused an 'invalid number of arguments in map directive' error due to parsing failures of the following configuration blocks. Also removed an redundant comment block that was causing confusion in the mapping section."
+  },
+  {
+    "datetime": "2026-04-13T08:35:00Z",
+    "description": "Fixed Helm deployment failure for Loki (v6.55.0) and Mimir. Updated values.yaml.template for both services to use the 'nginxConfig.file' map structure required by newer Helm charts for their gateway components. Previously, 'gateway.nginxConfig' (Loki) and 'nginx.config' (Mimir) were provided as direct strings, which caused a template evaluation error ('can't evaluate field file in type interface {}'). Consolidated Mimir gateway configuration under the 'nginxConfig' key for consistency. Updated OPERATIONS.md with the configuration change details."
+  },
+  {
+    "datetime": "2026-04-13T06:25:00Z",
+    "description": "Updated registry-config.md to reflect that talos-registry-patch.yaml is now part of the cluster installation and applied automatically by config-cluster.sh. Verified setup-complete.sh and apply-patch.sh already reference the correct path."
+  },
+  {
+    "datetime": "2026-04-13T06:20:00Z",
+    "description": "Environment initialization: Created daily git branch 'work-2026-04-13' and verified current project version (2.5.x)."
+  },
+  {
+    "datetime": "2026-04-11T13:45:00Z",
+    "description": "Fixed 404 errors during Talos bootstrap by updating the bootstrap registry seeding and mirror configuration. 1) Updated 08-setup-bootstrap-registry.sh to seed images with their full repository paths (e.g., registry.k8s.io/etcd) to match Talos mirror request patterns. 2) Updated machine-patches.yaml and talos-registry-patch.yaml to prioritize the local bootstrap registry for all major registries (registry.k8s.io, ghcr.io, docker.io, quay.io) and removed external fallbacks to ensure predictable offline behavior. 3) Backed up original configurations to ai-changes/original."
+  },
+  {
+    "datetime": "2026-04-11T13:00:00Z",
+    "description": "Configuration Cleanup: Removed redundant 10.0.0.1 host record for 'hierophant'. Updated Talos registry patches (YAML and JSON) to use the bridge IP 10.0.0.1 directly in mirror endpoints. This ensures reliable bootstrap registry access while keeping 'hierophant' pointing to its correct LAN IP (192.168.1.101) for other purposes."
+  },
+  {
+    "datetime": "2026-04-11T11:25:00Z",
+    "description": "Fix: Robust bootstrap registry startup. Updated 08-setup-bootstrap-registry.sh to correctly handle systemd --user bus connectivity in non-interactive and sudo environments by explicitly setting XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS, and using runuser when executed as root."
+  },
+  {
+    "datetime": "2026-04-11T12:00:00Z",
+    "description": "Cluster Setup Refactoring: Separated cluster setup from application build. 1) Moved 00-init-network.sh and talos-registry-patch.yaml into the kubernetes-setup directory. 2) Created 08-setup-bootstrap-registry.sh to automate bootstrap registry startup and seeding. 3) Updated config-cluster.sh to orchestrate network and registry setup before VM creation. 4) Restored registry mirrors in machine-patches.yaml with https endpoints. 5) Enabled non-interactive mode for cluster setup scripts via FRESH_INSTALL=true. 6) Updated OPERATIONS.md with the new cluster build flow."
+  },
+  {
+    "datetime": "2026-04-11T11:00:00Z",
+    "description": "Cluster Build Recovery: Resolved 'bootstrap registry not configured' issue. 1) Restored missing libvirt networks (talos-nat, lb-net) on Hierophant to establish 10.0.0.1 connectivity. 2) Created and started the CONTROLLER storage pool on Hierophant. 3) Fixed a protocol mismatch in machine-patches.yaml (http -> https) and updated 15-apply-cp-config.sh to include talos-registry-patch.yaml for correct TLS/CA configuration. 4) Verified registry content (Talos v1.12.4 images present) and accessibility. 5) Backed up original configurations to ai-changes/original."
+  },
+  {
+    "datetime": "2026-04-11T08:11:00Z",
+    "description": "Cluster Maintenance Fix: Updated cluster-shutdown.sh and cluster-startup.sh to use a persistent absolute path for replica state (/home/k8s/kube/cluster-replicas.state). Added logic to cluster-shutdown.sh to ensure the state file is only updated if active replicas are found, preserving previous state during partial reboots. Updated OPERATIONS.md."
+  },
+  {
+    "datetime": "2026-04-10T14:45:00Z",
+    "description": "Documentation: Reorganized OPERATIONS.md into a logical progression (Cluster Fundamentals -> Operational Procedures -> Build System -> Data/Model Management -> RAG Stack Architecture -> Frontend Dev -> Testing)."
+  },
+  {
+    "datetime": "2026-04-10T13:45:00Z",
+    "description": "Network Recovery: Created idempotent '00-init-network.sh' on Hierophant to restore Bridges and IPTables after host reboot. Integrated with '05-restore-vms.sh' to ensure network readiness before cluster startup. Updated OPERATIONS.md with Host Reboot Recovery procedure."
+  },
+  {
+    "datetime": "2026-04-10T13:20:00Z",
+    "description": "Diagnosis for Flutter UI timeout: Identified missing IPTables FORWARD rules on Hierophant (192.168.1.101). Traffic from VM (192.168.122.147) reaches Hierophant but is not forwarded to 172.20.0.0/16 cluster network."
+  },
+  {
+    "datetime": "2026-04-10T13:06:00Z",
+    "description": "Environment initialization: Verified guidelines.md, OPERATIONS.md, and CURRENT_VERSION. Local branch 'work-2026-04-10' is active."
+  },
+  {
+    "datetime": "2026-04-10T12:55:00Z",
+    "description": "Resolved 'connection timeout' issue in Flutter UI by fixing Traefik Ingress configurations for RAG services. 1) Added missing 'ingressClassName: traefik' to rag-admin-api, llm-gateway, and rag-explorer Ingresses. 2) Added 'traefik.ingress.kubernetes.io/service.serverstransport: skip-verify@kubernetescrd' to rag-admin-api and llm-gateway to allow Traefik to trust their backend TLS certificates. 3) Verified session creation (HTTP 201) via the public Ingress at rag-admin-api.rag.hierocracy.home. 4) Backed up original manifests to ai-changes/original."
+  },
+  {
+    "datetime": "2026-04-10T18:25:00Z",
+    "description": "Refactored Mermaid diagrams for improved editability and maintenance. 1) Created a dedicated 'diagrams/' directory. 2) Moved and updated 'architecture.mmd' and 'build-flow.mmd' to reflect the latest Iteration 9+ architecture. 3) Converted ASCII UI layout to 'ui-layout.mmd'. 4) Added 'diagrams/README.md' with comprehensive instructions for visual editing tools (Mermaid Live, Draw.io, VS Code). 5) Updated primary documentation files to reference these standalone editable sources."
+  },
+  {
+    "datetime": "2026-04-10T06:45:00Z",
+    "description": "Refactored RAG stack for better resource allocation and BFF pattern enforcement. 1) Split rag-worker into planner-agent (planning stage) and retrieval-agent (new search stage). 2) Updated Pulsar topics to include the search stage. 3) Enhanced rag-admin-api with proxies for Qdrant direct access and Grafana dashboards. 4) Centralized rag-explorer service endpoints through the rag-admin-api BFF."
+  },
+  {
+    "datetime": "2026-04-10T06:00:00Z",
+    "description": "Implemented DNS-driven approach for cluster bootstrap components using Technitium at diakonia (192.168.1.210). 1) Updated db.hierocracy.home with hierophant (10.0.0.1) and gateway (172.20.1.27) records. 2) Updated db.172.20.1 with gateway PTR record. 3) Enhanced setup_technitium_podman.sh with default admin password, zone import guidance, and post-installation checklist for Talos node configuration. 4) Validated file updates on the shared mount via SSH to hierophant."
+  },
+  {
+    "datetime": "2026-04-09T09:02:00Z",
+    "description": "Validated and updated registry-config.md. 1) Corrected Talos node host resolution mapping (registry.hierocracy.home points to in-cluster LB). 2) Updated registry mirror configuration to reflect the use of hierophant.hierocracy.home with public fallbacks and wildcard support. 3) Synchronized image groups with install-image-plan.sh (added headlamp, mimir, ollama, etc.). 4) Fixed manual push examples to use --tls-verify=true. 5) Backed up original file to ai-changes/original."
+  },
+  {
+    "datetime": "2026-04-09T08:54:00Z",
+    "description": "Environment initialization: Verified guidelines.md and OPERATIONS.md. Created daily branch work-2026-04-09. Project versions confirmed in CURRENT_VERSION."
+  },
+  {
+    "datetime": "2026-04-08T14:15:00Z",
+    "description": "Deployed and verified memory-controller (v2.5.3) and the full RAG stack. 1) Updated memory-controller with session name conflict handling (409 Conflict). 2) Fixed parallel build issues in rag-stack/build.sh by adding global and version-file locks. 3) Resolved build-orchestrator deployment failure (v2.5.6) by correcting source packaging (trigger-build.sh) and Dockerfile build paths. 4) Verified rag-admin-api (v2.5.4) health aggregation (api/health/all) shows all services as 'ready' using HTTPS and rag-system namespace."
+  },
+  {
+    "datetime": "2026-04-08T13:40:00Z",
+    "description": "Corrected service URLs in rag-admin-api config.go. Updated all internal service endpoints to use 'rag-system' namespace instead of 'rag', changed protocol to HTTPS, and used correct service names (e.g., rag-ingestion-service). Verified these endpoints are reachable within the cluster on port 443."
+  },
+  {
+    "datetime": "2026-04-08T13:45:00Z",
+    "description": "Resolved 'not responding' behavior in Flutter UI for session/tag creation. 1) Identified and fixed TLS handshake hangs by introducing a centralized 'dioProvider' in rag-explorer that honors 'skipTlsVerification'. 2) Updated ChatService and IngestionService to use the new provider. 3) Reverted backgrounding of creation calls to ensure synchronous session setup as required. 4) Refined UI code to ensure dialogs close immediately after the backend call completes, regardless of subsequent refresh success. 5) Fixed memory-controller to return 409 Conflict for duplicate session names instead of 500. 6) Corrected RAG Ingestion URL in rag-admin-api config."
+  },
+  {
+    "datetime": "2026-04-08T13:20:00Z",
+    "description": "Investigated 'operation already exists' CSI errors in rook-ceph nodeplugin pods. Confirmed errors were historical (from 2026-04-07 18:07) and related to the previous cluster restart/recovery event. Verified cluster health is currently OK, all volumes are correctly attached, and application pods are stable. No active remediation required."
+  },
+  {
+    "datetime": "2026-04-08T12:56:00Z",
+    "description": "Environment initialization: Verified guidelines.md and OPERATIONS.md. Daily branch work-2026-04-08 active. Project versions confirmed in CURRENT_VERSION."
+  },
+  {
+    "datetime": "2026-04-08T12:45:00Z",
+    "description": "Fixed regression in Flutter UI 'New Chat Session' dialog. 1) Ensured 'Enter' key triggers session creation by adding textInputAction: TextInputAction.go and onSubmitted. 2) Ensured dialog closes immediately on 'Create' button click and Enter key. 3) Applied similar fixes to 'Create New Tag' and prefix search fields in the Ingestion page for consistent UX."
+  },
+  {
+    "datetime": "2026-04-08T12:00:00Z",
+    "description": "Updated architecture documentation (RAG Stack Architecture.md, RAG-Diagram.mmd, RAG-Build-Flow.mmd, RAG-Flutter-UI-Design.md, OPERATIONS.md) to reflect Iteration 9 changes, including session-based Pulsar topics, build system optimizations, and new Ingestion features."
+  },
+  {
+    "datetime": "2026-04-07T12:20:00Z",
+    "description": "Fixed cluster-startup.sh and cluster-shutdown.sh to handle the k8tz admission controller deadlock. 1) Updated cluster-shutdown.sh to delete the k8tz MutatingWebhookConfiguration during shutdown. 2) Updated cluster-startup.sh to delete the k8tz MutatingWebhookConfiguration early (after API is up) as a safeguard for core networking (Flannel). 3) Added a final step to cluster-startup.sh to reinstall k8tz via Helm once the cluster is stable. 4) Updated OPERATIONS.md with description of the new sequence."
+  },
+  {
+    "datetime": "2026-04-07T08:55:00Z",
+    "description": "Fixed cluster-shutdown.sh sequence to prevent hang on worker VMs. 1) Reordered shutdown to drain nodes BEFORE scaling down Rook-Ceph while storage is still online. 2) Added explicit wait for pod termination in each namespace to ensure clean unmounts. 3) Updated quiescing logic to set Ceph flags before draining nodes. 4) Updated OPERATIONS.md with the corrected shutdown sequence and step descriptions."
+  },
+  {
+    "datetime": "2026-04-07T07:00:00Z",
+    "description": "Removed S3 bucket dropdown from rag-explorer Ingestion page; now uses configured default bucket and keeps prefix-based sub-indexing. Updated helper text and disabled bucket editing. Backed up original file to ai-changes/original."
+  },
+  {
+    "datetime": "2026-04-07T12:55:00Z",
+    "description": "Optimized RAG stack build process and confirmed 95% reduction in batch build time. 1) Reduced source context size from 700MB to 291KB (99.96% reduction). 2) Implemented shared S3 context upload and parallel cluster builds. 3) Added Docker layer caching for Go dependencies (go.mod/go.sum). 4) Verified reduction of individual service build time from ~19 minutes to ~3 minutes. 5) Added 'RAG Stack Operational Overview' Grafana dashboard and new telemetry for prompt/response sizes."
+  },
+  {
+    "datetime": "2026-04-06T14:55:00Z",
+    "description": "Implemented file/folder upload functionality in rag-explorer and object-store-mgr. Configured default bucket to rag-codebase-bucket. Fixed build orchestration bugs."
+  },
+  {
+    "timestamp": "2026-04-06T14:30:00Z",
+    "description": "Fixed rag-explorer build issues: 1) Made Tag class abstract in core/models/tag.dart to resolve freezed inheritance error. 2) Created centralized appConfigProvider in lib/app_config_provider.dart to fix missing provider errors. 3) Corrected relative import paths across multiple files (app.dart, ingestion_service.dart, ingestion_page.dart, etc.). 4) Verified all affected files with the linter."
+  },
+  {
+    "timestamp": "2026-04-06T14:00:00Z",
+    "description": "Iteration 9: Enhanced RAG Explorer and Backend. 1) Implemented response metadata and retrieved context display in the Chat tab with a resizable side panel. 2) Built the Ingestion tab with S3 bucket/object browsing, tag management (creation/deletion), and ingestion triggering. 3) Standardized metadata propagation across rag-worker, prompt-aggregator, db-adapter, and llm-gateway. 4) Fixed HPA metrics collection for rag-admin-api and memory-controller by adding resource requests/limits. 5) Optimized build.sh to respect registry checks during version overrides. 6) Incremented project version to 2.5.1 across the stack."
+  },
+  {
+    "timestamp": "2026-04-06T11:10:00Z",
+    "description": "Environment initialization: Verified guidelines and operations. Daily branch work-2026-04-06 active."
+  },
+  {
+    "timestamp": "2026-04-05T20:30:00Z",
+    "description": "Improved RAG Explorer chat input UX: 1) Updated the chat prompt TextField in ChatPage.dart to support wrapping and expansion for multiple lines. 2) Set minLines=1, maxLines=5, and keyboardType=TextInputType.multiline to allow the prompt window to grow as needed for long prompts or manual line breaks. 3) Maintained existing 'send' functionality via the send button."
+  },
+  {
+    "timestamp": "2026-04-05T19:30:00Z",
+    "description": "Fixed LLM response aggregation and persistence issue: 1) Refined 'rag-worker' to always send its output (streaming or non-streaming) as chunks to the Pulsar topic. 2) Updated 'db-adapter' to strictly ignore all chunk messages and only process aggregated results. 3) Enhanced 'prompt-aggregator' to assemble chunks into a single response string upon receiving a completion event. 4) Verified the unified aggregation flow on the cluster and ensured all services are running the latest code with a full rollout restart. 5) This eliminates duplicate/empty cards in conversation history by ensuring exactly one complete record per prompt."
+  },
+  {
+    "timestamp": "2026-04-05T12:30:00Z",
+    "description": "Improved RAG Explorer session management UX: 1) Enabled 'Enter' key to trigger 'Create' action in the New Session dialog. 2) Updated session deletion logic to clear current session state (ID, name, and messages) when the active session is deleted, instead of automatically starting a new one. 3) Enhanced chat area to display a helpful prompt when no session is selected. 4) Verified that the message input remains disabled and shows appropriate hint text in the empty session state."
+  },
+  {
+    "timestamp": "2026-04-05T09:55:00Z",
+    "description": "Fixed prompt input re-enablement in RAG Explorer: 1) Updated ResponseMessage model to include isLast field. 2) Updated ChatService.streamChat to decode is_last from WebSocket JSON chunks. 3) Updated ChatPage to set _isStreaming to false when a chunk with isLast=true is received, ensuring the prompt input is re-enabled immediately after the LLM finishes generating the response. 4) Incremented project version to 2.4.11."
+  },
+  {
+    "timestamp": "2026-04-05T09:45:00Z",
+    "description": "Redeployed entire RAG stack to version 2.4.10 and enhanced build system: 1) Consolidated all 12 RAG services to version 2.4.10 in CURRENT_VERSION. 2) Enhanced rag-stack/build.sh with automatic image existence checks via skopeo to skip redundant builds. 3) Added --version override and forced rebuild logic to build.sh. 4) Verified successful rollout of 2.4.10 images to all pods in the rag-system namespace. 5) Cleared stale Kaniko jobs from the build-pipeline namespace."
+  },
+  {
+    "timestamp": "2026-04-05T08:50:00Z",
+    "description": "Fixed parallel build recursion and binary file error in build.sh: 1) Restructured rag-stack/build.sh with a main() function and execution guard (BASH_SOURCE vs 0) to prevent infinite recursion when sourcing in subshells. 2) Improved path resolution using realpath for robust sourcing in xargs workers. 3) Standardized function and variable exports for parallel build subshells."
+  },
+  {
+    "timestamp": "2026-04-05T08:37:00Z",
+    "description": "Fixed session chat history loading and enhanced error reporting: 1) Updated db-adapter to interleave user prompts and assistant responses by sorting the merged message list by timestamp. 2) Enhanced rag-worker to include specific underlying error messages (e.g., from Ollama) when reporting pipeline failures. 3) Incremented project version to 2.4.10."
+  },
+  {
+    "timestamp": "2026-04-05T07:55:00Z",
+    "description": "Environment initialization: Verified guidelines and operations. Daily branch work-2026-04-05 active. Project version v2.4.9 confirmed."
+  },
+  {
+    "timestamp": "2026-04-04T12:35:00Z",
+    "description": "Updated RAG Explorer log output colors for dark mode: 1) Implemented bright red (redAccent) for ERROR, bright yellow (yellowAccent) for WARN, and white for INFO/standard logs when darkMode is active. 2) Adjusted log panel background opacity for dark mode. 3) Incremented project version to v2.4.8."
+  },
+  {
+    "timestamp": "2026-04-04T12:20:00Z",
+    "description": "Fixed LLM model identifier mismatch: Updated RAG Explorer (Flutter UI) to use 'llama3.1:latest' instead of 'llama3.1' to match the backend rag-worker expectation. Manually synchronized app_config.g.dart and app_config.freezed.dart for consistency. Incremented project version to v2.4.7."
+  },
+  {
+    "timestamp": "2026-04-04T12:09:00Z",
+    "description": "Environment initialization: Verified guidelines and operations. Daily branch work-2026-04-04 active. Project version v2.4.6 confirmed."
+  },
+  {
+    "timestamp": "2026-04-04T18:25:00Z",
+    "description": "Fixed build failures in RAG stack: 1) Added missing 'response' import in db-adapter/cmd/adapter/main.go. 2) Removed corrupted nested directory in memory-controller that blocked compilation. 3) Verified that all services (llm-gateway, memory-controller, db-adapter, rag-admin-api, object-store-mgr, qdrant-adapter) build correctly locally."
+  },
+  {
+    "timestamp": "2026-04-04T18:10:00Z",
+    "description": "Fixed 404 error and standardized backend routing: 1) Resolved a critical bug in memory-controller where the missing 'time' import caused build failures. 2) Standardized routing across memory-controller, db-adapter, object-store-mgr, and qdrant-adapter by removing /api/service prefixes from internal routes. 3) Updated rag-admin-api to strip these prefixes before proxying, ensuring architectural consistency across the RAG stack. 4) Updated memory-controller unit tests to reflect the new standardized paths."
+  },
+  {
+    "timestamp": "2026-04-04T18:00:00Z",
+    "description": "Optimized RAG Explorer Logging: Addressed performance concerns regarding StackTrace querying by disabling source location capture in release and profile modes (kDebugMode/kProfileMode). In these modes, the location displays as '[release]'. Updated OPERATIONS.md to document the performance trade-offs."
+  },
+  {
+    "timestamp": "2026-04-04T17:30:00Z",
+    "description": "Enhanced RAG Explorer Logging: Implemented automatic source location capture. Updated LogEntry and LogNotifier in log_service.dart to extract the caller's file and line number from StackTrace.current, with automatic simplification of package paths. Logs now display as [TIME] LEVEL [LOCATION]: MESSAGE in both the console and the system log panel."
+  },
+  {
+    "timestamp": "2026-04-04T17:15:00Z",
+    "description": "Improved RAG Explorer Log Panel: Added resizability and selectability. 1) Implemented _logPanelWidth and _metadataPanelWidth state variables and a custom _buildResizableDivider widget to allow dragging to resize side panels. 2) Wrapped log panel content in SelectionArea to enable text selection and copying. 3) Updated layout to use dynamic widths for both metadata and log panels."
+  },
+  {
+    "timestamp": "2026-04-04T16:50:00Z",
+    "description": "Fixed Riverpod 'modifying provider during build' warning in RAG Explorer: Updated LogNotifier.log in log_service.dart to use Future.microtask for state updates. This prevents synchronous provider modifications when logging is triggered during widget lifecycles (like ChatPage.initState)."
+  },
+  {
+    "timestamp": "2026-04-04T16:30:00Z",
+    "description": "Implemented RAG Explorer logging and flyout panel: Created LogService with Riverpod for centralized stateful logging. Integrated logging into ChatService (WS connection, request/response chunks, API calls) and ChatPage (prompt lifecycle). Added a toggleable 'System Logs' panel to the right side of the UI with auto-scrolling and level-based coloring. This will help diagnose the reported prompt stream issue."
+  },
+  {
+    "timestamp": "2026-04-04T16:15:00Z",
+    "description": "Fixed RAG Explorer session name population: Added POST /api/memory/sessions endpoint to memory-controller, and updated Flutter ChatService to create the session immediately after friendly name input. Fixed proxy routing in rag-admin-api by ensuring prefixes are correctly handled for memory, db, qdrant, s3, and ingest services. The session list now updates immediately upon creation."
+  },
+  {
+    "timestamp": "2026-04-03T21:00:00Z",
+    "description": "Contract & Gateway update: Added session_name to InternalRequest and updated llm-gateway to pass the friendly name through the Pulsar pipeline. Confirmed session schema 'name' field remains Unique."
+  },
+  {
+    "timestamp": "2026-04-03T20:20:00Z",
+    "description": "Updated RAG Explorer UI: disabled chat until session selected, added friendly name prompt and persistence, added animated waiting icon, and implemented 60s timeout for LLM prompts. Updated llm-gateway to support session name persistence."
+  },
+  {
+    "timestamp": "2026-04-03T20:14:00Z",
+    "description": "Environment initialization: Verified guidelines and operations. Daily branch work-2026-04-03 active. Project version v2.4.5 confirmed."
+  },
+  {
+    "timestamp": "2026-04-03T20:30:00Z",
+    "description": "Iteration 8 (Session Management & UI Polish): Updated RAG Explorer (v2.4.5) with session history, theme support, and centralized gateway proxying via rag-admin-api. Fixed prompt persistence in llm-gateway and added history endpoint to db-adapter."
+  },
+  {
+    "timestamp": "2026-04-03T19:30:00Z",
+    "description": "Environment initialization (v2.4.5)"
+  },
+  {
+    "timestamp": "2026-04-03T13:54:47Z",
+    "description": "Created TLS-GUIDE.md with step-by-step procedures for certificate management, CA trust installation, and SAN configuration (v2.4.4)"
+  },
+  {
+    "timestamp": "2026-04-03T12:45:42Z",
+    "description": "Resolved RAG Explorer TLS Handshake issues by fixing Certificate SANs, installing the Root CA on the development VM, and transitioning rag-admin-api to a standard Ingress (v2.4.3)"
+  },
+  {
+    "timestamp": "2026-04-03T12:28:39Z",
+    "description": "Upgraded RAG Explorer Flutter dependencies to major versions, including riverpod 3.x and freezed 3.x. Replaced discontinued flutter_markdown with flutter_markdown_plus (v2.4.2)"
+  },
+  {
+    "timestamp": "2026-04-03T12:19:17Z",
+    "description": "Reverted rag-admin-ui rename to rag-admin-api as per user feedback and updated TLS certificate for consistency (v2.4.1)"
+  },
+  {
+    "timestamp": "2026-04-03T06:30:00Z",
+    "description": "Iteration 8: Implemented Session Deletion and Flyout Menu with Pin feature. Synchronized DNS to rag-admin-ui.rag.hierocracy.home (v2.4.0)"
+  },
+  {
+    "timestamp": "2026-04-02T14:55:00Z",
+    "description": "Resolved RAG Explorer Linux build permission issue by adding flutter clean to setup script and documented troubleshooting steps (v2.3.9)"
+  },
+  {
+    "datetime": "2026-04-02 08:00:00",
+    "description": "Fixed RAG Explorer compilation and dependency issues: 1) Updated scripts/setup-flutter-linux.sh to automatically install missing Fedora system dependencies (cmake, ninja, gtk3) via sudo dnf. 2) Added automated code generation (build_runner) to the setup script. 3) Manually executed code generation in rag-stack/services/rag-explorer to resolve current build errors. 4) Updated OPERATIONS.md with detailed instructions for local Flutter development and manual code generation. 5) Incremented project version to 2.3.8 across all orchestration scripts and documentation."
+  },
+  {
+    "datetime": "2026-04-02 07:15:00",
+    "description": "Fixed RAG Explorer Linux Desktop execution: 1) Initialized linux and web platform support in rag-stack/services/rag-explorer. 2) Updated scripts/setup-flutter-linux.sh to automatically initialize project platforms. 3) Optimized rag-explorer Dockerfile by removing redundant platform creation. 4) Incremented project version to 2.3.7 across all orchestration scripts and documentation."
+  },
+  {
+    "datetime": "2026-04-02 06:20:00",
+    "description": "Added Linux Desktop setup for RAG Explorer (Flutter UI): 1) Created scripts/setup-flutter-linux.sh to automate Flutter SDK installation and dependency verification on Fedora 43. 2) Updated OPERATIONS.md with step-by-step instructions for running the UI as a native Linux application. 3) Updated USAGE_GUIDE.md to include the Linux Desktop App as an access option."
+  },
+  {
+    "datetime": "2026-04-01 14:15:00",
+    "description": "Fixed rag-explorer startup failure (exec: httpd: not found) by: 1) Switching to busybox:1.37.0-musl for the runtime stage. 2) Using explicit /bin/busybox httpd path in CMD. 3) Adding .dockerignore to optimize build. 4) Incremented project version to 2.3.5 across all orchestration scripts and documentation."
+  },
+  {
+    "datetime": "2026-04-01 13:30:00",
+    "description": "Implemented deployment pipeline for the new Flutter-based RAG UI (rag-explorer): 1) Created multi-stage Dockerfile for Flutter Web with Busybox HTTPD. 2) Created Kubernetes Deployment, Service, and Ingress manifests. 3) Updated rag-system-tls.yaml for the new UI certificate. 4) Integrated rag-explorer into build-all-on-cluster.sh and setup-all.sh. 5) Updated USAGE_GUIDE.md and OPERATIONS.md with execution and deployment instructions. Versioned to 2.3.4."
+  },
+  {
+    "datetime": "2026-04-01 09:15:00",
+    "description": "Implemented unit and integration tests for core RAG services: 1) rag-admin-api: Verified proxy and health aggregation. 2) memory-controller: Verified CRUD operations with in-memory SQLite and fixed Ent schema (added metadata fields). 3) llm-gateway: Refactored PulsarClient to an interface for mockability and verified OpenAI chat completions. Versioned to 2.3.3."
+  },
+  {
+    "datetime": "2026-04-01 07:45:00",
+    "description": "Iteration 7 Phase 1 implementation: Added memory-related Ent schemas and SQL migrations. Updated memory-controller with real DB operations. Implemented WebSocket streaming proxy in rag-admin-api. Transitioned Flutter UI from mock to real chat service with streaming. Versioned to 2.3.2."
+  },
+  {
+    "datetime": "2026-04-01 06:05:00",
+    "description": "Environment initialization: Established operational context by creating guidelines.md and ensuring OPERATIONS.md is present. Created daily branch work-2026-04-01. Versioned to 2.3.1."
+  },
+  {
+    "datetime": "2026-04-01 05:59:38",
+    "description": "Updated architecture documents (RAG Stack Architecture, TLS-SECURITY, TLS-Migration-Plan) and Mermaid diagrams to reflect current APM stack (TLS, metrics-generator), timezone consistency (k8tz), and simplified observability flow."
+  },
+  {
+    "datetime": "2026-04-01 05:25:58",
+    "description": "Updated repository templates and installation scripts (Loki, Mimir, Tempo, Alloy, k8tz) to incorporate all TLS, metrics-generator, and timezone fixes for future installations."
+  },
+  {
+    "datetime": "2026-03-31 14:15:22",
+    "description": "Enabled Tempo metrics-generator to support TraceQL features like rate(). Configured remote-write to Mimir via HTTPS with TLS trust. Resolved \"empty ring\" error in Tempo querier."
+  },
+  {
+    "datetime": "2026-03-31 12:07:47",
+    "description": "Resolved Tempo CrashLoopBackOff and Grafana connectivity issues by reverting Tempo query API (port 3200) to HTTP while maintaining TLS for OTLP push (port 4318). Updated Alloy to collect OTLP traces and export to Tempo via HTTPS."
+  },
+  {
+    "datetime": "2026-03-31 10:30:35",
+    "description": "Fixed Mimir out-of-order samples by updating Alloy to use local pod discovery for Pulsar and DCGM. Enabled k8tz injection for kube-system to ensure cluster-wide timezone consistency."
+  },
+  {
+    "datetime": "2026-03-31 09:17:05",
+    "description": "Environment initialization: Established operational context, created daily branch work-2026-03-31, and verified version 2.2.11."
+  },
+  {
+    "datetime": "2026-03-31 15:20:00",
+    "description": "Fixed multi-layered TLS and model misalignment issues: 1) Added Traefik 'serversscheme: https' to Ingresses. 2) Fixed OTEL TLS environment variables (no-prefix for Go, forced CA for Python). 3) Standardized S3 endpoints to HTTPS prefix in manifests. 4) Aligned all services and E2E tests to 'llama3.1:latest'. 5) Standardized internal RAG service exposure to port 443 (HTTPS). 6) Fixed undefined variable in rag-ingestion embeddings call. 7) Updated E2E tests to use semantic natural language queries."
+  },
+  {
+    "datetime": "2026-03-30 12:15:00",
+    "description": "Environment initialization: Synchronized operational context with guidelines.md and updated versioning to 2.2.10 in setup-complete.sh and OPERATIONS.md. Established daily branch work-2026-03-30."
+  },
+  {
+    "datetime": "2026-03-30 06:55:00",
+    "description": "Fixed RAG services readiness probe failures by switching to http for Ollama connections; manually seeded llama3.1 and granite3.1 into cluster pods; updated ollama.sh to support SKIP_SEEDING."
+  },
+  {
+    "datetime": "2026-03-30 00:15:00",
+    "description": "Fixed db-adapter crash caused by missing Pulsar DLQ namespace; added dlq to init-rag-pulsar.sh and provisioned on cluster."
+  },
+  {
+    "description": "Fixed memory-controller build failure by adding missing context-aware Dockerfile; cleaned up rag-admin-api Dockerfile to remove redundant go mod init.",
+    "datetime": "2026-03-29 12:05:00"
+  },
+  {
+    "datetime": "2026-03-29 12:20:00",
+    "description": "Resolved Go build failures across multiple services (rag-worker, rag-admin-api, db-adapter, qdrant-adapter, memory-controller): Fixed missing TLS config fields in rag-worker; created missing go.mod files for rag-admin-api and memory-controller; synchronized all Go dependencies with 'go mod tidy'; fixed unused/duplicate/missing imports in admin-api, db-adapter, and qdrant-adapter. Verified local Go build for all affected services."
+  },
+  {
+    "datetime": "2026-03-29 11:45:00",
+    "description": "Fixed object-store-mgr build failure by synchronizing missing opentelemetry dependency (otelhttp) in go.mod. Verified fix with a successful local Go build."
+  },
+  {
+    "datetime": "2026-03-29 11:40:00",
+    "description": "Optimized the build pipeline to avoid redundant bootstrap builds. Implemented an image existence check using 'skopeo inspect' in both install.sh and bootstrap-orchestrator.sh. Enhanced the should_run_step function to allow skipping and auto-marking steps as done if live verification succeeds, even if not present in the journal. Standardized ORCHESTRATOR_TAG to use the project VERSION (2.2.8) for consistency."
+  },
+  {
+    "datetime": "2026-03-29 11:15:00",
+    "description": "Fixed 'address already in use' conflict for build-orchestrator by splitting health checks (port 8081) and the status dashboard (port 8080) into separate HTTP/HTTPS servers. Incremented project version to 2.2.8 and updated the bootstrap-orchestrator.sh script to use explicit version tagging. Verified successful deployment with HTTPS probes passing on port 8081."
+  },
+  {
+    "datetime": "2026-03-29 10:45:00",
+    "description": "Resolved 'Readiness probe failed' (503) for build-orchestrator by fixing RBAC-restricted health check (switched from listing cluster-wide Namespaces to Pods in its own namespace). Added TLS support to build-orchestrator HTTP server and updated the deployment with a Certificate resource, HTTPS probes, and TLS environment variables to align with project security standards."
+  },
+  {
+    "datetime": "2026-03-29 10:25:00",
+    "description": "Fixed build-orchestrator Go compilation and dependency issues: Synchronized dependencies using 'go mod tidy' and fixed undefined variable errors in cmd/orchestrator/main.go (renamed local 'client' and 'clientset' variables to match global 'pulsarClient' and 'k8sClientset' and ensured 'activeBuilds' is declared before use)."
+  },
+  {
+    "datetime": "2026-03-29 10:05:00",
+    "description": "Resolved 'Bootstrap build failed' for build-orchestrator by making its Dockerfile context-aware (relative to the services/ directory) and including the common dependency in the bootstrap package. Updated bootstrap-orchestrator.sh to package build-orchestrator and common together and adjusted Kaniko job arguments to use the correct context and Dockerfile path. (version 2.2.7)"
+  },
+  {
+    "datetime": "2026-03-29 09:31:00",
+    "description": "Environment initialization: Established operational context with guidelines.md and OPERATIONS.md. Synchronized versioning to 2.2.6 across setup-complete.sh, INSTALLATION.md, and OPERATIONS.md. Added 'Session Establishment' and 'Current Focus' sections to OPERATIONS.md to track Iteration 7 (Local Prompt Memory + Recall) status. Verified git branch work-2026-03-29."
+  },
+  {
+    "datetime": "2026-03-29 08:30:00",
+    "description": "Resolved 'Error: 400:' during ollama push by establishing proper TLS trust for the private registry. Replaced --insecure fallback (which triggered HTTP-on-HTTPS errors) with a combined CA bundle (system + private CA) mounted into the sync container. Automated CA extraction and bundle creation in push-models-to-cluster.sh and pre-pull-models.sh. Created registry-ca-cm ConfigMaps in container-registry and llms-ollama namespaces. (version 2.2.5)"
+  },
+  {
+    "datetime": "2026-03-29 08:15:00",
+    "description": "Fixed 'permission denied' error during ollama pull by moving the container's internal model storage from /root/.ollama/models to /ollama-models and explicitly setting OLLAMA_MODELS environment variable. Updated push-models-to-cluster.sh, pre-pull-models.sh, and seed-models.sh to use this new path. (version 2.2.4)"
+  },
+  {
+    "datetime": "2026-03-28 11:40:00",
+    "description": "Fixed ollama/ollama:0.15.6 image missing/manifest error in the local registry by pushing it via skopeo (Docker V2S2 format). Updated push-models-to-cluster.sh and pre-pull-models.sh with docker.io fallback and local caching at /mnt/storage/ollama-models to avoid internet downloads during builds. Verified registry pull on hierophant. (version 2.2.3)"
+  },
+  {
+    "datetime": "2026-03-28 10:40:35",
+    "description": "Iteration 12 (version 2.2.2). Improved kubectl synchronization in new-setup/03-ensure-kubectl.sh: Fixed version detection logic (avoiding deprecated --short), added support for extracting the binary from a local container image using podman, and enabled using project's talos/kubectl if it matches the desired version. Moved registry and installer image variables to new-setup/config-env.sh. Created OPERATIONS.md."
+  },
+  {
+    "datetime": "2026-03-28 10:31:55",
+    "description": "Merged guidelines from complete-build, moved local ai-changes to external storage, updated .gitignore to exclude talos/ and ai-changes/, and created daily branch work-2026-03-28."
+  },
+  {
+    "datetime": "2026-03-28 10:20:00",
+    "description": "Environment initialization: Verified guidelines and operations files. Guidelines updated in .junie/guidelines.md. Current working branch work-2026-03-28 confirmed. Versioning set to 2.2.1."
+  },
+  {
+    "datetime": "2026-03-28 10:15:00",
+    "description": "Hardened cluster configuration for Iteration 7 (version 2.2.1). Externalized hardcoded magic values (Qdrant collection, batch sizes, timeouts, recursion budget) into environment variables across rag-ingestion, rag-worker, and llm-gateway. Verified TLS probe compliance for all backend services. Standardized seeder image handling to use local registry via push-models-to-cluster.sh, eliminating external dependencies during cluster teardown/rebuild."
+  },
+  {
+    "datetime": "2026-03-28 09:44:18",
+    "description": "Initial layout of RAG Pipeline Explorer (Flutter UI). Created directory structure, scaffold, configuration, shared data models, and Phase 1 MVP UI (Chat and Settings). Backed up OPERATIONS.md and updated it with Flutter build instructions."
+  }
+]

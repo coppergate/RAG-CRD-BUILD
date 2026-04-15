@@ -70,7 +70,7 @@ if ! is_done 10.ns; then
   else
       # Fallback: Extract from talos patch if source secret is missing
       log "Fallback: Extracting Registry CA from Talos registry patch..."
-      CA_B64=$(grep "ca: " "$REPO_DIR/../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+      CA_B64=$(grep "ca: " "/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
       if [ -n "$CA_B64" ]; then
           echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
       fi
