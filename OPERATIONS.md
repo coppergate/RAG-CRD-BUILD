@@ -418,6 +418,33 @@ flutter run -d chrome # Web browser
 - **CMake Error**: Run `flutter clean` to resolve stale `CMAKE_INSTALL_PREFIX` issues.
 - **Code Generation**: `flutter pub run build_runner build --delete-conflicting-outputs`
 
+## 7. Integration & E2E Testing
+
+### 7.1 Integration Tests (Python)
+The integration test suite verifies the functionality of individual components and their interactions.
+- **Location**: `rag-stack/tests/`
+- **Tests**:
+    - `aggregator_test.py`: Verifies basic chunk aggregation flow.
+    - `aggregator_failure_test.py`: Verifies aggregation with special characters, embedded JSON, and edge cases (null bytes, quotes, UTF-8).
+    - `pulsar_crud_test.py`: Verifies Pulsar topic creation and message processing.
+- **Execution**:
+    ```bash
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "cd /mnt/hegemon-share/share/code/complete-build && \
+       bash rag-stack/tests/run-tests.sh"
+    ```
+
+### 7.2 End-to-End (E2E) Tests (Go)
+The E2E test suite verifies the entire RAG pipeline from file upload to chat response.
+- **Location**: `rag-stack/tests/main.go`
+- **Execution**:
+    ```bash
+    ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+      "cd /mnt/hegemon-share/share/code/complete-build && \
+       bash rag-stack/tests/run-e2e-on-hierophant.sh"
+    ```
+- **Verification**: Checks for specific "secret codes" in the LLM response to ensure successful context retrieval and inference.
+
 ### 6.3 Cluster Deployment
 1. **Build**: Trigger Kaniko build on hierophant.
 2. **Deploy**: UI is deployed by `setup-all.sh`.

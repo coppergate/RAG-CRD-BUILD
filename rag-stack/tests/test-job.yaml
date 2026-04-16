@@ -57,6 +57,8 @@ spec:
             python /tests/pulsar_crud_test.py
             echo "--- Running Aggregator Flow Tests ---"
             python /tests/aggregator_test.py
+            echo "--- Running Aggregator Failure Tests ---"
+            python /tests/aggregator_failure_test.py
             echo "--- Seeding Qdrant Context ---"
             python /tests/seed_qdrant_context.py
             echo "--- Running Context Verification (Query) ---"
