@@ -4,8 +4,8 @@
     "last_build": "2026-04-16T12:27:05Z"
   },
   "rag-ingestion": {
-    "version": "2.5.7",
-    "last_build": "2026-04-16T12:27:06Z"
+    "version": "2.5.8",
+    "last_build": null
   },
   "rag-web-ui": {
     "version": "2.5.7",
@@ -24,27 +24,27 @@
     "last_build": "2026-04-16T12:27:10Z"
   },
   "object-store-mgr": {
-    "version": "2.5.7",
-    "last_build": "2026-04-16T12:27:11Z"
+    "version": "2.5.8",
+    "last_build": null
   },
   "rag-test-runner": {
     "version": "2.5.7",
     "last_build": "2026-04-16T12:27:12Z"
   },
   "rag-admin-api": {
-    "version": "2.5.11",
+    "version": "2.5.12",
     "last_build": null
   },
   "memory-controller": {
-    "version": "2.5.8",
+    "version": "2.5.9",
     "last_build": null
   },
   "build-orchestrator": {
     "version": "2.5.8",
-    "last_build": null
+    "last_build": "2026-04-16T14:08:01Z"
   },
   "prompt-aggregator": {
     "version": "2.5.7",
-    "last_build": null
+    "last_build": "2026-04-16T14:08:03Z"
   }
 }

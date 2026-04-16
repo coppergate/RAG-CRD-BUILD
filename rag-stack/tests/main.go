@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -83,11 +84,10 @@ func main() {
 			upperSecret := strings.ToUpper(secretCode)
 			if strings.Contains(upperAnswer, upperSecret) {
 				// Verify timestamp in answer if possible
-				tsPattern := regexp.MustCompile(`(?i)timestamp: (\d+)`)
+				tsPattern := regexp.MustCompile(`(?i)timestamp\D+(\d+)`)
 				match := tsPattern.FindStringSubmatch(answer)
 				if match != nil {
-					var retrievedTS int64
-					fmt.Sscanf(match[1], "%d", &retrievedTS)
+					retrievedTS, _ := strconv.ParseInt(match[1], 10, 64)
 					diff := time.Now().Unix() - retrievedTS
 					if diff > 60 || diff < -60 {
 						fmt.Printf("FAILURE: Found code but timestamp is stale. Diff: %ds\n", diff)

@@ -176,6 +176,12 @@ function deploy_lgtm_component() {
             --values "$SAFE_TMP_DIR/$name-values.yaml" \
             --wait --timeout 15m \
             --debug
+
+        # Patch gateway service if it's loki or mimir to ensure port 443 maps to 8443 (SSL)
+        if [[ "$name" == "loki" || "$name" == "mimir" ]]; then
+            echo "Patching $name-gateway service to map port 443 to targetPort 8443 (SSL)..."
+            $KUBECTL patch svc -n $NAMESPACE "$name-gateway" --type='json' -p='[{"op": "replace", "path": "/spec/ports/0/targetPort", "value": 8443}]' || true
+        fi
         
         mark_step_done "deploy-$name"
     else

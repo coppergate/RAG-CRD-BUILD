@@ -98,7 +98,7 @@ spec:
         - name: OTEL_USE_TLS
           value: "true"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "https://otel-collector.monitoring.svc.cluster.local:4318/v1/traces"
+          value: "https://otel-collector.monitoring.svc.cluster.local:4317"
         - name: OTEL_EXPORTER_OTLP_CERTIFICATE
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: BUCKET_PORT

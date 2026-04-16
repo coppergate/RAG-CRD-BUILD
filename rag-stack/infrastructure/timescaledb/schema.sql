@@ -136,3 +136,37 @@ $$;
 CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(tag_name);
 CREATE INDEX IF NOT EXISTS idx_code_ingestion_bucket ON code_ingestion(s3_bucket_id);
+
+-- Iteration 7: Long-term Memory Support
+
+-- 1) memory_items (Main memory storage)
+CREATE TABLE IF NOT EXISTS memory_items (
+    memory_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID REFERENCES sessions(session_id) ON DELETE SET NULL,
+    summary TEXT NOT NULL,
+    content TEXT,
+    salience DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+    retention_score DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    decay_state JSONB DEFAULT '{}'::jsonb,
+    status TEXT NOT NULL DEFAULT 'active', -- active, pruned, archived
+    pinning BOOLEAN NOT NULL DEFAULT FALSE,
+    ttl BIGINT, -- TTL in seconds
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 2) memory_links (Provenance and association)
+CREATE TABLE IF NOT EXISTS memory_links (
+    link_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_memory_id UUID REFERENCES memory_items(memory_id) ON DELETE CASCADE,
+    target_memory_id UUID REFERENCES memory_items(memory_id) ON DELETE CASCADE,
+    link_type TEXT NOT NULL, -- sequential, causal, topical
+    strength DOUBLE PRECISION DEFAULT 1.0,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_items_session ON memory_items(session_id);
+CREATE INDEX IF NOT EXISTS idx_memory_items_status ON memory_items(status);
+CREATE INDEX IF NOT EXISTS idx_memory_links_source ON memory_links(source_memory_id);
+CREATE INDEX IF NOT EXISTS idx_memory_links_target ON memory_links(target_memory_id);

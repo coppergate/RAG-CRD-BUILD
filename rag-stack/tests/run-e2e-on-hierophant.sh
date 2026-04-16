@@ -14,7 +14,12 @@ mkdir -p "$OUT_DIR"
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-2.2.1}"
+VERSION_FILE="/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION"
+VERSION="${VERSION:-}"
+if [ -z "$VERSION" ]; then
+    VERSION=$(jq -r '."rag-test-runner".version' "$VERSION_FILE")
+fi
+echo "[INFO] Using rag-test-runner version: ${VERSION}"
 
 echo "[INFO] Preflight: Checking connectivity to hierophant and cluster..."
 # 1. Ping hierophant

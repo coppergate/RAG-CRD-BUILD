@@ -1,0 +1,370 @@
+[INFO] Using rag-test-runner version: 2.5.7
+[INFO] Preflight: Checking connectivity to hierophant and cluster...
+[OK] Connectivity verified.
+[INFO] Logs will be saved to: /tmp/rag-logs/e2e-20260416-092238
+Client Version: v1.35.0
+Kustomize Version: v5.7.1
+[STEP] Refresh tests ConfigMap
+configmap "rag-integration-tests" deleted from rag-system namespace
+configmap/rag-integration-tests created
+[STEP] Apply cleanup job
+job.batch "rag-test-cleanup" deleted from rag-system namespace
+job.batch/rag-test-cleanup created
+[STEP] Wait for cleanup job to complete
+job.batch/rag-test-cleanup condition met
+[STEP] Apply test job
+job.batch "rag-integration-test" deleted from rag-system namespace
+job.batch/rag-integration-test created
+[STEP] Wait for test pod
+pod/rag-integration-test-k6htn condition met
+[INFO] Test pod: rag-integration-test-k6htn
+[STEP] Stream job logs
+Defaulted container "tester" out of: tester, k8tz (init)
+--- Preparing Certificates ---
+Appending internal CA to bundle...
+--- Running Integration Tests ---
+/usr/local/lib/python3.9/site-packages/boto3/compat.py:89: PythonDeprecationWarning: Boto3 will no longer support Python 3.9 starting April 29, 2026. To continue receiving service updates, bug fixes, and security updates please upgrade to Python 3.10 or later. More information can be found here: https://aws.amazon.com/blogs/developer/python-support-policy-updates-for-aws-sdks-and-tools/
+  warnings.warn(warning, PythonDeprecationWarning)
+[2026-04-16T15:22:51.171437] [ENV] Test configuration:
+{
+  "S3_ENDPOINT": "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc",
+  "BUCKET_NAME": "rag-codebase-cfc01905-853a-4b9c-9680-c65799c77947",
+  "QDRANT_HOST": "qdrant",
+  "GATEWAY_URL": "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions",
+  "OTEL_ENABLED": true
+}
+[2026-04-16T15:22:51.171518] [TEST] Testing S3 Operations...
+  - S3_ENDPOINT=https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc BUCKET_NAME=rag-codebase-cfc01905-853a-4b9c-9680-c65799c77947
+  - Uploaded test_file.txt
+  - Verified content
+  - Verified file in listing
+[2026-04-16T15:22:51.555442] [TEST] Testing Qdrant Operations...
+  - QDRANT_HOST=qdrant
+  - Created collection test_collection_4096 (size: 4096)
+  - Upserted test point
+  - Verified search result
+[2026-04-16T15:22:52.917407] [TEST] Testing RAG Retrieval via Gateway...
+  - GATEWAY_URL=https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions
+  - Gateway status code: 200
+  - Gateway responded successfully
+[2026-04-16T15:23:06.802543] [SUCCESS] All core component tests passed!
+--- Running API Health and Functionality Tests ---
+test_01_all_health_standardized (__main__.APIHealthTest)
+Verify all services have standardized health and readiness endpoints. ... ok
+test_02_admin_api_aggregation (__main__.APIHealthTest)
+Verify RAG Admin API can aggregate health from all other services. ... ok
+test_03_db_adapter_api (__main__.APIHealthTest)
+Verify DB Adapter REST API functionality. ... ok
+test_04_qdrant_adapter_api (__main__.APIHealthTest)
+Verify Qdrant Adapter REST API functionality. ... ok
+test_05_object_store_mgr_api (__main__.APIHealthTest)
+Verify Object Store Manager REST API functionality. ... ok
+test_06_memory_controller_api (__main__.APIHealthTest)
+Verify Memory Controller REST API functionality. ... ok
+----------------------------------------------------------------------
+Ran 6 tests in 1.141s
+OK
+[2026-04-16T15:23:07.363088] [INFO] Starting API Health and Functionality Tests...
+[INFO] Testing health of rag-admin-api at https://rag-admin-api.rag-system.svc.cluster.local:443...
+  [OK] rag-admin-api /readyz: {'status': 'ready'}
+  [OK] rag-admin-api /healthz: OK
+[INFO] Testing health of db-adapter at https://db-adapter.rag-system.svc.cluster.local:443...
+  [OK] db-adapter /readyz: {'status': 'ready'}
+  [OK] db-adapter /healthz: OK
+[INFO] Testing health of qdrant-adapter at https://qdrant-adapter.rag-system.svc.cluster.local:443...
+  [OK] qdrant-adapter /readyz: {'status': 'ready'}
+  [OK] qdrant-adapter /healthz: OK
+[INFO] Testing health of object-store-mgr at https://object-store-mgr.rag-system.svc.cluster.local:443...
+  [OK] object-store-mgr /readyz: {'status': 'ready'}
+  [OK] object-store-mgr /healthz: OK
+[INFO] Testing health of memory-controller at https://memory-controller.rag-system.svc.cluster.local:443...
+  [OK] memory-controller /readyz: {'status': 'ready'}
+  [OK] memory-controller /healthz: OK
+[INFO] Testing health of llm-gateway at https://llm-gateway.rag-system.svc.cluster.local:443...
+  [OK] llm-gateway /readyz: {'status': 'ready'}
+  [OK] llm-gateway /healthz: OK
+  [OK] Admin API Health Aggregation keys: ['db-adapter', 'llm-gateway', 'memory-controller', 'object-store-mgr', 'qdrant-adapter', 'rag-ingestion']
+  [OK] DB Adapter stats: {'prompts': 148, 'responses': 140, 'sessions': 124}
+  [OK] Qdrant Adapter collections count: 2
+  [OK] Object Store Mgr buckets count: 1
+  [OK] Memory Controller items count: 0
+[2026-04-16T15:23:08.505050] [SUCCESS] API Health Tests passed.
+--- Running Isolated Ingestion Pipeline Test ---
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+[2026-04-16T15:23:09.846309] --- Starting Isolated Ingestion Test [iso-test-34461dff] ---
+  - Creating tag: iso-test-34461dff
+  - Fetching tag ID for: iso-test-34461dff
+  - Uploading file: iso-file-34461dff.txt with tag ID: 7a3b14cb-3c15-488d-a7be-581338da7227
+  - Triggering ingestion for tag ID: 7a3b14cb-3c15-488d-a7be-581338da7227 (files: iso-file-34461dff.txt)
+  - Fetching tag ID for: iso-test-34461dff
+  - Verifying points in Qdrant for tag_id: 7a3b14cb-3c15-488d-a7be-581338da7227 (dims: 4096)...
+    [WAIT] No points found yet for this tag.
+    [OK] Found 1 points in Qdrant.
+    [SUCCESS] Found code and valid timestamp (diff 11s)
+[2026-04-16T15:23:20.349528] [PASS] Ingestion pipeline isolated verification: SUCCESS
+--- Running Recursive RAG Flow Tests ---
+[2026-04-16T15:23:20.617560] [TEST] Recursive Multi-Model RAG Flow
+  - Connecting to Pulsar at pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+  - Sending request to Ingress topic persistent://rag-pipeline/stage/ingress (ID: 170ff918-883b-43a9-8211-9c9c31b4975b)
+  - Monitoring Status messages (Thinking Trace)...
+    [STATUS] INGRESS_RECEIVED: Initial request received
+    [STATUS] PLANNING_TASK: Decomposing prompt into sub-tasks
+    [STATUS] RETRIEVING_CONTEXT: Executing 1 sub-queries
+    [STATUS] EXECUTING_TASK: Generating response with specialized model
+    [STATUS] COMPLETED: Response generated
+  - Waiting for final response on Results topic...
+    [OK] Received final result: Given that there is no specific context provided i...
+  - Verifying Thinking Trace states:
+    [PASS] State 'INGRESS_RECEIVED' observed.
+    [PASS] State 'PLANNING_TASK' observed.
+    [PASS] State 'RETRIEVING_CONTEXT' observed.
+    [PASS] State 'EXECUTING_TASK' observed.
+    [PASS] Final response received.
+[DONE] Recursive RAG Flow test finished.
+2026-04-16 16:23:33.381 DEBUG [140550988624640] ConsumerImpl:162 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-7acf6f30, 1] ~ConsumerImpl
+2026-04-16 16:23:33.381 DEBUG [140550988624640] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-5a97a457, 0] ~ConsumerImpl
+--- Running Pulsar CRUD Tests ---
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'llm-gateway.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+[2026-04-16T15:23:33.814777] [TEST] LLM Gateway Session Upsert Side-Effect
+  - Using new session ID: 15deb726-a4c2-4aa9-b86e-7a2a1b618e1e
+  - Calling LLM Gateway at https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions
+  - Gateway status: 200
+  - Verifying session 15deb726-a4c2-4aa9-b86e-7a2a1b618e1e exists in TimescaleDB... [OK] Last Active: 2026-04-16 16:23:33.856845+01:00
+[SUCCESS] Gateway Session Upsert Verified!
+[2026-04-16T15:23:38.516409] [TEST] Pulsar & Database CRUD Interaction
+  - Connecting to Pulsar at pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+  - Connecting to TimescaleDB with conn string (redacted host):
+    postgres://app:VPbdmQ0HcczUUOb819opOpRWcSviKbyxTj1ng1WS4DCWSTH6ktVRXky7f7KsScUv@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=require
+  - Creating test session: e85ec8ea-1282-419d-854a-6d284a36c5e5
+  - Sending prompt to Pulsar topic persistent://rag-pipeline/data/chat-prompts (ID: d65147cf-6b0d-4184-96e8-be0ed1e4d470)
+  - Waiting for DB Adapter to insert prompt into TimescaleDB.... [OK]
+  - Waiting for RAG Worker and DB Adapter to process response...
+  - Sending task to Pulsar topic persistent://rag-pipeline/stage/ingress
+  - Waiting for response on Pulsar topic persistent://rag-pipeline/stage/results...
+    [OK] Received response from Pulsar: I'm sorry for the confusion, but it seems there is...
+  - Verifying response in TimescaleDB 'responses' table.... [OK] Response found.
+  - Sending delete session op via Pulsar for e85ec8ea-1282-419d-854a-6d284a36c5e5...
+  - Verifying deletion in DB.... [OK]
+[SUCCESS] Pulsar <-> DB CRUD Cycle Verified!
+[2026-04-16T15:23:52.156748] [TEST] Pulsar & Qdrant Search Interaction
+  - Sending Qdrant search op to Pulsar topic persistent://rag-pipeline/operations/qdrant-ops (ID: aa16b671-5f1e-46a7-b9ed-841605140403)
+  - Waiting for Qdrant result on Pulsar topic...
+    [OK] Received Qdrant result: {'action': 'search', 'collection': 'vectors', 'id': 'aa16b671-5f1e-46a7-b9ed-841605140403', 'result': ["Project Alpha uses the 'Zeltron-9' protocol for inter-pod communication. The primary maintainer is 'Dr. Aris Thorne'.", 'This is a secret code: BLUE-ORCHID-3e3d073b. Generation timestamp: 1776352933. This file is for RAG testing.', 'The isolated test secret code is SECRET-CODE-91907100. Generation timestamp: 1776352630. Verify this in Qdrant.', 'The isolated test secret code is SECRET-CODE-34461dff. Generation timestamp: 1776352989. Verify this in Qdrant.', 'This is a secret code: BLUE-ORCHID-c13cb945. Generation timestamp: 1776352762. This file is for RAG testing.'], 'timestamp': '2026-04-16T16:23:52+01:00'}
+[SUCCESS] Pulsar <-> Qdrant Search Flow Verified!
+2026-04-16 16:23:52.669 DEBUG [140452403217152] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-crud-sub-03cd032f, 0] ~ConsumerImpl
+2026-04-16 16:23:52.669 DEBUG [140452403217152] ConsumerImpl:162 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-a4c13ba0, 0] ~ConsumerImpl
+--- Running Aggregator Flow Tests ---
+[2026-04-16T15:23:52.835699] [TEST] Prompt Aggregator Flow
+  - Connecting to Pulsar at pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+  - Request ID: 488e2013-08d4-47c6-a96c-4debca880662
+  - Session ID: 6aa6f6c7-8d0b-49b7-8ed7-8f710889dbbd
+  - Session Topic: persistent://rag-pipeline/sessions/488e2013-08d4-47c6-a96c-4debca880662
+  - Sending 5 chunks to persistent://rag-pipeline/sessions/488e2013-08d4-47c6-a96c-4debca880662... [OK]
+  - Triggering aggregation via persistent://rag-pipeline/stage/completion
+  - Waiting for aggregated result on persistent://rag-pipeline/stage/results...
+    [OK] Received result for 488e2013-08d4-47c6-a96c-4debca880662
+    [SUCCESS] Aggregation verified correctly!
+[2026-04-16T15:23:53.580524] [TEST] Aggregator test finished.
+2026-04-16 16:23:53.589 DEBUG [139750861988608] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-aggregator-sub-f867741e, 0] ~ConsumerImpl
+--- Running Aggregator Failure Tests ---
+[2026-04-16T15:23:53.726100] [TEST] Embedded JSON Test
+  - Request ID: ff527e66-55b3-4ece-8159-6dd669b65497
+  - Session Topic: persistent://rag-pipeline/sessions/ff527e66-55b3-4ece-8159-6dd669b65497
+  - Sending 4 chunks to persistent://rag-pipeline/sessions/ff527e66-55b3-4ece-8159-6dd669b65497... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[2026-04-16T15:23:54.263214] [TEST] Special Characters Test
+  - Request ID: e3b3a5d3-6530-41c5-b9cc-e6920c423119
+  - Session Topic: persistent://rag-pipeline/sessions/e3b3a5d3-6530-41c5-b9cc-e6920c423119
+  - Sending 4 chunks to persistent://rag-pipeline/sessions/e3b3a5d3-6530-41c5-b9cc-e6920c423119... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[2026-04-16T15:23:54.769335] [TEST] Quotes and Backslashes Test
+  - Request ID: e196d1d8-7c8f-452f-90d7-775db12abf3a
+  - Session Topic: persistent://rag-pipeline/sessions/e196d1d8-7c8f-452f-90d7-775db12abf3a
+  - Sending 2 chunks to persistent://rag-pipeline/sessions/e196d1d8-7c8f-452f-90d7-775db12abf3a... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[2026-04-16T15:23:55.393022] [TEST] UTF-8 Multi-byte Characters Test
+  - Request ID: 62f82b1e-6b47-414f-a325-ecccf6d1f81e
+  - Session Topic: persistent://rag-pipeline/sessions/62f82b1e-6b47-414f-a325-ecccf6d1f81e
+  - Sending 3 chunks to persistent://rag-pipeline/sessions/62f82b1e-6b47-414f-a325-ecccf6d1f81e... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[2026-04-16T15:23:56.019581] [TEST] Null Byte Test
+  - Request ID: a0c1607e-9a40-4aa4-9c80-ab030f8cabd0
+  - Session Topic: persistent://rag-pipeline/sessions/a0c1607e-9a40-4aa4-9c80-ab030f8cabd0
+  - Sending 2 chunks to persistent://rag-pipeline/sessions/a0c1607e-9a40-4aa4-9c80-ab030f8cabd0... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[ALL TESTS PASSED]
+2026-04-16 16:23:56.614 DEBUG [140040706818816] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-embedded-json-test-f76c8f8e, 0] ~ConsumerImpl
+2026-04-16 16:23:56.616 DEBUG [140040706818816] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-special-characters-test-67aff183, 0] ~ConsumerImpl
+2026-04-16 16:23:56.617 DEBUG [140040706818816] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-quotes-and-backslashes-test-a98a88b7, 0] ~ConsumerImpl
+2026-04-16 16:23:56.618 DEBUG [140040706818816] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-utf-8-multi-byte-characters-test-81544453, 0] ~ConsumerImpl
+2026-04-16 16:23:56.619 DEBUG [140040706818816] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-null-byte-test-e21424b0, 0] ~ConsumerImpl
+--- Seeding Qdrant Context ---
+[2026-04-16T15:23:57.929265] [SEED] Connecting to Qdrant at qdrant
+[SEED] Ensuring collection 'vectors-4096' (size: 4096)...
+  - Collection vectors-4096 already exists (race condition), continuing.
+  - Embedding chunk 1001 using llama3.1:latest...
+  - Embedding chunk 1002 using llama3.1:latest...
+  - Upserting 2 points...
+[2026-04-16T15:23:58.866138] [SEED] Done.
+--- Running Context Verification (Query) ---
+[2026-04-16T15:24:00.368337] [TEST] Running Context Verification Queries (Heat 0)...
+  - Query: What protocol does Project Alpha use?
+    - Pass: True
+  - Query: Who is the primary maintainer of Project Alpha?
+    - Pass: True
+  - Query: What is the secret passphrase for the beta portal?
+    - Pass: True
+[SUMMARY] Context verification: SUCCESS
+--- Running Sad Path Tests ---
+[2026-04-16T15:24:17.401130] [TEST] Sad Path: LLM Gateway
+  - Testing 405 Method Not Allowed (GET instead of POST) on https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions ...
+    [PASS] Received 405 as expected.
+  - Testing 400 Bad Request (Malformed JSON) on https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions ...
+    [PASS] Received 400 as expected.
+  - Testing 400 Bad Request (Empty JSON object)...
+    [INFO] Result for empty JSON: 200
+==================================================
+[2026-04-16T15:24:32.649933] [TEST] Sad Path: Worker Invalid Payload
+  - Sending malformed payload to persistent://rag-pipeline/stage/ingress...
+    [DONE] Malformed payload sent to worker.
+[STEP] Run Go E2E driver via Podman
+[2026-04-16T15:24:47Z] --- Starting E2E Test with tag: test-tag-1776353087 ---
+Using vector_size: 4096
+[STEP 1] Creating tag...
+[STEP 2] Getting tag ID...
+DEBUG: HTML body:
+        <!DOCTYPE html>
+        <html>
+        <head>
+                <title>RAG Control Center</title>
+                <style>
+                        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #121212; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
+                        .sidebar { width: 240px; background: #1e1e1e; border-right: 1px solid #333; padding: 20px; display: flex; flex-direction: column; }
+                        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px; }
+                        .nav-item { padding: 12px; margin-bottom: 8px; border-radius: 6px; cursor: pointer; color: #bbb; text-decoration: none; }
+                        .nav-item:hover, .nav-item.active { background: #333; color: white; }
+                        .section { background: #1e1e1e; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+                        .btn { padding: 10px 16px; border-radius: 4px; border: none; cursor: pointer; background: #2196F3; color: white; }
+                        .btn-success { background: #4CAF50; }
+                        .btn-danger { background: #f44336; }
+                        input[type="text"], select, textarea { background: #2d2d2d; border: 1px solid #444; color: white; padding: 10px; border-radius: 4px; }
+                        #chat-history { flex: 1; overflow-y: auto; padding: 20px; background: #181818; border-radius: 8px; border: 1px solid #333; margin-bottom: 20px; display: flex; flex-direction: column; }
+                        .msg { margin-bottom: 15px; padding: 12px; border-radius: 8px; max-width: 80%; }
+                        .msg-user { align-self: flex-end; background: #0d47a1; }
+                        .msg-assistant { align-self: flex-start; background: #333; }
+                        .query-box { background: #1e1e1e; padding: 20px; border: 1px solid #333; border-radius: 8px; }
+                        .multi-select { height: 100px; overflow-y: auto; border: 1px solid #444; padding: 5px; background: #2d2d2d; }
+                        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+                        .modal-content { background: #1e1e1e; margin: 10% auto; padding: 20px; border: 1px solid #333; width: 60%; border-radius: 8px; }
+                </style>
+        </head>
+        <body>
+                <div class="sidebar">
+                        <h2 style="color:white; margin-top:0;">RAG Stack</h2>
+                        <a href="/" class="nav-item active">📥 Data Ingestion</a>
+                        <a href="/chat" class="nav-item ">💬 Interactive Chat</a>
+                        <div style="flex:1"></div>
+                        <div style="font-size: 0.8em; color: #666;">v4.0.0-interactive</div>
+                </div>
+                <div class="main-content">
+
+                                <h1>Data Ingestion</h1>
+                                <div class="section">
+                                        <h3>Upload Source Code</h3>
+                                        <input type="file" id="fileInput" multiple style="display:none" onchange="handleSelection()">
+                                        <button onclick="document.getElementById('fileInput').click()" class="btn btn-success">Choose Files...</button>
+                                        <div id="fileList" style="margin-top:10px;"></div>
+                                        <button onclick="uploadFiles()" class="btn" style="margin-top:10px; width:100%">Upload to S3</button>
+                                </div>
+                                <div class="section">
+                                        <h3>Ingest & Tag</h3>
+                                        <form action="/trigger-ingest" method="post">
+                                                <div class="multi-select">
+
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="7a3b14cb-3c15-488d-a7be-581338da7227"> iso-test-34461dff</label>
+
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="9112ab3f-8825-4eb6-85ad-0f07cf2590cc"> iso-test-4c8fc3e0</label>
+
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="b892ed9b-b447-488f-9492-7404beaeefa1"> iso-test-91907100</label>
+
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="c13cb945-0f59-4561-b946-e30930ed7620"> test-tag-1776352761</label>
+
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="3e3d073b-b110-4bb9-845a-8444237dd1a1"> test-tag-1776352932</label>
+
+                                                                <label style="display:block;"><input type="checkbox" name="tags" value="51df3d8d-9486-481c-9458-b300c6934cfc"> test-tag-1776353087</label>
+
+                                                </div>
+                                                <button type="submit" class="btn btn-success" style="margin-top:10px;">Start Ingestion</button>
+                                        </form>
+                                        <hr style="border:0; border-top:1px solid #333; margin:20px 0;">
+                                        <form action="/create-tag" method="post">
+                                                <input type="text" name="tag_name" placeholder="New tag name...">
+                                                <button type="submit" class="btn">Create Tag</button>
+                                        </form>
+                                </div>
+
+                </div>
+                <div id="sessionModal" class="modal"><div class="modal-content"><h3>Recent Sessions</h3><div id="sessionList"></div><button class="btn" onclick="document.getElementById('sessionModal').style.display='none'">Close</button></div></div>
+                <script>
+                let currentSessionID = "";
+                async function ask() {
+                        const query = document.getElementById('query').value; if (!query) return;
+                        const tags = Array.from(document.querySelectorAll('.chat-tag:checked')).map(cb => cb.value);
+                        const payload = { query: query, session_id: currentSessionID, session_name: document.getElementById('sessionName').value, session_desc: document.getElementById('sessionDesc').value, tags: tags };
+                        const res = await fetch('/ask', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                        const data = await res.json(); if (data.session_id) currentSessionID = data.session_id;
+                        document.getElementById('query').value = ""; loadHistory();
+                }
+                async function loadHistory() {
+                        if (!currentSessionID) return;
+                        const res = await fetch("/history?session_id=" + currentSessionID + "&keyword=" + document.getElementById('keyword').value);
+                        const msgs = await res.json();
+                        document.getElementById('chat-history').innerHTML = msgs.map(m => '<div class="msg msg-'+m.Role+'"><strong>'+m.Role+'</strong>: '+m.Content+'</div>').join('');
+                }
+                async function showSessions() {
+                        const res = await fetch("/sessions"); const sessions = await res.json();
+                        document.getElementById('sessionList').innerHTML = sessions.map(s => '<div style="padding:10px; border-bottom:1px solid #333; cursor:pointer;" onclick="selectSession(\''+s.ID+'\', \''+s.Name+'\', \''+s.Description+'\')">'+s.Name+' - '+s.Description+'</div>').join('');
+                        document.getElementById('sessionModal').style.display = 'block';
+                }
+                function selectSession(id, name, desc) {
+                        currentSessionID = id; document.getElementById('sessionName').value = name; document.getElementById('sessionDesc').value = desc;
+                        document.getElementById('sessionModal').style.display = 'none'; loadHistory();
+                }
+                function handleSelection() { document.getElementById('fileList').innerHTML = Array.from(document.getElementById('fileInput').files).map(f => '<div>'+f.name+'</div>').join(''); }
+                async function uploadFiles() {
+                        const formData = new FormData(); Array.from(document.getElementById('fileInput').files).forEach(f => formData.append("file", f));
+                        await fetch("/upload", {method: 'POST', body: formData}); alert("Uploaded!"); location.reload();
+                }
+                </script>
+        </body>
+        </html>
+Tag ID: 51df3d8d-9486-481c-9458-b300c6934cfc
+[STEP 3] Uploading test file...
+[STEP 4] Triggering ingestion...
+[STEP 5&6] Waiting for ingestion and verifying via RAG Query (up to 5m)...
+SUCCESS: Found secret code BLUE-ORCHID-51df3d8d and valid timestamp (diff: 7s) in answer after 7.201777941s!
+RAG Answer: The secret code is BLUE-ORCHID-51df3d8d, and the generation timestamp of this code is 1776353088.
+[STEP 7] Cleaning up data by tag...
+[STEP 8] Final Verification (Checking if file is gone from S3)...
+SUCCESS: Test file removed from S3.
+[2026-04-16T15:25:00Z] --- E2E Test Completed ---
+[DONE] E2E run complete. Logs saved to /tmp/rag-logs/e2e-20260416-092238

@@ -6,7 +6,12 @@ CODE_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 TEST_DIR="${CODE_DIR}/tests"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-1.5.11}"
+VERSION_FILE="${CODE_DIR}/../CURRENT_VERSION"
+VERSION="${VERSION:-}"
+if [ -z "$VERSION" ]; then
+    VERSION=$(jq -r '."rag-test-runner".version' "$VERSION_FILE")
+fi
+echo "Using rag-test-runner version: ${VERSION}"
 
 echo "--- Preparing RAG Integration Tests ---"
 

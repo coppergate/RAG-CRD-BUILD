@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS memory_items (
     status TEXT NOT NULL DEFAULT 'active', -- active, pruned, archived
     pinning BOOLEAN NOT NULL DEFAULT FALSE,
     ttl BIGINT, -- TTL in seconds
+    metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
