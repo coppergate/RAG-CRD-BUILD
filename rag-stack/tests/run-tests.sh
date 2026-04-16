@@ -18,6 +18,7 @@ $KUBECTL create configmap rag-integration-tests -n $NAMESPACE \
     --from-file="${TEST_DIR}/context_verification.py" \
     --from-file="${TEST_DIR}/recursive_rag_test.py" \
     --from-file="${TEST_DIR}/pulsar_crud_test.py" \
+    --from-file="${TEST_DIR}/aggregator_test.py" \
     --from-file="${TEST_DIR}/seed_qdrant_context.py" \
     --from-file="${TEST_DIR}/sad_path_test.py"
 

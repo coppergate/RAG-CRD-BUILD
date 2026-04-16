@@ -55,6 +55,8 @@ spec:
             python /tests/recursive_rag_test.py
             echo "--- Running Pulsar CRUD Tests ---"
             python /tests/pulsar_crud_test.py
+            echo "--- Running Aggregator Flow Tests ---"
+            python /tests/aggregator_test.py
             echo "--- Seeding Qdrant Context ---"
             python /tests/seed_qdrant_context.py
             echo "--- Running Context Verification (Query) ---"
@@ -103,6 +105,8 @@ spec:
           value: "persistent://rag-pipeline/data/chat-prompts"
         - name: PULSAR_RESPONSE_TOPIC
           value: "persistent://rag-pipeline/stage/results"
+        - name: PULSAR_COMPLETION_TOPIC
+          value: "persistent://rag-pipeline/stage/completion"
         - name: PULSAR_INGRESS_TOPIC
           value: "persistent://rag-pipeline/stage/ingress"
         - name: PULSAR_RESULTS_TOPIC

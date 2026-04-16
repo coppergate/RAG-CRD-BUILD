@@ -441,4 +441,5 @@ Verifies multiple LLM model combinations (e.g., Llama + Granite).
 ### 7.3 Unit and Integration Tests
 - **Unit Tests**: `go test ./...` in the respective service directory.
 - **Integration Tests**: `cd rag-stack/tests && VERSION=x.y.z bash ./run-tests.sh` (on hierophant).
+  - Includes `aggregator_test.py` to verify chunk aggregation on session-specific Pulsar topics.
 - **Manual Verification**: Use `kubectl exec` and `curl` to check `/healthz` and `/readyz` endpoints.
