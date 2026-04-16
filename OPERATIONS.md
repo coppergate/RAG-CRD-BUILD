@@ -361,7 +361,8 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
   - Suppressed internal Pulsar INFO logs (e.g., `ConnectionPool`, `ClientConnection`) in Python tests by configuring a dedicated logger set to `ERROR` level.
   - Standardized all test output (Go E2E and Python Integration) with UTC timestamps for clear start and end markers.
   - Minimized intermediate progress messages to focus on critical steps and errors.
-- **Secret Code Validation**: Updated E2E and isolation tests to include a Unix timestamp in the 'secret code' and verify that retrieved context is within a 60-second window of the generation.
+- **Secret Code Validation**: Updated E2E and isolation tests to include a Unix timestamp in the 'secret code' and verify that retrieved context is within a 60-second window of the generation. Tests will now explicitly FAIL if the timestamp is missing or stale.
+- **OpenTelemetry gRPC Migration**: Services now use OTLP gRPC exporters on port 4317 instead of HTTP on 4318 for better performance and reliability.
 - **Logging Improvements**: 
   - Reduced verbosity in Pulsar CRUD and Aggregator tests.
   - Test scripts (`run-tests.sh`, `run-e2e-on-hierophant.sh`) no longer wipe the terminal.

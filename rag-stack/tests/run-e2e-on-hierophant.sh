@@ -60,6 +60,8 @@ echo "[STEP] Refresh tests ConfigMap" | tee -a "${OUT_DIR}/job.log"
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/sad_path_test.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/ingestion_isolation.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/cleanup_test_data.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/aggregator_test.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/aggregator_failure_test.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/api_health_test.py | tee -a "${OUT_DIR}/job.log"
 
 # 2) Run Cleanup Job

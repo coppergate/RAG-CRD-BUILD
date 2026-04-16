@@ -9,14 +9,15 @@ import (
 	"app-builds/common/tlsutil"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"google.golang.org/grpc/credentials"
 )
 
 func InitTracer(serviceName string) (func(context.Context) error, error) {
@@ -24,36 +25,36 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	if endpoint == "" {
-		endpoint = "otel-collector.monitoring.svc.cluster.local:4318"
+		endpoint = "otel-collector.monitoring.svc.cluster.local:4317"
 	}
 
 	useTLS := os.Getenv("OTEL_USE_TLS") == "true"
 
-	var traceOpts []otlptracehttp.Option
-	traceOpts = append(traceOpts, otlptracehttp.WithEndpoint(endpoint))
+	var traceOpts []otlptracegrpc.Option
+	traceOpts = append(traceOpts, otlptracegrpc.WithEndpoint(endpoint))
 
-	var metricOpts []otlpmetrichttp.Option
-	metricOpts = append(metricOpts, otlpmetrichttp.WithEndpoint(endpoint))
+	var metricOpts []otlpmetricgrpc.Option
+	metricOpts = append(metricOpts, otlpmetricgrpc.WithEndpoint(endpoint))
 
 	if !useTLS {
-		traceOpts = append(traceOpts, otlptracehttp.WithInsecure())
-		metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
+		traceOpts = append(traceOpts, otlptracegrpc.WithInsecure())
+		metricOpts = append(metricOpts, otlpmetricgrpc.WithInsecure())
 	} else {
 		tlsConfig, err := tlsutil.NewTLSConfig()
 		if err != nil {
 			return nil, fmt.Errorf("OTEL TLS initialization failed for %s: %w", serviceName, err)
 		}
-		log.Printf("OTEL: TLS enabled for %s using CA from SSL_CERT_FILE", serviceName)
-		traceOpts = append(traceOpts, otlptracehttp.WithTLSClientConfig(tlsConfig))
-		metricOpts = append(metricOpts, otlpmetrichttp.WithTLSClientConfig(tlsConfig))
+		log.Printf("OTEL (gRPC): TLS enabled for %s using CA from SSL_CERT_FILE", serviceName)
+		traceOpts = append(traceOpts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(tlsConfig)))
+		metricOpts = append(metricOpts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(tlsConfig)))
 	}
 
-	traceExp, err := otlptracehttp.New(ctx, traceOpts...)
+	traceExp, err := otlptracegrpc.New(ctx, traceOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
 	}
 
-	metricExp, err := otlpmetrichttp.New(ctx, metricOpts...)
+	metricExp, err := otlpmetricgrpc.New(ctx, metricOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
 	}

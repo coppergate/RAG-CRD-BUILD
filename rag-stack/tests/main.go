@@ -54,7 +54,8 @@ func main() {
 	fmt.Println("[STEP 3] Uploading test file...")
 	fileName := fmt.Sprintf("e2e-test-file-%d.txt", time.Now().Unix())
 	timestamp := time.Now().Unix()
-	fileContent := fmt.Sprintf("This is a secret code: BLUE-ORCHID-2026. Generation timestamp: %d. This file is for RAG testing.", timestamp)
+	secretCode := fmt.Sprintf("BLUE-ORCHID-%s", tagID[:8])
+	fileContent := fmt.Sprintf("This is a secret code: %s. Generation timestamp: %d. This file is for RAG testing.", secretCode, timestamp)
 	if err := uploadFile(fileName, fileContent); err != nil {
 		logFatal("Failed to upload file: %v", err)
 	}
@@ -73,16 +74,16 @@ func main() {
 	var lastAnswer string
 	for time.Since(start) < 5*time.Minute {
 		// Use a very specific query to ensure we are testing the isolation and the file we just uploaded.
-		query := fmt.Sprintf("What is the secret code mentioned in the file %s? Answer with just the code.", fileName)
+		query := fmt.Sprintf("What is the secret code and its generation timestamp mentioned in the file %s? Provide the exact code and timestamp.", fileName)
 		answer, askErr := askRAG(query, []string{tagID})
 		if askErr == nil {
 			lastAnswer = answer
 			// Tighten verification: should contain the code and be relatively short or focused
 			upperAnswer := strings.ToUpper(answer)
-			if strings.Contains(upperAnswer, "BLUE-ORCHID-2026") {
-				// Verify timestamp in answer if possible, or just ensure answer is recent context
-				// We expect the LLM to include the timestamp we provided in the content.
-				tsPattern := regexp.MustCompile(`timestamp: (\d+)`)
+			upperSecret := strings.ToUpper(secretCode)
+			if strings.Contains(upperAnswer, upperSecret) {
+				// Verify timestamp in answer if possible
+				tsPattern := regexp.MustCompile(`(?i)timestamp: (\d+)`)
 				match := tsPattern.FindStringSubmatch(answer)
 				if match != nil {
 					var retrievedTS int64
@@ -90,14 +91,12 @@ func main() {
 					diff := time.Now().Unix() - retrievedTS
 					if diff > 60 || diff < -60 {
 						fmt.Printf("FAILURE: Found code but timestamp is stale. Diff: %ds\n", diff)
-						continue
+						logFatal("Secret code verification failed: timestamp stale (diff: %ds)", diff)
 					}
-					fmt.Printf("SUCCESS: Found secret code and valid timestamp (diff: %ds) in answer after %v!\n", diff, time.Since(start))
+					fmt.Printf("SUCCESS: Found secret code %s and valid timestamp (diff: %ds) in answer after %v!\n", secretCode, diff, time.Since(start))
 				} else {
-					fmt.Printf("WARNING: Found code but no timestamp in answer. Answer: %q\n", answer)
-					// We'll still count this as success if the code is correct, but the user wanted timestamp enforcement.
-					// Actually, let's enforce it if we can.
-					fmt.Printf("SUCCESS: Found secret code in answer after %v!\n", time.Since(start))
+					fmt.Printf("FAILURE: Found code %s but NO timestamp in answer. Answer: %q\n", secretCode, answer)
+					logFatal("Secret code verification failed: missing timestamp in answer")
 				}
 				
 				fmt.Printf("RAG Answer: %s\n", answer)

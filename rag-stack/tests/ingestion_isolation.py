@@ -90,7 +90,8 @@ def verify_in_qdrant(tag_name, expected_text, vector_size, expected_timestamp=No
                                 print(f"    [SUCCESS] Found code and valid timestamp (diff {diff}s)")
                                 return True
                             else:
-                                print(f"    [WARN] Found secret code but no timestamp in payload.")
+                                print(f"    [FAIL] Found secret code but NO timestamp in payload.")
+                                return False
                         
                         print(f"    [SUCCESS] Found expected content: '{expected_text}'")
                         return True
