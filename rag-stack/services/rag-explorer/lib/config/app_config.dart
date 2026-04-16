@@ -21,7 +21,7 @@ abstract class AppConfig with _$AppConfig {
     @Default(['llama3.1:latest', 'granite3.1-dense:8b']) List<String> availableModels,
     @Default(true) bool memoryExplorerEnabled,
     @Default(true) bool modelComparisonEnabled,
-    @Default(60) int promptTimeoutSeconds,
+    @Default(120) int promptTimeoutSeconds,
   }) = _AppConfig;
 
   factory AppConfig.fromJson(Map<String, dynamic> json) => _$AppConfigFromJson(json);

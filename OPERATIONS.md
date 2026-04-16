@@ -376,6 +376,7 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 
 - **Internal API TLS**: Switched `rag-admin-api` to use plain HTTP (port 8080) for internal communication with Traefik to resolve certificate verification issues (`bad certificate` error) when using mkcert-signed certificates.
 - **Node Affinity**: Ensure all non-inference pods use `nodeSelector: role: storage-node` to keep inference nodes available for GPU workloads.
+- **UI Timeout Fix (v2.5.0)**: Resolved `TimeoutException` in `rag-explorer` by explicitly canceling stream subscriptions upon receiving the `isLast` flag and suppressing idle timeouts in the `onError` handler. Increased default timeout to 120s.
 
 ### 5.1 Service Configuration (Externalized Values)
 - **RAG Ingestion**: `QDRANT_COLLECTION`, `INGEST_BATCH_SIZE`, `CHUNK_SIZE`, `CHUNK_OVERLAP`.

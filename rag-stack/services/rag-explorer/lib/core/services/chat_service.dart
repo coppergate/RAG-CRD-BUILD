@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:rag_explorer/config/app_config.dart';
@@ -133,7 +134,14 @@ class ChatService {
       channel.sink.add(jsonEncode(request));
 
       return channel.stream
-          .timeout(Duration(seconds: _config.promptTimeoutSeconds))
+          .timeout(
+            Duration(seconds: _config.promptTimeoutSeconds),
+            onTimeout: (sink) {
+              _logger.warn('Stream timed out after ${_config.promptTimeoutSeconds} seconds of inactivity');
+              sink.addError(TimeoutException('No stream event received for ${_config.promptTimeoutSeconds}s. The backend may be processing or the connection is idle.', Duration(seconds: _config.promptTimeoutSeconds)));
+              sink.close();
+            },
+          )
           .map((event) {
             _logger.debug('Received chunk: $event');
             final data = jsonDecode(event);

@@ -838,6 +838,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           if (chunk.isLast) {
             _isStreaming = false;
             logger.info('Received last chunk from LLM via isLast flag');
+            _chatSubscription?.cancel();
+            _loadSessions();
           }
         });
       },
@@ -851,9 +853,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       onError: (err) {
         logger.error('Chat stream encountered an error: $err');
         
-        // Suppress timeout error if not in conversation
         final isTimeout = err.toString().contains('TimeoutException');
-        if (isTimeout && !_inConversation) {
+        
+        // Suppress timeout error if we think we are already done or not in conversation
+        if (isTimeout && (!_isStreaming || !_inConversation)) {
           logger.warn('Suppressing idle timeout error');
           setState(() {
             _isStreaming = false;
@@ -867,6 +870,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
         setState(() {
           _isStreaming = false;
+          // Only add error message if it's not a timeout that happened after we started receiving data
+          // but we still want to show real errors.
           _messages.add(ResponseMessage(
             content: 'Error: $err',
             role: 'assistant',
