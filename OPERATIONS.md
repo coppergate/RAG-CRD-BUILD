@@ -370,8 +370,12 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 - **Failure Scanning**: `run-tests.sh` now performs a comprehensive scan of the logs for errors, failures, and monitoring issues (e.g., OTEL 400 errors) and provides a summary.
 - **Node Affinity**: Test jobs now use `nodeSelector: role: storage-node` to ensure they run on worker nodes.
 - **API Paths**: Corrected several API paths in `api_health_test.py` to match the actual service implementations.
+- **Database Schema Fix**: Added missing `metadata` column (JSONB) to `memory_items` table in `schema.sql` and migration files to ensure consistency with Ent ORM models.
 
 ## 5. RAG Stack Architecture & Services
+
+- **Internal API TLS**: Switched `rag-admin-api` to use plain HTTP (port 8080) for internal communication with Traefik to resolve certificate verification issues (`bad certificate` error) when using mkcert-signed certificates.
+- **Node Affinity**: Ensure all non-inference pods use `nodeSelector: role: storage-node` to keep inference nodes available for GPU workloads.
 
 ### 5.1 Service Configuration (Externalized Values)
 - **RAG Ingestion**: `QDRANT_COLLECTION`, `INGEST_BATCH_SIZE`, `CHUNK_SIZE`, `CHUNK_OVERLAP`.
