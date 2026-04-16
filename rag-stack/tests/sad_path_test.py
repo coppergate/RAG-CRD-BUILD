@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import requests
+import logging
 from datetime import datetime
 from pulsar import Client
 
@@ -57,12 +58,16 @@ def test_sad_path_gateway():
         print(f"    [ERROR] Connection failed: {e}")
 
 def test_sad_path_worker_invalid_payload():
+    # Configure Pulsar logger to ERROR only
+    pulsar_logger = logging.getLogger('pulsar')
+    pulsar_logger.setLevel(logging.ERROR)
+    
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Sad Path: Worker Invalid Payload")
     INGRESS_TOPIC = "persistent://rag-pipeline/stage/ingress"
     
     try:
         # Support TLS for Pulsar if pulsar+ssl is used
-        client_args = {}
+        client_args = {"logger": pulsar_logger}
         ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
         if PULSAR_URL.startswith("pulsar+ssl"):
             client_args["tls_trust_certs_file_path"] = ca_bundle

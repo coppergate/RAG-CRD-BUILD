@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import sys
+import logging
 from datetime import datetime
 from pulsar import Client, MessageId, Producer, Consumer
 
@@ -12,10 +13,14 @@ COMPLETION_TOPIC = os.getenv("PULSAR_COMPLETION_TOPIC", "persistent://rag-pipeli
 RESULTS_TOPIC = os.getenv("PULSAR_RESULTS_TOPIC", "persistent://rag-pipeline/stage/results")
 
 def run_aggregator_test(test_name, chunks):
+    # Configure Pulsar logger to ERROR only
+    pulsar_logger = logging.getLogger('pulsar')
+    pulsar_logger.setLevel(logging.ERROR)
+    
     print(f"[{datetime.utcnow().isoformat()}] [TEST] {test_name}")
     
     # 1. Initialize Pulsar Client
-    client_args = {}
+    client_args = {"logger": pulsar_logger}
     ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
     if PULSAR_URL.startswith("pulsar+ssl"):
         client_args["tls_trust_certs_file_path"] = ca_bundle
@@ -38,7 +43,7 @@ def run_aggregator_test(test_name, chunks):
         consumer = client.subscribe(RESULTS_TOPIC, sub_name)
         
         # 3. Send Chunks to Session Topic
-        print(f"  - Sending {len(chunks)} chunks...")
+        print(f"  - Sending {len(chunks)} chunks to {session_topic}...", end="", flush=True)
         
         for i, text in enumerate(chunks):
             chunk_payload = {
@@ -52,10 +57,8 @@ def run_aggregator_test(test_name, chunks):
                 "in_conversation": True
             }
             session_producer.send(json.dumps(chunk_payload).encode('utf-8'))
-            
-            # Use format() to avoid backslashes in f-string on older Python versions
-            display_text = text.replace('\n', '\\n').replace('\r', '\\r')[:50]
-            print("    [OK] Chunk {} sent: '{}...'".format(i, display_text))
+
+        print(" [OK]")
 
         # 4. Trigger Aggregation
         completion_payload = {

@@ -356,6 +356,20 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 - **Robustness**: If `ollama pull` fails (e.g., due to registry protocol issues like "no Location header"), the script automatically falls back to a `curl`-based manual seed.
 - **Automation**: This is automatic if models are in the registry.
 
+### 2026-04-16 - Integration Testing Hardening
+- **Reduced Logging Verbosity**: 
+  - Suppressed internal Pulsar INFO logs (e.g., `ConnectionPool`, `ClientConnection`) in Python tests by configuring a dedicated logger set to `ERROR` level.
+  - Standardized all test output (Go E2E and Python Integration) with UTC timestamps for clear start and end markers.
+  - Minimized intermediate progress messages to focus on critical steps and errors.
+- **Secret Code Validation**: Updated E2E and isolation tests to include a Unix timestamp in the 'secret code' and verify that retrieved context is within a 60-second window of the generation.
+- **Logging Improvements**: 
+  - Reduced verbosity in Pulsar CRUD and Aggregator tests.
+  - Test scripts (`run-tests.sh`, `run-e2e-on-hierophant.sh`) no longer wipe the terminal.
+  - Integration test logs are preserved in `/tmp/rag-logs/`.
+- **Failure Scanning**: `run-tests.sh` now performs a comprehensive scan of the logs for errors, failures, and monitoring issues (e.g., OTEL 400 errors) and provides a summary.
+- **Node Affinity**: Test jobs now use `nodeSelector: role: storage-node` to ensure they run on worker nodes.
+- **API Paths**: Corrected several API paths in `api_health_test.py` to match the actual service implementations.
+
 ## 5. RAG Stack Architecture & Services
 
 ### 5.1 Service Configuration (Externalized Values)

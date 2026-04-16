@@ -141,4 +141,6 @@ spec:
           - key: ca.crt
             path: ca.crt
       restartPolicy: Never
+      nodeSelector:
+        role: storage-node
   backoffLimit: 0

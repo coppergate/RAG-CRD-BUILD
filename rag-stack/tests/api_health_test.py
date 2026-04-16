@@ -3,6 +3,7 @@ import requests
 import json
 import unittest
 import sys
+from datetime import datetime
 
 # Standardized API Health and Functionality Tests for Iteration 7
 # This test script runs within the cluster and verifies that all services
@@ -78,7 +79,7 @@ class APIHealthTest(unittest.TestCase):
 
     def test_03_db_adapter_api(self):
         """Verify DB Adapter REST API functionality."""
-        url = f"{SERVICES['db-adapter']}/api/db/stats"
+        url = f"{SERVICES['db-adapter']}/stats"
         try:
             resp = requests.get(url, verify=self.verify, timeout=5)
             self.assertEqual(resp.status_code, 200, f"DB Adapter stats failed: {resp.status_code}")
@@ -92,7 +93,7 @@ class APIHealthTest(unittest.TestCase):
 
     def test_04_qdrant_adapter_api(self):
         """Verify Qdrant Adapter REST API functionality."""
-        url = f"{SERVICES['qdrant-adapter']}/api/qdrant/collections"
+        url = f"{SERVICES['qdrant-adapter']}/collections"
         try:
             resp = requests.get(url, verify=self.verify, timeout=5)
             self.assertEqual(resp.status_code, 200, f"Qdrant Adapter collections failed: {resp.status_code}")
@@ -107,7 +108,7 @@ class APIHealthTest(unittest.TestCase):
 
     def test_05_object_store_mgr_api(self):
         """Verify Object Store Manager REST API functionality."""
-        url = f"{SERVICES['object-store-mgr']}/api/s3/buckets"
+        url = f"{SERVICES['object-store-mgr']}/buckets"
         try:
             resp = requests.get(url, verify=self.verify, timeout=5)
             self.assertEqual(resp.status_code, 200, f"Object Store Mgr buckets failed: {resp.status_code}")
@@ -119,7 +120,7 @@ class APIHealthTest(unittest.TestCase):
 
     def test_06_memory_controller_api(self):
         """Verify Memory Controller REST API functionality."""
-        url = f"{SERVICES['memory-controller']}/api/memory/items"
+        url = f"{SERVICES['memory-controller']}/items"
         try:
             resp = requests.get(url, verify=self.verify, timeout=5)
             self.assertEqual(resp.status_code, 200, f"Memory Controller items failed: {resp.status_code}")
@@ -130,8 +131,10 @@ class APIHealthTest(unittest.TestCase):
             self.fail(f"Memory Controller API test failed: {e}")
 
 if __name__ == "__main__":
-    print("[INFO] Starting API Health and Functionality Tests...")
+    print(f"[{datetime.utcnow().isoformat()}] [INFO] Starting API Health and Functionality Tests...")
     suite = unittest.TestLoader().loadTestsFromTestCase(APIHealthTest)
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     if not result.wasSuccessful():
+        print(f"[{datetime.utcnow().isoformat()}] [FAILURE] API Health Tests failed.")
         sys.exit(1)
+    print(f"[{datetime.utcnow().isoformat()}] [SUCCESS] API Health Tests passed.")

@@ -47,7 +47,7 @@ def trigger_ingest(tag_id, filename):
         raise Exception(f"Failed to trigger ingest: {resp.status_code} - {resp.text}")
 
 # 2. Vector Store Verification
-def verify_in_qdrant(tag_name, expected_text, vector_size, timeout=120):
+def verify_in_qdrant(tag_name, expected_text, vector_size, expected_timestamp=None, timeout=120):
     # Use tag_id for strict UUID filtering in Qdrant
     tag_id = get_tag_id(tag_name)
     print(f"  - Verifying points in Qdrant for tag_id: {tag_id} (dims: {vector_size})...")
@@ -75,7 +75,23 @@ def verify_in_qdrant(tag_name, expected_text, vector_size, timeout=120):
             if results:
                 print(f"    [OK] Found {len(results)} points in Qdrant.")
                 for point in results:
-                    if expected_text.lower() in str(point.payload.get('text', '')).lower():
+                    text_content = str(point.payload.get('text', ''))
+                    if expected_text.lower() in text_content.lower():
+                        # Verify timestamp if provided
+                        if expected_timestamp:
+                            import re
+                            match = re.search(r'timestamp: (\d+)', text_content)
+                            if match:
+                                retrieved_ts = int(match.group(1))
+                                diff = int(time.time()) - retrieved_ts
+                                if abs(diff) > 60:
+                                    print(f"    [FAIL] Found secret code but timestamp is stale: diff {diff}s")
+                                    return False
+                                print(f"    [SUCCESS] Found code and valid timestamp (diff {diff}s)")
+                                return True
+                            else:
+                                print(f"    [WARN] Found secret code but no timestamp in payload.")
+                        
                         print(f"    [SUCCESS] Found expected content: '{expected_text}'")
                         return True
                 print("    [INFO] Found points, but text content didn't match yet.")
@@ -93,13 +109,14 @@ def run_isolation_test():
     test_id = str(uuid.uuid4())[:8]
     tag_name = f"iso-test-{test_id}"
     filename = f"iso-file-{test_id}.txt"
+    timestamp = int(time.time())
     secret_code = f"SECRET-CODE-{test_id}"
-    content = f"The isolated test secret code is {secret_code}. Verify this in Qdrant."
+    content = f"The isolated test secret code is {secret_code}. Generation timestamp: {timestamp}. Verify this in Qdrant."
     
     # We assume Llama 3.1 (4096 dims)
     vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
 
-    print(f"\n--- Starting Isolated Ingestion Test [{tag_name}] ---")
+    print(f"\n[{datetime.utcnow().isoformat()}] --- Starting Isolated Ingestion Test [{tag_name}] ---")
     try:
         create_tag(tag_name)
         tag_id = get_tag_id(tag_name)
@@ -107,15 +124,15 @@ def run_isolation_test():
         trigger_ingest(tag_id, filename)
         
         # Pass tag_id to verification
-        success = verify_in_qdrant(tag_name, secret_code, vector_size)
+        success = verify_in_qdrant(tag_name, secret_code, vector_size, expected_timestamp=timestamp)
         if success:
-            print(f"\n[PASS] Ingestion pipeline isolated verification: SUCCESS")
+            print(f"\n[{datetime.utcnow().isoformat()}] [PASS] Ingestion pipeline isolated verification: SUCCESS")
         else:
-            print(f"\n[FAIL] Ingestion pipeline isolated verification: FAILED")
+            print(f"\n[{datetime.utcnow().isoformat()}] [FAIL] Ingestion pipeline isolated verification: FAILED")
             sys.exit(1)
             
     except Exception as e:
-        print(f"\n[ERROR] Isolation test failed with exception: {e}")
+        print(f"\n[{datetime.utcnow().isoformat()}] [ERROR] Isolation test failed with exception: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import sys
+import logging
 from datetime import datetime
 from pulsar import Client, MessageId, Producer, Consumer
 
@@ -13,11 +14,15 @@ RESULTS_TOPIC = os.getenv("PULSAR_RESULTS_TOPIC", "persistent://rag-pipeline/sta
 STATUS_TOPIC = os.getenv("PULSAR_STATUS_TOPIC", "persistent://rag-pipeline/stage/status")
 
 def test_recursive_rag_flow():
+    # Configure Pulsar logger to ERROR only
+    pulsar_logger = logging.getLogger('pulsar')
+    pulsar_logger.setLevel(logging.ERROR)
+    
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Recursive Multi-Model RAG Flow")
     
     # 1. Initialize Pulsar Client
     print(f"  - Connecting to Pulsar at {PULSAR_URL}")
-    client_args = {}
+    client_args = {"logger": pulsar_logger}
     ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
     if PULSAR_URL.startswith("pulsar+ssl"):
         client_args["tls_trust_certs_file_path"] = ca_bundle

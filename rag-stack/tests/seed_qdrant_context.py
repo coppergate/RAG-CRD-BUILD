@@ -2,6 +2,7 @@ import os
 import time
 import requests
 import json
+from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
@@ -35,7 +36,7 @@ def get_ollama_embeddings(text: str):
     return resp.json()["embedding"]
 
 def seed_data():
-    print(f"[SEED] Connecting to Qdrant at {QDRANT_HOST}")
+    print(f"[{datetime.utcnow().isoformat()}] [SEED] Connecting to Qdrant at {QDRANT_HOST}")
     qdrant_use_tls = os.getenv("QDRANT_USE_TLS", "true") == "true"
     client = QdrantClient(host=QDRANT_HOST, port=6333, https=qdrant_use_tls, prefer_grpc=False, timeout=30)
     
@@ -82,11 +83,11 @@ def seed_data():
             print(f"    [ERROR] Failed to embed {item['id']}: {e}")
     
     if points:
-        print(f"[SEED] Upserting {len(points)} points...")
+        print(f"  - Upserting {len(points)} points...")
         client.upsert(collection_name=COLLECTION_NAME, points=points)
-        print("[SEED] Done.")
+        print(f"[{datetime.utcnow().isoformat()}] [SEED] Done.")
     else:
-        print("[SEED] No points to upsert.")
+        print(f"[{datetime.utcnow().isoformat()}] [SEED] No points to upsert.")
 
 if __name__ == "__main__":
     seed_data()

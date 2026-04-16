@@ -136,7 +136,7 @@ def test_rag_retrieval():
 
 if __name__ == "__main__":
     # Note: These tests are intended to run INSIDE the cluster or where endpoints are reachable
-    print("[ENV] Test configuration:")
+    print(f"[{datetime.utcnow().isoformat()}] [ENV] Test configuration:")
     print(json.dumps({
         "S3_ENDPOINT": S3_ENDPOINT,
         "BUCKET_NAME": BUCKET_NAME,
@@ -148,9 +148,9 @@ if __name__ == "__main__":
         test_s3_ops()
         test_qdrant_ops()
         test_rag_retrieval()
-        print("\n[SUCCESS] All core component tests passed!")
+        print(f"\n[{datetime.utcnow().isoformat()}] [SUCCESS] All core component tests passed!")
     except Exception as e:
-        print(f"\n[FAILURE] Test failed: {e}")
+        print(f"\n[{datetime.utcnow().isoformat()}] [FAILURE] Test failed: {e}")
         # Try to provide more diagnostics on failure
         print("[DIAG] Python version:", sys.version)
         print("[DIAG] Installed packages:")

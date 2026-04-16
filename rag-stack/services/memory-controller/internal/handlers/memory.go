@@ -48,6 +48,7 @@ func (h *MemoryHandler) listItems(w http.ResponseWriter, r *http.Request) {
 	
 	items, err := query.All(ctx)
 	if err != nil {
+		log.Printf("[MEMCTRL] Error listing items: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

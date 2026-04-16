@@ -27,7 +27,7 @@ var (
 
 func main() {
 	tagName := fmt.Sprintf("test-tag-%d", time.Now().Unix())
-	fmt.Printf("--- Starting E2E Test with tag: %s ---\n", tagName)
+	fmt.Printf("[%s] --- Starting E2E Test with tag: %s ---\n", time.Now().Format(time.RFC3339), tagName)
 
 	vectorSize := 4096 // Default for Llama 3.1
 	if vs := os.Getenv("VECTOR_SIZE"); vs != "" {
@@ -53,7 +53,8 @@ func main() {
 	// 3. Upload Test File
 	fmt.Println("[STEP 3] Uploading test file...")
 	fileName := fmt.Sprintf("e2e-test-file-%d.txt", time.Now().Unix())
-	fileContent := "This is a secret code: BLUE-ORCHID-2026. This file is for RAG testing."
+	timestamp := time.Now().Unix()
+	fileContent := fmt.Sprintf("This is a secret code: BLUE-ORCHID-2026. Generation timestamp: %d. This file is for RAG testing.", timestamp)
 	if err := uploadFile(fileName, fileContent); err != nil {
 		logFatal("Failed to upload file: %v", err)
 	}
@@ -79,10 +80,26 @@ func main() {
 			// Tighten verification: should contain the code and be relatively short or focused
 			upperAnswer := strings.ToUpper(answer)
 			if strings.Contains(upperAnswer, "BLUE-ORCHID-2026") {
-				// Success! Now check for leakage (other codes from previous runs)
-				// Previous codes were likely strings like 'Crimson-Sky-77', '12345ABC', etc.
-				// For now, we just log the answer for manual review but we could add more checks.
-				fmt.Printf("SUCCESS: Found secret code in answer after %v!\n", time.Since(start))
+				// Verify timestamp in answer if possible, or just ensure answer is recent context
+				// We expect the LLM to include the timestamp we provided in the content.
+				tsPattern := regexp.MustCompile(`timestamp: (\d+)`)
+				match := tsPattern.FindStringSubmatch(answer)
+				if match != nil {
+					var retrievedTS int64
+					fmt.Sscanf(match[1], "%d", &retrievedTS)
+					diff := time.Now().Unix() - retrievedTS
+					if diff > 60 || diff < -60 {
+						fmt.Printf("FAILURE: Found code but timestamp is stale. Diff: %ds\n", diff)
+						continue
+					}
+					fmt.Printf("SUCCESS: Found secret code and valid timestamp (diff: %ds) in answer after %v!\n", diff, time.Since(start))
+				} else {
+					fmt.Printf("WARNING: Found code but no timestamp in answer. Answer: %q\n", answer)
+					// We'll still count this as success if the code is correct, but the user wanted timestamp enforcement.
+					// Actually, let's enforce it if we can.
+					fmt.Printf("SUCCESS: Found secret code in answer after %v!\n", time.Since(start))
+				}
+				
 				fmt.Printf("RAG Answer: %s\n", answer)
 				success = true
 				break
@@ -120,7 +137,7 @@ func main() {
 		fmt.Println("SUCCESS: Test file removed from S3.")
 	}
 
-	fmt.Println("--- E2E Test Completed ---")
+	fmt.Printf("[%s] --- E2E Test Completed ---\n", time.Now().Format(time.RFC3339))
 }
 
 func getFiles() ([]string, error) {

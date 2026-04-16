@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import sys
+import logging
 from datetime import datetime
 from pulsar import Client, MessageId, Producer, Consumer
 
@@ -12,11 +13,15 @@ COMPLETION_TOPIC = os.getenv("PULSAR_COMPLETION_TOPIC", "persistent://rag-pipeli
 RESULTS_TOPIC = os.getenv("PULSAR_RESULTS_TOPIC", "persistent://rag-pipeline/stage/results")
 
 def test_aggregator_flow():
+    # Configure Pulsar logger to ERROR only
+    pulsar_logger = logging.getLogger('pulsar')
+    pulsar_logger.setLevel(logging.ERROR)
+    
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Prompt Aggregator Flow")
     
     # 1. Initialize Pulsar Client
     print(f"  - Connecting to Pulsar at {PULSAR_URL}")
-    client_args = {}
+    client_args = {"logger": pulsar_logger}
     ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
     if PULSAR_URL.startswith("pulsar+ssl"):
         client_args["tls_trust_certs_file_path"] = ca_bundle
@@ -41,7 +46,7 @@ def test_aggregator_flow():
         
         # 3. Send Chunks to Session Topic
         chunks = ["The quick ", "brown fox ", "jumps over ", "the lazy ", "dog."]
-        print(f"  - Sending {len(chunks)} chunks to {session_topic}")
+        print(f"  - Sending {len(chunks)} chunks to {session_topic}...", end="", flush=True)
         
         for i, text in enumerate(chunks):
             chunk_payload = {
@@ -55,7 +60,8 @@ def test_aggregator_flow():
                 "in_conversation": True
             }
             session_producer.send(json.dumps(chunk_payload).encode('utf-8'))
-            print(f"    [OK] Chunk {i} sent")
+        
+        print(" [OK]")
 
         # 4. Trigger Aggregation with Completion Event
         completion_payload = {
@@ -80,11 +86,11 @@ def test_aggregator_flow():
                 res_data = json.loads(msg.data())
                 
                 if res_data.get("id") == request_id:
+                    result_text = res_data.get("result")
                     print(f"    [OK] Received result for {request_id}")
-                    print(f"    [DATA] Result: '{res_data.get('result')}'")
                     
                     expected_text = "".join(chunks)
-                    assert res_data.get("result") == expected_text, f"Result mismatch! Expected '{expected_text}', got '{res_data.get('result')}'"
+                    assert result_text == expected_text, f"Result mismatch! Expected '{expected_text}', got '{result_text}'"
                     assert res_data.get("session_id") == session_id
                     assert res_data.get("metadata", {}).get("test_source") == "aggregator_test.py"
                     
@@ -93,7 +99,6 @@ def test_aggregator_flow():
                     found_result = True
                     break
                 else:
-                    print(f"    [SKIP] Received message for different ID: {res_data.get('id')}")
                     consumer.acknowledge(msg)
             except Exception as e:
                 # Timeout is normal if we are waiting

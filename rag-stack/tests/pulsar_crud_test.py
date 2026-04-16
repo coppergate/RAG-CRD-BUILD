@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import sys
+import logging
 from datetime import datetime
 import psycopg2
 from pulsar import Client, MessageId, Producer, Consumer
@@ -60,20 +61,23 @@ def test_gateway_session_upsert():
     assert resp.status_code == 200
     
     # 3. Verify in DB
-    print(f"  - Verifying session {session_id} exists in TimescaleDB...")
     conn = psycopg2.connect(DB_CONN_STRING)
     cur = conn.cursor()
     
     found = False
+    print("  - Verifying session {} exists in TimescaleDB...".format(session_id), end="", flush=True)
     for i in range(5):
         cur.execute("SELECT session_id, last_active_at FROM sessions WHERE session_id = %s", (session_id,))
         row = cur.fetchone()
         if row:
-            print(f"    [OK] Session found in DB. Last Active: {row[1]}")
+            print(" [OK] Last Active: {}".format(row[1]))
             found = True
             break
-        print(f"    [WAIT] Session not found yet (attempt {i+1}/5)")
+        print(".", end="", flush=True)
         time.sleep(2)
+    
+    if not found:
+        print(" [FAIL]")
     
     cur.close()
     conn.close()
@@ -85,11 +89,15 @@ def test_gateway_session_upsert():
 
 
 def test_pulsar_db_crud():
+    # Configure Pulsar logger to ERROR only
+    pulsar_logger = logging.getLogger('pulsar')
+    pulsar_logger.setLevel(logging.ERROR)
+    
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Pulsar & Database CRUD Interaction")
     
     # 1. Initialize Pulsar Client
     print(f"  - Connecting to Pulsar at {PULSAR_URL}")
-    client_args = {}
+    client_args = {"logger": pulsar_logger}
     ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
     if PULSAR_URL.startswith("pulsar+ssl"):
         client_args["tls_trust_certs_file_path"] = ca_bundle
@@ -141,20 +149,21 @@ def test_pulsar_db_crud():
     producer.send(json.dumps(prompt_payload).encode('utf-8'), properties=headers)
 
     # 5. Step B: Verify DB Adapter picked it up (Prompts table)
-    print("  - Waiting for DB Adapter to insert prompt into TimescaleDB...")
+    print("  - Waiting for DB Adapter to insert prompt into TimescaleDB...", end="", flush=True)
     found_prompt = False
     for i in range(10):
         cur.execute("SELECT content FROM prompts WHERE prompt_id = %s", (correlation_id,))
         row = cur.fetchone()
         if row:
             assert row[0] == prompt_content
-            print("    [OK] Prompt found in 'prompts' table.")
+            print(" [OK]")
             found_prompt = True
             break
-        print(f"    [WAIT] Prompt not found yet (attempt {i+1}/10)")
+        print(".", end="", flush=True)
         time.sleep(2)
     
     if not found_prompt:
+        print(" [FAIL]")
         raise Exception("Timed out waiting for prompt in DB")
 
     # 6. Step C: Verify RAG Worker picked it up and produced a response
@@ -193,19 +202,20 @@ def test_pulsar_db_crud():
         raise e
 
     # 8. Step E: Verify DB Adapter inserted response into DB
-    print("  - Verifying response in TimescaleDB 'responses' table...")
+    print("  - Verifying response in TimescaleDB 'responses' table...", end="", flush=True)
     found_response = False
     for i in range(10):
         cur.execute("SELECT content FROM responses WHERE prompt_id = (SELECT id FROM prompts WHERE prompt_id = %s LIMIT 1)", (correlation_id,))
         row = cur.fetchone()
         if row:
-            print(f"    [OK] Response found in 'responses' table: {row[0][:50]}...")
+            print(" [OK] Response found.")
             found_response = True
             break
-        print(f"    [WAIT] Response not found yet (attempt {i+1}/10)")
+        print(".", end="", flush=True)
         time.sleep(2)
-
+    
     if not found_response:
+        print(" [FAIL]")
         raise Exception("Timed out waiting for response in DB")
 
     # 9. Step F: Test Pulsar-driven Delete
@@ -216,19 +226,20 @@ def test_pulsar_db_crud():
     }
     ops_producer.send(json.dumps(delete_payload).encode('utf-8'), properties=headers)
     
-    print("  - Verifying deletion in DB...")
+    print("  - Verifying deletion in DB...", end="", flush=True)
     deleted = False
     for i in range(10):
         # We need to use the actual session_id from the session_id variable
         cur.execute("SELECT 1 FROM sessions WHERE session_id = %s", (session_id,))
         if not cur.fetchone():
-            print("    [OK] Session successfully deleted via Pulsar.")
+            print(" [OK]")
             deleted = True
             break
-        print(f"    [WAIT] Session still present (attempt {i+1}/10)")
+        print(".", end="", flush=True)
         time.sleep(2)
     
     if not deleted:
+        print(" [FAIL]")
         raise Exception("Timed out waiting for session deletion in DB")
 
     print("\n[SUCCESS] Pulsar <-> DB CRUD Cycle Verified!")
@@ -236,9 +247,13 @@ def test_pulsar_db_crud():
     conn.close()
 
 def test_pulsar_qdrant_ops():
-    print("\n[TEST] Pulsar & Qdrant Search Interaction")
+    # Configure Pulsar logger to ERROR only
+    pulsar_logger = logging.getLogger('pulsar')
+    pulsar_logger.setLevel(logging.ERROR)
+    
+    print(f"[{datetime.utcnow().isoformat()}] [TEST] Pulsar & Qdrant Search Interaction")
     # Support TLS for Pulsar if pulsar+ssl is used
-    client_args = {}
+    client_args = {"logger": pulsar_logger}
     ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
     if PULSAR_URL.startswith("pulsar+ssl"):
         client_args["tls_trust_certs_file_path"] = ca_bundle
