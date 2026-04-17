@@ -16,7 +16,7 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 
 	"app-builds/common/contracts"
-	"app-builds/common/tlsutil"
+	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/prompt-aggregator/internal/config"
 )
 
@@ -28,32 +28,21 @@ func main() {
 	cfg := config.LoadConfig()
 	log.Printf("Starting prompt-aggregator for topic: %s", cfg.PulsarCompletionTopic)
 
-	opts := pulsar.ClientOptions{URL: cfg.PulsarURL}
-	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
-		opts.TLSTrustCertsFilePath = certPath
-	}
-
-	client, err := pulsar.NewClient(opts)
+	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
 	defer client.Close()
 
 	// 1. Consumer for Completion Events
-	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.PulsarCompletionTopic,
-		SubscriptionName: cfg.PulsarSubscription,
-		Type:             pulsar.Shared,
-	})
+	consumer, err := client.NewSharedConsumer(cfg.PulsarCompletionTopic, cfg.PulsarSubscription)
 	if err != nil {
 		log.Fatalf("Could not subscribe to completion topic: %v", err)
 	}
 	defer consumer.Close()
 
 	// 2. Producer for Final Results (sent back to Results topic for db-adapter)
-	producer, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: cfg.PulsarResultsTopic,
-	})
+	producer, err := client.NewProducer(cfg.PulsarResultsTopic)
 	if err != nil {
 		log.Fatalf("Could not create results producer: %v", err)
 	}

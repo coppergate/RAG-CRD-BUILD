@@ -10,15 +10,14 @@ import (
 
 	"github.com/apache/pulsar-client-go/pulsar"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
 
 	"app-builds/common/contracts"
-	"app-builds/common/tlsutil"
+	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/llm-gateway/internal/config"
 )
 
 type pulsarClient struct {
-	client         pulsar.Client
+	client         *pulsarCommon.Client
 	producer       pulsar.Producer
 	promptProducer pulsar.Producer
 	consumer       pulsar.Consumer
@@ -39,40 +38,25 @@ type response struct {
 }
 
 func NewPulsarClient(cfg *config.Config) (Client, error) {
-	opts := pulsar.ClientOptions{
-		URL: cfg.PulsarURL,
-	}
-	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
-		opts.TLSTrustCertsFilePath = certPath
-	}
-
-	client, err := pulsar.NewClient(opts)
+	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
 		return nil, fmt.Errorf("could not create pulsar client: %w", err)
 	}
 
-	producer, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: cfg.RequestTopic,
-	})
+	producer, err := client.NewProducer(cfg.RequestTopic)
 	if err != nil {
 		client.Close()
 		return nil, fmt.Errorf("could not create pulsar producer: %w", err)
 	}
 
-	promptProducer, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: cfg.PromptTopic,
-	})
+	promptProducer, err := client.NewProducer(cfg.PromptTopic)
 	if err != nil {
 		producer.Close()
 		client.Close()
 		return nil, fmt.Errorf("could not create prompt producer: %w", err)
 	}
 
-	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.ResponseTopic,
-		SubscriptionName: "gateway-results-sub",
-		Type:             pulsar.Shared,
-	})
+	consumer, err := client.NewSharedConsumer(cfg.ResponseTopic, "gateway-results-sub")
 	if err != nil {
 		promptProducer.Close()
 		producer.Close()
@@ -120,22 +104,7 @@ func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload inte
 	pc.pending.Store(id, resChan)
 	defer pc.pending.Delete(id)
 
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-
-	msg := &pulsar.ProducerMessage{
-		Payload: data,
-	}
-
-	// Inject tracing context into Pulsar message properties
-	if msg.Properties == nil {
-		msg.Properties = make(map[string]string)
-	}
-	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Properties))
-
-	_, err = pc.producer.Send(ctx, msg)
+	_, err := pulsarCommon.SendJSON(ctx, pc.producer, payload)
 	if err != nil {
 		return "", err
 	}
@@ -159,14 +128,7 @@ func (pc *pulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, cont
 		"session_id": sessionID,
 		"content":    content,
 	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("[%s] Failed to marshal prompt event: %v", id, err)
-		return fmt.Errorf("marshal prompt event: %w", err)
-	}
-	_, err = pc.promptProducer.Send(ctx, &pulsar.ProducerMessage{
-		Payload: data,
-	})
+	_, err := pulsarCommon.SendJSON(ctx, pc.promptProducer, payload)
 	return err
 }
 
@@ -222,21 +184,7 @@ func (pc *pulsarClient) UnsubscribeStream(id string) {
 }
 
 func (pc *pulsarClient) SendRawRequest(ctx context.Context, payload interface{}) error {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	msg := &pulsar.ProducerMessage{
-		Payload: data,
-	}
-
-	if msg.Properties == nil {
-		msg.Properties = make(map[string]string)
-	}
-	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Properties))
-
-	_, err = pc.producer.Send(ctx, msg)
+	_, err := pulsarCommon.SendJSON(ctx, pc.producer, payload)
 	return err
 }
 

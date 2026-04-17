@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"app-builds/common/health"
+	pulsarCommon "app-builds/common/pulsar"
 	"github.com/apache/pulsar-client-go/pulsar"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -235,26 +236,13 @@ func main() {
 		log.Fatalf("Error creating kubernetes client: %v", err)
 	}
 
-	pulsarOpts := pulsar.ClientOptions{URL: pulsarURL}
-	if strings.HasPrefix(pulsarURL, "pulsar+ssl://") {
-		if caFile := os.Getenv("SSL_CERT_FILE"); caFile != "" {
-			pulsarOpts.TLSTrustCertsFilePath = caFile
-		} else {
-			log.Printf("WARNING: Pulsar URL uses TLS but SSL_CERT_FILE is not set")
-		}
-	}
-
-	pulsarClient, err = pulsar.NewClient(pulsarOpts)
+	pulsarClient, err = pulsarCommon.NewClient(pulsarCommon.Config{URL: pulsarURL})
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
 	defer pulsarClient.Close()
 
-	consumer, err := pulsarClient.Subscribe(pulsar.ConsumerOptions{
-		Topic:            topic,
-		SubscriptionName: "build-orchestrator-sub",
-		Type:             pulsar.Shared,
-	})
+	consumer, err := pulsarClient.NewSharedConsumer(topic, "build-orchestrator-sub")
 	if err != nil {
 		log.Fatalf("Could not subscribe to topic: %v", err)
 	}
@@ -262,7 +250,7 @@ func main() {
 
 	var statusProducer pulsar.Producer
 	if statusTopic != "" {
-		statusProducer, err = pulsarClient.CreateProducer(pulsar.ProducerOptions{Topic: statusTopic})
+		statusProducer, err = pulsarClient.NewProducer(statusTopic)
 		if err != nil {
 			log.Fatalf("Could not create status topic producer: %v", err)
 		}
@@ -270,7 +258,7 @@ func main() {
 	}
 	var failedProducer pulsar.Producer
 	if failedTaskTopic != "" {
-		failedProducer, err = pulsarClient.CreateProducer(pulsar.ProducerOptions{Topic: failedTaskTopic})
+		failedProducer, err = pulsarClient.NewProducer(failedTaskTopic)
 		if err != nil {
 			log.Fatalf("Could not create failed-task topic producer: %v", err)
 		}
@@ -473,7 +461,7 @@ func waitForJobCompletion(ctx context.Context, clientset *kubernetes.Clientset, 
 }
 
 var (
-	pulsarClient pulsar.Client
+	pulsarClient *pulsarCommon.Client
 	k8sClientset *kubernetes.Clientset
 )
 

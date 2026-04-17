@@ -21,8 +21,8 @@ import (
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 	"app-builds/common/health"
+	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/common/telemetry"
-	"app-builds/common/tlsutil"
 	"app-builds/db-adapter/internal/config"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/google/uuid"
@@ -79,14 +79,7 @@ func main() {
 	}
 	defer entClient.Close()
 
-	opts := pulsar.ClientOptions{
-		URL: cfg.PulsarURL,
-	}
-	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
-		opts.TLSTrustCertsFilePath = certPath
-	}
-
-	client, err := pulsar.NewClient(opts)
+	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
@@ -100,22 +93,14 @@ func main() {
 	defer dlqHandler.Close()
 
 	// Consumer for Prompts
-	promptConsumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.PromptTopic,
-		SubscriptionName: cfg.Subscription,
-		Type:             pulsar.Shared,
-	})
+	promptConsumer, err := client.NewSharedConsumer(cfg.PromptTopic, cfg.Subscription)
 	if err != nil {
 		log.Fatalf("Could not subscribe to prompts: %v", err)
 	}
 	defer promptConsumer.Close()
 
 	// Consumer for Responses
-	responseConsumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.ResponseTopic,
-		SubscriptionName: cfg.Subscription,
-		Type:             pulsar.Shared,
-	})
+	responseConsumer, err := client.NewSharedConsumer(cfg.ResponseTopic, cfg.Subscription)
 	if err != nil {
 		log.Fatalf("Could not subscribe to responses: %v", err)
 	}
@@ -130,11 +115,7 @@ func main() {
 	log.Printf("DB Adapter started, listening on topics: %s, %s, %s", cfg.PromptTopic, cfg.ResponseTopic, cfg.DBOpsTopic)
 
 	// Consumer for DB Ops (Delete)
-	opsConsumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.DBOpsTopic,
-		SubscriptionName: cfg.Subscription + "-ops",
-		Type:             pulsar.Shared,
-	})
+	opsConsumer, err := client.NewSharedConsumer(cfg.DBOpsTopic, cfg.Subscription+"-ops")
 	if err != nil {
 		log.Printf("Warning: Could not subscribe to DB ops: %v", err)
 	} else {

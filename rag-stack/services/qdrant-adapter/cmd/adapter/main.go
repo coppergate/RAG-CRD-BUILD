@@ -15,8 +15,8 @@ import (
 
 	"app-builds/common/dlq"
 	"app-builds/common/health"
+	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/common/telemetry"
-	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
 	"app-builds/qdrant-adapter/internal/qdrant"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -73,20 +73,13 @@ func main() {
 		defer shutdown(context.Background())
 	}
 
-	opts := pulsar.ClientOptions{
-		URL: cfg.PulsarURL,
-	}
-	if certPath := tlsutil.PulsarTLSCertPath(cfg.PulsarURL); certPath != "" {
-		opts.TLSTrustCertsFilePath = certPath
-	}
-
-	client, err := pulsar.NewClient(opts)
+	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
 		log.Fatalf("could not create pulsar client: %v", err)
 	}
 	defer client.Close()
 
-	producer, err := client.CreateProducer(pulsar.ProducerOptions{Topic: cfg.QdrantResultsTopic})
+	producer, err := client.NewProducer(cfg.QdrantResultsTopic)
 	if err != nil {
 		log.Fatalf("could not create results producer: %v", err)
 	}
@@ -107,11 +100,7 @@ func main() {
 	}
 
 	// subscribe to qdrant ops
-	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.QdrantOpsTopic,
-		SubscriptionName: "qdrant-adapter-sub",
-		Type:             pulsar.Shared,
-	})
+	consumer, err := client.NewSharedConsumer(cfg.QdrantOpsTopic, cfg.PulsarSubscription)
 	if err != nil {
 		log.Fatalf("could not subscribe to qdrant ops: %v", err)
 	}
