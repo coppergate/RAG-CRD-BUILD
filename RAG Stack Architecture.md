@@ -15,9 +15,11 @@ graph TD
     subgraph "Kubernetes: rag-system namespace: TLS-SSL"
         UI[rag-web-ui]
         Flutter[rag-explorer]
+        Admin[rag-admin-api]
         Gateway[llm-gateway]
         Worker[rag-worker]
         DBAdapter[db-adapter]
+        Memory[memory-controller]
         Aggregator[prompt-aggregator]
         Ingestor[rag-ingestion-service]
         QAdapter[qdrant-adapter]
@@ -68,7 +70,14 @@ graph TD
 
     %% Interaction Flows: HTTPS
     Browser <-->|HTTPS/443| UI
-    Explorer <-->|Websocket/HTTPS| Gateway
+    Explorer <-->|HTTPS/443| Admin
+    Admin <-->|Proxy| Gateway
+    Admin <-->|Proxy| Ingestor
+    Admin <-->|Proxy| DBAdapter
+    Admin <-->|Proxy| Memory
+    Admin <-->|Proxy| QAdapter
+    Admin <-->|Proxy| OSMgr
+    Gateway <-->|WS/HTTPS| Explorer
 
     %% Registry Flow
     UI & Flutter & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
@@ -140,10 +149,12 @@ graph TD
 
 - `rag-web-ui`: Legacy front-end for data ingestion and interactive chat; secured via Traefik HTTPS.
 - `rag-explorer`: Advanced Flutter-based management UI for the RAG pipeline. Supports granular ingestion control, metadata inspection, and real-time session monitoring.
+- `rag-admin-api`: Management portal proxy and health aggregator; provides a unified API for `rag-explorer`.
 - `llm-gateway`: OpenAI-compatible entry point; manages session lifecycle and asynchronous task delegation. Now supports isolated session topics for streaming.
 - `rag-worker`: Core orchestration engine with modular LLM support (Llama/Granite); integrates multi-stage RAG logic (ingress/plan/search/exec).
 - `qdrant-adapter`: Centralized vector DB adapter ensuring consistent tag-filtered search and upsert logic.
 - `db-adapter`: Async persistence layer for audit logs, session state, and chat history.
+- `memory-controller`: Manages structured memory items and session-based graph links for Titans/Miras-inspired memory.
 - `prompt-aggregator`: High-performance aggregation service that assembles streaming chunks from session-specific Pulsar topics into final results.
 - `rag-ingestion-service`: Persistent Python service for multi-source data ingestion and embedding generation.
 - `common/telemetry`: Shared OTLP package for distributed tracing and Prometheus metrics; services export to local `Alloy` instances.
