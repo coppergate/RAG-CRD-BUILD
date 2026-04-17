@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
@@ -12,6 +14,13 @@ import (
 // Tag holds the schema definition for the Tag entity.
 type Tag struct {
 	ent.Schema
+}
+
+// Annotations of the Tag.
+func (Tag) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entsql.Annotation{Table: "tag"},
+	}
 }
 
 // Fields of the Tag.

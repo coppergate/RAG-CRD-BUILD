@@ -3,6 +3,7 @@
 package migrate
 
 import (
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/dialect/sql/schema"
 	"entgo.io/ent/schema/field"
 )
@@ -164,17 +165,17 @@ var (
 		Columns:    SessionsColumns,
 		PrimaryKey: []*schema.Column{SessionsColumns[0]},
 	}
-	// TagsColumns holds the columns for the "tags" table.
-	TagsColumns = []*schema.Column{
+	// TagColumns holds the columns for the "tag" table.
+	TagColumns = []*schema.Column{
 		{Name: "tag_id", Type: field.TypeUUID},
 		{Name: "tag_name", Type: field.TypeString, Unique: true, Size: 2147483647},
 		{Name: "created_at", Type: field.TypeTime},
 	}
-	// TagsTable holds the schema information for the "tags" table.
-	TagsTable = &schema.Table{
-		Name:       "tags",
-		Columns:    TagsColumns,
-		PrimaryKey: []*schema.Column{TagsColumns[0]},
+	// TagTable holds the schema information for the "tag" table.
+	TagTable = &schema.Table{
+		Name:       "tag",
+		Columns:    TagColumns,
+		PrimaryKey: []*schema.Column{TagColumns[0]},
 	}
 	// SessionTagColumns holds the columns for the "session_tag" table.
 	SessionTagColumns = []*schema.Column{
@@ -196,7 +197,7 @@ var (
 			{
 				Symbol:     "session_tag_tag_id",
 				Columns:    []*schema.Column{SessionTagColumns[1]},
-				RefColumns: []*schema.Column{TagsColumns[0]},
+				RefColumns: []*schema.Column{TagColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
 		},
@@ -209,12 +210,15 @@ var (
 		PromptsTable,
 		ResponsesTable,
 		SessionsTable,
-		TagsTable,
+		TagTable,
 		SessionTagTable,
 	}
 )
 
 func init() {
+	TagTable.Annotation = &entsql.Annotation{
+		Table: "tag",
+	}
 	SessionTagTable.ForeignKeys[0].RefTable = SessionsTable
-	SessionTagTable.ForeignKeys[1].RefTable = TagsTable
+	SessionTagTable.ForeignKeys[1].RefTable = TagTable
 }

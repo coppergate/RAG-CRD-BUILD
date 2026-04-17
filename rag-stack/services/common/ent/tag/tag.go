@@ -24,7 +24,7 @@ const (
 	// SessionFieldID holds the string denoting the ID field of the Session.
 	SessionFieldID = "session_id"
 	// Table holds the table name of the tag in the database.
-	Table = "tags"
+	Table = "tag"
 	// SessionsTable is the table that holds the sessions relation/edge. The primary key declared below.
 	SessionsTable = "session_tag"
 	// SessionsInverseTable is the table name for the Session entity.

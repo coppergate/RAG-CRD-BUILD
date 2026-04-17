@@ -39,7 +39,7 @@ const (
 	TagsTable = "session_tag"
 	// TagsInverseTable is the table name for the Tag entity.
 	// It exists in this package in order to avoid circular dependency with the "tag" package.
-	TagsInverseTable = "tags"
+	TagsInverseTable = "tag"
 )
 
 // Columns holds all SQL columns for session fields.

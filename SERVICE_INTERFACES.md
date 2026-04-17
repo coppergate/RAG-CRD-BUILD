@@ -1,6 +1,6 @@
 # RAG Stack Service Interfaces
 
-This document details the HTTP endpoints and Pulsar topics for all services in the RAG stack (v2.6.1).
+This document details the HTTP endpoints and Pulsar topics for all services in the RAG stack (v2.6.5).
 
 ## 1. LLM Gateway (`llm-gateway`)
 The entry point for all LLM and RAG requests. It provides an OpenAI-compatible API and handles session management.

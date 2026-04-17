@@ -79,12 +79,13 @@ func main() {
 		answer, askErr := askRAG(query, []string{tagID})
 		if askErr == nil {
 			lastAnswer = answer
+			fmt.Printf("DEBUG: Received RAG Answer: %q\n", answer)
 			// Tighten verification: should contain the code and be relatively short or focused
 			upperAnswer := strings.ToUpper(answer)
 			upperSecret := strings.ToUpper(secretCode)
 			if strings.Contains(upperAnswer, upperSecret) {
 				// Verify timestamp in answer if possible
-				tsPattern := regexp.MustCompile(`(?i)timestamp\D+(\d+)`)
+				tsPattern := regexp.MustCompile(`(?i)timestamp\D*?(\d{10})`)
 				match := tsPattern.FindStringSubmatch(answer)
 				if match != nil {
 					retrievedTS, _ := strconv.ParseInt(match[1], 10, 64)

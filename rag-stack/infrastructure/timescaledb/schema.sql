@@ -59,8 +59,9 @@ CREATE TABLE IF NOT EXISTS code_ingestion (
 
 -- 7. Tag Definition
 CREATE TABLE IF NOT EXISTS tag (
-    tag_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tag_name TEXT NOT NULL UNIQUE
+  tag_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tag_name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 8. Ingestion to Tag Mapping

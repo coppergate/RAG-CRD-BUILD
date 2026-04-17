@@ -128,22 +128,22 @@ ERROR_COUNT=0
 # Scan integration tests log
 INTEGRATION_LOG="${OUT_DIR}/integration-tests.log"
 if [ -f "$INTEGRATION_LOG" ]; then
-  INTEGRATION_ERRORS=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError" "$INTEGRATION_LOG" | grep -v "expected" | wc -l)
+  INTEGRATION_ERRORS=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError|Errno" "$INTEGRATION_LOG" | grep -v "expected" | wc -l)
   ERROR_COUNT=$((ERROR_COUNT + INTEGRATION_ERRORS))
   if [ "$INTEGRATION_ERRORS" -gt 0 ]; then
     echo "[WARN] Found ${INTEGRATION_ERRORS} possible errors in integration tests log:"
-    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError" "$INTEGRATION_LOG" | grep -v "expected" | head -n 10
+    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError|Errno" "$INTEGRATION_LOG" | grep -v "expected" | head -n 10
   fi
 fi
 
 # Scan Go E2E driver log
 GO_E2E_LOG="${OUT_DIR}/go-e2e-driver.log"
 if [ -f "$GO_E2E_LOG" ]; then
-  GO_ERRORS=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|stale timestamp|Panic:" "$GO_E2E_LOG" | grep -v "expected" | wc -l)
+  GO_ERRORS=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|stale timestamp|Panic:|Errno" "$GO_E2E_LOG" | grep -v "expected" | wc -l)
   ERROR_COUNT=$((ERROR_COUNT + GO_ERRORS))
   if [ "$GO_ERRORS" -gt 0 ]; then
     echo "[WARN] Found ${GO_ERRORS} possible errors in Go E2E driver log:"
-    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|stale timestamp|Panic:" "$GO_E2E_LOG" | grep -v "expected" | head -n 10
+    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|stale timestamp|Panic:|Errno" "$GO_E2E_LOG" | grep -v "expected" | head -n 10
   fi
 fi
 

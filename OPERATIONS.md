@@ -438,6 +438,11 @@ flutter run -d chrome # Web browser
 - **CMake Error**: Run `flutter clean` to resolve stale `CMAKE_INSTALL_PREFIX` issues.
 - **Code Generation**: `flutter pub run build_runner build --delete-conflicting-outputs`
 
+### 6.3 Cluster Deployment
+1. **Build**: Trigger Kaniko build on hierophant.
+2. **Deploy**: UI is deployed by `setup-all.sh`.
+3. **Verification**: `https://rag-explorer.rag.hierocracy.home`
+
 ## 7. Testing & Verification
 
 ### 7.1 Integration Tests (Python)
