@@ -1,5 +1,5 @@
 # Stage 1: Build Flutter Web
-FROM registry.hierocracy.home:5000/debian:bookworm-slim AS build
+FROM registry.hierocracy.home:5000/python:3.9-slim AS build
 
 # Install dependencies for Flutter
 RUN apt-get update && apt-get install -y \

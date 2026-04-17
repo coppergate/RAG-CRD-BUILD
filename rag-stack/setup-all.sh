@@ -280,6 +280,11 @@ $KUBECTL apply -f "$REPO_DIR/services/llm-gateway/k8s/configmap.yaml"
 apply_manifest "$REPO_DIR/services/llm-gateway/k8s/deployment.yaml"
 mark_step_done "llm-gateway"
 fi
+if ! is_step_done "build-orchestrator"; then
+echo "--- 6.5 Deploying Build Orchestrator (Go) ---"
+apply_manifest "$REPO_DIR/infrastructure/build-pipeline/orchestrator-deployment.yaml"
+mark_step_done "build-orchestrator"
+fi
 
 if ! is_step_done "rag-worker"; then
 echo "--- 7. Deploying RAG Worker (Go) ---"
@@ -310,6 +315,11 @@ if ! is_step_done "rag-web-ui"; then
 echo "--- 9. Deploying RAG Web UI (Go) ---"
 apply_manifest "$REPO_DIR/services/rag-web-ui/ui-deployment.yaml"
 mark_step_done "rag-web-ui"
+fi
+if ! is_step_done "rag-explorer"; then
+echo "--- 9.5 Deploying RAG Explorer (Flutter) ---"
+apply_manifest "$REPO_DIR/services/rag-explorer/k8s/deployment.yaml"
+mark_step_done "rag-explorer"
 fi
 
 if ! is_step_done "db-adapter"; then

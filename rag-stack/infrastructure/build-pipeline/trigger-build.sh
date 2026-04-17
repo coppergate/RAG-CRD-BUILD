@@ -69,11 +69,7 @@ if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
     CREATED_TARBALL="true"
     # Pack 'services' folder so Kaniko sees 'common/' and the target service
     cd "$REPO_DIR/services"
-    EXCLUDE_EXPLORER=""
-    if [[ "$SERVICE" != "rag-explorer" ]]; then
-        EXCLUDE_EXPLORER="--exclude=rag-explorer"
-    fi
-    tar $EXCLUDE_EXPLORER \
+    tar \
         --exclude="*/build" --exclude="*/.dart_tool" \
         --exclude="*/bin" --exclude="*/*.exe" --exclude="*/main" \
         -czf "$SAFE_TMP_DIR/$TARBALL" .

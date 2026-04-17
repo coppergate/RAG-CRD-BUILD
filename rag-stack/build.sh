@@ -55,6 +55,7 @@ SERVICES=(
     "memory-controller"
     "build-orchestrator"
     "prompt-aggregator"
+    "rag-explorer"
 )
 
 log() { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
