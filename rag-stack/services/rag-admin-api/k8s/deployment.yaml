@@ -24,14 +24,14 @@ spec:
           httpGet:
             path: /readyz
             port: 8080
-            scheme: HTTP
+            scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 5
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8080
-            scheme: HTTP
+            scheme: HTTPS
           initialDelaySeconds: 15
           periodSeconds: 10
         resources:
@@ -60,6 +60,10 @@ spec:
           value: "otel-collector.monitoring.svc.cluster.local:4317"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
         volumeMounts:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt
@@ -87,9 +91,9 @@ spec:
   selector:
     app: rag-admin-api
   ports:
-  - port: 80
+  - port: 443
     targetPort: 8080
-    name: http
+    name: https
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -99,7 +103,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/service.serversscheme: http
+    traefik.ingress.kubernetes.io/service.serversscheme: https
 spec:
   ingressClassName: traefik
   tls:
@@ -116,4 +120,4 @@ spec:
           service:
             name: rag-admin-api
             port:
-              name: http
+              name: https
