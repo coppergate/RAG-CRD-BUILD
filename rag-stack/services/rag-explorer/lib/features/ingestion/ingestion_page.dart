@@ -17,7 +17,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   List<Map<String, dynamic>> _objects = [];
   String _prefix = '';
   List<Tag> _tags = [];
-  Tag? _selectedTag;
+  final Set<Tag> _selectedTags = {};
   bool _forceReingest = false;
   bool _isLoading = false;
   String? _statusMessage;
@@ -39,7 +39,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
       setState(() {
         _tags = tags;
         _selectedBucket = config.defaultBucketName.isNotEmpty ? config.defaultBucketName : null;
-        if (tags.isNotEmpty) _selectedTag = tags.first;
+        if (tags.isNotEmpty) _selectedTags.add(tags.first);
         _isLoading = false;
       });
       if (_selectedBucket != null) {
@@ -123,7 +123,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   }
 
   Future<void> _triggerIngestion() async {
-    if (_selectedBucket == null || _selectedTag == null) return;
+    if (_selectedBucket == null || _selectedTags.isEmpty) return;
 
     setState(() {
       _isLoading = true;
@@ -131,24 +131,34 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
       _isError = false;
     });
 
-    final service = ref.read(ingestionServiceProvider.notifier);
-    final result = await service.triggerIngest(
-      bucketName: _selectedBucket!,
-      tagId: _selectedTag!.id,
-      prefix: _prefix,
-      forceReingest: _forceReingest,
-    );
+    try {
+      final service = ref.read(ingestionServiceProvider.notifier);
+      final result = await service.triggerIngest(
+        bucketName: _selectedBucket!,
+        tagIds: _selectedTags.map((t) => t.id).toList(),
+        prefix: _prefix,
+        forceReingest: _forceReingest,
+      );
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        if (result.containsKey('error')) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          if (result.containsKey('error')) {
+            _isError = true;
+            _statusMessage = 'Error: ${result['error']}';
+          } else {
+            _statusMessage = 'Ingestion triggered successfully! Check system logs for progress.';
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
           _isError = true;
-          _statusMessage = 'Error: ${result['error']}';
-        } else {
-          _statusMessage = 'Ingestion triggered successfully! Check system logs for progress.';
-        }
-      });
+          _statusMessage = 'Exception: $e';
+        });
+      }
     }
   }
 
@@ -195,7 +205,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
       if (newTag != null) {
         setState(() {
           _tags.add(newTag);
-          _selectedTag = newTag;
+          _selectedTags.add(newTag);
         });
       }
       // Close dialog as soon as creation attempt is done
@@ -323,7 +333,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
                   children: [
                     Icon(Icons.label, size: 18),
                     SizedBox(width: 8),
-                    Text('Knowledge Tag', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text('Knowledge Tags', style: TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ),
                 IconButton(
@@ -334,16 +344,37 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
               ],
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<Tag>(
-              initialValue: _selectedTag,
-              isExpanded: true,
-              decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12)),
-              items: _tags.map((t) => DropdownMenuItem(value: t, child: Text(t.name))).toList(),
-              onChanged: (val) => setState(() => _selectedTag = val),
-            ),
+            if (_tags.isEmpty)
+              const Text('No tags available. Create one to get started.', style: TextStyle(color: Colors.grey, fontSize: 13))
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _tags.map((tag) {
+                  final isSelected = _selectedTags.contains(tag);
+                  return FilterChip(
+                    label: Text(tag.name),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedTags.add(tag);
+                        } else {
+                          // Don't allow deselecting if it's the only one? 
+                          // Actually, multiple tags are allowed, let's allow empty if they want, 
+                          // but start ingestion check will block it.
+                          _selectedTags.remove(tag);
+                        }
+                      });
+                    },
+                    selectedColor: Colors.blue.withOpacity(0.2),
+                    checkmarkColor: Colors.blue,
+                  );
+                }).toList(),
+              ),
             const SizedBox(height: 12),
             const Text(
-              'Tags partition the vector store and allow context isolation.',
+              'Tags partition the vector store and allow context isolation. Select multiple to index into all of them.',
               style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic),
             ),
           ],
@@ -410,7 +441,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   }
 
   Widget _buildActionArea(bool darkMode) {
-    final canIngest = _selectedBucket != null && _selectedTag != null && !_isLoading;
+    final canIngest = _selectedBucket != null && _selectedTags.isNotEmpty && !_isLoading;
     return Center(
       child: SizedBox(
         width: 300,

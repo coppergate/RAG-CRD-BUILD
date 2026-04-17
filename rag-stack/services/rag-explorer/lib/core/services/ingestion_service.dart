@@ -121,18 +121,18 @@ class IngestionService extends _$IngestionService {
 
   Future<Map<String, dynamic>> triggerIngest({
     required String bucketName,
-    required String tagId,
+    required List<String> tagIds,
     String prefix = '',
     bool forceReingest = false,
   }) async {
-    _logger.info('Triggering ingestion for bucket: $bucketName, tag: $tagId');
+    _logger.info('Triggering ingestion for bucket: $bucketName, tags: $tagIds');
     try {
       final response = await _dio.post(
         '${_config.ragAdminApiUrl}/api/ingest/ingest',
         data: {
           'bucket_name': bucketName,
           'prefix': prefix,
-          'tag_id': tagId,
+          'tag_ids': tagIds,
           'force_reingest': forceReingest,
         },
       );
