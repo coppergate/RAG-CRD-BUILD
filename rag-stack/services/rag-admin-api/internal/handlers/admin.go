@@ -21,6 +21,16 @@ func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.Hand
 	target, _ := url.Parse(targetURL)
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	
+	// Configure TLS transport for internal proxy calls
+	if strings.HasPrefix(targetURL, "https") {
+		client, err := tlsutil.NewHTTPClient(true, 30*time.Second)
+		if err == nil {
+			proxy.Transport = client.Transport
+		} else {
+			log.Printf("[PROXY] Warning: failed to initialize TLS transport for %s: %v", targetURL, err)
+		}
+	}
+
 	// Customize the director to strip prefix if needed
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {

@@ -17,7 +17,8 @@ spec:
         role: storage-node
       containers:
       - name: admin-api
-        image: registry.container-registry.svc.cluster.local:5000/rag-admin-api:__VERSION__
+        image: registry.hierocracy.home:5000/rag-admin-api:__VERSION__
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         readinessProbe:
@@ -87,6 +88,9 @@ kind: Service
 metadata:
   name: rag-admin-api
   namespace: rag-system
+  annotations:
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: traefik-skip-verify@kubernetescrd
 spec:
   selector:
     app: rag-admin-api
@@ -104,6 +108,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: traefik-skip-verify@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:
@@ -120,4 +125,4 @@ spec:
           service:
             name: rag-admin-api
             port:
-              name: https
+              number: 443
