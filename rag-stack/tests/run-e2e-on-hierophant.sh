@@ -119,5 +119,40 @@ else
   echo "[WARN] podman not found; skipping Go E2E driver" | tee -a "${OUT_DIR}/go-e2e-driver.log"
 fi
 
-# 5) Summary
+# 5) Summary & Scan for failures
+echo ""
+echo "--- E2E Scan Summary ---"
+# Check both the Go E2E driver and the integration-tests.log
+ERROR_COUNT=0
+
+# Scan integration tests log
+INTEGRATION_LOG="${OUT_DIR}/integration-tests.log"
+if [ -f "$INTEGRATION_LOG" ]; then
+  INTEGRATION_ERRORS=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError" "$INTEGRATION_LOG" | grep -v "expected" | wc -l)
+  ERROR_COUNT=$((ERROR_COUNT + INTEGRATION_ERRORS))
+  if [ "$INTEGRATION_ERRORS" -gt 0 ]; then
+    echo "[WARN] Found ${INTEGRATION_ERRORS} possible errors in integration tests log:"
+    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError" "$INTEGRATION_LOG" | grep -v "expected" | head -n 10
+  fi
+fi
+
+# Scan Go E2E driver log
+GO_E2E_LOG="${OUT_DIR}/go-e2e-driver.log"
+if [ -f "$GO_E2E_LOG" ]; then
+  GO_ERRORS=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|stale timestamp|Panic:" "$GO_E2E_LOG" | grep -v "expected" | wc -l)
+  ERROR_COUNT=$((ERROR_COUNT + GO_ERRORS))
+  if [ "$GO_ERRORS" -gt 0 ]; then
+    echo "[WARN] Found ${GO_ERRORS} possible errors in Go E2E driver log:"
+    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|stale timestamp|Panic:" "$GO_E2E_LOG" | grep -v "expected" | head -n 10
+  fi
+fi
+
+if [ "$ERROR_COUNT" -eq 0 ]; then
+  echo "[OK] No obvious errors found in log scan."
+else
+  echo "[FAILURE] Detected ${ERROR_COUNT} possible failures/errors during the E2E run."
+  # If we have errors, we should exit with a non-zero code to indicate failure to caller/CI
+  exit 1
+fi
+
 echo "[DONE] E2E run complete. Logs saved to ${OUT_DIR}"

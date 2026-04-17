@@ -438,7 +438,7 @@ flutter run -d chrome # Web browser
 - **CMake Error**: Run `flutter clean` to resolve stale `CMAKE_INSTALL_PREFIX` issues.
 - **Code Generation**: `flutter pub run build_runner build --delete-conflicting-outputs`
 
-## 7. Integration & E2E Testing
+## 7. Testing & Verification
 
 ### 7.1 Integration Tests (Python)
 The integration test suite verifies the functionality of individual components and their interactions.
@@ -465,28 +465,18 @@ The E2E test suite verifies the entire RAG pipeline from file upload to chat res
     ```
 - **Verification**: Checks for specific "secret codes" in the LLM response to ensure successful context retrieval and inference.
 
-### 6.3 Cluster Deployment
-1. **Build**: Trigger Kaniko build on hierophant.
-2. **Deploy**: UI is deployed by `setup-all.sh`.
-3. **Verification**: `https://rag-explorer.rag.hierocracy.home`
+### 7.3 Log Scanning (CRITICAL)
+Simply having a test Job "Complete" or "Success" is insufficient. A manual or script-based scan of the logs MUST be performed after every test run to identify hidden errors, monitoring failures (e.g., OTLP exporters), or partial data losses.
+- **Scripts**: `run-tests.sh` and `run-e2e-on-hierophant.sh` both perform an automatic scan at the end.
+- **Manual Scan**: Check the latest logs in `/tmp/rag-logs/` on hierophant. Look for:
+  - `[ERROR]`, `[FAIL]`, `[FAILURE]`
+  - `Exception:`, `Panic:`, `stale timestamp`
+  - `Failed to export` (OpenTelemetry issues)
+  - `SyntaxError`, `can't open file`
 
-## 7. Testing & Verification
-
-### 7.1 End-to-End Testing (E2E)
-Full RAG stack E2E test suite.
-```bash
-./run-on-hierophant.sh "export VERSION=X.Y.Z && bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-e2e-on-hierophant.sh"
-```
-The script performs connectivity checks, refreshes ConfigMaps, and launches the `rag-integration-test` Kubernetes Job.
-
-### 7.2 Cross-Model Verification
+### 7.4 Cross-Model Verification
 Verifies multiple LLM model combinations (e.g., Llama + Granite).
 ```bash
-./run-on-hierophant.sh "export VERSION=X.Y.Z && cd /mnt/hegemon-share/share/code/complete-build/rag-stack/tests && bash ./run-cross-model-tests.sh"
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export VERSION=2.6.1 && cd /mnt/hegemon-share/share/code/complete-build/rag-stack/tests && bash ./run-cross-model-tests.sh"
 ```
-
-### 7.3 Unit and Integration Tests
-- **Unit Tests**: `go test ./...` in the respective service directory.
-- **Integration Tests**: `cd rag-stack/tests && VERSION=x.y.z bash ./run-tests.sh` (on hierophant).
-  - Includes `aggregator_test.py` to verify chunk aggregation on session-specific Pulsar topics.
-- **Manual Verification**: Use `kubectl exec` and `curl` to check `/healthz` and `/readyz` endpoints.
