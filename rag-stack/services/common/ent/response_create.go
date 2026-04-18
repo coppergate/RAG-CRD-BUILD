@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ type ResponseCreate struct {
 	config
 	mutation *ResponseMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetResponseID sets the "response_id" field.
@@ -202,6 +204,7 @@ func (_c *ResponseCreate) createSpec() (*Response, *sqlgraph.CreateSpec) {
 		_node = &Response{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(response.Table, sqlgraph.NewFieldSpec(response.FieldID, field.TypeInt64))
 	)
+	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
@@ -241,11 +244,405 @@ func (_c *ResponseCreate) createSpec() (*Response, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Response.Create().
+//		SetResponseID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ResponseUpsert) {
+//			SetResponseID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ResponseCreate) OnConflict(opts ...sql.ConflictOption) *ResponseUpsertOne {
+	_c.conflict = opts
+	return &ResponseUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Response.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ResponseCreate) OnConflictColumns(columns ...string) *ResponseUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ResponseUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ResponseUpsertOne is the builder for "upsert"-ing
+	//  one Response node.
+	ResponseUpsertOne struct {
+		create *ResponseCreate
+	}
+
+	// ResponseUpsert is the "OnConflict" setter.
+	ResponseUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetResponseID sets the "response_id" field.
+func (u *ResponseUpsert) SetResponseID(v uuid.UUID) *ResponseUpsert {
+	u.Set(response.FieldResponseID, v)
+	return u
+}
+
+// UpdateResponseID sets the "response_id" field to the value that was provided on create.
+func (u *ResponseUpsert) UpdateResponseID() *ResponseUpsert {
+	u.SetExcluded(response.FieldResponseID)
+	return u
+}
+
+// SetPromptID sets the "prompt_id" field.
+func (u *ResponseUpsert) SetPromptID(v int64) *ResponseUpsert {
+	u.Set(response.FieldPromptID, v)
+	return u
+}
+
+// UpdatePromptID sets the "prompt_id" field to the value that was provided on create.
+func (u *ResponseUpsert) UpdatePromptID() *ResponseUpsert {
+	u.SetExcluded(response.FieldPromptID)
+	return u
+}
+
+// AddPromptID adds v to the "prompt_id" field.
+func (u *ResponseUpsert) AddPromptID(v int64) *ResponseUpsert {
+	u.Add(response.FieldPromptID, v)
+	return u
+}
+
+// ClearPromptID clears the value of the "prompt_id" field.
+func (u *ResponseUpsert) ClearPromptID() *ResponseUpsert {
+	u.SetNull(response.FieldPromptID)
+	return u
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *ResponseUpsert) SetSessionID(v uuid.UUID) *ResponseUpsert {
+	u.Set(response.FieldSessionID, v)
+	return u
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *ResponseUpsert) UpdateSessionID() *ResponseUpsert {
+	u.SetExcluded(response.FieldSessionID)
+	return u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *ResponseUpsert) ClearSessionID() *ResponseUpsert {
+	u.SetNull(response.FieldSessionID)
+	return u
+}
+
+// SetContent sets the "content" field.
+func (u *ResponseUpsert) SetContent(v string) *ResponseUpsert {
+	u.Set(response.FieldContent, v)
+	return u
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *ResponseUpsert) UpdateContent() *ResponseUpsert {
+	u.SetExcluded(response.FieldContent)
+	return u
+}
+
+// SetSequenceNumber sets the "sequence_number" field.
+func (u *ResponseUpsert) SetSequenceNumber(v int) *ResponseUpsert {
+	u.Set(response.FieldSequenceNumber, v)
+	return u
+}
+
+// UpdateSequenceNumber sets the "sequence_number" field to the value that was provided on create.
+func (u *ResponseUpsert) UpdateSequenceNumber() *ResponseUpsert {
+	u.SetExcluded(response.FieldSequenceNumber)
+	return u
+}
+
+// AddSequenceNumber adds v to the "sequence_number" field.
+func (u *ResponseUpsert) AddSequenceNumber(v int) *ResponseUpsert {
+	u.Add(response.FieldSequenceNumber, v)
+	return u
+}
+
+// SetModelName sets the "model_name" field.
+func (u *ResponseUpsert) SetModelName(v string) *ResponseUpsert {
+	u.Set(response.FieldModelName, v)
+	return u
+}
+
+// UpdateModelName sets the "model_name" field to the value that was provided on create.
+func (u *ResponseUpsert) UpdateModelName() *ResponseUpsert {
+	u.SetExcluded(response.FieldModelName)
+	return u
+}
+
+// ClearModelName clears the value of the "model_name" field.
+func (u *ResponseUpsert) ClearModelName() *ResponseUpsert {
+	u.SetNull(response.FieldModelName)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *ResponseUpsert) SetMetadata(v map[string]interface{}) *ResponseUpsert {
+	u.Set(response.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *ResponseUpsert) UpdateMetadata() *ResponseUpsert {
+	u.SetExcluded(response.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *ResponseUpsert) ClearMetadata() *ResponseUpsert {
+	u.SetNull(response.FieldMetadata)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
+// Using this option is equivalent to using:
+//
+//	client.Response.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(response.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *ResponseUpsertOne) UpdateNewValues() *ResponseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ID(); exists {
+			s.SetIgnore(response.FieldID)
+		}
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(response.FieldCreatedAt)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Response.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ResponseUpsertOne) Ignore() *ResponseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ResponseUpsertOne) DoNothing() *ResponseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ResponseCreate.OnConflict
+// documentation for more info.
+func (u *ResponseUpsertOne) Update(set func(*ResponseUpsert)) *ResponseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ResponseUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetResponseID sets the "response_id" field.
+func (u *ResponseUpsertOne) SetResponseID(v uuid.UUID) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetResponseID(v)
+	})
+}
+
+// UpdateResponseID sets the "response_id" field to the value that was provided on create.
+func (u *ResponseUpsertOne) UpdateResponseID() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateResponseID()
+	})
+}
+
+// SetPromptID sets the "prompt_id" field.
+func (u *ResponseUpsertOne) SetPromptID(v int64) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetPromptID(v)
+	})
+}
+
+// AddPromptID adds v to the "prompt_id" field.
+func (u *ResponseUpsertOne) AddPromptID(v int64) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.AddPromptID(v)
+	})
+}
+
+// UpdatePromptID sets the "prompt_id" field to the value that was provided on create.
+func (u *ResponseUpsertOne) UpdatePromptID() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdatePromptID()
+	})
+}
+
+// ClearPromptID clears the value of the "prompt_id" field.
+func (u *ResponseUpsertOne) ClearPromptID() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearPromptID()
+	})
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *ResponseUpsertOne) SetSessionID(v uuid.UUID) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetSessionID(v)
+	})
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *ResponseUpsertOne) UpdateSessionID() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateSessionID()
+	})
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *ResponseUpsertOne) ClearSessionID() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearSessionID()
+	})
+}
+
+// SetContent sets the "content" field.
+func (u *ResponseUpsertOne) SetContent(v string) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetContent(v)
+	})
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *ResponseUpsertOne) UpdateContent() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateContent()
+	})
+}
+
+// SetSequenceNumber sets the "sequence_number" field.
+func (u *ResponseUpsertOne) SetSequenceNumber(v int) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetSequenceNumber(v)
+	})
+}
+
+// AddSequenceNumber adds v to the "sequence_number" field.
+func (u *ResponseUpsertOne) AddSequenceNumber(v int) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.AddSequenceNumber(v)
+	})
+}
+
+// UpdateSequenceNumber sets the "sequence_number" field to the value that was provided on create.
+func (u *ResponseUpsertOne) UpdateSequenceNumber() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateSequenceNumber()
+	})
+}
+
+// SetModelName sets the "model_name" field.
+func (u *ResponseUpsertOne) SetModelName(v string) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetModelName(v)
+	})
+}
+
+// UpdateModelName sets the "model_name" field to the value that was provided on create.
+func (u *ResponseUpsertOne) UpdateModelName() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateModelName()
+	})
+}
+
+// ClearModelName clears the value of the "model_name" field.
+func (u *ResponseUpsertOne) ClearModelName() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearModelName()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *ResponseUpsertOne) SetMetadata(v map[string]interface{}) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *ResponseUpsertOne) UpdateMetadata() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *ResponseUpsertOne) ClearMetadata() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// Exec executes the query.
+func (u *ResponseUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ResponseCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ResponseUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ResponseUpsertOne) ID(ctx context.Context) (id int64, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ResponseUpsertOne) IDX(ctx context.Context) int64 {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ResponseCreateBulk is the builder for creating many Response entities in bulk.
 type ResponseCreateBulk struct {
 	config
 	err      error
 	builders []*ResponseCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Response entities in the database.
@@ -275,6 +672,7 @@ func (_c *ResponseCreateBulk) Save(ctx context.Context) ([]*Response, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -325,6 +723,263 @@ func (_c *ResponseCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ResponseCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Response.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ResponseUpsert) {
+//			SetResponseID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ResponseCreateBulk) OnConflict(opts ...sql.ConflictOption) *ResponseUpsertBulk {
+	_c.conflict = opts
+	return &ResponseUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Response.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ResponseCreateBulk) OnConflictColumns(columns ...string) *ResponseUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ResponseUpsertBulk{
+		create: _c,
+	}
+}
+
+// ResponseUpsertBulk is the builder for "upsert"-ing
+// a bulk of Response nodes.
+type ResponseUpsertBulk struct {
+	create *ResponseCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Response.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(response.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *ResponseUpsertBulk) UpdateNewValues() *ResponseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ID(); exists {
+				s.SetIgnore(response.FieldID)
+			}
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(response.FieldCreatedAt)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Response.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ResponseUpsertBulk) Ignore() *ResponseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ResponseUpsertBulk) DoNothing() *ResponseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ResponseCreateBulk.OnConflict
+// documentation for more info.
+func (u *ResponseUpsertBulk) Update(set func(*ResponseUpsert)) *ResponseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ResponseUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetResponseID sets the "response_id" field.
+func (u *ResponseUpsertBulk) SetResponseID(v uuid.UUID) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetResponseID(v)
+	})
+}
+
+// UpdateResponseID sets the "response_id" field to the value that was provided on create.
+func (u *ResponseUpsertBulk) UpdateResponseID() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateResponseID()
+	})
+}
+
+// SetPromptID sets the "prompt_id" field.
+func (u *ResponseUpsertBulk) SetPromptID(v int64) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetPromptID(v)
+	})
+}
+
+// AddPromptID adds v to the "prompt_id" field.
+func (u *ResponseUpsertBulk) AddPromptID(v int64) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.AddPromptID(v)
+	})
+}
+
+// UpdatePromptID sets the "prompt_id" field to the value that was provided on create.
+func (u *ResponseUpsertBulk) UpdatePromptID() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdatePromptID()
+	})
+}
+
+// ClearPromptID clears the value of the "prompt_id" field.
+func (u *ResponseUpsertBulk) ClearPromptID() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearPromptID()
+	})
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *ResponseUpsertBulk) SetSessionID(v uuid.UUID) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetSessionID(v)
+	})
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *ResponseUpsertBulk) UpdateSessionID() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateSessionID()
+	})
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *ResponseUpsertBulk) ClearSessionID() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearSessionID()
+	})
+}
+
+// SetContent sets the "content" field.
+func (u *ResponseUpsertBulk) SetContent(v string) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetContent(v)
+	})
+}
+
+// UpdateContent sets the "content" field to the value that was provided on create.
+func (u *ResponseUpsertBulk) UpdateContent() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateContent()
+	})
+}
+
+// SetSequenceNumber sets the "sequence_number" field.
+func (u *ResponseUpsertBulk) SetSequenceNumber(v int) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetSequenceNumber(v)
+	})
+}
+
+// AddSequenceNumber adds v to the "sequence_number" field.
+func (u *ResponseUpsertBulk) AddSequenceNumber(v int) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.AddSequenceNumber(v)
+	})
+}
+
+// UpdateSequenceNumber sets the "sequence_number" field to the value that was provided on create.
+func (u *ResponseUpsertBulk) UpdateSequenceNumber() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateSequenceNumber()
+	})
+}
+
+// SetModelName sets the "model_name" field.
+func (u *ResponseUpsertBulk) SetModelName(v string) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetModelName(v)
+	})
+}
+
+// UpdateModelName sets the "model_name" field to the value that was provided on create.
+func (u *ResponseUpsertBulk) UpdateModelName() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateModelName()
+	})
+}
+
+// ClearModelName clears the value of the "model_name" field.
+func (u *ResponseUpsertBulk) ClearModelName() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearModelName()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *ResponseUpsertBulk) SetMetadata(v map[string]interface{}) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *ResponseUpsertBulk) UpdateMetadata() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *ResponseUpsertBulk) ClearMetadata() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// Exec executes the query.
+func (u *ResponseUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ResponseCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ResponseCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ResponseUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

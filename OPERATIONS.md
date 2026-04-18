@@ -222,7 +222,7 @@ Every new session for the **Junie** agent MUST establish the operational context
 4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
 ### 2.2 Current Focus (Iteration 9)
-As of version 2.5.5, the project is focusing on **Iteration 9 (Ingestion & Observability)**.
+As of version 2.7.1, the project is focusing on **Iteration 11 (Refinement & Backend Standardisation)**.
 1.  **Ingestion Pipeline**: Prefix-based browsing, knowledge tags, targeted ingestion, and multi-file upload.
 2.  **Prompt Aggregation**: Session-specific Pulsar topics to eliminate linear scanning.
 3.  **Observability**: Custom metrics and Grafana dashboards for tracking health and GPU utilization.

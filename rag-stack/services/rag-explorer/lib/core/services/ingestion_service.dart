@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/tag.dart';
 import '../../config/app_config.dart';
@@ -58,12 +59,23 @@ class IngestionService extends _$IngestionService {
     try {
       final response = await _dio.get('${_config.ragAdminApiUrl}/api/db/tags');
       if (response.statusCode == 200) {
-        if (response.data is String) {
-           _logger.error('Backend returned string instead of list for tags. Check Content-Type.');
-           return [];
+        dynamic data = response.data;
+        if (data is String) {
+          _logger.warn('Backend returned string for tags, attempting to decode JSON. Content: $data');
+          try {
+            data = json.decode(data);
+          } catch (e) {
+            _logger.error('Failed to decode tags string: $e');
+            return [];
+          }
         }
-        final List<dynamic> data = response.data;
-        return data.map((e) => Tag.fromJson(e)).toList();
+        
+        if (data is List) {
+          return data.map((e) => Tag.fromJson(e as Map<String, dynamic>)).toList();
+        } else {
+          _logger.error('Tags data is not a list: ${data.runtimeType}');
+          return [];
+        }
       }
       return [];
     } catch (e) {
@@ -80,7 +92,17 @@ class IngestionService extends _$IngestionService {
         data: {'name': name},
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return Tag.fromJson(response.data);
+        dynamic data = response.data;
+        if (data is String) {
+          _logger.warn('Backend returned string for createTag, attempting to decode JSON. Content: $data');
+          try {
+            data = json.decode(data);
+          } catch (e) {
+            _logger.error('Failed to decode created tag string: $e');
+            return null;
+          }
+        }
+        return Tag.fromJson(data as Map<String, dynamic>);
       }
       return null;
     } catch (e) {

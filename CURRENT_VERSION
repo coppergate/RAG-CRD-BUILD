@@ -1,54 +1,54 @@
 {
   "rag-worker": {
-    "version": "2.6.1",
-    "last_build": "2026-04-16T12:27:05Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "rag-ingestion": {
-    "version": "2.6.2",
-    "last_build": null
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "rag-web-ui": {
-    "version": "2.6.1",
-    "last_build": "2026-04-16T12:27:07Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "llm-gateway": {
-    "version": "2.6.1",
-    "last_build": "2026-04-16T12:27:09Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "db-adapter": {
-    "version": "2.7.0",
-    "last_build": "2026-04-16T12:27:10Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "qdrant-adapter": {
-    "version": "2.6.1",
-    "last_build": "2026-04-16T12:27:10Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "object-store-mgr": {
-    "version": "2.7.0",
-    "last_build": null
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "rag-test-runner": {
-    "version": "2.6.1",
-    "last_build": "2026-04-16T12:27:12Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "rag-admin-api": {
-    "version": "2.7.0",
-    "last_build": "2026-04-16T15:42:00Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "memory-controller": {
-    "version": "2.6.1",
-    "last_build": null
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "build-orchestrator": {
-    "version": "2.6.2",
-    "last_build": "2026-04-16T14:08:01Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "prompt-aggregator": {
-    "version": "2.6.2",
-    "last_build": "2026-04-16T14:08:03Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   },
   "rag-explorer": {
-    "version": "2.7.0",
-    "last_build": "2026-04-16T16:55:00Z"
+    "version": "2.7.1",
+    "last_build": "2026-04-18T09:00:00Z"
   }
 }
