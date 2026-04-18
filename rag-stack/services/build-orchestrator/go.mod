@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	app-builds/common v0.0.0
 	github.com/apache/pulsar-client-go v0.18.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.59.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.68.0
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
