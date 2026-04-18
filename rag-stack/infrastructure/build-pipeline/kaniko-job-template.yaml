@@ -35,16 +35,10 @@ spec:
         - "--destination=${REGISTRY}/${SERVICE_NAME}:${VERSION}"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:latest"
         - "--registry-certificate=${REGISTRY}=/kaniko/ssl/certs/registry-ca.crt"
-        - "--rootless"
-        env:
-        - name: HOME
-          value: /workspace
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop: ["ALL"]
-          runAsNonRoot: true
-          runAsUser: 1000
           seccompProfile:
             type: RuntimeDefault
         volumeMounts:

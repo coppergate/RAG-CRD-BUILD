@@ -662,7 +662,7 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 					Containers: []corev1.Container{
 						{
 							Name:  "kaniko",
-							Image: toolingRegistry + "/gcr.io/kaniko-project/executor:v1.24.0",
+							Image: toolingRegistry + "/martizih/kaniko:v1.27.0",
 							Args: []string{
 								"--dockerfile=" + task.DockerfilePath,
 								"--context=dir:///workspace",
@@ -670,18 +670,13 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 								"--destination=" + pushRegistry + "/" + task.ServiceName + ":latest",
 								"--cache=true",
 								"--cache-repo=" + pushRegistry + "/kaniko-cache",
-								"--rootless",
-							},
-							Env: []corev1.EnvVar{
-								{Name: "HOME", Value: "/workspace"},
+								"--registry-certificate=" + pushRegistry + "=/kaniko/ssl/certs/ca-certificates.crt",
 							},
 							SecurityContext: &corev1.SecurityContext{
 								AllowPrivilegeEscalation: ptr(false),
 								Capabilities: &corev1.Capabilities{
 									Drop: []corev1.Capability{"ALL"},
 								},
-								RunAsNonRoot: ptr(true),
-								RunAsUser:    ptr(int64(1000)),
 								SeccompProfile: &corev1.SeccompProfile{
 									Type: corev1.SeccompProfileTypeRuntimeDefault,
 								},
