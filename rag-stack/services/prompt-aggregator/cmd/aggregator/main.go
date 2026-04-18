@@ -77,11 +77,15 @@ func main() {
 		certFile := os.Getenv("TLS_CERT")
 		keyFile := os.Getenv("TLS_KEY")
 		if certFile != "" && keyFile != "" {
+			tlsCfg, err := tlsutil.NewTLSConfig()
+			if err != nil {
+				log.Fatalf("Failed to create TLS config: %v", err)
+			}
 			log.Printf("Health server listening with TLS on :8080")
 			server := &http.Server{
 				Addr:      ":8080",
 				Handler:   otelHandler,
-				TLSConfig: tlsutil.NewTLSConfig(),
+				TLSConfig: tlsCfg,
 			}
 			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
 				log.Printf("Health server failed: %v", err)
