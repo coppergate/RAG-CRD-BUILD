@@ -16,7 +16,7 @@
     "last_build": "2026-04-16T12:27:09Z"
   },
   "db-adapter": {
-    "version": "2.6.5",
+    "version": "2.7.0",
     "last_build": "2026-04-16T12:27:10Z"
   },
   "qdrant-adapter": {
@@ -24,7 +24,7 @@
     "last_build": "2026-04-16T12:27:10Z"
   },
   "object-store-mgr": {
-    "version": "2.6.1",
+    "version": "2.7.0",
     "last_build": null
   },
   "rag-test-runner": {
@@ -32,7 +32,7 @@
     "last_build": "2026-04-16T12:27:12Z"
   },
   "rag-admin-api": {
-    "version": "2.6.6",
+    "version": "2.7.0",
     "last_build": "2026-04-16T15:42:00Z"
   },
   "memory-controller": {
@@ -48,7 +48,7 @@
     "last_build": "2026-04-16T14:08:03Z"
   },
   "rag-explorer": {
-    "version": "2.6.8",
+    "version": "2.7.0",
     "last_build": "2026-04-16T16:55:00Z"
   }
 }

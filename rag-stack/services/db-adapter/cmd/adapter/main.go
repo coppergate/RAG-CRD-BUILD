@@ -192,6 +192,7 @@ func main() {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(sessions)
 			return
 		}
@@ -205,6 +206,7 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(sessions)
 	})
 
@@ -216,6 +218,7 @@ func main() {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(tags)
 		case http.MethodPost:
 			var payload struct {
@@ -232,6 +235,7 @@ func main() {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(t)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -261,6 +265,7 @@ func main() {
 		sessionCount, _ := entClient.Session.Query().Count(r.Context())
 		promptCount, _ := entClient.Prompt.Query().Count(r.Context())
 		responseCount, _ := entClient.Response.Query().Count(r.Context())
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]int{
 			"sessions":  sessionCount,
 			"prompts":   promptCount,

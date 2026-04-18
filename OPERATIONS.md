@@ -405,13 +405,13 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
    curl -sk https://localhost:8080/api/health/all"
 ```
 
-### 5.4 Adding Support for New LLMs (Rag-Worker)
-1.  Define implementation in `internal/models/<newmodel>`.
-2.  Implement `Planner` and `Executor` interfaces.
-3.  Update factory logic in `cmd/worker/main.go`.
-4.  Set `PLANNER_MODEL`/`EXECUTOR_MODEL` environment variables.
+### 5.5 Excluded Services (TEMPORARY)
+The following services are intentionally excluded from the standard build and deployment process to optimize cluster resources and development focus.
+- **rag-web-ui**: Removed from `SERVICES` in `build.sh` and commented out in `setup-all.sh`.
+- **rag-explorer**: Removed from `SERVICES` in `build.sh` and commented out in `setup-all.sh`.
+- **Note**: DO NOT add these services back to the build or deployment scripts unless explicitly instructed by the user.
 
-## 6. Frontend Development (RAG Explorer)
+## 6. Frontend Development (RAG Explorer - EXCLUDED)
 
 ### 6.1 Features and Routing
 The RAG Explorer is the Flutter-based web application for managing the cluster.
@@ -438,9 +438,9 @@ flutter run -d chrome # Web browser
 - **CMake Error**: Run `flutter clean` to resolve stale `CMAKE_INSTALL_PREFIX` issues.
 - **Code Generation**: `flutter pub run build_runner build --delete-conflicting-outputs`
 
-### 6.3 Cluster Deployment
-1. **Build**: Trigger Kaniko build on hierophant.
-2. **Deploy**: UI is deployed by `setup-all.sh`.
+### 6.3 Cluster Deployment (EXCLUDED)
+1. **Build**: Trigger Kaniko build on hierophant (Manual only).
+2. **Deploy**: UI is currently EXCLUDED from `setup-all.sh`.
 3. **Verification**: `https://rag-explorer.rag.hierocracy.home`
 
 ## 7. Testing & Verification

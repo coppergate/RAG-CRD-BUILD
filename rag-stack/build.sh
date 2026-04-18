@@ -45,7 +45,6 @@ trap release_lock EXIT
 SERVICES=(
     "rag-worker" 
     "rag-ingestion" 
-    "rag-web-ui" 
     "llm-gateway" 
     "db-adapter" 
     "qdrant-adapter" 
@@ -55,7 +54,6 @@ SERVICES=(
     "memory-controller"
     "build-orchestrator"
     "prompt-aggregator"
-    "rag-explorer"
 )
 
 log() { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
@@ -144,7 +142,6 @@ deploy_update() {
     log "DEPLOY UPDATE: $svc -> $ver"
     local manifest=""
     case "$svc" in
-        "rag-web-ui") manifest="$REPO_DIR/services/rag-web-ui/ui-deployment.yaml" ;;
         "object-store-mgr") manifest="$REPO_DIR/services/object-store-mgr/mgr-deployment.yaml" ;;
         "build-orchestrator") manifest="$REPO_DIR/infrastructure/build-pipeline/orchestrator-deployment.yaml" ;;
         "rag-test-runner") manifest="" ;; # No deployment for test-runner

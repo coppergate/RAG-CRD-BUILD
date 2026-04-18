@@ -32,14 +32,40 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     final service = ref.read(ingestionServiceProvider.notifier);
-    final tags = await service.getTags();
+    
+    // Fetch tags and buckets in parallel
+    final results = await Future.wait([
+      service.getTags(),
+      service.getBuckets(),
+    ]);
+    
+    final tags = results[0] as List<Tag>;
+    final buckets = results[1] as List<String>;
     final config = ref.read(appConfigProvider);
     
     if (mounted) {
       setState(() {
         _tags = tags;
-        _selectedBucket = config.defaultBucketName.isNotEmpty ? config.defaultBucketName : null;
-        if (tags.isNotEmpty) _selectedTags.add(tags.first);
+        if (tags.isNotEmpty && _selectedTags.isEmpty) {
+          _selectedTags.add(tags.first);
+        }
+        
+        // Resolve bucket
+        if (buckets.isNotEmpty) {
+          if (buckets.contains(config.defaultBucketName)) {
+            _selectedBucket = config.defaultBucketName;
+          } else {
+            // Try to find a bucket with 'rag-codebase' in the name
+            try {
+              _selectedBucket = buckets.firstWhere(
+                (b) => b.contains('rag-codebase'),
+              );
+            } catch (_) {
+              _selectedBucket = buckets.first;
+            }
+          }
+        }
+        
         _isLoading = false;
       });
       if (_selectedBucket != null) {

@@ -26,7 +26,8 @@ class IngestionService extends _$IngestionService {
     try {
       final response = await _dio.get('${_config.ragAdminApiUrl}/api/s3/buckets');
       if (response.statusCode == 200) {
-        return List<String>.from(response.data);
+        final List<dynamic> data = response.data is String ? [] : response.data;
+        return data.map((e) => e['Name'] as String).toList();
       }
       return [];
     } catch (e) {
@@ -57,6 +58,10 @@ class IngestionService extends _$IngestionService {
     try {
       final response = await _dio.get('${_config.ragAdminApiUrl}/api/db/tags');
       if (response.statusCode == 200) {
+        if (response.data is String) {
+           _logger.error('Backend returned string instead of list for tags. Check Content-Type.');
+           return [];
+        }
         final List<dynamic> data = response.data;
         return data.map((e) => Tag.fromJson(e)).toList();
       }

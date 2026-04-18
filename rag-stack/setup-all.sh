@@ -62,14 +62,14 @@ $KUBECTL apply -f "$REPO_DIR/infrastructure/rag-system-tls.yaml"
 echo "Waiting for RAG System certificates to be issued..."
 $KUBECTL wait --for=condition=Ready certificate/llm-gateway-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/rag-ingestion-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/rag-web-ui-cert -n $NAMESPACE --timeout=60s
+# $KUBECTL wait --for=condition=Ready certificate/rag-web-ui-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/db-adapter-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/qdrant-adapter-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/rag-admin-api-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/object-store-mgr-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
+# $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=60s
 mark_step_done "rag-system-tls"
 fi
@@ -311,16 +311,16 @@ apply_manifest "$REPO_DIR/services/memory-controller/k8s/deployment.yaml"
 mark_step_done "memory-controller"
 fi
 
-if ! is_step_done "rag-web-ui"; then
-echo "--- 9. Deploying RAG Web UI (Go) ---"
-apply_manifest "$REPO_DIR/services/rag-web-ui/ui-deployment.yaml"
-mark_step_done "rag-web-ui"
-fi
-if ! is_step_done "rag-explorer"; then
-echo "--- 9.5 Deploying RAG Explorer (Flutter) ---"
-apply_manifest "$REPO_DIR/services/rag-explorer/k8s/deployment.yaml"
-mark_step_done "rag-explorer"
-fi
+# if ! is_step_done "rag-web-ui"; then
+# echo "--- 9. Deploying RAG Web UI (Go) ---"
+# apply_manifest "$REPO_DIR/services/rag-web-ui/ui-deployment.yaml"
+# mark_step_done "rag-web-ui"
+# fi
+# if ! is_step_done "rag-explorer"; then
+# echo "--- 9.5 Deploying RAG Explorer (Flutter) ---"
+# apply_manifest "$REPO_DIR/services/rag-explorer/k8s/deployment.yaml"
+# mark_step_done "rag-explorer"
+# fi
 
 if ! is_step_done "db-adapter"; then
 echo "--- 10. Deploying DB Adapter (Go) ---"
