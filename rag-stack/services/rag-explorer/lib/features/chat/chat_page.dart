@@ -26,18 +26,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   String _selectedExecutor = 'llama3.1:latest';
   String _memoryMode = 'off';
   bool _showMetadata = true;
-  bool _showLogs = false;
   bool _isStreaming = false;
   bool _inConversation = false;
   final List<String> _tags = ['general'];
   StreamSubscription<ResponseMessage>? _chatSubscription;
-  final ScrollController _logScrollController = ScrollController();
   final ScrollController _chatScrollController = ScrollController();
   bool _isChatSelected = false;
-  bool _isLogSelected = false;
   int? _selectedMessageIndex;
   double _metadataPanelWidth = 350.0;
-  double _logPanelWidth = 400.0;
 
   @override
   void initState() {
@@ -49,7 +45,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void dispose() {
     _chatSubscription?.cancel();
     _messageController.dispose();
-    _logScrollController.dispose();
     _chatScrollController.dispose();
     super.dispose();
   }
@@ -138,11 +133,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         title: const Text('Chat Explorer'),
         actions: [
           IconButton(
-            icon: Icon(_showLogs ? Icons.terminal : Icons.terminal_outlined),
-            onPressed: () => setState(() => _showLogs = !_showLogs),
-            tooltip: 'Toggle Log Panel',
-          ),
-          IconButton(
             icon: Icon(_showMetadata ? Icons.info : Icons.info_outline),
             onPressed: () => setState(() => _showMetadata = !_showMetadata),
             tooltip: 'Toggle Metadata Panel',
@@ -179,20 +169,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             ),
             // Right Sub-panel: Metadata
             _buildMetadataPanel(),
-          ],
-          if (_showLogs) ...[
-            _buildResizableDivider(
-              isLogPanel: true,
-              onResizeUpdate: (delta) {
-                setState(() {
-                  _logPanelWidth -= delta;
-                  if (_logPanelWidth < 100) _logPanelWidth = 100;
-                  if (_logPanelWidth > 800) _logPanelWidth = 800;
-                });
-              },
-            ),
-            // Right Sub-panel: Logs
-            _buildLogPanel(),
           ],
         ],
       ),
@@ -582,83 +558,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
-  Widget _buildLogPanel() {
-    final logs = ref.watch(logProvider);
-    final darkMode = ref.watch(appConfigProvider).darkMode;
-    
-    // Auto-scroll to bottom
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_logScrollController.hasClients && !_isLogSelected) {
-        _logScrollController.jumpTo(_logScrollController.position.maxScrollExtent);
-      }
-    });
-
-    return SizedBox(
-      width: _logPanelWidth,
-      child: SelectionArea(
-        onSelectionChanged: (content) {
-          final isSelected = content != null && content.plainText.isNotEmpty;
-          if (isSelected != _isLogSelected) {
-            setState(() {
-              _isLogSelected = isSelected;
-            });
-          }
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('System Logs', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  IconButton(
-                    icon: const Icon(Icons.delete_sweep_outlined, size: 20),
-                    onPressed: () => ref.read(logProvider.notifier).clear(),
-                    tooltip: 'Clear Logs',
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: darkMode ? Colors.white.withValues(alpha: .05) : Colors.black.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: ListView.builder(
-                  controller: _logScrollController,
-                  padding: const EdgeInsets.all(8),
-                  itemCount: logs.length,
-                  itemBuilder: (context, index) {
-                    final log = logs[index];
-                    Color color = darkMode ? Colors.white : Colors.black87;
-                    if (log.level == 'ERROR') color = darkMode ? Colors.redAccent : Colors.red;
-                    if (log.level == 'WARN') color = darkMode ? Colors.yellowAccent : Colors.orange[800]!;
-                    if (log.level == 'DEBUG') color = darkMode ? const Color.fromARGB(255, 237, 196, 250) : Colors.blue[800]!;
-  
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        log.toString(),
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: color,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildMetadataItem(String label, String value) {
     return Padding(

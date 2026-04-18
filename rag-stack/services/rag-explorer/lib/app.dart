@@ -12,6 +12,8 @@ import 'features/qdrant/qdrant_page.dart';
 import 'features/models/models_page.dart';
 import 'features/observability/observability_page.dart';
 import 'features/settings/settings_page.dart';
+import 'core/services/log_service.dart';
+import 'core/widgets/log_panel.dart';
 import 'app_config_provider.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -81,6 +83,8 @@ class MainScaffold extends ConsumerStatefulWidget {
 class _MainScaffoldState extends ConsumerState<MainScaffold> {
   bool _isPinned = true;
   bool _isHovered = false;
+  bool _showLogs = false;
+  double _logPanelWidth = 350;
 
   final List<String> _routes = [
     '/chat',
@@ -106,6 +110,30 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
           _buildSidebar(selectedIndex),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(child: widget.child),
+          if (_showLogs) ...[
+            MouseRegion(
+              cursor: SystemMouseCursors.resizeLeftRight,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    _logPanelWidth -= details.delta.dx;
+                    if (_logPanelWidth < 100) _logPanelWidth = 100;
+                    if (_logPanelWidth > 800) _logPanelWidth = 800;
+                  });
+                },
+                child: Container(
+                  width: 8,
+                  color: Colors.transparent,
+                  child: const VerticalDivider(width: 1),
+                ),
+              ),
+            ),
+            LogPanel(
+              width: _logPanelWidth,
+              onClear: () => ref.read(logProvider.notifier).clear(),
+            ),
+          ],
         ],
       ),
     );
@@ -150,6 +178,16 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
                 ],
               ),
             ),
+            const Divider(),
+            Tooltip(
+              message: _showLogs ? 'Hide Debug Panel' : 'Show Debug Panel',
+              child: ListTile(
+                leading: Icon(_showLogs ? Icons.terminal : Icons.terminal_outlined, color: _showLogs ? Colors.blue : null),
+                title: isExtended ? Text(_showLogs ? 'Hide Debug' : 'Show Debug') : null,
+                onTap: () => setState(() => _showLogs = !_showLogs),
+              ),
+            ),
+            const SizedBox(height: 16),
           ],
         ),
       ),

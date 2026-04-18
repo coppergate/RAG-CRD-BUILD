@@ -51,17 +51,25 @@ http_session = _build_requests_session()
 # OpenTelemetry Setup
 resource = Resource(attributes={SERVICE_NAME: "rag-ingestion"})
 provider = TracerProvider(resource=resource)
-otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector.monitoring.svc.cluster.local:4318/v1/traces")
-if os.getenv("OTEL_USE_TLS") == "true":
-    if otlp_endpoint.startswith("http://"):
-        otlp_endpoint = otlp_endpoint.replace("http://", "https://")
-    elif not otlp_endpoint.startswith("https://"):
-        otlp_endpoint = f"https://{otlp_endpoint}"
-    # Ensure OTEL exporter trusts our CA
-    if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
-        os.environ["OTEL_EXPORTER_OTLP_CERTIFICATE"] = SSL_CERT_FILE
+otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector.monitoring.svc.cluster.local:4317")
+if otlp_endpoint.startswith("http://"):
+    otlp_endpoint = otlp_endpoint.replace("http://", "")
+elif otlp_endpoint.startswith("https://"):
+    otlp_endpoint = otlp_endpoint.replace("https://", "")
 
-processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
+use_tls = os.getenv("OTEL_USE_TLS", "false").lower() == "true"
+insecure = not use_tls
+
+# Ensure OTEL exporter trusts our CA if using TLS
+credentials = None
+if use_tls:
+    if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
+        with open(SSL_CERT_FILE, "rb") as f:
+            from grpc import ssl_channel_credentials
+            credentials = ssl_channel_credentials(root_certificates=f.read())
+            logger.info(f"OTEL exporter using CA from SSL_CERT_FILE: {SSL_CERT_FILE}")
+
+processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint, insecure=insecure, credentials=credentials))
 provider.add_span_processor(processor)
 trace.set_tracer_provider(provider)
 tracer = trace.get_tracer(__name__)

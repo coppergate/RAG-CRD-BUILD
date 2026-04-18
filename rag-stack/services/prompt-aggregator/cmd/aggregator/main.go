@@ -16,8 +16,12 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 
 	"app-builds/common/contracts"
+	"app-builds/common/health"
 	pulsarCommon "app-builds/common/pulsar"
+	"app-builds/common/telemetry"
+	"app-builds/common/tlsutil"
 	"app-builds/prompt-aggregator/internal/config"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func SessionTopic(id string) string {
@@ -27,6 +31,15 @@ func SessionTopic(id string) string {
 func main() {
 	cfg := config.LoadConfig()
 	log.Printf("Starting prompt-aggregator for topic: %s", cfg.PulsarCompletionTopic)
+
+	healthSrv := health.NewServer()
+
+	shutdown, err := telemetry.InitTracer("prompt-aggregator")
+	if err != nil {
+		log.Printf("Warning: failed to initialize tracer: %v", err)
+	} else {
+		defer shutdown(context.Background())
+	}
 
 	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
@@ -55,16 +68,29 @@ func main() {
 	defer cancel()
 
 	// 3. Healthz Server
+	mux := http.NewServeMux()
+	healthSrv.RegisterRoutes(mux)
+
+	otelHandler := otelhttp.NewHandler(mux, "prompt-aggregator")
+
 	go func() {
-		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		})
-		http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		})
-		log.Printf("Health server listening on :8080")
-		if err := http.ListenAndServe(":8080", nil); err != nil {
-			log.Printf("Health server failed: %v", err)
+		certFile := os.Getenv("TLS_CERT")
+		keyFile := os.Getenv("TLS_KEY")
+		if certFile != "" && keyFile != "" {
+			log.Printf("Health server listening with TLS on :8080")
+			server := &http.Server{
+				Addr:      ":8080",
+				Handler:   otelHandler,
+				TLSConfig: tlsutil.NewTLSConfig(),
+			}
+			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+				log.Printf("Health server failed: %v", err)
+			}
+		} else {
+			log.Printf("Health server listening on :8080")
+			if err := http.ListenAndServe(":8080", otelHandler); err != nil {
+				log.Printf("Health server failed: %v", err)
+			}
 		}
 	}()
 

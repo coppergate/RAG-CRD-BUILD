@@ -4,7 +4,7 @@
     "last_build": "2026-04-16T12:27:05Z"
   },
   "rag-ingestion": {
-    "version": "2.6.1",
+    "version": "2.6.2",
     "last_build": null
   },
   "rag-web-ui": {
@@ -32,7 +32,7 @@
     "last_build": "2026-04-16T12:27:12Z"
   },
   "rag-admin-api": {
-    "version": "2.6.5",
+    "version": "2.6.6",
     "last_build": "2026-04-16T15:42:00Z"
   },
   "memory-controller": {
@@ -40,15 +40,15 @@
     "last_build": null
   },
   "build-orchestrator": {
-    "version": "2.6.1",
+    "version": "2.6.2",
     "last_build": "2026-04-16T14:08:01Z"
   },
   "prompt-aggregator": {
-    "version": "2.6.1",
+    "version": "2.6.2",
     "last_build": "2026-04-16T14:08:03Z"
   },
   "rag-explorer": {
-    "version": "2.6.5",
+    "version": "2.6.8",
     "last_build": "2026-04-16T16:55:00Z"
   }
 }

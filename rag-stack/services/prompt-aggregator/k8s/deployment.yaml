@@ -25,18 +25,21 @@ spec:
           httpGet:
             path: /healthz
             port: 8080
+            scheme: HTTPS
           periodSeconds: 5
           failureThreshold: 10
         readinessProbe:
           httpGet:
             path: /readyz
             port: 8080
+            scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8080
+            scheme: HTTPS
           initialDelaySeconds: 15
           periodSeconds: 20
         resources:
@@ -59,11 +62,28 @@ spec:
           value: "60s"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OTEL_USE_TLS
+          value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "otel-collector.monitoring.svc.cluster.local:4317"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
         volumeMounts:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt
           subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
       volumes:
       - name: registry-ca
         configMap:
           name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: prompt-aggregator-tls

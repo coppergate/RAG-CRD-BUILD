@@ -18,6 +18,8 @@ import (
 
 	"app-builds/common/health"
 	pulsarCommon "app-builds/common/pulsar"
+	"app-builds/common/telemetry"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"github.com/apache/pulsar-client-go/pulsar"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -208,6 +210,13 @@ func (p *failedTaskPublisher) Publish(task BuildTask, msg pulsar.Message, reason
 }
 
 func main() {
+	shutdown, err := telemetry.InitTracer("build-orchestrator")
+	if err != nil {
+		log.Printf("Warning: failed to initialize tracer: %v", err)
+	} else {
+		defer shutdown(context.Background())
+	}
+
 	pulsarURL := os.Getenv("PULSAR_URL")
 	topic := os.Getenv("BUILD_TOPIC")
 	if pulsarURL == "" || topic == "" {
@@ -523,7 +532,8 @@ func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBui
 		_, _ = w.Write([]byte(dashboardHTML))
 	})
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	otelHandler := otelhttp.NewHandler(mux, "build-orchestrator-status")
+	srv := &http.Server{Addr: addr, Handler: otelHandler}
 
 	go func() {
 		<-ctx.Done()
@@ -569,7 +579,8 @@ func runHealthServer(ctx context.Context, addr string) {
 	})
 	healthSrv.RegisterRoutes(mux)
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	otelHandler := otelhttp.NewHandler(mux, "build-orchestrator-health")
+	srv := &http.Server{Addr: addr, Handler: otelHandler}
 
 	go func() {
 		<-ctx.Done()
