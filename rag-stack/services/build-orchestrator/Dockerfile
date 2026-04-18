@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 go mod download
 # Copy sources and build
 COPY common/ /common/
 COPY build-orchestrator/ .
-RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o build-orchestrator ./cmd/orchestrator
+RUN CGO_ENABLED=0 go build -v -o build-orchestrator ./cmd/orchestrator
 
 FROM registry.hierocracy.home:5000/alpine:3.23.3
 WORKDIR /app

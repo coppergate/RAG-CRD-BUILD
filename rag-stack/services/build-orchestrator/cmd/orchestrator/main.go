@@ -631,6 +631,7 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 			},
 		},
 		Spec: batchv1.JobSpec{
+			TTLSecondsAfterFinished: ptr(int32(600)),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					InitContainers: []corev1.Container{
@@ -675,7 +676,17 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
         // "--skip-tls-verify",
         // "--skip-tls-verify-registry=" + pushRegistry,
 							},
-							SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr(true)},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptr(false),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								RunAsNonRoot: ptr(true),
+								RunAsUser:    ptr(int64(1000)),
+								SeccompProfile: &corev1.SeccompProfile{
+									Type: corev1.SeccompProfileTypeRuntimeDefault,
+								},
+							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
 								{Name: "registry-ca", MountPath: "/kaniko/ssl/certs/ca-certificates.crt", SubPath: "ca.crt"},
