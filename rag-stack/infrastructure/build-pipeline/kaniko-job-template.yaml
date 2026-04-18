@@ -4,6 +4,7 @@ metadata:
   name: kaniko-build-${SERVICE_NAME}-${VERSION}
   namespace: build-pipeline
 spec:
+  ttlSecondsAfterFinished: 600
   template:
     spec:
       initContainers:
@@ -34,13 +35,18 @@ spec:
         - "--destination=${REGISTRY}/${SERVICE_NAME}:${VERSION}"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:latest"
         - "--registry-certificate=${REGISTRY}=/kaniko/ssl/certs/registry-ca.crt"
-        #- "--insecure" # No longer needed with TLS
-        #- "--insecure-pull"
-        #- "--insecure-registry=${REGISTRY}"
-        #- "--skip-tls-verify"
-        #- "--skip-tls-verify-registry=${REGISTRY}"
+        - "--rootless"
+        env:
+        - name: HOME
+          value: /workspace
         securityContext:
-          allowPrivilegeEscalation: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - name: workspace
           mountPath: /workspace

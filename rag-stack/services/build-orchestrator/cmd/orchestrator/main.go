@@ -670,11 +670,10 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 								"--destination=" + pushRegistry + "/" + task.ServiceName + ":latest",
 								"--cache=true",
 								"--cache-repo=" + pushRegistry + "/kaniko-cache",
-        // "--insecure",
-        // "--insecure-pull",
-        // "--insecure-registry=" + pushRegistry,
-        // "--skip-tls-verify",
-        // "--skip-tls-verify-registry=" + pushRegistry,
+								"--rootless",
+							},
+							Env: []corev1.EnvVar{
+								{Name: "HOME", Value: "/workspace"},
 							},
 							SecurityContext: &corev1.SecurityContext{
 								AllowPrivilegeEscalation: ptr(false),
