@@ -672,15 +672,6 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 								"--cache-repo=" + pushRegistry + "/kaniko-cache",
 								"--registry-certificate=" + pushRegistry + "=/kaniko/ssl/certs/ca-certificates.crt",
 							},
-							SecurityContext: &corev1.SecurityContext{
-								AllowPrivilegeEscalation: ptr(false),
-								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"ALL"},
-								},
-								SeccompProfile: &corev1.SeccompProfile{
-									Type: corev1.SeccompProfileTypeRuntimeDefault,
-								},
-							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
 								{Name: "registry-ca", MountPath: "/kaniko/ssl/certs/ca-certificates.crt", SubPath: "ca.crt"},

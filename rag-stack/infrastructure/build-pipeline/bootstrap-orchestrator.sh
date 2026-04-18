@@ -119,6 +119,7 @@ metadata:
   name: kaniko-bootstrap-orchestrator
   namespace: $NAMESPACE
 spec:
+  ttlSecondsAfterFinished: 600
   template:
     spec:
       initContainers:
@@ -145,8 +146,7 @@ spec:
         - "--context=dir:///workspace"
         - "--destination=$INTERNAL_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
         - "--destination=$INTERNAL_REGISTRY/build-orchestrator:latest"
-        securityContext:
-          allowPrivilegeEscalation: true
+        - "--registry-certificate=$INTERNAL_REGISTRY=/kaniko/ssl/certs/ca-certificates.crt"
         volumeMounts:
         - name: workspace
           mountPath: /workspace

@@ -35,12 +35,6 @@ spec:
         - "--destination=${REGISTRY}/${SERVICE_NAME}:${VERSION}"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:latest"
         - "--registry-certificate=${REGISTRY}=/kaniko/ssl/certs/registry-ca.crt"
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: ["ALL"]
-          seccompProfile:
-            type: RuntimeDefault
         volumeMounts:
         - name: workspace
           mountPath: /workspace
