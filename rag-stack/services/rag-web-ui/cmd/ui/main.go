@@ -327,6 +327,7 @@ func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 	tags := r.Form["tags"]
 	fileNames := r.Form["file_names"]
 	vsStr := r.FormValue("vector_size")
+	sessionID := r.FormValue("session_id")
 	if db != nil {
 		var ingestionID string
 		err := db.QueryRow("INSERT INTO code_ingestion (s3_bucket_id) VALUES ($1) RETURNING ingestion_id", bucketName).Scan(&ingestionID)
@@ -354,6 +355,7 @@ func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 				"ingestion_id": ingestionID,
 				"tag_names":    tNames,
 				"tag_ids":      tags,
+				"session_id":   sessionID,
 			}
 			if len(fileNames) > 0 {
 				payload["file_names"] = fileNames

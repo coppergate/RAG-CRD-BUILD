@@ -137,6 +137,7 @@ class IngestRequest(BaseModel):
     ingestion_id: str
     tag_names: List[str]
     tag_ids: List[str]
+    session_id: Optional[str] = None
     vector_size: Optional[int] = None
     file_names: Optional[List[str]] = None
 
@@ -200,7 +201,7 @@ def _create_pulsar_client():
             logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
     return pulsar.Client(PULSAR_URL, **kwargs)
 
-def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], vector_size: Optional[int] = None, file_names: Optional[List[str]] = None):
+def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], vector_size: Optional[int] = None, file_names: Optional[List[str]] = None, session_id: Optional[str] = None):
     pool = get_db_pool()
     conn = None
     pulsar_client = None
@@ -268,6 +269,8 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                         "tags": tag_ids,
                         "ingestion_id": ingestion_id
                     }
+                    if session_id:
+                        payload["session_id"] = session_id
 
                     point_id = str(uuid.uuid4())
                     points.append({
@@ -327,8 +330,8 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
 
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
-    logger.info(f"Received ingestion request for ID: {req.ingestion_id} (requested vector_size: {req.vector_size}, files: {req.file_names})")
-    background_tasks.add_task(run_ingestion, req.ingestion_id, req.tag_names, req.tag_ids, req.vector_size, req.file_names)
+    logger.info(f"Received ingestion request for ID: {req.ingestion_id} (requested vector_size: {req.vector_size}, files: {req.file_names}, session: {req.session_id})")
+    background_tasks.add_task(run_ingestion, req.ingestion_id, req.tag_names, req.tag_ids, req.vector_size, req.file_names, req.session_id)
     return {"status": "accepted", "ingestion_id": req.ingestion_id}
 
 @app.get("/healthz")

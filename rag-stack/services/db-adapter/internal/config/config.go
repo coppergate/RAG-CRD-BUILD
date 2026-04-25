@@ -10,9 +10,10 @@ type Config struct {
 	PromptTopic   string
 	ResponseTopic string
 	DBConnString  string
-	Subscription  string
-	DBOpsTopic    string
-	TLSCert       string
+	Subscription    string
+	DBOpsTopic      string
+	QdrantOpsTopic  string
+	TLSCert         string
 	TLSKey        string
 }
 
@@ -31,9 +32,10 @@ func Load() *Config {
 		PromptTopic:   envutil.GetEnv("PULSAR_PROMPT_TOPIC", "persistent://rag-pipeline/data/chat-prompts"),
 		ResponseTopic: envutil.GetEnv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/data/chat-responses"),
 		DBConnString:  envutil.GetEnv("DB_CONN_STRING", dbDefault),
-		Subscription:  envutil.GetEnv("PULSAR_SUBSCRIPTION", "db-adapter-sub"),
-		DBOpsTopic:    envutil.GetEnv("PULSAR_DB_OPS_TOPIC", "persistent://rag-pipeline/operations/db-ops"),
-		TLSCert:       envutil.GetEnv("TLS_CERT", ""),
+		Subscription:    envutil.GetEnv("PULSAR_SUBSCRIPTION", "db-adapter-sub"),
+		DBOpsTopic:      envutil.GetEnv("PULSAR_DB_OPS_TOPIC", "persistent://rag-pipeline/operations/db-ops"),
+		QdrantOpsTopic:  envutil.GetEnv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops"),
+		TLSCert:         envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:        envutil.GetEnv("TLS_KEY", ""),
 	}
 }

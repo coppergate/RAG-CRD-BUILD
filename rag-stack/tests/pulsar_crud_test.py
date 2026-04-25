@@ -263,6 +263,7 @@ def test_pulsar_qdrant_ops():
     q_res_consumer = client.subscribe(QDRANT_RESULTS_TOPIC, "test-qdrant-sub-" + str(uuid.uuid4())[:8])
 
     op_id = str(uuid.uuid4())
+    session_id = str(uuid.uuid4())
     vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
     search_payload = {
         "id": op_id,
@@ -270,7 +271,9 @@ def test_pulsar_qdrant_ops():
         "collection": "vectors",
         "vector_size": vector_size,
         "vector": [0.1] * vector_size,
-        "limit": 5
+        "limit": 5,
+        "session_id": session_id,
+        "tags": ["test-tag-" + op_id[:8]]
     }
 
     print(f"  - Sending Qdrant search op to Pulsar topic {QDRANT_OPS_TOPIC} (ID: {op_id})")

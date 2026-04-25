@@ -1,240 +1,202 @@
---- 1. Packaging sources for rag-admin-api ---
---- 2. Uploading sources to S3 ---
-pod/s3-uploader-rag-admin-api-1007298 created
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-rag-admin-api-1007298 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:29:53,199+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0xfe39206a, L:/10.244.8.27:34772 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:29:53,509+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:29:53,532+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:29:53,558+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0xc3811b69, L:/10.244.8.27:34788 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:29:53,572+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xc3811b69, L:/10.244.8.27:34788 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:29:53,635+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0xc3811b69, L:/10.244.8.27:34788 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:29:53,661+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-963] Created producer on cnx [id: 0xc3811b69, L:/10.244.8.27:34788 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:29:53,771+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-963] --- Publish throughput: 4.27 msg/s --- 0.02 Mbit/s --- Latency: med: 83.000 ms - 95pct: 83.000 ms - 99pct: 83.000 ms - 99.9pct: 83.000 ms - max: 83.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 626.000 bytes - 95pct: 626.000 bytes - 99pct: 626.000 bytes - 99.9pct: 626.000 bytes - max: 626.000 bytes --- Ack received rate: 4.27 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:29:53,779+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-963] Closed Producer
-2026-04-18T16:29:53,782+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:29:53,807+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xfe39206a, L:/10.244.8.27:34772 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:29:53,808+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xc3811b69, L:/10.244.8.27:34788 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:29:55,837+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for rag-admin-api:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for db-adapter ---
---- 2. Uploading sources to S3 ---
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-db-adapter-1007556 created
-pod/s3-uploader-db-adapter-1007556 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:30:18,927+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0xcfa24520, L:/10.244.8.27:50952 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:30:19,209+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:30:19,230+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:30:19,257+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x36ccbf56, L:/10.244.8.27:50968 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:30:19,278+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x36ccbf56, L:/10.244.8.27:50968 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:30:19,328+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0x36ccbf56, L:/10.244.8.27:50968 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:30:19,351+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-964] Created producer on cnx [id: 0x36ccbf56, L:/10.244.8.27:50968 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:30:19,808+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-964] --- Publish throughput: 1.75 msg/s --- 0.01 Mbit/s --- Latency: med: 420.000 ms - 95pct: 420.000 ms - 99pct: 420.000 ms - 99.9pct: 420.000 ms - max: 420.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 620.000 bytes - 95pct: 620.000 bytes - 99pct: 620.000 bytes - 99.9pct: 620.000 bytes - max: 620.000 bytes --- Ack received rate: 1.75 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:30:19,820+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-964] Closed Producer
-2026-04-18T16:30:19,825+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:30:19,846+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x36ccbf56, L:/10.244.8.27:50968 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:30:19,846+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xcfa24520, L:/10.244.8.27:50952 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:30:21,873+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for db-adapter:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for object-store-mgr ---
---- 2. Uploading sources to S3 ---
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-object-store-mgr-1007836 created
-pod/s3-uploader-object-store-mgr-1007836 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:30:43,699+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0xa706dd24, L:/10.244.8.27:48124 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:30:43,964+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:30:43,987+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:30:44,007+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0xdc50238e, L:/10.244.8.27:48130 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:30:44,019+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xdc50238e, L:/10.244.8.27:48130 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:30:44,066+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0xdc50238e, L:/10.244.8.27:48130 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:30:44,089+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-965] Created producer on cnx [id: 0xdc50238e, L:/10.244.8.27:48130 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:30:44,543+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-965] --- Publish throughput: 1.81 msg/s --- 0.01 Mbit/s --- Latency: med: 421.000 ms - 95pct: 421.000 ms - 99pct: 421.000 ms - 99.9pct: 421.000 ms - max: 421.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 632.000 bytes - 95pct: 632.000 bytes - 99pct: 632.000 bytes - 99.9pct: 632.000 bytes - max: 632.000 bytes --- Ack received rate: 1.81 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:30:44,550+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-965] Closed Producer
-2026-04-18T16:30:44,554+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:30:44,574+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xdc50238e, L:/10.244.8.27:48130 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:30:44,574+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xa706dd24, L:/10.244.8.27:48124 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:30:46,614+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for object-store-mgr:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for memory-controller ---
---- 2. Uploading sources to S3 ---
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-memory-controller-1008096 created
-pod/s3-uploader-memory-controller-1008096 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:31:07,916+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x22d4443c, L:/10.244.8.27:52040 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:31:08,188+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:31:08,208+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:31:08,229+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x330b9f87, L:/10.244.8.27:52054 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:31:08,238+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x330b9f87, L:/10.244.8.27:52054 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:31:08,264+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0x330b9f87, L:/10.244.8.27:52054 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:31:08,289+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-966] Created producer on cnx [id: 0x330b9f87, L:/10.244.8.27:52054 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:31:13,296+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-966] --- Publish throughput: 0.20 msg/s --- 0.00 Mbit/s --- Latency: med: 4969.000 ms - 95pct: 4969.000 ms - 99pct: 4969.000 ms - 99.9pct: 4969.000 ms - max: 4969.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 634.000 bytes - 95pct: 634.000 bytes - 99pct: 634.000 bytes - 99.9pct: 634.000 bytes - max: 634.000 bytes --- Ack received rate: 0.20 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:31:13,305+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-966] Closed Producer
-2026-04-18T16:31:13,310+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:31:13,331+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x22d4443c, L:/10.244.8.27:52040 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:31:13,331+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x330b9f87, L:/10.244.8.27:52054 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:31:15,354+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for memory-controller:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for llm-gateway ---
---- 2. Uploading sources to S3 ---
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-llm-gateway-1008373 created
-pod/s3-uploader-llm-gateway-1008373 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:31:37,802+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x38b633eb, L:/10.244.8.27:56978 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:31:38,144+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:31:38,172+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:31:38,206+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x60a63d19, L:/10.244.8.27:56992 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:31:38,216+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x60a63d19, L:/10.244.8.27:56992 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:31:38,272+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0x60a63d19, L:/10.244.8.27:56992 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:31:38,294+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-967] Created producer on cnx [id: 0x60a63d19, L:/10.244.8.27:56992 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:31:38,404+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-967] --- Publish throughput: 4.40 msg/s --- 0.02 Mbit/s --- Latency: med: 81.000 ms - 95pct: 81.000 ms - 99pct: 81.000 ms - 99.9pct: 81.000 ms - max: 81.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 622.000 bytes - 95pct: 622.000 bytes - 99pct: 622.000 bytes - 99.9pct: 622.000 bytes - max: 622.000 bytes --- Ack received rate: 4.40 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:31:38,411+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-967] Closed Producer
-2026-04-18T16:31:38,415+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:31:38,434+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x60a63d19, L:/10.244.8.27:56992 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:31:38,435+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x38b633eb, L:/10.244.8.27:56978 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:31:40,455+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for llm-gateway:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for rag-ingestion ---
---- 2. Uploading sources to S3 ---
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-rag-ingestion-1008625 created
-pod/s3-uploader-rag-ingestion-1008625 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:32:03,253+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x83e5a645, L:/10.244.8.27:33176 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:32:03,553+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:32:03,576+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:32:03,596+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x67e7e94a, L:/10.244.8.27:33186 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:32:03,603+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x67e7e94a, L:/10.244.8.27:33186 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:32:03,641+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0x67e7e94a, L:/10.244.8.27:33186 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:32:03,657+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-968] Created producer on cnx [id: 0x67e7e94a, L:/10.244.8.27:33186 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:32:03,773+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-968] --- Publish throughput: 5.19 msg/s --- 0.02 Mbit/s --- Latency: med: 92.000 ms - 95pct: 92.000 ms - 99pct: 92.000 ms - 99.9pct: 92.000 ms - max: 92.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 626.000 bytes - 95pct: 626.000 bytes - 99pct: 626.000 bytes - 99.9pct: 626.000 bytes - max: 626.000 bytes --- Ack received rate: 5.19 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:32:03,785+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-968] Closed Producer
-2026-04-18T16:32:03,791+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:32:03,807+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x67e7e94a, L:/10.244.8.27:33186 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:32:03,807+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x83e5a645, L:/10.244.8.27:33176 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:32:05,840+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for rag-ingestion:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for rag-worker ---
---- 2. Uploading sources to S3 ---
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-rag-worker-1008878 created
-pod/s3-uploader-rag-worker-1008878 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:32:28,446+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x51773c41, L:/10.244.8.27:33004 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:32:28,716+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:32:28,740+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:32:28,763+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0xcea6ac09, L:/10.244.8.27:35516 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:32:28,774+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xcea6ac09, L:/10.244.8.27:35516 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:32:28,822+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0xcea6ac09, L:/10.244.8.27:35516 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:32:28,844+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-969] Created producer on cnx [id: 0xcea6ac09, L:/10.244.8.27:35516 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:32:29,187+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-969] --- Publish throughput: 2.26 msg/s --- 0.01 Mbit/s --- Latency: med: 317.000 ms - 95pct: 317.000 ms - 99pct: 317.000 ms - 99.9pct: 317.000 ms - max: 317.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 620.000 bytes - 95pct: 620.000 bytes - 99pct: 620.000 bytes - 99.9pct: 620.000 bytes - max: 620.000 bytes --- Ack received rate: 2.26 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:32:29,195+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-969] Closed Producer
-2026-04-18T16:32:29,200+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:32:29,218+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xcea6ac09, L:/10.244.8.27:35516 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:32:29,218+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x51773c41, L:/10.244.8.27:33004 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:32:31,245+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for rag-worker:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for qdrant-adapter ---
---- 2. Uploading sources to S3 ---
-pod/s3-uploader-qdrant-adapter-1009145 created
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-qdrant-adapter-1009145 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:32:52,629+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x2bbc8876, L:/10.244.8.27:38784 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:32:52,956+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:32:52,979+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:32:53,009+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0xc571c031, L:/10.244.8.27:38788 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:32:53,024+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xc571c031, L:/10.244.8.27:38788 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:32:53,086+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0xc571c031, L:/10.244.8.27:38788 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:32:53,120+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-970] Created producer on cnx [id: 0xc571c031, L:/10.244.8.27:38788 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:32:53,218+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-970] --- Publish throughput: 4.28 msg/s --- 0.02 Mbit/s --- Latency: med: 74.000 ms - 95pct: 74.000 ms - 99pct: 74.000 ms - 99.9pct: 74.000 ms - max: 74.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 628.000 bytes - 95pct: 628.000 bytes - 99pct: 628.000 bytes - 99.9pct: 628.000 bytes - max: 628.000 bytes --- Ack received rate: 4.28 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:32:53,227+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-970] Closed Producer
-2026-04-18T16:32:53,232+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:32:53,256+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xc571c031, L:/10.244.8.27:38788 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:32:53,258+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x2bbc8876, L:/10.244.8.27:38784 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:32:55,295+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for qdrant-adapter:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for prompt-aggregator ---
---- 2. Uploading sources to S3 ---
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-prompt-aggregator-1009407 created
-pod/s3-uploader-prompt-aggregator-1009407 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:33:18,043+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0xb192c3a5, L:/10.244.8.27:43198 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:33:18,322+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:33:18,343+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:33:18,365+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x23dee5db, L:/10.244.8.27:43210 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:33:18,376+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x23dee5db, L:/10.244.8.27:43210 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:33:18,422+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0x23dee5db, L:/10.244.8.27:43210 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:33:18,448+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-971] Created producer on cnx [id: 0x23dee5db, L:/10.244.8.27:43210 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:33:18,549+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-971] --- Publish throughput: 4.98 msg/s --- 0.02 Mbit/s --- Latency: med: 75.000 ms - 95pct: 75.000 ms - 99pct: 75.000 ms - 99.9pct: 75.000 ms - max: 75.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 634.000 bytes - 95pct: 634.000 bytes - 99pct: 634.000 bytes - 99.9pct: 634.000 bytes - max: 634.000 bytes --- Ack received rate: 4.98 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:33:18,556+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-971] Closed Producer
-2026-04-18T16:33:18,560+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:33:18,584+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x23dee5db, L:/10.244.8.27:43210 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:33:18,584+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0xb192c3a5, L:/10.244.8.27:43198 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:33:20,611+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for prompt-aggregator:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
---- 1. Packaging sources for build-orchestrator ---
---- 2. Uploading sources to S3 ---
-Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true (pod or container "k8tz" must set securityContext.runAsNonRoot=true)
-pod/s3-uploader-build-orchestrator-1009660 created
-pod/s3-uploader-build-orchestrator-1009660 condition met
-Defaulted container "uploader" out of: uploader, k8tz (init)
---- 3. Triggering Orchestrator via Pulsar ---
-pod/pulsar-toolset-0 condition met
-Defaulted container "pulsar-toolset" out of: pulsar-toolset, k8tz (init)
-2026-04-18T16:33:42,324+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x2042b801, L:/10.244.8.27:58318 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:33:42,597+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Starting Pulsar producer perf with config: {"topicName":"persistent://public/default/build-tasks","producerName":null,"sendTimeoutMs":30000,"blockIfQueueFull":false,"maxPendingMessages":1000,"maxPendingMessagesAcrossPartitions":50000,"messageRoutingMode":"RoundRobinPartition","hashingScheme":"JavaStringHash","cryptoFailureAction":"FAIL","batchingMaxPublishDelayMicros":1000,"batchingPartitionSwitchFrequencyByPublishDelay":10,"batchingMaxMessages":1000,"batchingMaxBytes":131072,"batchingEnabled":true,"chunkingEnabled":false,"chunkMaxMessageSize":-1,"encryptionKeys":[],"compressionType":"NONE","initialSequenceId":null,"autoUpdatePartitions":true,"autoUpdatePartitionsIntervalSeconds":60,"multiSchema":true,"accessMode":"Shared","lazyStartPartitionedProducers":false,"properties":{},"initialSubscriptionName":null,"nonPartitionedTopicExpected":false}
-2026-04-18T16:33:42,618+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - Pulsar client config: {"serviceUrl":"pulsar+ssl://pulsar-proxy:6651/","authPluginClassName":null,"authParams":null,"authParamMap":null,"operationTimeoutMs":30000,"lookupTimeoutMs":30000,"statsIntervalSeconds":60,"numIoThreads":8,"numListenerThreads":8,"connectionsPerBroker":1,"connectionMaxIdleSeconds":25,"useTcpNoDelay":true,"useTls":true,"tlsKeyFilePath":"","tlsCertificateFilePath":"","tlsTrustCertsFilePath":"/pulsar/certs/proxy-ca/ca.crt","tlsAllowInsecureConnection":false,"tlsHostnameVerificationEnable":false,"concurrentLookupRequest":5000,"maxLookupRequest":50000,"maxLookupRedirects":20,"maxNumberOfRejectedRequestPerConnection":50,"keepAliveIntervalSeconds":30,"connectionTimeoutMs":10000,"requestTimeoutMs":60000,"readTimeoutMs":60000,"autoCertRefreshSeconds":300,"initialBackoffIntervalNanos":100000000,"maxBackoffIntervalNanos":60000000000,"enableBusyWait":false,"listenerName":null,"useKeyStoreTls":false,"sslProvider":null,"tlsKeyStoreType":"JKS","tlsKeyStorePath":"","tlsKeyStorePassword":"*****","tlsTrustStoreType":"JKS","tlsTrustStorePath":"","tlsTrustStorePassword":"*****","tlsCiphers":[],"tlsProtocols":[],"memoryLimitBytes":0,"proxyServiceUrl":null,"proxyProtocol":null,"enableTransaction":false,"dnsLookupBindAddress":null,"dnsLookupBindPort":0,"socks5ProxyAddress":null,"socks5ProxyUsername":null,"socks5ProxyPassword":null,"description":null}
-2026-04-18T16:33:42,641+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ConnectionPool - [[id: 0x6935cde0, L:/10.244.8.27:58326 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]] Connected to server
-2026-04-18T16:33:42,651+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x6935cde0, L:/10.244.8.27:58326 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Connected through proxy to target broker at pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651
-2026-04-18T16:33:42,686+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [null] Creating producer on cnx [id: 0x6935cde0, L:/10.244.8.27:58326 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:33:42,708+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-972] Created producer on cnx [id: 0x6935cde0, L:/10.244.8.27:58326 - R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651]
-2026-04-18T16:33:42,812+0100 [main] INFO  org.apache.pulsar.client.impl.ProducerStatsRecorderImpl - [persistent://public/default/build-tasks] [pulsar-2-972] --- Publish throughput: 5.31 msg/s --- 0.03 Mbit/s --- Latency: med: 75.000 ms - 95pct: 75.000 ms - 99pct: 75.000 ms - 99.9pct: 75.000 ms - max: 75.000 ms --- BatchSize: med: 1.000 - 95pct: 1.000 - 99pct: 1.000 - 99.9pct: 1.000 - max: 1.000 --- MsgSize: med: 636.000 bytes - 95pct: 636.000 bytes - 99pct: 636.000 bytes - 99.9pct: 636.000 bytes - max: 636.000 bytes --- Ack received rate: 5.31 ack/s --- Failed messages: 0 --- Pending messages: 0
-2026-04-18T16:33:42,821+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ProducerImpl - [persistent://public/default/build-tasks] [pulsar-2-972] Closed Producer
-2026-04-18T16:33:42,823+0100 [main] INFO  org.apache.pulsar.client.impl.PulsarClientImpl - Client closing. URL: pulsar+ssl://pulsar-proxy:6651/
-2026-04-18T16:33:42,840+0100 [pulsar-client-io-1-5] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x6935cde0, L:/10.244.8.27:58326 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:33:42,840+0100 [pulsar-client-io-1-3] INFO  org.apache.pulsar.client.impl.ClientCnx - [id: 0x2042b801, L:/10.244.8.27:58318 ! R:pulsar-proxy.apache-pulsar.svc.cluster.local/10.96.232.238:6651] Disconnected
-2026-04-18T16:33:44,865+0100 [main] INFO  org.apache.pulsar.client.cli.PulsarClientTool - 1 messages successfully produced
-Build triggered for build-orchestrator:2.7.1
-Check Kaniko logs: /home/k8s/kube/kubectl get jobs -n build-pipeline
+Defaulted container "ingestor" out of: ingestor, k8tz (init)
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Received ingestion request for ID: c032a64e-b680-4de9-a521-45e53f565c34 (requested vector_size: None, files: ['iso-file-36a2edad.txt'], session: None)
+INFO:     10.244.4.68:50396 - "POST /ingest HTTP/1.1" 200 OK
+INFO:rag-ingestor:Detected model llama3.1:latest dimensions: 4096
+INFO:rag-ingestor:Starting ingestion task for c032a64e-b680-4de9-a521-45e53f565c34 using Ollama model llama3.1:latest (dims: 4096)
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Ensuring collection vectors via Pulsar (vector_size: 4096)
+INFO:rag-ingestor:Filtering ingestion to explicit file allowlist: ['iso-file-36a2edad.txt']
+INFO:rag-ingestor:Found 1 files to process.
+INFO:rag-ingestor:Ingestion c032a64e-b680-4de9-a521-45e53f565c34 completed successfully. Total chunks: 1
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Received ingestion request for ID: ingest-1776543702 (requested vector_size: 4096, files: ['e2e-test-file-1776543702.txt'], session: session-1776543700)
+INFO:     10.244.3.146:51896 - "POST /ingest HTTP/1.1" 200 OK
+INFO:rag-ingestor:Starting ingestion task for ingest-1776543702 using Ollama model llama3.1:latest (dims: 4096)
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Ensuring collection vectors via Pulsar (vector_size: 4096)
+INFO:rag-ingestor:Filtering ingestion to explicit file allowlist: ['e2e-test-file-1776543702.txt']
+INFO:rag-ingestor:Found 1 files to process.
+ERROR:rag-ingestor:Error processing e2e-test-file-1776543702.txt: invalid input syntax for type uuid: "ingest-1776543702"
+LINE 1: ...ingestion_id, embedding_vector, metadata) VALUES ('ingest-17...
+INFO:rag-ingestor:Ingestion ingest-1776543702 completed successfully. Total chunks: 0
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags
+INFO:rag-ingestor:Pulsar client using TLS with CA from: /etc/ssl/certs/ca-certificates.crt
+INFO:rag-ingestor:Checking Ollama health at: http://ollama.llms-ollama.svc.cluster.local:11434/api/tags

@@ -106,6 +106,13 @@ func main() {
 	}
 	defer responseConsumer.Close()
 
+	qdrantProducer, err := client.NewProducer(cfg.QdrantOpsTopic)
+	if err != nil {
+		log.Printf("Warning: Could not create qdrant ops producer: %v", err)
+	} else {
+		defer qdrantProducer.Close()
+	}
+
 	// Register readiness checks
 	healthSrv.RegisterCheck("database", func() error {
 		_, err := entClient.Session.Query().Limit(1).Count(context.Background())
@@ -250,6 +257,25 @@ func main() {
 				http.Error(w, "Invalid tag ID", http.StatusBadRequest)
 				return
 			}
+
+			// 1. Delete from Qdrant first (via Pulsar) if producer is available
+			if qdrantProducer != nil {
+				delPayload := map[string]interface{}{
+					"id":         uuid.New().String(),
+					"action":     "delete",
+					"collection": "vectors",
+					"tags":       []string{idStr},
+				}
+				p, _ := json.Marshal(delPayload)
+				_, perr := qdrantProducer.Send(r.Context(), &pulsar.ProducerMessage{
+					Payload: p,
+				})
+				if perr != nil {
+					log.Printf("Warning: failed to send qdrant delete for tag %s: %v", idStr, perr)
+				}
+			}
+
+			// 2. Delete from Postgres
 			err = entClient.Tag.DeleteOneID(tagID).Exec(r.Context())
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)

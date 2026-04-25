@@ -255,7 +255,15 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 			limit = int(l)
 		}
 		tags := toStringSlice(data["tags"])
-		result, opErr = a.qdrant.Search(collection, vs, vector, limit, tags)
+		sessionID, _ := data["session_id"].(string)
+		result, opErr = a.qdrant.Search(collection, vs, vector, limit, tags, sessionID)
+	case "delete":
+		tags := toStringSlice(data["tags"])
+		log.Printf("[%s] Deleting points from collection %s with tags %v", opID, collection, tags)
+		opErr = a.qdrant.DeleteByFilter(collection, vs, tags)
+		if opErr == nil {
+			result = map[string]any{"ok": true}
+		}
 	case "upsert":
 		points, _ := data["points"].([]interface{})
 		opErr = a.qdrant.Upsert(collection, vs, points)

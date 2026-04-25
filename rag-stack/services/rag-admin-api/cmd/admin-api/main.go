@@ -51,7 +51,7 @@ func main() {
 	mux.HandleFunc("/api/chat/", h.ProxyTo(cfg.LLMGatewayURL, "/api/chat"))
 	
 	// RAG Ingestion Proxy
-	mux.HandleFunc("/api/ingest/", h.ProxyTo(cfg.IngestionURL, "/api"))
+	mux.HandleFunc("/api/ingest/", h.ProxyTo(cfg.IngestionURL, "/api/ingest"))
 	
 	// Qdrant Direct Proxy
 	mux.HandleFunc("/api/qdrant-direct/", h.ProxyTo(cfg.QdrantDirectURL, "/api/qdrant-direct"))

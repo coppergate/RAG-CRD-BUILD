@@ -28,11 +28,11 @@ func NewClient(cfg *config.Config) *QdrantClient {
 	}
 }
 
-func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []string) ([]string, error) {
-	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, true)
+func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID string) ([]string, error) {
+	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, true)
 }
 
-func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []string, retry bool) ([]string, error) {
+func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID string, retry bool) ([]string, error) {
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
@@ -52,18 +52,31 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		"with_payload": true,
 	}
 
+	var mustFilters []map[string]interface{}
+
 	if len(tags) > 0 {
-		query["filter"] = map[string]interface{}{
-			"must": []map[string]interface{}{
-				{
-					"key": "tags",
-					"match": map[string]interface{}{
-						"any": tags,
-					},
-				},
+		mustFilters = append(mustFilters, map[string]interface{}{
+			"key": "tags",
+			"match": map[string]interface{}{
+				"any": tags,
 			},
+		})
+	}
+
+	if sessionID != "" {
+		mustFilters = append(mustFilters, map[string]interface{}{
+			"key": "session_id",
+			"match": map[string]interface{}{
+				"value": sessionID,
+			},
+		})
+	}
+
+	if len(mustFilters) > 0 {
+		query["filter"] = map[string]interface{}{
+			"must": mustFilters,
 		}
-		log.Printf("DEBUG: Qdrant Search Filter (tags=%v): %+v", tags, query["filter"])
+		log.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%s): %+v", tags, sessionID, query["filter"])
 	}
 
 	body, err := json.Marshal(query)
@@ -81,7 +94,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		if err := q.CreateCollection(collection, vs); err != nil {
 			return nil, fmt.Errorf("failed to auto-create collection %s: %v", effectiveColl, err)
 		}
-		return q.searchWithRetry(collection, vectorSize, vector, limit, tags, false)
+		return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, false)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -106,6 +119,65 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 	}
 
 	return contexts, nil
+}
+
+func (q *QdrantClient) DeleteByFilter(collection string, vectorSize int, tags []string) error {
+	vs := vectorSize
+	if vs <= 0 {
+		vs = q.cfg.DefaultVectorSize
+	}
+
+	effectiveColl := collection
+	if vs > 0 {
+		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
+	}
+
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
+	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/delete?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
+
+	if len(tags) == 0 {
+		return nil
+	}
+
+	filter := map[string]interface{}{
+		"must": []map[string]interface{}{
+			{
+				"key": "tags",
+				"match": map[string]interface{}{
+					"any": tags,
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"filter": filter,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal delete filter: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := q.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil // Collection doesn't exist, nothing to delete
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("qdrant (coll: %s) returned status %d on delete", effectiveColl, resp.StatusCode)
+	}
+
+	return nil
 }
 
 func (q *QdrantClient) ListCollections() (interface{}, error) {

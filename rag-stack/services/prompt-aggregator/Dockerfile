@@ -16,7 +16,7 @@ COPY common/ /common/
 COPY prompt-aggregator/ .
 
 # Build
-RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o aggregator cmd/aggregator/main.go
+RUN CGO_ENABLED=0 go build -v -o aggregator cmd/aggregator/main.go
 
 # Final image
 FROM registry.hierocracy.home:5000/alpine:3.23.3

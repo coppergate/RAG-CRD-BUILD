@@ -210,8 +210,8 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 			continue
 		}
 		vs := len(vector)
-		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, query='%s'", req.ID, h.cfg.QdrantCollection, vs, tags, sq)
-		contexts, err := h.searcher.Search(ctx, vector, tags)
+		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, session=%s, query='%s'", req.ID, h.cfg.QdrantCollection, vs, tags, req.SessionID, sq)
+		contexts, err := h.searcher.Search(ctx, vector, tags, req.SessionID)
 		if err != nil {
 			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.ID, sq, vs, err)
 			continue
