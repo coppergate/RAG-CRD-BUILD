@@ -121,6 +121,17 @@ func main() {
 
 	mux.HandleFunc("/collections/", func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/collections/")
+		if strings.HasSuffix(name, "/stats") {
+			collName := strings.TrimSuffix(name, "/stats")
+			res, err := adapter.qdrant.GetStats(collName)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(res)
+			return
+		}
 		res, err := adapter.qdrant.GetCollection(name)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -259,8 +270,9 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 		result, opErr = a.qdrant.Search(collection, vs, vector, limit, tags, sessionID)
 	case "delete":
 		tags := toStringSlice(data["tags"])
-		log.Printf("[%s] Deleting points from collection %s with tags %v", opID, collection, tags)
-		opErr = a.qdrant.DeleteByFilter(collection, vs, tags)
+		paths := toStringSlice(data["paths"])
+		log.Printf("[%s] Deleting points from collection %s with tags %v, paths %v", opID, collection, tags, paths)
+		opErr = a.qdrant.DeleteByFilter(collection, vs, tags, paths)
 		if opErr == nil {
 			result = map[string]any{"ok": true}
 		}
@@ -272,6 +284,13 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 		}
 	case "create_collection":
 		opErr = a.qdrant.CreateCollection(collection, vs)
+		if opErr == nil {
+			result = map[string]any{"ok": true}
+		}
+	case "merge_tags":
+		sourceTag, _ := data["source_tag"].(string)
+		targetTag, _ := data["target_tag"].(string)
+		opErr = a.qdrant.MergeTags(collection, vs, sourceTag, targetTag)
 		if opErr == nil {
 			result = map[string]any{"ok": true}
 		}
