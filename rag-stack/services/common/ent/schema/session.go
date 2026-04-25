@@ -42,5 +42,8 @@ func (Session) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("tags", Tag.Type).
 			StorageKey(edge.Table("session_tag"), edge.Columns("session_id", "tag_id")),
+		edge.To("metrics", ModelExecutionMetric.Type),
+		edge.To("retrieval_logs", RetrievalLog.Type),
+		edge.To("memory_events", MemoryEvent.Type),
 	}
 }

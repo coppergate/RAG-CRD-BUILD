@@ -11,11 +11,17 @@ import (
 
 	"app-builds/common/ent/migrate"
 
+	"app-builds/common/ent/codeembedding"
+	"app-builds/common/ent/codeingestion"
+	"app-builds/common/ent/inferencenode"
 	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
+	"app-builds/common/ent/modeldefinition"
+	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
+	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 
@@ -31,16 +37,28 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// CodeEmbedding is the client for interacting with the CodeEmbedding builders.
+	CodeEmbedding *CodeEmbeddingClient
+	// CodeIngestion is the client for interacting with the CodeIngestion builders.
+	CodeIngestion *CodeIngestionClient
+	// InferenceNode is the client for interacting with the InferenceNode builders.
+	InferenceNode *InferenceNodeClient
 	// MemoryEvent is the client for interacting with the MemoryEvent builders.
 	MemoryEvent *MemoryEventClient
 	// MemoryItem is the client for interacting with the MemoryItem builders.
 	MemoryItem *MemoryItemClient
 	// MemoryLink is the client for interacting with the MemoryLink builders.
 	MemoryLink *MemoryLinkClient
+	// ModelDefinition is the client for interacting with the ModelDefinition builders.
+	ModelDefinition *ModelDefinitionClient
+	// ModelExecutionMetric is the client for interacting with the ModelExecutionMetric builders.
+	ModelExecutionMetric *ModelExecutionMetricClient
 	// Prompt is the client for interacting with the Prompt builders.
 	Prompt *PromptClient
 	// Response is the client for interacting with the Response builders.
 	Response *ResponseClient
+	// RetrievalLog is the client for interacting with the RetrievalLog builders.
+	RetrievalLog *RetrievalLogClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
 	// Tag is the client for interacting with the Tag builders.
@@ -56,11 +74,17 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.CodeEmbedding = NewCodeEmbeddingClient(c.config)
+	c.CodeIngestion = NewCodeIngestionClient(c.config)
+	c.InferenceNode = NewInferenceNodeClient(c.config)
 	c.MemoryEvent = NewMemoryEventClient(c.config)
 	c.MemoryItem = NewMemoryItemClient(c.config)
 	c.MemoryLink = NewMemoryLinkClient(c.config)
+	c.ModelDefinition = NewModelDefinitionClient(c.config)
+	c.ModelExecutionMetric = NewModelExecutionMetricClient(c.config)
 	c.Prompt = NewPromptClient(c.config)
 	c.Response = NewResponseClient(c.config)
+	c.RetrievalLog = NewRetrievalLogClient(c.config)
 	c.Session = NewSessionClient(c.config)
 	c.Tag = NewTagClient(c.config)
 }
@@ -153,15 +177,21 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:         ctx,
-		config:      cfg,
-		MemoryEvent: NewMemoryEventClient(cfg),
-		MemoryItem:  NewMemoryItemClient(cfg),
-		MemoryLink:  NewMemoryLinkClient(cfg),
-		Prompt:      NewPromptClient(cfg),
-		Response:    NewResponseClient(cfg),
-		Session:     NewSessionClient(cfg),
-		Tag:         NewTagClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		CodeEmbedding:        NewCodeEmbeddingClient(cfg),
+		CodeIngestion:        NewCodeIngestionClient(cfg),
+		InferenceNode:        NewInferenceNodeClient(cfg),
+		MemoryEvent:          NewMemoryEventClient(cfg),
+		MemoryItem:           NewMemoryItemClient(cfg),
+		MemoryLink:           NewMemoryLinkClient(cfg),
+		ModelDefinition:      NewModelDefinitionClient(cfg),
+		ModelExecutionMetric: NewModelExecutionMetricClient(cfg),
+		Prompt:               NewPromptClient(cfg),
+		Response:             NewResponseClient(cfg),
+		RetrievalLog:         NewRetrievalLogClient(cfg),
+		Session:              NewSessionClient(cfg),
+		Tag:                  NewTagClient(cfg),
 	}, nil
 }
 
@@ -179,22 +209,28 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:         ctx,
-		config:      cfg,
-		MemoryEvent: NewMemoryEventClient(cfg),
-		MemoryItem:  NewMemoryItemClient(cfg),
-		MemoryLink:  NewMemoryLinkClient(cfg),
-		Prompt:      NewPromptClient(cfg),
-		Response:    NewResponseClient(cfg),
-		Session:     NewSessionClient(cfg),
-		Tag:         NewTagClient(cfg),
+		ctx:                  ctx,
+		config:               cfg,
+		CodeEmbedding:        NewCodeEmbeddingClient(cfg),
+		CodeIngestion:        NewCodeIngestionClient(cfg),
+		InferenceNode:        NewInferenceNodeClient(cfg),
+		MemoryEvent:          NewMemoryEventClient(cfg),
+		MemoryItem:           NewMemoryItemClient(cfg),
+		MemoryLink:           NewMemoryLinkClient(cfg),
+		ModelDefinition:      NewModelDefinitionClient(cfg),
+		ModelExecutionMetric: NewModelExecutionMetricClient(cfg),
+		Prompt:               NewPromptClient(cfg),
+		Response:             NewResponseClient(cfg),
+		RetrievalLog:         NewRetrievalLogClient(cfg),
+		Session:              NewSessionClient(cfg),
+		Tag:                  NewTagClient(cfg),
 	}, nil
 }
 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		MemoryEvent.
+//		CodeEmbedding.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -217,8 +253,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.Prompt, c.Response, c.Session,
-		c.Tag,
+		c.CodeEmbedding, c.CodeIngestion, c.InferenceNode, c.MemoryEvent, c.MemoryItem,
+		c.MemoryLink, c.ModelDefinition, c.ModelExecutionMetric, c.Prompt, c.Response,
+		c.RetrievalLog, c.Session, c.Tag,
 	} {
 		n.Use(hooks...)
 	}
@@ -228,8 +265,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.Prompt, c.Response, c.Session,
-		c.Tag,
+		c.CodeEmbedding, c.CodeIngestion, c.InferenceNode, c.MemoryEvent, c.MemoryItem,
+		c.MemoryLink, c.ModelDefinition, c.ModelExecutionMetric, c.Prompt, c.Response,
+		c.RetrievalLog, c.Session, c.Tag,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -238,22 +276,513 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *CodeEmbeddingMutation:
+		return c.CodeEmbedding.mutate(ctx, m)
+	case *CodeIngestionMutation:
+		return c.CodeIngestion.mutate(ctx, m)
+	case *InferenceNodeMutation:
+		return c.InferenceNode.mutate(ctx, m)
 	case *MemoryEventMutation:
 		return c.MemoryEvent.mutate(ctx, m)
 	case *MemoryItemMutation:
 		return c.MemoryItem.mutate(ctx, m)
 	case *MemoryLinkMutation:
 		return c.MemoryLink.mutate(ctx, m)
+	case *ModelDefinitionMutation:
+		return c.ModelDefinition.mutate(ctx, m)
+	case *ModelExecutionMetricMutation:
+		return c.ModelExecutionMetric.mutate(ctx, m)
 	case *PromptMutation:
 		return c.Prompt.mutate(ctx, m)
 	case *ResponseMutation:
 		return c.Response.mutate(ctx, m)
+	case *RetrievalLogMutation:
+		return c.RetrievalLog.mutate(ctx, m)
 	case *SessionMutation:
 		return c.Session.mutate(ctx, m)
 	case *TagMutation:
 		return c.Tag.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// CodeEmbeddingClient is a client for the CodeEmbedding schema.
+type CodeEmbeddingClient struct {
+	config
+}
+
+// NewCodeEmbeddingClient returns a client for the CodeEmbedding from the given config.
+func NewCodeEmbeddingClient(c config) *CodeEmbeddingClient {
+	return &CodeEmbeddingClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `codeembedding.Hooks(f(g(h())))`.
+func (c *CodeEmbeddingClient) Use(hooks ...Hook) {
+	c.hooks.CodeEmbedding = append(c.hooks.CodeEmbedding, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `codeembedding.Intercept(f(g(h())))`.
+func (c *CodeEmbeddingClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CodeEmbedding = append(c.inters.CodeEmbedding, interceptors...)
+}
+
+// Create returns a builder for creating a CodeEmbedding entity.
+func (c *CodeEmbeddingClient) Create() *CodeEmbeddingCreate {
+	mutation := newCodeEmbeddingMutation(c.config, OpCreate)
+	return &CodeEmbeddingCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CodeEmbedding entities.
+func (c *CodeEmbeddingClient) CreateBulk(builders ...*CodeEmbeddingCreate) *CodeEmbeddingCreateBulk {
+	return &CodeEmbeddingCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CodeEmbeddingClient) MapCreateBulk(slice any, setFunc func(*CodeEmbeddingCreate, int)) *CodeEmbeddingCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CodeEmbeddingCreateBulk{err: fmt.Errorf("calling to CodeEmbeddingClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CodeEmbeddingCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CodeEmbeddingCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CodeEmbedding.
+func (c *CodeEmbeddingClient) Update() *CodeEmbeddingUpdate {
+	mutation := newCodeEmbeddingMutation(c.config, OpUpdate)
+	return &CodeEmbeddingUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CodeEmbeddingClient) UpdateOne(_m *CodeEmbedding) *CodeEmbeddingUpdateOne {
+	mutation := newCodeEmbeddingMutation(c.config, OpUpdateOne, withCodeEmbedding(_m))
+	return &CodeEmbeddingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CodeEmbeddingClient) UpdateOneID(id uuid.UUID) *CodeEmbeddingUpdateOne {
+	mutation := newCodeEmbeddingMutation(c.config, OpUpdateOne, withCodeEmbeddingID(id))
+	return &CodeEmbeddingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CodeEmbedding.
+func (c *CodeEmbeddingClient) Delete() *CodeEmbeddingDelete {
+	mutation := newCodeEmbeddingMutation(c.config, OpDelete)
+	return &CodeEmbeddingDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CodeEmbeddingClient) DeleteOne(_m *CodeEmbedding) *CodeEmbeddingDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CodeEmbeddingClient) DeleteOneID(id uuid.UUID) *CodeEmbeddingDeleteOne {
+	builder := c.Delete().Where(codeembedding.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CodeEmbeddingDeleteOne{builder}
+}
+
+// Query returns a query builder for CodeEmbedding.
+func (c *CodeEmbeddingClient) Query() *CodeEmbeddingQuery {
+	return &CodeEmbeddingQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCodeEmbedding},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CodeEmbedding entity by its id.
+func (c *CodeEmbeddingClient) Get(ctx context.Context, id uuid.UUID) (*CodeEmbedding, error) {
+	return c.Query().Where(codeembedding.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CodeEmbeddingClient) GetX(ctx context.Context, id uuid.UUID) *CodeEmbedding {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryIngestion queries the ingestion edge of a CodeEmbedding.
+func (c *CodeEmbeddingClient) QueryIngestion(_m *CodeEmbedding) *CodeIngestionQuery {
+	query := (&CodeIngestionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(codeembedding.Table, codeembedding.FieldID, id),
+			sqlgraph.To(codeingestion.Table, codeingestion.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, codeembedding.IngestionTable, codeembedding.IngestionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryTags queries the tags edge of a CodeEmbedding.
+func (c *CodeEmbeddingClient) QueryTags(_m *CodeEmbedding) *TagQuery {
+	query := (&TagClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(codeembedding.Table, codeembedding.FieldID, id),
+			sqlgraph.To(tag.Table, tag.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, codeembedding.TagsTable, codeembedding.TagsPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CodeEmbeddingClient) Hooks() []Hook {
+	return c.hooks.CodeEmbedding
+}
+
+// Interceptors returns the client interceptors.
+func (c *CodeEmbeddingClient) Interceptors() []Interceptor {
+	return c.inters.CodeEmbedding
+}
+
+func (c *CodeEmbeddingClient) mutate(ctx context.Context, m *CodeEmbeddingMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CodeEmbeddingCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CodeEmbeddingUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CodeEmbeddingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CodeEmbeddingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CodeEmbedding mutation op: %q", m.Op())
+	}
+}
+
+// CodeIngestionClient is a client for the CodeIngestion schema.
+type CodeIngestionClient struct {
+	config
+}
+
+// NewCodeIngestionClient returns a client for the CodeIngestion from the given config.
+func NewCodeIngestionClient(c config) *CodeIngestionClient {
+	return &CodeIngestionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `codeingestion.Hooks(f(g(h())))`.
+func (c *CodeIngestionClient) Use(hooks ...Hook) {
+	c.hooks.CodeIngestion = append(c.hooks.CodeIngestion, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `codeingestion.Intercept(f(g(h())))`.
+func (c *CodeIngestionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CodeIngestion = append(c.inters.CodeIngestion, interceptors...)
+}
+
+// Create returns a builder for creating a CodeIngestion entity.
+func (c *CodeIngestionClient) Create() *CodeIngestionCreate {
+	mutation := newCodeIngestionMutation(c.config, OpCreate)
+	return &CodeIngestionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CodeIngestion entities.
+func (c *CodeIngestionClient) CreateBulk(builders ...*CodeIngestionCreate) *CodeIngestionCreateBulk {
+	return &CodeIngestionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CodeIngestionClient) MapCreateBulk(slice any, setFunc func(*CodeIngestionCreate, int)) *CodeIngestionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CodeIngestionCreateBulk{err: fmt.Errorf("calling to CodeIngestionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CodeIngestionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CodeIngestionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CodeIngestion.
+func (c *CodeIngestionClient) Update() *CodeIngestionUpdate {
+	mutation := newCodeIngestionMutation(c.config, OpUpdate)
+	return &CodeIngestionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CodeIngestionClient) UpdateOne(_m *CodeIngestion) *CodeIngestionUpdateOne {
+	mutation := newCodeIngestionMutation(c.config, OpUpdateOne, withCodeIngestion(_m))
+	return &CodeIngestionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CodeIngestionClient) UpdateOneID(id uuid.UUID) *CodeIngestionUpdateOne {
+	mutation := newCodeIngestionMutation(c.config, OpUpdateOne, withCodeIngestionID(id))
+	return &CodeIngestionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CodeIngestion.
+func (c *CodeIngestionClient) Delete() *CodeIngestionDelete {
+	mutation := newCodeIngestionMutation(c.config, OpDelete)
+	return &CodeIngestionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CodeIngestionClient) DeleteOne(_m *CodeIngestion) *CodeIngestionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CodeIngestionClient) DeleteOneID(id uuid.UUID) *CodeIngestionDeleteOne {
+	builder := c.Delete().Where(codeingestion.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CodeIngestionDeleteOne{builder}
+}
+
+// Query returns a query builder for CodeIngestion.
+func (c *CodeIngestionClient) Query() *CodeIngestionQuery {
+	return &CodeIngestionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCodeIngestion},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CodeIngestion entity by its id.
+func (c *CodeIngestionClient) Get(ctx context.Context, id uuid.UUID) (*CodeIngestion, error) {
+	return c.Query().Where(codeingestion.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CodeIngestionClient) GetX(ctx context.Context, id uuid.UUID) *CodeIngestion {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryEmbeddings queries the embeddings edge of a CodeIngestion.
+func (c *CodeIngestionClient) QueryEmbeddings(_m *CodeIngestion) *CodeEmbeddingQuery {
+	query := (&CodeEmbeddingClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(codeingestion.Table, codeingestion.FieldID, id),
+			sqlgraph.To(codeembedding.Table, codeembedding.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, codeingestion.EmbeddingsTable, codeingestion.EmbeddingsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryTags queries the tags edge of a CodeIngestion.
+func (c *CodeIngestionClient) QueryTags(_m *CodeIngestion) *TagQuery {
+	query := (&TagClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(codeingestion.Table, codeingestion.FieldID, id),
+			sqlgraph.To(tag.Table, tag.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, codeingestion.TagsTable, codeingestion.TagsPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CodeIngestionClient) Hooks() []Hook {
+	return c.hooks.CodeIngestion
+}
+
+// Interceptors returns the client interceptors.
+func (c *CodeIngestionClient) Interceptors() []Interceptor {
+	return c.inters.CodeIngestion
+}
+
+func (c *CodeIngestionClient) mutate(ctx context.Context, m *CodeIngestionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CodeIngestionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CodeIngestionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CodeIngestionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CodeIngestionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CodeIngestion mutation op: %q", m.Op())
+	}
+}
+
+// InferenceNodeClient is a client for the InferenceNode schema.
+type InferenceNodeClient struct {
+	config
+}
+
+// NewInferenceNodeClient returns a client for the InferenceNode from the given config.
+func NewInferenceNodeClient(c config) *InferenceNodeClient {
+	return &InferenceNodeClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `inferencenode.Hooks(f(g(h())))`.
+func (c *InferenceNodeClient) Use(hooks ...Hook) {
+	c.hooks.InferenceNode = append(c.hooks.InferenceNode, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `inferencenode.Intercept(f(g(h())))`.
+func (c *InferenceNodeClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InferenceNode = append(c.inters.InferenceNode, interceptors...)
+}
+
+// Create returns a builder for creating a InferenceNode entity.
+func (c *InferenceNodeClient) Create() *InferenceNodeCreate {
+	mutation := newInferenceNodeMutation(c.config, OpCreate)
+	return &InferenceNodeCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InferenceNode entities.
+func (c *InferenceNodeClient) CreateBulk(builders ...*InferenceNodeCreate) *InferenceNodeCreateBulk {
+	return &InferenceNodeCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InferenceNodeClient) MapCreateBulk(slice any, setFunc func(*InferenceNodeCreate, int)) *InferenceNodeCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InferenceNodeCreateBulk{err: fmt.Errorf("calling to InferenceNodeClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InferenceNodeCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InferenceNodeCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InferenceNode.
+func (c *InferenceNodeClient) Update() *InferenceNodeUpdate {
+	mutation := newInferenceNodeMutation(c.config, OpUpdate)
+	return &InferenceNodeUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InferenceNodeClient) UpdateOne(_m *InferenceNode) *InferenceNodeUpdateOne {
+	mutation := newInferenceNodeMutation(c.config, OpUpdateOne, withInferenceNode(_m))
+	return &InferenceNodeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InferenceNodeClient) UpdateOneID(id uuid.UUID) *InferenceNodeUpdateOne {
+	mutation := newInferenceNodeMutation(c.config, OpUpdateOne, withInferenceNodeID(id))
+	return &InferenceNodeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InferenceNode.
+func (c *InferenceNodeClient) Delete() *InferenceNodeDelete {
+	mutation := newInferenceNodeMutation(c.config, OpDelete)
+	return &InferenceNodeDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InferenceNodeClient) DeleteOne(_m *InferenceNode) *InferenceNodeDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InferenceNodeClient) DeleteOneID(id uuid.UUID) *InferenceNodeDeleteOne {
+	builder := c.Delete().Where(inferencenode.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InferenceNodeDeleteOne{builder}
+}
+
+// Query returns a query builder for InferenceNode.
+func (c *InferenceNodeClient) Query() *InferenceNodeQuery {
+	return &InferenceNodeQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInferenceNode},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InferenceNode entity by its id.
+func (c *InferenceNodeClient) Get(ctx context.Context, id uuid.UUID) (*InferenceNode, error) {
+	return c.Query().Where(inferencenode.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InferenceNodeClient) GetX(ctx context.Context, id uuid.UUID) *InferenceNode {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryMetrics queries the metrics edge of a InferenceNode.
+func (c *InferenceNodeClient) QueryMetrics(_m *InferenceNode) *ModelExecutionMetricQuery {
+	query := (&ModelExecutionMetricClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(inferencenode.Table, inferencenode.FieldID, id),
+			sqlgraph.To(modelexecutionmetric.Table, modelexecutionmetric.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, inferencenode.MetricsTable, inferencenode.MetricsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *InferenceNodeClient) Hooks() []Hook {
+	return c.hooks.InferenceNode
+}
+
+// Interceptors returns the client interceptors.
+func (c *InferenceNodeClient) Interceptors() []Interceptor {
+	return c.inters.InferenceNode
+}
+
+func (c *InferenceNodeClient) mutate(ctx context.Context, m *InferenceNodeMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InferenceNodeCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InferenceNodeUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InferenceNodeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InferenceNodeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown InferenceNode mutation op: %q", m.Op())
 	}
 }
 
@@ -363,6 +892,22 @@ func (c *MemoryEventClient) GetX(ctx context.Context, id uuid.UUID) *MemoryEvent
 		panic(err)
 	}
 	return obj
+}
+
+// QuerySession queries the session edge of a MemoryEvent.
+func (c *MemoryEventClient) QuerySession(_m *MemoryEvent) *SessionQuery {
+	query := (&SessionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memoryevent.Table, memoryevent.FieldID, id),
+			sqlgraph.To(session.Table, session.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, memoryevent.SessionTable, memoryevent.SessionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // Hooks returns the client hooks.
@@ -656,6 +1201,336 @@ func (c *MemoryLinkClient) mutate(ctx context.Context, m *MemoryLinkMutation) (V
 	}
 }
 
+// ModelDefinitionClient is a client for the ModelDefinition schema.
+type ModelDefinitionClient struct {
+	config
+}
+
+// NewModelDefinitionClient returns a client for the ModelDefinition from the given config.
+func NewModelDefinitionClient(c config) *ModelDefinitionClient {
+	return &ModelDefinitionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `modeldefinition.Hooks(f(g(h())))`.
+func (c *ModelDefinitionClient) Use(hooks ...Hook) {
+	c.hooks.ModelDefinition = append(c.hooks.ModelDefinition, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `modeldefinition.Intercept(f(g(h())))`.
+func (c *ModelDefinitionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ModelDefinition = append(c.inters.ModelDefinition, interceptors...)
+}
+
+// Create returns a builder for creating a ModelDefinition entity.
+func (c *ModelDefinitionClient) Create() *ModelDefinitionCreate {
+	mutation := newModelDefinitionMutation(c.config, OpCreate)
+	return &ModelDefinitionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ModelDefinition entities.
+func (c *ModelDefinitionClient) CreateBulk(builders ...*ModelDefinitionCreate) *ModelDefinitionCreateBulk {
+	return &ModelDefinitionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ModelDefinitionClient) MapCreateBulk(slice any, setFunc func(*ModelDefinitionCreate, int)) *ModelDefinitionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ModelDefinitionCreateBulk{err: fmt.Errorf("calling to ModelDefinitionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ModelDefinitionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ModelDefinitionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ModelDefinition.
+func (c *ModelDefinitionClient) Update() *ModelDefinitionUpdate {
+	mutation := newModelDefinitionMutation(c.config, OpUpdate)
+	return &ModelDefinitionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ModelDefinitionClient) UpdateOne(_m *ModelDefinition) *ModelDefinitionUpdateOne {
+	mutation := newModelDefinitionMutation(c.config, OpUpdateOne, withModelDefinition(_m))
+	return &ModelDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ModelDefinitionClient) UpdateOneID(id uuid.UUID) *ModelDefinitionUpdateOne {
+	mutation := newModelDefinitionMutation(c.config, OpUpdateOne, withModelDefinitionID(id))
+	return &ModelDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ModelDefinition.
+func (c *ModelDefinitionClient) Delete() *ModelDefinitionDelete {
+	mutation := newModelDefinitionMutation(c.config, OpDelete)
+	return &ModelDefinitionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ModelDefinitionClient) DeleteOne(_m *ModelDefinition) *ModelDefinitionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ModelDefinitionClient) DeleteOneID(id uuid.UUID) *ModelDefinitionDeleteOne {
+	builder := c.Delete().Where(modeldefinition.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ModelDefinitionDeleteOne{builder}
+}
+
+// Query returns a query builder for ModelDefinition.
+func (c *ModelDefinitionClient) Query() *ModelDefinitionQuery {
+	return &ModelDefinitionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeModelDefinition},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ModelDefinition entity by its id.
+func (c *ModelDefinitionClient) Get(ctx context.Context, id uuid.UUID) (*ModelDefinition, error) {
+	return c.Query().Where(modeldefinition.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ModelDefinitionClient) GetX(ctx context.Context, id uuid.UUID) *ModelDefinition {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryMetrics queries the metrics edge of a ModelDefinition.
+func (c *ModelDefinitionClient) QueryMetrics(_m *ModelDefinition) *ModelExecutionMetricQuery {
+	query := (&ModelExecutionMetricClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(modeldefinition.Table, modeldefinition.FieldID, id),
+			sqlgraph.To(modelexecutionmetric.Table, modelexecutionmetric.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, modeldefinition.MetricsTable, modeldefinition.MetricsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ModelDefinitionClient) Hooks() []Hook {
+	return c.hooks.ModelDefinition
+}
+
+// Interceptors returns the client interceptors.
+func (c *ModelDefinitionClient) Interceptors() []Interceptor {
+	return c.inters.ModelDefinition
+}
+
+func (c *ModelDefinitionClient) mutate(ctx context.Context, m *ModelDefinitionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ModelDefinitionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ModelDefinitionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ModelDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ModelDefinitionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ModelDefinition mutation op: %q", m.Op())
+	}
+}
+
+// ModelExecutionMetricClient is a client for the ModelExecutionMetric schema.
+type ModelExecutionMetricClient struct {
+	config
+}
+
+// NewModelExecutionMetricClient returns a client for the ModelExecutionMetric from the given config.
+func NewModelExecutionMetricClient(c config) *ModelExecutionMetricClient {
+	return &ModelExecutionMetricClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `modelexecutionmetric.Hooks(f(g(h())))`.
+func (c *ModelExecutionMetricClient) Use(hooks ...Hook) {
+	c.hooks.ModelExecutionMetric = append(c.hooks.ModelExecutionMetric, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `modelexecutionmetric.Intercept(f(g(h())))`.
+func (c *ModelExecutionMetricClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ModelExecutionMetric = append(c.inters.ModelExecutionMetric, interceptors...)
+}
+
+// Create returns a builder for creating a ModelExecutionMetric entity.
+func (c *ModelExecutionMetricClient) Create() *ModelExecutionMetricCreate {
+	mutation := newModelExecutionMetricMutation(c.config, OpCreate)
+	return &ModelExecutionMetricCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ModelExecutionMetric entities.
+func (c *ModelExecutionMetricClient) CreateBulk(builders ...*ModelExecutionMetricCreate) *ModelExecutionMetricCreateBulk {
+	return &ModelExecutionMetricCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ModelExecutionMetricClient) MapCreateBulk(slice any, setFunc func(*ModelExecutionMetricCreate, int)) *ModelExecutionMetricCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ModelExecutionMetricCreateBulk{err: fmt.Errorf("calling to ModelExecutionMetricClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ModelExecutionMetricCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ModelExecutionMetricCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ModelExecutionMetric.
+func (c *ModelExecutionMetricClient) Update() *ModelExecutionMetricUpdate {
+	mutation := newModelExecutionMetricMutation(c.config, OpUpdate)
+	return &ModelExecutionMetricUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ModelExecutionMetricClient) UpdateOne(_m *ModelExecutionMetric) *ModelExecutionMetricUpdateOne {
+	mutation := newModelExecutionMetricMutation(c.config, OpUpdateOne, withModelExecutionMetric(_m))
+	return &ModelExecutionMetricUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ModelExecutionMetricClient) UpdateOneID(id int64) *ModelExecutionMetricUpdateOne {
+	mutation := newModelExecutionMetricMutation(c.config, OpUpdateOne, withModelExecutionMetricID(id))
+	return &ModelExecutionMetricUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ModelExecutionMetric.
+func (c *ModelExecutionMetricClient) Delete() *ModelExecutionMetricDelete {
+	mutation := newModelExecutionMetricMutation(c.config, OpDelete)
+	return &ModelExecutionMetricDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ModelExecutionMetricClient) DeleteOne(_m *ModelExecutionMetric) *ModelExecutionMetricDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ModelExecutionMetricClient) DeleteOneID(id int64) *ModelExecutionMetricDeleteOne {
+	builder := c.Delete().Where(modelexecutionmetric.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ModelExecutionMetricDeleteOne{builder}
+}
+
+// Query returns a query builder for ModelExecutionMetric.
+func (c *ModelExecutionMetricClient) Query() *ModelExecutionMetricQuery {
+	return &ModelExecutionMetricQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeModelExecutionMetric},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ModelExecutionMetric entity by its id.
+func (c *ModelExecutionMetricClient) Get(ctx context.Context, id int64) (*ModelExecutionMetric, error) {
+	return c.Query().Where(modelexecutionmetric.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ModelExecutionMetricClient) GetX(ctx context.Context, id int64) *ModelExecutionMetric {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySession queries the session edge of a ModelExecutionMetric.
+func (c *ModelExecutionMetricClient) QuerySession(_m *ModelExecutionMetric) *SessionQuery {
+	query := (&SessionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(modelexecutionmetric.Table, modelexecutionmetric.FieldID, id),
+			sqlgraph.To(session.Table, session.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, modelexecutionmetric.SessionTable, modelexecutionmetric.SessionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryNode queries the node edge of a ModelExecutionMetric.
+func (c *ModelExecutionMetricClient) QueryNode(_m *ModelExecutionMetric) *InferenceNodeQuery {
+	query := (&InferenceNodeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(modelexecutionmetric.Table, modelexecutionmetric.FieldID, id),
+			sqlgraph.To(inferencenode.Table, inferencenode.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, modelexecutionmetric.NodeTable, modelexecutionmetric.NodeColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryModel queries the model edge of a ModelExecutionMetric.
+func (c *ModelExecutionMetricClient) QueryModel(_m *ModelExecutionMetric) *ModelDefinitionQuery {
+	query := (&ModelDefinitionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(modelexecutionmetric.Table, modelexecutionmetric.FieldID, id),
+			sqlgraph.To(modeldefinition.Table, modeldefinition.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, modelexecutionmetric.ModelTable, modelexecutionmetric.ModelColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ModelExecutionMetricClient) Hooks() []Hook {
+	return c.hooks.ModelExecutionMetric
+}
+
+// Interceptors returns the client interceptors.
+func (c *ModelExecutionMetricClient) Interceptors() []Interceptor {
+	return c.inters.ModelExecutionMetric
+}
+
+func (c *ModelExecutionMetricClient) mutate(ctx context.Context, m *ModelExecutionMetricMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ModelExecutionMetricCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ModelExecutionMetricUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ModelExecutionMetricUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ModelExecutionMetricDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ModelExecutionMetric mutation op: %q", m.Op())
+	}
+}
+
 // PromptClient is a client for the Prompt schema.
 type PromptClient struct {
 	config
@@ -922,6 +1797,155 @@ func (c *ResponseClient) mutate(ctx context.Context, m *ResponseMutation) (Value
 	}
 }
 
+// RetrievalLogClient is a client for the RetrievalLog schema.
+type RetrievalLogClient struct {
+	config
+}
+
+// NewRetrievalLogClient returns a client for the RetrievalLog from the given config.
+func NewRetrievalLogClient(c config) *RetrievalLogClient {
+	return &RetrievalLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `retrievallog.Hooks(f(g(h())))`.
+func (c *RetrievalLogClient) Use(hooks ...Hook) {
+	c.hooks.RetrievalLog = append(c.hooks.RetrievalLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `retrievallog.Intercept(f(g(h())))`.
+func (c *RetrievalLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RetrievalLog = append(c.inters.RetrievalLog, interceptors...)
+}
+
+// Create returns a builder for creating a RetrievalLog entity.
+func (c *RetrievalLogClient) Create() *RetrievalLogCreate {
+	mutation := newRetrievalLogMutation(c.config, OpCreate)
+	return &RetrievalLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RetrievalLog entities.
+func (c *RetrievalLogClient) CreateBulk(builders ...*RetrievalLogCreate) *RetrievalLogCreateBulk {
+	return &RetrievalLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RetrievalLogClient) MapCreateBulk(slice any, setFunc func(*RetrievalLogCreate, int)) *RetrievalLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RetrievalLogCreateBulk{err: fmt.Errorf("calling to RetrievalLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RetrievalLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RetrievalLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RetrievalLog.
+func (c *RetrievalLogClient) Update() *RetrievalLogUpdate {
+	mutation := newRetrievalLogMutation(c.config, OpUpdate)
+	return &RetrievalLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RetrievalLogClient) UpdateOne(_m *RetrievalLog) *RetrievalLogUpdateOne {
+	mutation := newRetrievalLogMutation(c.config, OpUpdateOne, withRetrievalLog(_m))
+	return &RetrievalLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RetrievalLogClient) UpdateOneID(id uuid.UUID) *RetrievalLogUpdateOne {
+	mutation := newRetrievalLogMutation(c.config, OpUpdateOne, withRetrievalLogID(id))
+	return &RetrievalLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RetrievalLog.
+func (c *RetrievalLogClient) Delete() *RetrievalLogDelete {
+	mutation := newRetrievalLogMutation(c.config, OpDelete)
+	return &RetrievalLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RetrievalLogClient) DeleteOne(_m *RetrievalLog) *RetrievalLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RetrievalLogClient) DeleteOneID(id uuid.UUID) *RetrievalLogDeleteOne {
+	builder := c.Delete().Where(retrievallog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RetrievalLogDeleteOne{builder}
+}
+
+// Query returns a query builder for RetrievalLog.
+func (c *RetrievalLogClient) Query() *RetrievalLogQuery {
+	return &RetrievalLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRetrievalLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RetrievalLog entity by its id.
+func (c *RetrievalLogClient) Get(ctx context.Context, id uuid.UUID) (*RetrievalLog, error) {
+	return c.Query().Where(retrievallog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RetrievalLogClient) GetX(ctx context.Context, id uuid.UUID) *RetrievalLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySession queries the session edge of a RetrievalLog.
+func (c *RetrievalLogClient) QuerySession(_m *RetrievalLog) *SessionQuery {
+	query := (&SessionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(retrievallog.Table, retrievallog.FieldID, id),
+			sqlgraph.To(session.Table, session.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, retrievallog.SessionTable, retrievallog.SessionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *RetrievalLogClient) Hooks() []Hook {
+	return c.hooks.RetrievalLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *RetrievalLogClient) Interceptors() []Interceptor {
+	return c.inters.RetrievalLog
+}
+
+func (c *RetrievalLogClient) mutate(ctx context.Context, m *RetrievalLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RetrievalLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RetrievalLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RetrievalLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RetrievalLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown RetrievalLog mutation op: %q", m.Op())
+	}
+}
+
 // SessionClient is a client for the Session schema.
 type SessionClient struct {
 	config
@@ -1039,6 +2063,54 @@ func (c *SessionClient) QueryTags(_m *Session) *TagQuery {
 			sqlgraph.From(session.Table, session.FieldID, id),
 			sqlgraph.To(tag.Table, tag.FieldID),
 			sqlgraph.Edge(sqlgraph.M2M, false, session.TagsTable, session.TagsPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMetrics queries the metrics edge of a Session.
+func (c *SessionClient) QueryMetrics(_m *Session) *ModelExecutionMetricQuery {
+	query := (&ModelExecutionMetricClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(session.Table, session.FieldID, id),
+			sqlgraph.To(modelexecutionmetric.Table, modelexecutionmetric.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, session.MetricsTable, session.MetricsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryRetrievalLogs queries the retrieval_logs edge of a Session.
+func (c *SessionClient) QueryRetrievalLogs(_m *Session) *RetrievalLogQuery {
+	query := (&RetrievalLogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(session.Table, session.FieldID, id),
+			sqlgraph.To(retrievallog.Table, retrievallog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, session.RetrievalLogsTable, session.RetrievalLogsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMemoryEvents queries the memory_events edge of a Session.
+func (c *SessionClient) QueryMemoryEvents(_m *Session) *MemoryEventQuery {
+	query := (&MemoryEventClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(session.Table, session.FieldID, id),
+			sqlgraph.To(memoryevent.Table, memoryevent.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, session.MemoryEventsTable, session.MemoryEventsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -1195,6 +2267,38 @@ func (c *TagClient) QuerySessions(_m *Tag) *SessionQuery {
 	return query
 }
 
+// QueryIngestions queries the ingestions edge of a Tag.
+func (c *TagClient) QueryIngestions(_m *Tag) *CodeIngestionQuery {
+	query := (&CodeIngestionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(tag.Table, tag.FieldID, id),
+			sqlgraph.To(codeingestion.Table, codeingestion.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, tag.IngestionsTable, tag.IngestionsPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryEmbeddings queries the embeddings edge of a Tag.
+func (c *TagClient) QueryEmbeddings(_m *Tag) *CodeEmbeddingQuery {
+	query := (&CodeEmbeddingClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(tag.Table, tag.FieldID, id),
+			sqlgraph.To(codeembedding.Table, codeembedding.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, tag.EmbeddingsTable, tag.EmbeddingsPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *TagClient) Hooks() []Hook {
 	return c.hooks.Tag
@@ -1223,10 +2327,13 @@ func (c *TagClient) mutate(ctx context.Context, m *TagMutation) (Value, error) {
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		MemoryEvent, MemoryItem, MemoryLink, Prompt, Response, Session, Tag []ent.Hook
+		CodeEmbedding, CodeIngestion, InferenceNode, MemoryEvent, MemoryItem,
+		MemoryLink, ModelDefinition, ModelExecutionMetric, Prompt, Response,
+		RetrievalLog, Session, Tag []ent.Hook
 	}
 	inters struct {
-		MemoryEvent, MemoryItem, MemoryLink, Prompt, Response, Session,
-		Tag []ent.Interceptor
+		CodeEmbedding, CodeIngestion, InferenceNode, MemoryEvent, MemoryItem,
+		MemoryLink, ModelDefinition, ModelExecutionMetric, Prompt, Response,
+		RetrievalLog, Session, Tag []ent.Interceptor
 	}
 )

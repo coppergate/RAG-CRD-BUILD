@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"app-builds/common/ent/codeembedding"
+	"app-builds/common/ent/codeingestion"
 	"app-builds/common/ent/predicate"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
@@ -58,6 +60,36 @@ func (_u *TagUpdate) AddSessions(v ...*Session) *TagUpdate {
 	return _u.AddSessionIDs(ids...)
 }
 
+// AddIngestionIDs adds the "ingestions" edge to the CodeIngestion entity by IDs.
+func (_u *TagUpdate) AddIngestionIDs(ids ...uuid.UUID) *TagUpdate {
+	_u.mutation.AddIngestionIDs(ids...)
+	return _u
+}
+
+// AddIngestions adds the "ingestions" edges to the CodeIngestion entity.
+func (_u *TagUpdate) AddIngestions(v ...*CodeIngestion) *TagUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddIngestionIDs(ids...)
+}
+
+// AddEmbeddingIDs adds the "embeddings" edge to the CodeEmbedding entity by IDs.
+func (_u *TagUpdate) AddEmbeddingIDs(ids ...uuid.UUID) *TagUpdate {
+	_u.mutation.AddEmbeddingIDs(ids...)
+	return _u
+}
+
+// AddEmbeddings adds the "embeddings" edges to the CodeEmbedding entity.
+func (_u *TagUpdate) AddEmbeddings(v ...*CodeEmbedding) *TagUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddEmbeddingIDs(ids...)
+}
+
 // Mutation returns the TagMutation object of the builder.
 func (_u *TagUpdate) Mutation() *TagMutation {
 	return _u.mutation
@@ -82,6 +114,48 @@ func (_u *TagUpdate) RemoveSessions(v ...*Session) *TagUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveSessionIDs(ids...)
+}
+
+// ClearIngestions clears all "ingestions" edges to the CodeIngestion entity.
+func (_u *TagUpdate) ClearIngestions() *TagUpdate {
+	_u.mutation.ClearIngestions()
+	return _u
+}
+
+// RemoveIngestionIDs removes the "ingestions" edge to CodeIngestion entities by IDs.
+func (_u *TagUpdate) RemoveIngestionIDs(ids ...uuid.UUID) *TagUpdate {
+	_u.mutation.RemoveIngestionIDs(ids...)
+	return _u
+}
+
+// RemoveIngestions removes "ingestions" edges to CodeIngestion entities.
+func (_u *TagUpdate) RemoveIngestions(v ...*CodeIngestion) *TagUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveIngestionIDs(ids...)
+}
+
+// ClearEmbeddings clears all "embeddings" edges to the CodeEmbedding entity.
+func (_u *TagUpdate) ClearEmbeddings() *TagUpdate {
+	_u.mutation.ClearEmbeddings()
+	return _u
+}
+
+// RemoveEmbeddingIDs removes the "embeddings" edge to CodeEmbedding entities by IDs.
+func (_u *TagUpdate) RemoveEmbeddingIDs(ids ...uuid.UUID) *TagUpdate {
+	_u.mutation.RemoveEmbeddingIDs(ids...)
+	return _u
+}
+
+// RemoveEmbeddings removes "embeddings" edges to CodeEmbedding entities.
+func (_u *TagUpdate) RemoveEmbeddings(v ...*CodeEmbedding) *TagUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveEmbeddingIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -168,6 +242,96 @@ func (_u *TagUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.IngestionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.IngestionsTable,
+			Columns: tag.IngestionsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedIngestionsIDs(); len(nodes) > 0 && !_u.mutation.IngestionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.IngestionsTable,
+			Columns: tag.IngestionsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.IngestionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.IngestionsTable,
+			Columns: tag.IngestionsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.EmbeddingsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.EmbeddingsTable,
+			Columns: tag.EmbeddingsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedEmbeddingsIDs(); len(nodes) > 0 && !_u.mutation.EmbeddingsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.EmbeddingsTable,
+			Columns: tag.EmbeddingsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.EmbeddingsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.EmbeddingsTable,
+			Columns: tag.EmbeddingsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{tag.Label}
@@ -217,6 +381,36 @@ func (_u *TagUpdateOne) AddSessions(v ...*Session) *TagUpdateOne {
 	return _u.AddSessionIDs(ids...)
 }
 
+// AddIngestionIDs adds the "ingestions" edge to the CodeIngestion entity by IDs.
+func (_u *TagUpdateOne) AddIngestionIDs(ids ...uuid.UUID) *TagUpdateOne {
+	_u.mutation.AddIngestionIDs(ids...)
+	return _u
+}
+
+// AddIngestions adds the "ingestions" edges to the CodeIngestion entity.
+func (_u *TagUpdateOne) AddIngestions(v ...*CodeIngestion) *TagUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddIngestionIDs(ids...)
+}
+
+// AddEmbeddingIDs adds the "embeddings" edge to the CodeEmbedding entity by IDs.
+func (_u *TagUpdateOne) AddEmbeddingIDs(ids ...uuid.UUID) *TagUpdateOne {
+	_u.mutation.AddEmbeddingIDs(ids...)
+	return _u
+}
+
+// AddEmbeddings adds the "embeddings" edges to the CodeEmbedding entity.
+func (_u *TagUpdateOne) AddEmbeddings(v ...*CodeEmbedding) *TagUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddEmbeddingIDs(ids...)
+}
+
 // Mutation returns the TagMutation object of the builder.
 func (_u *TagUpdateOne) Mutation() *TagMutation {
 	return _u.mutation
@@ -241,6 +435,48 @@ func (_u *TagUpdateOne) RemoveSessions(v ...*Session) *TagUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveSessionIDs(ids...)
+}
+
+// ClearIngestions clears all "ingestions" edges to the CodeIngestion entity.
+func (_u *TagUpdateOne) ClearIngestions() *TagUpdateOne {
+	_u.mutation.ClearIngestions()
+	return _u
+}
+
+// RemoveIngestionIDs removes the "ingestions" edge to CodeIngestion entities by IDs.
+func (_u *TagUpdateOne) RemoveIngestionIDs(ids ...uuid.UUID) *TagUpdateOne {
+	_u.mutation.RemoveIngestionIDs(ids...)
+	return _u
+}
+
+// RemoveIngestions removes "ingestions" edges to CodeIngestion entities.
+func (_u *TagUpdateOne) RemoveIngestions(v ...*CodeIngestion) *TagUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveIngestionIDs(ids...)
+}
+
+// ClearEmbeddings clears all "embeddings" edges to the CodeEmbedding entity.
+func (_u *TagUpdateOne) ClearEmbeddings() *TagUpdateOne {
+	_u.mutation.ClearEmbeddings()
+	return _u
+}
+
+// RemoveEmbeddingIDs removes the "embeddings" edge to CodeEmbedding entities by IDs.
+func (_u *TagUpdateOne) RemoveEmbeddingIDs(ids ...uuid.UUID) *TagUpdateOne {
+	_u.mutation.RemoveEmbeddingIDs(ids...)
+	return _u
+}
+
+// RemoveEmbeddings removes "embeddings" edges to CodeEmbedding entities.
+func (_u *TagUpdateOne) RemoveEmbeddings(v ...*CodeEmbedding) *TagUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveEmbeddingIDs(ids...)
 }
 
 // Where appends a list predicates to the TagUpdate builder.
@@ -350,6 +586,96 @@ func (_u *TagUpdateOne) sqlSave(ctx context.Context) (_node *Tag, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.IngestionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.IngestionsTable,
+			Columns: tag.IngestionsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedIngestionsIDs(); len(nodes) > 0 && !_u.mutation.IngestionsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.IngestionsTable,
+			Columns: tag.IngestionsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.IngestionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.IngestionsTable,
+			Columns: tag.IngestionsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.EmbeddingsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.EmbeddingsTable,
+			Columns: tag.EmbeddingsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedEmbeddingsIDs(); len(nodes) > 0 && !_u.mutation.EmbeddingsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.EmbeddingsTable,
+			Columns: tag.EmbeddingsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.EmbeddingsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.EmbeddingsTable,
+			Columns: tag.EmbeddingsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

@@ -143,12 +143,15 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 		return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
 	}
 
-	subQueries, err := planner.Plan(ctx, req.Prompt)
+	subQueries, metrics, err := planner.Plan(ctx, req.Prompt)
 	if err != nil {
 		log.Printf("[%s] Planning failed: %v", req.ID, err)
 		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Planning failed: %v", err), false)
 		return dlq.TransientFailure, fmt.Errorf("planning: %w", err)
 	}
+
+	// We don't store planning metrics yet, but we could in the future.
+	_ = metrics 
 
 	if len(subQueries) == 0 {
 		subQueries = []string{req.Prompt}
@@ -265,50 +268,71 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 
 	if req.Stream {
 		startTime := time.Now().UTC().Format(time.RFC3339)
-		stream, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts)
+		stream, metaCh, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts)
 		var fullResult string
+		var finalMetrics *contracts.ExecutionMetrics
 		seq := 0
 		inConversation := false
 		for {
 			select {
 			case chunk, ok := <-stream:
 				if !ok {
-					// Stream closed, handle grounding/recursion check on fullResult if needed
-					// Record response size
-					responseSizeHist.Record(ctx, int64(len(fullResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
-
-					// For now, just send completed status
-					h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
-					h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID, inConversation, req.Metadata)
-					h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED")
-					return dlq.Success, nil
+					// Wait a bit for final metrics/error
+					stream = nil
+					if stream == nil && metaCh == nil && errCh == nil {
+						goto endStream
+					}
+					continue
 				}
 				fullResult += chunk
 				inConversation = true
 				h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID, inConversation, req.Metadata)
 				seq++
+			case rawMeta, ok := <-metaCh:
+				if !ok {
+					metaCh = nil
+					continue
+				}
+				finalMetrics = h.mapMetrics(rawMeta)
 			case err := <-errCh:
 				if err != nil {
 					log.Printf("[%s] Execution stream failed: %v", req.ID, err)
 					h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution stream failed: %v", err), inConversation)
-					h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
+					h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED", nil)
 					return dlq.TransientFailure, fmt.Errorf("execution stream: %w", err)
 				}
+				errCh = nil
 			case <-ctx.Done():
-				h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
+				h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED", nil)
 				return dlq.TransientFailure, ctx.Err()
 			}
+
+			if stream == nil && metaCh == nil && errCh == nil {
+				break
+			}
 		}
+
+	endStream:
+		// Record response size
+		responseSizeHist.Record(ctx, int64(len(fullResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
+
+		// For now, just send completed status
+		h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
+		h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID, inConversation, req.Metadata)
+		h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED", finalMetrics)
+		return dlq.Success, nil
 	}
 
 	startTime := time.Now().UTC().Format(time.RFC3339)
-	result, err := executor.Execute(ctx, req.Prompt, contexts)
+	result, rawMetrics, err := executor.Execute(ctx, req.Prompt, contexts)
 	if err != nil {
 		log.Printf("[%s] Execution failed: %v", req.ID, err)
 		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution failed: %v", err), false)
-		h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED")
+		h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED", nil)
 		return dlq.TransientFailure, fmt.Errorf("execution: %w", err)
 	}
+
+	metrics := h.mapMetrics(rawMetrics)
 
 	// Grounding Guard / Recursion Check
 	if executor.IsInsufficientContext(result) {
@@ -333,10 +357,23 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 
 	h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
 	h.msg.SendResult(ctx, req.ID, req.SessionID, result, modelID, req.Metadata)
-	h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED")
+	h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED", metrics)
 
 	// Record response size
 	responseSizeHist.Record(ctx, int64(len(result)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
 
 	return dlq.Success, nil
+}
+
+func (h *Handler) mapMetrics(raw interface{}) *contracts.ExecutionMetrics {
+	if raw == nil {
+		return nil
+	}
+
+	// We use a type assertion to extract metrics if possible.
+	if or, ok := raw.(interface{ GetMetrics() *contracts.ExecutionMetrics }); ok {
+		return or.GetMetrics()
+	}
+
+	return nil
 }

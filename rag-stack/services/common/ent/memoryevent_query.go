@@ -5,6 +5,7 @@ package ent
 import (
 	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/predicate"
+	"app-builds/common/ent/session"
 	"context"
 	"fmt"
 	"math"
@@ -19,10 +20,11 @@ import (
 // MemoryEventQuery is the builder for querying MemoryEvent entities.
 type MemoryEventQuery struct {
 	config
-	ctx        *QueryContext
-	order      []memoryevent.OrderOption
-	inters     []Interceptor
-	predicates []predicate.MemoryEvent
+	ctx         *QueryContext
+	order       []memoryevent.OrderOption
+	inters      []Interceptor
+	predicates  []predicate.MemoryEvent
+	withSession *SessionQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -57,6 +59,28 @@ func (_q *MemoryEventQuery) Unique(unique bool) *MemoryEventQuery {
 func (_q *MemoryEventQuery) Order(o ...memoryevent.OrderOption) *MemoryEventQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QuerySession chains the current query on the "session" edge.
+func (_q *MemoryEventQuery) QuerySession() *SessionQuery {
+	query := (&SessionClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memoryevent.Table, memoryevent.FieldID, selector),
+			sqlgraph.To(session.Table, session.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, memoryevent.SessionTable, memoryevent.SessionColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first MemoryEvent entity from the query.
@@ -246,15 +270,27 @@ func (_q *MemoryEventQuery) Clone() *MemoryEventQuery {
 		return nil
 	}
 	return &MemoryEventQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]memoryevent.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.MemoryEvent{}, _q.predicates...),
+		config:      _q.config,
+		ctx:         _q.ctx.Clone(),
+		order:       append([]memoryevent.OrderOption{}, _q.order...),
+		inters:      append([]Interceptor{}, _q.inters...),
+		predicates:  append([]predicate.MemoryEvent{}, _q.predicates...),
+		withSession: _q.withSession.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithSession tells the query-builder to eager-load the nodes that are connected to
+// the "session" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *MemoryEventQuery) WithSession(opts ...func(*SessionQuery)) *MemoryEventQuery {
+	query := (&SessionClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSession = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -333,8 +369,11 @@ func (_q *MemoryEventQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *MemoryEventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MemoryEvent, error) {
 	var (
-		nodes = []*MemoryEvent{}
-		_spec = _q.querySpec()
+		nodes       = []*MemoryEvent{}
+		_spec       = _q.querySpec()
+		loadedTypes = [1]bool{
+			_q.withSession != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*MemoryEvent).scanValues(nil, columns)
@@ -342,6 +381,7 @@ func (_q *MemoryEventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &MemoryEvent{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -353,7 +393,43 @@ func (_q *MemoryEventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withSession; query != nil {
+		if err := _q.loadSession(ctx, query, nodes, nil,
+			func(n *MemoryEvent, e *Session) { n.Edges.Session = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *MemoryEventQuery) loadSession(ctx context.Context, query *SessionQuery, nodes []*MemoryEvent, init func(*MemoryEvent), assign func(*MemoryEvent, *Session)) error {
+	ids := make([]uuid.UUID, 0, len(nodes))
+	nodeids := make(map[uuid.UUID][]*MemoryEvent)
+	for i := range nodes {
+		fk := nodes[i].SessionID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(session.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "session_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (_q *MemoryEventQuery) sqlCount(ctx context.Context) (int, error) {
@@ -380,6 +456,9 @@ func (_q *MemoryEventQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != memoryevent.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withSession != nil {
+			_spec.Node.AddColumnOnce(memoryevent.FieldSessionID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

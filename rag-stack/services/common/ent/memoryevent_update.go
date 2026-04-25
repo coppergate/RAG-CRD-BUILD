@@ -5,6 +5,7 @@ package ent
 import (
 	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/predicate"
+	"app-builds/common/ent/session"
 	"context"
 	"errors"
 	"fmt"
@@ -42,6 +43,26 @@ func (_u *MemoryEventUpdate) SetNillableMemoryItemID(v *uuid.UUID) *MemoryEventU
 	return _u
 }
 
+// SetSessionID sets the "session_id" field.
+func (_u *MemoryEventUpdate) SetSessionID(v uuid.UUID) *MemoryEventUpdate {
+	_u.mutation.SetSessionID(v)
+	return _u
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_u *MemoryEventUpdate) SetNillableSessionID(v *uuid.UUID) *MemoryEventUpdate {
+	if v != nil {
+		_u.SetSessionID(*v)
+	}
+	return _u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (_u *MemoryEventUpdate) ClearSessionID() *MemoryEventUpdate {
+	_u.mutation.ClearSessionID()
+	return _u
+}
+
 // SetEventType sets the "event_type" field.
 func (_u *MemoryEventUpdate) SetEventType(v string) *MemoryEventUpdate {
 	_u.mutation.SetEventType(v)
@@ -68,9 +89,20 @@ func (_u *MemoryEventUpdate) ClearEventData() *MemoryEventUpdate {
 	return _u
 }
 
+// SetSession sets the "session" edge to the Session entity.
+func (_u *MemoryEventUpdate) SetSession(v *Session) *MemoryEventUpdate {
+	return _u.SetSessionID(v.ID)
+}
+
 // Mutation returns the MemoryEventMutation object of the builder.
 func (_u *MemoryEventUpdate) Mutation() *MemoryEventMutation {
 	return _u.mutation
+}
+
+// ClearSession clears the "session" edge to the Session entity.
+func (_u *MemoryEventUpdate) ClearSession() *MemoryEventUpdate {
+	_u.mutation.ClearSession()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -121,6 +153,35 @@ func (_u *MemoryEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if _u.mutation.EventDataCleared() {
 		_spec.ClearField(memoryevent.FieldEventData, field.TypeJSON)
 	}
+	if _u.mutation.SessionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.SessionTable,
+			Columns: []string{memoryevent.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SessionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.SessionTable,
+			Columns: []string{memoryevent.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{memoryevent.Label}
@@ -155,6 +216,26 @@ func (_u *MemoryEventUpdateOne) SetNillableMemoryItemID(v *uuid.UUID) *MemoryEve
 	return _u
 }
 
+// SetSessionID sets the "session_id" field.
+func (_u *MemoryEventUpdateOne) SetSessionID(v uuid.UUID) *MemoryEventUpdateOne {
+	_u.mutation.SetSessionID(v)
+	return _u
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_u *MemoryEventUpdateOne) SetNillableSessionID(v *uuid.UUID) *MemoryEventUpdateOne {
+	if v != nil {
+		_u.SetSessionID(*v)
+	}
+	return _u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (_u *MemoryEventUpdateOne) ClearSessionID() *MemoryEventUpdateOne {
+	_u.mutation.ClearSessionID()
+	return _u
+}
+
 // SetEventType sets the "event_type" field.
 func (_u *MemoryEventUpdateOne) SetEventType(v string) *MemoryEventUpdateOne {
 	_u.mutation.SetEventType(v)
@@ -181,9 +262,20 @@ func (_u *MemoryEventUpdateOne) ClearEventData() *MemoryEventUpdateOne {
 	return _u
 }
 
+// SetSession sets the "session" edge to the Session entity.
+func (_u *MemoryEventUpdateOne) SetSession(v *Session) *MemoryEventUpdateOne {
+	return _u.SetSessionID(v.ID)
+}
+
 // Mutation returns the MemoryEventMutation object of the builder.
 func (_u *MemoryEventUpdateOne) Mutation() *MemoryEventMutation {
 	return _u.mutation
+}
+
+// ClearSession clears the "session" edge to the Session entity.
+func (_u *MemoryEventUpdateOne) ClearSession() *MemoryEventUpdateOne {
+	_u.mutation.ClearSession()
+	return _u
 }
 
 // Where appends a list predicates to the MemoryEventUpdate builder.
@@ -263,6 +355,35 @@ func (_u *MemoryEventUpdateOne) sqlSave(ctx context.Context) (_node *MemoryEvent
 	}
 	if _u.mutation.EventDataCleared() {
 		_spec.ClearField(memoryevent.FieldEventData, field.TypeJSON)
+	}
+	if _u.mutation.SessionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.SessionTable,
+			Columns: []string{memoryevent.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SessionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.SessionTable,
+			Columns: []string{memoryevent.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &MemoryEvent{config: _u.config}
 	_spec.Assign = _node.assignValues

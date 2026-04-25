@@ -449,6 +449,75 @@ func HasTagsWith(preds ...predicate.Tag) predicate.Session {
 	})
 }
 
+// HasMetrics applies the HasEdge predicate on the "metrics" edge.
+func HasMetrics() predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, MetricsTable, MetricsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasMetricsWith applies the HasEdge predicate on the "metrics" edge with a given conditions (other predicates).
+func HasMetricsWith(preds ...predicate.ModelExecutionMetric) predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := newMetricsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasRetrievalLogs applies the HasEdge predicate on the "retrieval_logs" edge.
+func HasRetrievalLogs() predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, RetrievalLogsTable, RetrievalLogsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasRetrievalLogsWith applies the HasEdge predicate on the "retrieval_logs" edge with a given conditions (other predicates).
+func HasRetrievalLogsWith(preds ...predicate.RetrievalLog) predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := newRetrievalLogsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasMemoryEvents applies the HasEdge predicate on the "memory_events" edge.
+func HasMemoryEvents() predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, MemoryEventsTable, MemoryEventsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasMemoryEventsWith applies the HasEdge predicate on the "memory_events" edge with a given conditions (other predicates).
+func HasMemoryEventsWith(preds ...predicate.MemoryEvent) predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := newMemoryEventsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Session) predicate.Session {
 	return predicate.Session(sql.AndPredicates(predicates...))

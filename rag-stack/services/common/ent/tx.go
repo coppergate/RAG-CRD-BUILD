@@ -12,16 +12,28 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// CodeEmbedding is the client for interacting with the CodeEmbedding builders.
+	CodeEmbedding *CodeEmbeddingClient
+	// CodeIngestion is the client for interacting with the CodeIngestion builders.
+	CodeIngestion *CodeIngestionClient
+	// InferenceNode is the client for interacting with the InferenceNode builders.
+	InferenceNode *InferenceNodeClient
 	// MemoryEvent is the client for interacting with the MemoryEvent builders.
 	MemoryEvent *MemoryEventClient
 	// MemoryItem is the client for interacting with the MemoryItem builders.
 	MemoryItem *MemoryItemClient
 	// MemoryLink is the client for interacting with the MemoryLink builders.
 	MemoryLink *MemoryLinkClient
+	// ModelDefinition is the client for interacting with the ModelDefinition builders.
+	ModelDefinition *ModelDefinitionClient
+	// ModelExecutionMetric is the client for interacting with the ModelExecutionMetric builders.
+	ModelExecutionMetric *ModelExecutionMetricClient
 	// Prompt is the client for interacting with the Prompt builders.
 	Prompt *PromptClient
 	// Response is the client for interacting with the Response builders.
 	Response *ResponseClient
+	// RetrievalLog is the client for interacting with the RetrievalLog builders.
+	RetrievalLog *RetrievalLogClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
 	// Tag is the client for interacting with the Tag builders.
@@ -157,11 +169,17 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.CodeEmbedding = NewCodeEmbeddingClient(tx.config)
+	tx.CodeIngestion = NewCodeIngestionClient(tx.config)
+	tx.InferenceNode = NewInferenceNodeClient(tx.config)
 	tx.MemoryEvent = NewMemoryEventClient(tx.config)
 	tx.MemoryItem = NewMemoryItemClient(tx.config)
 	tx.MemoryLink = NewMemoryLinkClient(tx.config)
+	tx.ModelDefinition = NewModelDefinitionClient(tx.config)
+	tx.ModelExecutionMetric = NewModelExecutionMetricClient(tx.config)
 	tx.Prompt = NewPromptClient(tx.config)
 	tx.Response = NewResponseClient(tx.config)
+	tx.RetrievalLog = NewRetrievalLogClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
 	tx.Tag = NewTagClient(tx.config)
 }
@@ -173,7 +191,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: MemoryEvent.QueryXXX(), the query will be executed
+// applies a query, for example: CodeEmbedding.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

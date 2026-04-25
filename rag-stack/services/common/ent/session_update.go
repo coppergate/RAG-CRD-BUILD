@@ -3,7 +3,10 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/predicate"
+	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 	"context"
@@ -165,6 +168,51 @@ func (_u *SessionUpdate) AddTags(v ...*Tag) *SessionUpdate {
 	return _u.AddTagIDs(ids...)
 }
 
+// AddMetricIDs adds the "metrics" edge to the ModelExecutionMetric entity by IDs.
+func (_u *SessionUpdate) AddMetricIDs(ids ...int64) *SessionUpdate {
+	_u.mutation.AddMetricIDs(ids...)
+	return _u
+}
+
+// AddMetrics adds the "metrics" edges to the ModelExecutionMetric entity.
+func (_u *SessionUpdate) AddMetrics(v ...*ModelExecutionMetric) *SessionUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddMetricIDs(ids...)
+}
+
+// AddRetrievalLogIDs adds the "retrieval_logs" edge to the RetrievalLog entity by IDs.
+func (_u *SessionUpdate) AddRetrievalLogIDs(ids ...uuid.UUID) *SessionUpdate {
+	_u.mutation.AddRetrievalLogIDs(ids...)
+	return _u
+}
+
+// AddRetrievalLogs adds the "retrieval_logs" edges to the RetrievalLog entity.
+func (_u *SessionUpdate) AddRetrievalLogs(v ...*RetrievalLog) *SessionUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddRetrievalLogIDs(ids...)
+}
+
+// AddMemoryEventIDs adds the "memory_events" edge to the MemoryEvent entity by IDs.
+func (_u *SessionUpdate) AddMemoryEventIDs(ids ...uuid.UUID) *SessionUpdate {
+	_u.mutation.AddMemoryEventIDs(ids...)
+	return _u
+}
+
+// AddMemoryEvents adds the "memory_events" edges to the MemoryEvent entity.
+func (_u *SessionUpdate) AddMemoryEvents(v ...*MemoryEvent) *SessionUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddMemoryEventIDs(ids...)
+}
+
 // Mutation returns the SessionMutation object of the builder.
 func (_u *SessionUpdate) Mutation() *SessionMutation {
 	return _u.mutation
@@ -189,6 +237,69 @@ func (_u *SessionUpdate) RemoveTags(v ...*Tag) *SessionUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveTagIDs(ids...)
+}
+
+// ClearMetrics clears all "metrics" edges to the ModelExecutionMetric entity.
+func (_u *SessionUpdate) ClearMetrics() *SessionUpdate {
+	_u.mutation.ClearMetrics()
+	return _u
+}
+
+// RemoveMetricIDs removes the "metrics" edge to ModelExecutionMetric entities by IDs.
+func (_u *SessionUpdate) RemoveMetricIDs(ids ...int64) *SessionUpdate {
+	_u.mutation.RemoveMetricIDs(ids...)
+	return _u
+}
+
+// RemoveMetrics removes "metrics" edges to ModelExecutionMetric entities.
+func (_u *SessionUpdate) RemoveMetrics(v ...*ModelExecutionMetric) *SessionUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveMetricIDs(ids...)
+}
+
+// ClearRetrievalLogs clears all "retrieval_logs" edges to the RetrievalLog entity.
+func (_u *SessionUpdate) ClearRetrievalLogs() *SessionUpdate {
+	_u.mutation.ClearRetrievalLogs()
+	return _u
+}
+
+// RemoveRetrievalLogIDs removes the "retrieval_logs" edge to RetrievalLog entities by IDs.
+func (_u *SessionUpdate) RemoveRetrievalLogIDs(ids ...uuid.UUID) *SessionUpdate {
+	_u.mutation.RemoveRetrievalLogIDs(ids...)
+	return _u
+}
+
+// RemoveRetrievalLogs removes "retrieval_logs" edges to RetrievalLog entities.
+func (_u *SessionUpdate) RemoveRetrievalLogs(v ...*RetrievalLog) *SessionUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveRetrievalLogIDs(ids...)
+}
+
+// ClearMemoryEvents clears all "memory_events" edges to the MemoryEvent entity.
+func (_u *SessionUpdate) ClearMemoryEvents() *SessionUpdate {
+	_u.mutation.ClearMemoryEvents()
+	return _u
+}
+
+// RemoveMemoryEventIDs removes the "memory_events" edge to MemoryEvent entities by IDs.
+func (_u *SessionUpdate) RemoveMemoryEventIDs(ids ...uuid.UUID) *SessionUpdate {
+	_u.mutation.RemoveMemoryEventIDs(ids...)
+	return _u
+}
+
+// RemoveMemoryEvents removes "memory_events" edges to MemoryEvent entities.
+func (_u *SessionUpdate) RemoveMemoryEvents(v ...*MemoryEvent) *SessionUpdate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveMemoryEventIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -301,6 +412,141 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MetricsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MetricsTable,
+			Columns: []string{session.MetricsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(modelexecutionmetric.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedMetricsIDs(); len(nodes) > 0 && !_u.mutation.MetricsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MetricsTable,
+			Columns: []string{session.MetricsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(modelexecutionmetric.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MetricsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MetricsTable,
+			Columns: []string{session.MetricsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(modelexecutionmetric.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.RetrievalLogsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.RetrievalLogsTable,
+			Columns: []string{session.RetrievalLogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedRetrievalLogsIDs(); len(nodes) > 0 && !_u.mutation.RetrievalLogsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.RetrievalLogsTable,
+			Columns: []string{session.RetrievalLogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RetrievalLogsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.RetrievalLogsTable,
+			Columns: []string{session.RetrievalLogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MemoryEventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryEventsTable,
+			Columns: []string{session.MemoryEventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedMemoryEventsIDs(); len(nodes) > 0 && !_u.mutation.MemoryEventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryEventsTable,
+			Columns: []string{session.MemoryEventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MemoryEventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryEventsTable,
+			Columns: []string{session.MemoryEventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -463,6 +709,51 @@ func (_u *SessionUpdateOne) AddTags(v ...*Tag) *SessionUpdateOne {
 	return _u.AddTagIDs(ids...)
 }
 
+// AddMetricIDs adds the "metrics" edge to the ModelExecutionMetric entity by IDs.
+func (_u *SessionUpdateOne) AddMetricIDs(ids ...int64) *SessionUpdateOne {
+	_u.mutation.AddMetricIDs(ids...)
+	return _u
+}
+
+// AddMetrics adds the "metrics" edges to the ModelExecutionMetric entity.
+func (_u *SessionUpdateOne) AddMetrics(v ...*ModelExecutionMetric) *SessionUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddMetricIDs(ids...)
+}
+
+// AddRetrievalLogIDs adds the "retrieval_logs" edge to the RetrievalLog entity by IDs.
+func (_u *SessionUpdateOne) AddRetrievalLogIDs(ids ...uuid.UUID) *SessionUpdateOne {
+	_u.mutation.AddRetrievalLogIDs(ids...)
+	return _u
+}
+
+// AddRetrievalLogs adds the "retrieval_logs" edges to the RetrievalLog entity.
+func (_u *SessionUpdateOne) AddRetrievalLogs(v ...*RetrievalLog) *SessionUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddRetrievalLogIDs(ids...)
+}
+
+// AddMemoryEventIDs adds the "memory_events" edge to the MemoryEvent entity by IDs.
+func (_u *SessionUpdateOne) AddMemoryEventIDs(ids ...uuid.UUID) *SessionUpdateOne {
+	_u.mutation.AddMemoryEventIDs(ids...)
+	return _u
+}
+
+// AddMemoryEvents adds the "memory_events" edges to the MemoryEvent entity.
+func (_u *SessionUpdateOne) AddMemoryEvents(v ...*MemoryEvent) *SessionUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddMemoryEventIDs(ids...)
+}
+
 // Mutation returns the SessionMutation object of the builder.
 func (_u *SessionUpdateOne) Mutation() *SessionMutation {
 	return _u.mutation
@@ -487,6 +778,69 @@ func (_u *SessionUpdateOne) RemoveTags(v ...*Tag) *SessionUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveTagIDs(ids...)
+}
+
+// ClearMetrics clears all "metrics" edges to the ModelExecutionMetric entity.
+func (_u *SessionUpdateOne) ClearMetrics() *SessionUpdateOne {
+	_u.mutation.ClearMetrics()
+	return _u
+}
+
+// RemoveMetricIDs removes the "metrics" edge to ModelExecutionMetric entities by IDs.
+func (_u *SessionUpdateOne) RemoveMetricIDs(ids ...int64) *SessionUpdateOne {
+	_u.mutation.RemoveMetricIDs(ids...)
+	return _u
+}
+
+// RemoveMetrics removes "metrics" edges to ModelExecutionMetric entities.
+func (_u *SessionUpdateOne) RemoveMetrics(v ...*ModelExecutionMetric) *SessionUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveMetricIDs(ids...)
+}
+
+// ClearRetrievalLogs clears all "retrieval_logs" edges to the RetrievalLog entity.
+func (_u *SessionUpdateOne) ClearRetrievalLogs() *SessionUpdateOne {
+	_u.mutation.ClearRetrievalLogs()
+	return _u
+}
+
+// RemoveRetrievalLogIDs removes the "retrieval_logs" edge to RetrievalLog entities by IDs.
+func (_u *SessionUpdateOne) RemoveRetrievalLogIDs(ids ...uuid.UUID) *SessionUpdateOne {
+	_u.mutation.RemoveRetrievalLogIDs(ids...)
+	return _u
+}
+
+// RemoveRetrievalLogs removes "retrieval_logs" edges to RetrievalLog entities.
+func (_u *SessionUpdateOne) RemoveRetrievalLogs(v ...*RetrievalLog) *SessionUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveRetrievalLogIDs(ids...)
+}
+
+// ClearMemoryEvents clears all "memory_events" edges to the MemoryEvent entity.
+func (_u *SessionUpdateOne) ClearMemoryEvents() *SessionUpdateOne {
+	_u.mutation.ClearMemoryEvents()
+	return _u
+}
+
+// RemoveMemoryEventIDs removes the "memory_events" edge to MemoryEvent entities by IDs.
+func (_u *SessionUpdateOne) RemoveMemoryEventIDs(ids ...uuid.UUID) *SessionUpdateOne {
+	_u.mutation.RemoveMemoryEventIDs(ids...)
+	return _u
+}
+
+// RemoveMemoryEvents removes "memory_events" edges to MemoryEvent entities.
+func (_u *SessionUpdateOne) RemoveMemoryEvents(v ...*MemoryEvent) *SessionUpdateOne {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveMemoryEventIDs(ids...)
 }
 
 // Where appends a list predicates to the SessionUpdate builder.
@@ -629,6 +983,141 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MetricsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MetricsTable,
+			Columns: []string{session.MetricsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(modelexecutionmetric.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedMetricsIDs(); len(nodes) > 0 && !_u.mutation.MetricsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MetricsTable,
+			Columns: []string{session.MetricsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(modelexecutionmetric.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MetricsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MetricsTable,
+			Columns: []string{session.MetricsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(modelexecutionmetric.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.RetrievalLogsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.RetrievalLogsTable,
+			Columns: []string{session.RetrievalLogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedRetrievalLogsIDs(); len(nodes) > 0 && !_u.mutation.RetrievalLogsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.RetrievalLogsTable,
+			Columns: []string{session.RetrievalLogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RetrievalLogsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.RetrievalLogsTable,
+			Columns: []string{session.RetrievalLogsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MemoryEventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryEventsTable,
+			Columns: []string{session.MemoryEventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedMemoryEventsIDs(); len(nodes) > 0 && !_u.mutation.MemoryEventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryEventsTable,
+			Columns: []string{session.MemoryEventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MemoryEventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryEventsTable,
+			Columns: []string{session.MemoryEventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

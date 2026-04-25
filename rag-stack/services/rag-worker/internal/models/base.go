@@ -24,11 +24,11 @@ type GenericModel struct {
 }
 
 // Plan decomposes a user query into specific search queries using the configured template
-func (m *GenericModel) Plan(ctx context.Context, prompt string) ([]string, error) {
+func (m *GenericModel) Plan(ctx context.Context, prompt string) ([]string, interface{}, error) {
 	planningPrompt := fmt.Sprintf(m.Config.PlanningPromptTemplate, prompt)
-	planResult, err := m.ChatSingleTurn(ctx, planningPrompt)
+	planResult, metrics, err := m.ChatSingleTurn(ctx, planningPrompt)
 	if err != nil {
-		return nil, fmt.Errorf("planning Chat failed: %w", err)
+		return nil, nil, fmt.Errorf("planning Chat failed: %w", err)
 	}
 
 	subQueries := ParseJSONArray(planResult)
@@ -36,26 +36,26 @@ func (m *GenericModel) Plan(ctx context.Context, prompt string) ([]string, error
 		log.Printf("Planner output did not contain a valid JSON array or was empty: %s", planResult)
 		subQueries = []string{prompt}
 	}
-	return subQueries, nil
+	return subQueries, metrics, nil
 }
 
 // Execute performs the augmented query with provided contexts using configured templates
-func (m *GenericModel) Execute(ctx context.Context, prompt string, contexts []interface{}) (string, error) {
+func (m *GenericModel) Execute(ctx context.Context, prompt string, contexts []interface{}) (string, interface{}, error) {
 	augmentedPrompt := m.Config.ExecutionHeader
 	for _, c := range contexts {
 		augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
 	}
 	augmentedPrompt += m.Config.ExecutionFooter + prompt + m.Config.ExecutionSuffix
 
-	result, err := m.ChatSingleTurn(ctx, augmentedPrompt)
+	result, metrics, err := m.ChatSingleTurn(ctx, augmentedPrompt)
 	if err != nil {
-		return "", fmt.Errorf("execution Chat failed: %w", err)
+		return "", nil, fmt.Errorf("execution Chat failed: %w", err)
 	}
-	return result, nil
+	return result, metrics, nil
 }
 
 // ExecuteStream performs the augmented query with provided contexts and returns a stream of results
-func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, contexts []interface{}) (<-chan string, <-chan error) {
+func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, contexts []interface{}) (<-chan string, <-chan interface{}, <-chan error) {
 	augmentedPrompt := m.Config.ExecutionHeader
 	for _, c := range contexts {
 		augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
@@ -90,7 +90,7 @@ func (m *BaseModel) GetEmbeddings(ctx context.Context, text string) ([]float32, 
 }
 
 // ChatSingleTurn sends a single user message to the LLM
-func (m *BaseModel) ChatSingleTurn(ctx context.Context, prompt string) (string, error) {
+func (m *BaseModel) ChatSingleTurn(ctx context.Context, prompt string) (string, interface{}, error) {
 	messages := []map[string]string{
 		{"role": "user", "content": prompt},
 	}

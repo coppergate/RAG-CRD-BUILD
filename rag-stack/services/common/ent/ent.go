@@ -3,11 +3,17 @@
 package ent
 
 import (
+	"app-builds/common/ent/codeembedding"
+	"app-builds/common/ent/codeingestion"
+	"app-builds/common/ent/inferencenode"
 	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
+	"app-builds/common/ent/modeldefinition"
+	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
+	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 	"context"
@@ -79,13 +85,19 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			memoryevent.Table: memoryevent.ValidColumn,
-			memoryitem.Table:  memoryitem.ValidColumn,
-			memorylink.Table:  memorylink.ValidColumn,
-			prompt.Table:      prompt.ValidColumn,
-			response.Table:    response.ValidColumn,
-			session.Table:     session.ValidColumn,
-			tag.Table:         tag.ValidColumn,
+			codeembedding.Table:        codeembedding.ValidColumn,
+			codeingestion.Table:        codeingestion.ValidColumn,
+			inferencenode.Table:        inferencenode.ValidColumn,
+			memoryevent.Table:          memoryevent.ValidColumn,
+			memoryitem.Table:           memoryitem.ValidColumn,
+			memorylink.Table:           memorylink.ValidColumn,
+			modeldefinition.Table:      modeldefinition.ValidColumn,
+			modelexecutionmetric.Table: modelexecutionmetric.ValidColumn,
+			prompt.Table:               prompt.ValidColumn,
+			response.Table:             response.ValidColumn,
+			retrievallog.Table:         retrievallog.ValidColumn,
+			session.Table:              session.ValidColumn,
+			tag.Table:                  tag.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

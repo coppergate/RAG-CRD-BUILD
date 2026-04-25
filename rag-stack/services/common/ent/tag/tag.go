@@ -21,8 +21,16 @@ const (
 	FieldCreatedAt = "created_at"
 	// EdgeSessions holds the string denoting the sessions edge name in mutations.
 	EdgeSessions = "sessions"
+	// EdgeIngestions holds the string denoting the ingestions edge name in mutations.
+	EdgeIngestions = "ingestions"
+	// EdgeEmbeddings holds the string denoting the embeddings edge name in mutations.
+	EdgeEmbeddings = "embeddings"
 	// SessionFieldID holds the string denoting the ID field of the Session.
 	SessionFieldID = "session_id"
+	// CodeIngestionFieldID holds the string denoting the ID field of the CodeIngestion.
+	CodeIngestionFieldID = "ingestion_id"
+	// CodeEmbeddingFieldID holds the string denoting the ID field of the CodeEmbedding.
+	CodeEmbeddingFieldID = "embedding_id"
 	// Table holds the table name of the tag in the database.
 	Table = "tag"
 	// SessionsTable is the table that holds the sessions relation/edge. The primary key declared below.
@@ -30,6 +38,16 @@ const (
 	// SessionsInverseTable is the table name for the Session entity.
 	// It exists in this package in order to avoid circular dependency with the "session" package.
 	SessionsInverseTable = "sessions"
+	// IngestionsTable is the table that holds the ingestions relation/edge. The primary key declared below.
+	IngestionsTable = "code_ingestion_tag"
+	// IngestionsInverseTable is the table name for the CodeIngestion entity.
+	// It exists in this package in order to avoid circular dependency with the "codeingestion" package.
+	IngestionsInverseTable = "code_ingestions"
+	// EmbeddingsTable is the table that holds the embeddings relation/edge. The primary key declared below.
+	EmbeddingsTable = "code_embedding_tag"
+	// EmbeddingsInverseTable is the table name for the CodeEmbedding entity.
+	// It exists in this package in order to avoid circular dependency with the "codeembedding" package.
+	EmbeddingsInverseTable = "code_embeddings"
 )
 
 // Columns holds all SQL columns for tag fields.
@@ -43,6 +61,12 @@ var (
 	// SessionsPrimaryKey and SessionsColumn2 are the table columns denoting the
 	// primary key for the sessions relation (M2M).
 	SessionsPrimaryKey = []string{"session_id", "tag_id"}
+	// IngestionsPrimaryKey and IngestionsColumn2 are the table columns denoting the
+	// primary key for the ingestions relation (M2M).
+	IngestionsPrimaryKey = []string{"ingestion_id", "tag_id"}
+	// EmbeddingsPrimaryKey and EmbeddingsColumn2 are the table columns denoting the
+	// primary key for the embeddings relation (M2M).
+	EmbeddingsPrimaryKey = []string{"embedding_id", "tag_id"}
 )
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -93,10 +117,52 @@ func BySessions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newSessionsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByIngestionsCount orders the results by ingestions count.
+func ByIngestionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newIngestionsStep(), opts...)
+	}
+}
+
+// ByIngestions orders the results by ingestions terms.
+func ByIngestions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newIngestionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByEmbeddingsCount orders the results by embeddings count.
+func ByEmbeddingsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newEmbeddingsStep(), opts...)
+	}
+}
+
+// ByEmbeddings orders the results by embeddings terms.
+func ByEmbeddings(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newEmbeddingsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newSessionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SessionsInverseTable, SessionFieldID),
 		sqlgraph.Edge(sqlgraph.M2M, true, SessionsTable, SessionsPrimaryKey...),
+	)
+}
+func newIngestionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(IngestionsInverseTable, CodeIngestionFieldID),
+		sqlgraph.Edge(sqlgraph.M2M, true, IngestionsTable, IngestionsPrimaryKey...),
+	)
+}
+func newEmbeddingsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(EmbeddingsInverseTable, CodeEmbeddingFieldID),
+		sqlgraph.Edge(sqlgraph.M2M, true, EmbeddingsTable, EmbeddingsPrimaryKey...),
 	)
 }

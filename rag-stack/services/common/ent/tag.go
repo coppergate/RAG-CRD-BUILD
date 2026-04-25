@@ -32,9 +32,13 @@ type Tag struct {
 type TagEdges struct {
 	// Sessions holds the value of the sessions edge.
 	Sessions []*Session `json:"sessions,omitempty"`
+	// Ingestions holds the value of the ingestions edge.
+	Ingestions []*CodeIngestion `json:"ingestions,omitempty"`
+	// Embeddings holds the value of the embeddings edge.
+	Embeddings []*CodeEmbedding `json:"embeddings,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [3]bool
 }
 
 // SessionsOrErr returns the Sessions value or an error if the edge
@@ -44,6 +48,24 @@ func (e TagEdges) SessionsOrErr() ([]*Session, error) {
 		return e.Sessions, nil
 	}
 	return nil, &NotLoadedError{edge: "sessions"}
+}
+
+// IngestionsOrErr returns the Ingestions value or an error if the edge
+// was not loaded in eager-loading.
+func (e TagEdges) IngestionsOrErr() ([]*CodeIngestion, error) {
+	if e.loadedTypes[1] {
+		return e.Ingestions, nil
+	}
+	return nil, &NotLoadedError{edge: "ingestions"}
+}
+
+// EmbeddingsOrErr returns the Embeddings value or an error if the edge
+// was not loaded in eager-loading.
+func (e TagEdges) EmbeddingsOrErr() ([]*CodeEmbedding, error) {
+	if e.loadedTypes[2] {
+		return e.Embeddings, nil
+	}
+	return nil, &NotLoadedError{edge: "embeddings"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -106,6 +128,16 @@ func (_m *Tag) Value(name string) (ent.Value, error) {
 // QuerySessions queries the "sessions" edge of the Tag entity.
 func (_m *Tag) QuerySessions() *SessionQuery {
 	return NewTagClient(_m.config).QuerySessions(_m)
+}
+
+// QueryIngestions queries the "ingestions" edge of the Tag entity.
+func (_m *Tag) QueryIngestions() *CodeIngestionQuery {
+	return NewTagClient(_m.config).QueryIngestions(_m)
+}
+
+// QueryEmbeddings queries the "embeddings" edge of the Tag entity.
+func (_m *Tag) QueryEmbeddings() *CodeEmbeddingQuery {
+	return NewTagClient(_m.config).QueryEmbeddings(_m)
 }
 
 // Update returns a builder for updating this Tag.

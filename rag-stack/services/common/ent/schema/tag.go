@@ -43,5 +43,9 @@ func (Tag) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.From("sessions", Session.Type).
 			Ref("tags"),
+		edge.From("ingestions", CodeIngestion.Type).
+			Ref("tags"),
+		edge.From("embeddings", CodeEmbedding.Type).
+			Ref("tags"),
 	}
 }

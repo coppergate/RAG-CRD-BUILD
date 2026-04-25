@@ -9,6 +9,55 @@ import (
 )
 
 var (
+	// CodeEmbeddingsColumns holds the columns for the "code_embeddings" table.
+	CodeEmbeddingsColumns = []*schema.Column{
+		{Name: "embedding_id", Type: field.TypeUUID},
+		{Name: "embedding_vector", Type: field.TypeJSON, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "ingestion_id", Type: field.TypeUUID, Nullable: true},
+	}
+	// CodeEmbeddingsTable holds the schema information for the "code_embeddings" table.
+	CodeEmbeddingsTable = &schema.Table{
+		Name:       "code_embeddings",
+		Columns:    CodeEmbeddingsColumns,
+		PrimaryKey: []*schema.Column{CodeEmbeddingsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "code_embeddings_code_ingestions_embeddings",
+				Columns:    []*schema.Column{CodeEmbeddingsColumns[4]},
+				RefColumns: []*schema.Column{CodeIngestionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
+	// CodeIngestionsColumns holds the columns for the "code_ingestions" table.
+	CodeIngestionsColumns = []*schema.Column{
+		{Name: "ingestion_id", Type: field.TypeUUID},
+		{Name: "s3_bucket_id", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// CodeIngestionsTable holds the schema information for the "code_ingestions" table.
+	CodeIngestionsTable = &schema.Table{
+		Name:       "code_ingestions",
+		Columns:    CodeIngestionsColumns,
+		PrimaryKey: []*schema.Column{CodeIngestionsColumns[0]},
+	}
+	// InferenceNodesColumns holds the columns for the "inference_nodes" table.
+	InferenceNodesColumns = []*schema.Column{
+		{Name: "node_id", Type: field.TypeUUID},
+		{Name: "hostname", Type: field.TypeString, Unique: true},
+		{Name: "ip_address", Type: field.TypeString, Nullable: true},
+		{Name: "gpu_model", Type: field.TypeString, Nullable: true},
+		{Name: "total_vram_mb", Type: field.TypeInt, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// InferenceNodesTable holds the schema information for the "inference_nodes" table.
+	InferenceNodesTable = &schema.Table{
+		Name:       "inference_nodes",
+		Columns:    InferenceNodesColumns,
+		PrimaryKey: []*schema.Column{InferenceNodesColumns[0]},
+	}
 	// MemoryEventsColumns holds the columns for the "memory_events" table.
 	MemoryEventsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -16,12 +65,21 @@ var (
 		{Name: "event_type", Type: field.TypeString},
 		{Name: "event_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
 	}
 	// MemoryEventsTable holds the schema information for the "memory_events" table.
 	MemoryEventsTable = &schema.Table{
 		Name:       "memory_events",
 		Columns:    MemoryEventsColumns,
 		PrimaryKey: []*schema.Column{MemoryEventsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "memory_events_sessions_memory_events",
+				Columns:    []*schema.Column{MemoryEventsColumns[5]},
+				RefColumns: []*schema.Column{SessionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "memoryevent_memory_item_id",
@@ -115,6 +173,64 @@ var (
 			},
 		},
 	}
+	// ModelDefinitionsColumns holds the columns for the "model_definitions" table.
+	ModelDefinitionsColumns = []*schema.Column{
+		{Name: "model_id", Type: field.TypeUUID},
+		{Name: "model_name", Type: field.TypeString, Unique: true},
+		{Name: "family", Type: field.TypeString, Nullable: true},
+		{Name: "parameters_billions", Type: field.TypeFloat32, Nullable: true},
+		{Name: "quantization", Type: field.TypeString, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// ModelDefinitionsTable holds the schema information for the "model_definitions" table.
+	ModelDefinitionsTable = &schema.Table{
+		Name:       "model_definitions",
+		Columns:    ModelDefinitionsColumns,
+		PrimaryKey: []*schema.Column{ModelDefinitionsColumns[0]},
+	}
+	// ModelExecutionMetricsColumns holds the columns for the "model_execution_metrics" table.
+	ModelExecutionMetricsColumns = []*schema.Column{
+		{Name: "metric_id", Type: field.TypeInt64, Increment: true},
+		{Name: "response_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "prompt_tokens", Type: field.TypeInt, Nullable: true},
+		{Name: "completion_tokens", Type: field.TypeInt, Nullable: true},
+		{Name: "total_tokens", Type: field.TypeInt, Nullable: true},
+		{Name: "total_duration_usec", Type: field.TypeInt64, Nullable: true},
+		{Name: "load_duration_usec", Type: field.TypeInt64, Nullable: true},
+		{Name: "prompt_eval_duration_usec", Type: field.TypeInt64, Nullable: true},
+		{Name: "eval_duration_usec", Type: field.TypeInt64, Nullable: true},
+		{Name: "tokens_per_second", Type: field.TypeFloat32, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "node_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "model_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+	}
+	// ModelExecutionMetricsTable holds the schema information for the "model_execution_metrics" table.
+	ModelExecutionMetricsTable = &schema.Table{
+		Name:       "model_execution_metrics",
+		Columns:    ModelExecutionMetricsColumns,
+		PrimaryKey: []*schema.Column{ModelExecutionMetricsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "model_execution_metrics_inference_nodes_metrics",
+				Columns:    []*schema.Column{ModelExecutionMetricsColumns[11]},
+				RefColumns: []*schema.Column{InferenceNodesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "model_execution_metrics_model_definitions_metrics",
+				Columns:    []*schema.Column{ModelExecutionMetricsColumns[12]},
+				RefColumns: []*schema.Column{ModelDefinitionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "model_execution_metrics_sessions_metrics",
+				Columns:    []*schema.Column{ModelExecutionMetricsColumns[13]},
+				RefColumns: []*schema.Column{SessionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
 	// PromptsColumns holds the columns for the "prompts" table.
 	PromptsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -148,6 +264,29 @@ var (
 		Columns:    ResponsesColumns,
 		PrimaryKey: []*schema.Column{ResponsesColumns[0]},
 	}
+	// RetrievalLogsColumns holds the columns for the "retrieval_logs" table.
+	RetrievalLogsColumns = []*schema.Column{
+		{Name: "log_id", Type: field.TypeUUID},
+		{Name: "message_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "query", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "retrieved_chunks", Type: field.TypeJSON, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+	}
+	// RetrievalLogsTable holds the schema information for the "retrieval_logs" table.
+	RetrievalLogsTable = &schema.Table{
+		Name:       "retrieval_logs",
+		Columns:    RetrievalLogsColumns,
+		PrimaryKey: []*schema.Column{RetrievalLogsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "retrieval_logs_sessions_retrieval_logs",
+				Columns:    []*schema.Column{RetrievalLogsColumns[5]},
+				RefColumns: []*schema.Column{SessionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
 	// SessionsColumns holds the columns for the "sessions" table.
 	SessionsColumns = []*schema.Column{
 		{Name: "session_id", Type: field.TypeUUID},
@@ -177,6 +316,56 @@ var (
 		Columns:    TagColumns,
 		PrimaryKey: []*schema.Column{TagColumns[0]},
 	}
+	// CodeEmbeddingTagColumns holds the columns for the "code_embedding_tag" table.
+	CodeEmbeddingTagColumns = []*schema.Column{
+		{Name: "embedding_id", Type: field.TypeUUID},
+		{Name: "tag_id", Type: field.TypeUUID},
+	}
+	// CodeEmbeddingTagTable holds the schema information for the "code_embedding_tag" table.
+	CodeEmbeddingTagTable = &schema.Table{
+		Name:       "code_embedding_tag",
+		Columns:    CodeEmbeddingTagColumns,
+		PrimaryKey: []*schema.Column{CodeEmbeddingTagColumns[0], CodeEmbeddingTagColumns[1]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "code_embedding_tag_embedding_id",
+				Columns:    []*schema.Column{CodeEmbeddingTagColumns[0]},
+				RefColumns: []*schema.Column{CodeEmbeddingsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "code_embedding_tag_tag_id",
+				Columns:    []*schema.Column{CodeEmbeddingTagColumns[1]},
+				RefColumns: []*schema.Column{TagColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
+	// CodeIngestionTagColumns holds the columns for the "code_ingestion_tag" table.
+	CodeIngestionTagColumns = []*schema.Column{
+		{Name: "ingestion_id", Type: field.TypeUUID},
+		{Name: "tag_id", Type: field.TypeUUID},
+	}
+	// CodeIngestionTagTable holds the schema information for the "code_ingestion_tag" table.
+	CodeIngestionTagTable = &schema.Table{
+		Name:       "code_ingestion_tag",
+		Columns:    CodeIngestionTagColumns,
+		PrimaryKey: []*schema.Column{CodeIngestionTagColumns[0], CodeIngestionTagColumns[1]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "code_ingestion_tag_ingestion_id",
+				Columns:    []*schema.Column{CodeIngestionTagColumns[0]},
+				RefColumns: []*schema.Column{CodeIngestionsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "code_ingestion_tag_tag_id",
+				Columns:    []*schema.Column{CodeIngestionTagColumns[1]},
+				RefColumns: []*schema.Column{TagColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
 	// SessionTagColumns holds the columns for the "session_tag" table.
 	SessionTagColumns = []*schema.Column{
 		{Name: "session_id", Type: field.TypeUUID},
@@ -204,21 +393,39 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		CodeEmbeddingsTable,
+		CodeIngestionsTable,
+		InferenceNodesTable,
 		MemoryEventsTable,
 		MemoryItemsTable,
 		MemoryLinksTable,
+		ModelDefinitionsTable,
+		ModelExecutionMetricsTable,
 		PromptsTable,
 		ResponsesTable,
+		RetrievalLogsTable,
 		SessionsTable,
 		TagTable,
+		CodeEmbeddingTagTable,
+		CodeIngestionTagTable,
 		SessionTagTable,
 	}
 )
 
 func init() {
+	CodeEmbeddingsTable.ForeignKeys[0].RefTable = CodeIngestionsTable
+	MemoryEventsTable.ForeignKeys[0].RefTable = SessionsTable
+	ModelExecutionMetricsTable.ForeignKeys[0].RefTable = InferenceNodesTable
+	ModelExecutionMetricsTable.ForeignKeys[1].RefTable = ModelDefinitionsTable
+	ModelExecutionMetricsTable.ForeignKeys[2].RefTable = SessionsTable
+	RetrievalLogsTable.ForeignKeys[0].RefTable = SessionsTable
 	TagTable.Annotation = &entsql.Annotation{
 		Table: "tag",
 	}
+	CodeEmbeddingTagTable.ForeignKeys[0].RefTable = CodeEmbeddingsTable
+	CodeEmbeddingTagTable.ForeignKeys[1].RefTable = TagTable
+	CodeIngestionTagTable.ForeignKeys[0].RefTable = CodeIngestionsTable
+	CodeIngestionTagTable.ForeignKeys[1].RefTable = TagTable
 	SessionTagTable.ForeignKeys[0].RefTable = SessionsTable
 	SessionTagTable.ForeignKeys[1].RefTable = TagTable
 }

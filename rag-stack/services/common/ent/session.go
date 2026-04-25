@@ -43,9 +43,15 @@ type Session struct {
 type SessionEdges struct {
 	// Tags holds the value of the tags edge.
 	Tags []*Tag `json:"tags,omitempty"`
+	// Metrics holds the value of the metrics edge.
+	Metrics []*ModelExecutionMetric `json:"metrics,omitempty"`
+	// RetrievalLogs holds the value of the retrieval_logs edge.
+	RetrievalLogs []*RetrievalLog `json:"retrieval_logs,omitempty"`
+	// MemoryEvents holds the value of the memory_events edge.
+	MemoryEvents []*MemoryEvent `json:"memory_events,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [4]bool
 }
 
 // TagsOrErr returns the Tags value or an error if the edge
@@ -55,6 +61,33 @@ func (e SessionEdges) TagsOrErr() ([]*Tag, error) {
 		return e.Tags, nil
 	}
 	return nil, &NotLoadedError{edge: "tags"}
+}
+
+// MetricsOrErr returns the Metrics value or an error if the edge
+// was not loaded in eager-loading.
+func (e SessionEdges) MetricsOrErr() ([]*ModelExecutionMetric, error) {
+	if e.loadedTypes[1] {
+		return e.Metrics, nil
+	}
+	return nil, &NotLoadedError{edge: "metrics"}
+}
+
+// RetrievalLogsOrErr returns the RetrievalLogs value or an error if the edge
+// was not loaded in eager-loading.
+func (e SessionEdges) RetrievalLogsOrErr() ([]*RetrievalLog, error) {
+	if e.loadedTypes[2] {
+		return e.RetrievalLogs, nil
+	}
+	return nil, &NotLoadedError{edge: "retrieval_logs"}
+}
+
+// MemoryEventsOrErr returns the MemoryEvents value or an error if the edge
+// was not loaded in eager-loading.
+func (e SessionEdges) MemoryEventsOrErr() ([]*MemoryEvent, error) {
+	if e.loadedTypes[3] {
+		return e.MemoryEvents, nil
+	}
+	return nil, &NotLoadedError{edge: "memory_events"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -151,6 +184,21 @@ func (_m *Session) Value(name string) (ent.Value, error) {
 // QueryTags queries the "tags" edge of the Session entity.
 func (_m *Session) QueryTags() *TagQuery {
 	return NewSessionClient(_m.config).QueryTags(_m)
+}
+
+// QueryMetrics queries the "metrics" edge of the Session entity.
+func (_m *Session) QueryMetrics() *ModelExecutionMetricQuery {
+	return NewSessionClient(_m.config).QueryMetrics(_m)
+}
+
+// QueryRetrievalLogs queries the "retrieval_logs" edge of the Session entity.
+func (_m *Session) QueryRetrievalLogs() *RetrievalLogQuery {
+	return NewSessionClient(_m.config).QueryRetrievalLogs(_m)
+}
+
+// QueryMemoryEvents queries the "memory_events" edge of the Session entity.
+func (_m *Session) QueryMemoryEvents() *MemoryEventQuery {
+	return NewSessionClient(_m.config).QueryMemoryEvents(_m)
 }
 
 // Update returns a builder for updating this Session.

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/session"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,20 @@ type MemoryEventCreate struct {
 // SetMemoryItemID sets the "memory_item_id" field.
 func (_c *MemoryEventCreate) SetMemoryItemID(v uuid.UUID) *MemoryEventCreate {
 	_c.mutation.SetMemoryItemID(v)
+	return _c
+}
+
+// SetSessionID sets the "session_id" field.
+func (_c *MemoryEventCreate) SetSessionID(v uuid.UUID) *MemoryEventCreate {
+	_c.mutation.SetSessionID(v)
+	return _c
+}
+
+// SetNillableSessionID sets the "session_id" field if the given value is not nil.
+func (_c *MemoryEventCreate) SetNillableSessionID(v *uuid.UUID) *MemoryEventCreate {
+	if v != nil {
+		_c.SetSessionID(*v)
+	}
 	return _c
 }
 
@@ -68,6 +83,11 @@ func (_c *MemoryEventCreate) SetNillableID(v *uuid.UUID) *MemoryEventCreate {
 		_c.SetID(*v)
 	}
 	return _c
+}
+
+// SetSession sets the "session" edge to the Session entity.
+func (_c *MemoryEventCreate) SetSession(v *Session) *MemoryEventCreate {
+	return _c.SetSessionID(v.ID)
 }
 
 // Mutation returns the MemoryEventMutation object of the builder.
@@ -178,6 +198,23 @@ func (_c *MemoryEventCreate) createSpec() (*MemoryEvent, *sqlgraph.CreateSpec) {
 		_spec.SetField(memoryevent.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
+	if nodes := _c.mutation.SessionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.SessionTable,
+			Columns: []string{memoryevent.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.SessionID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	return _node, _spec
 }
 
@@ -239,6 +276,24 @@ func (u *MemoryEventUpsert) SetMemoryItemID(v uuid.UUID) *MemoryEventUpsert {
 // UpdateMemoryItemID sets the "memory_item_id" field to the value that was provided on create.
 func (u *MemoryEventUpsert) UpdateMemoryItemID() *MemoryEventUpsert {
 	u.SetExcluded(memoryevent.FieldMemoryItemID)
+	return u
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *MemoryEventUpsert) SetSessionID(v uuid.UUID) *MemoryEventUpsert {
+	u.Set(memoryevent.FieldSessionID, v)
+	return u
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *MemoryEventUpsert) UpdateSessionID() *MemoryEventUpsert {
+	u.SetExcluded(memoryevent.FieldSessionID)
+	return u
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *MemoryEventUpsert) ClearSessionID() *MemoryEventUpsert {
+	u.SetNull(memoryevent.FieldSessionID)
 	return u
 }
 
@@ -334,6 +389,27 @@ func (u *MemoryEventUpsertOne) SetMemoryItemID(v uuid.UUID) *MemoryEventUpsertOn
 func (u *MemoryEventUpsertOne) UpdateMemoryItemID() *MemoryEventUpsertOne {
 	return u.Update(func(s *MemoryEventUpsert) {
 		s.UpdateMemoryItemID()
+	})
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *MemoryEventUpsertOne) SetSessionID(v uuid.UUID) *MemoryEventUpsertOne {
+	return u.Update(func(s *MemoryEventUpsert) {
+		s.SetSessionID(v)
+	})
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *MemoryEventUpsertOne) UpdateSessionID() *MemoryEventUpsertOne {
+	return u.Update(func(s *MemoryEventUpsert) {
+		s.UpdateSessionID()
+	})
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *MemoryEventUpsertOne) ClearSessionID() *MemoryEventUpsertOne {
+	return u.Update(func(s *MemoryEventUpsert) {
+		s.ClearSessionID()
 	})
 }
 
@@ -601,6 +677,27 @@ func (u *MemoryEventUpsertBulk) SetMemoryItemID(v uuid.UUID) *MemoryEventUpsertB
 func (u *MemoryEventUpsertBulk) UpdateMemoryItemID() *MemoryEventUpsertBulk {
 	return u.Update(func(s *MemoryEventUpsert) {
 		s.UpdateMemoryItemID()
+	})
+}
+
+// SetSessionID sets the "session_id" field.
+func (u *MemoryEventUpsertBulk) SetSessionID(v uuid.UUID) *MemoryEventUpsertBulk {
+	return u.Update(func(s *MemoryEventUpsert) {
+		s.SetSessionID(v)
+	})
+}
+
+// UpdateSessionID sets the "session_id" field to the value that was provided on create.
+func (u *MemoryEventUpsertBulk) UpdateSessionID() *MemoryEventUpsertBulk {
+	return u.Update(func(s *MemoryEventUpsert) {
+		s.UpdateSessionID()
+	})
+}
+
+// ClearSessionID clears the value of the "session_id" field.
+func (u *MemoryEventUpsertBulk) ClearSessionID() *MemoryEventUpsertBulk {
+	return u.Update(func(s *MemoryEventUpsert) {
+		s.ClearSessionID()
 	})
 }
 

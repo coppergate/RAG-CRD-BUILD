@@ -3,7 +3,10 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/predicate"
+	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 	"context"
@@ -21,11 +24,14 @@ import (
 // SessionQuery is the builder for querying Session entities.
 type SessionQuery struct {
 	config
-	ctx        *QueryContext
-	order      []session.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Session
-	withTags   *TagQuery
+	ctx               *QueryContext
+	order             []session.OrderOption
+	inters            []Interceptor
+	predicates        []predicate.Session
+	withTags          *TagQuery
+	withMetrics       *ModelExecutionMetricQuery
+	withRetrievalLogs *RetrievalLogQuery
+	withMemoryEvents  *MemoryEventQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -77,6 +83,72 @@ func (_q *SessionQuery) QueryTags() *TagQuery {
 			sqlgraph.From(session.Table, session.FieldID, selector),
 			sqlgraph.To(tag.Table, tag.FieldID),
 			sqlgraph.Edge(sqlgraph.M2M, false, session.TagsTable, session.TagsPrimaryKey...),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryMetrics chains the current query on the "metrics" edge.
+func (_q *SessionQuery) QueryMetrics() *ModelExecutionMetricQuery {
+	query := (&ModelExecutionMetricClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(session.Table, session.FieldID, selector),
+			sqlgraph.To(modelexecutionmetric.Table, modelexecutionmetric.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, session.MetricsTable, session.MetricsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryRetrievalLogs chains the current query on the "retrieval_logs" edge.
+func (_q *SessionQuery) QueryRetrievalLogs() *RetrievalLogQuery {
+	query := (&RetrievalLogClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(session.Table, session.FieldID, selector),
+			sqlgraph.To(retrievallog.Table, retrievallog.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, session.RetrievalLogsTable, session.RetrievalLogsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryMemoryEvents chains the current query on the "memory_events" edge.
+func (_q *SessionQuery) QueryMemoryEvents() *MemoryEventQuery {
+	query := (&MemoryEventClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(session.Table, session.FieldID, selector),
+			sqlgraph.To(memoryevent.Table, memoryevent.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, session.MemoryEventsTable, session.MemoryEventsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -271,12 +343,15 @@ func (_q *SessionQuery) Clone() *SessionQuery {
 		return nil
 	}
 	return &SessionQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]session.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.Session{}, _q.predicates...),
-		withTags:   _q.withTags.Clone(),
+		config:            _q.config,
+		ctx:               _q.ctx.Clone(),
+		order:             append([]session.OrderOption{}, _q.order...),
+		inters:            append([]Interceptor{}, _q.inters...),
+		predicates:        append([]predicate.Session{}, _q.predicates...),
+		withTags:          _q.withTags.Clone(),
+		withMetrics:       _q.withMetrics.Clone(),
+		withRetrievalLogs: _q.withRetrievalLogs.Clone(),
+		withMemoryEvents:  _q.withMemoryEvents.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -291,6 +366,39 @@ func (_q *SessionQuery) WithTags(opts ...func(*TagQuery)) *SessionQuery {
 		opt(query)
 	}
 	_q.withTags = query
+	return _q
+}
+
+// WithMetrics tells the query-builder to eager-load the nodes that are connected to
+// the "metrics" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *SessionQuery) WithMetrics(opts ...func(*ModelExecutionMetricQuery)) *SessionQuery {
+	query := (&ModelExecutionMetricClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withMetrics = query
+	return _q
+}
+
+// WithRetrievalLogs tells the query-builder to eager-load the nodes that are connected to
+// the "retrieval_logs" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *SessionQuery) WithRetrievalLogs(opts ...func(*RetrievalLogQuery)) *SessionQuery {
+	query := (&RetrievalLogClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withRetrievalLogs = query
+	return _q
+}
+
+// WithMemoryEvents tells the query-builder to eager-load the nodes that are connected to
+// the "memory_events" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *SessionQuery) WithMemoryEvents(opts ...func(*MemoryEventQuery)) *SessionQuery {
+	query := (&MemoryEventClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withMemoryEvents = query
 	return _q
 }
 
@@ -372,8 +480,11 @@ func (_q *SessionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Sess
 	var (
 		nodes       = []*Session{}
 		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [4]bool{
 			_q.withTags != nil,
+			_q.withMetrics != nil,
+			_q.withRetrievalLogs != nil,
+			_q.withMemoryEvents != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -398,6 +509,27 @@ func (_q *SessionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Sess
 		if err := _q.loadTags(ctx, query, nodes,
 			func(n *Session) { n.Edges.Tags = []*Tag{} },
 			func(n *Session, e *Tag) { n.Edges.Tags = append(n.Edges.Tags, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withMetrics; query != nil {
+		if err := _q.loadMetrics(ctx, query, nodes,
+			func(n *Session) { n.Edges.Metrics = []*ModelExecutionMetric{} },
+			func(n *Session, e *ModelExecutionMetric) { n.Edges.Metrics = append(n.Edges.Metrics, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withRetrievalLogs; query != nil {
+		if err := _q.loadRetrievalLogs(ctx, query, nodes,
+			func(n *Session) { n.Edges.RetrievalLogs = []*RetrievalLog{} },
+			func(n *Session, e *RetrievalLog) { n.Edges.RetrievalLogs = append(n.Edges.RetrievalLogs, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withMemoryEvents; query != nil {
+		if err := _q.loadMemoryEvents(ctx, query, nodes,
+			func(n *Session) { n.Edges.MemoryEvents = []*MemoryEvent{} },
+			func(n *Session, e *MemoryEvent) { n.Edges.MemoryEvents = append(n.Edges.MemoryEvents, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -462,6 +594,96 @@ func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*
 		for kn := range nodes {
 			assign(kn, n)
 		}
+	}
+	return nil
+}
+func (_q *SessionQuery) loadMetrics(ctx context.Context, query *ModelExecutionMetricQuery, nodes []*Session, init func(*Session), assign func(*Session, *ModelExecutionMetric)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*Session)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(modelexecutionmetric.FieldSessionID)
+	}
+	query.Where(predicate.ModelExecutionMetric(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(session.MetricsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SessionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "session_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *SessionQuery) loadRetrievalLogs(ctx context.Context, query *RetrievalLogQuery, nodes []*Session, init func(*Session), assign func(*Session, *RetrievalLog)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*Session)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(retrievallog.FieldSessionID)
+	}
+	query.Where(predicate.RetrievalLog(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(session.RetrievalLogsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SessionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "session_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *SessionQuery) loadMemoryEvents(ctx context.Context, query *MemoryEventQuery, nodes []*Session, init func(*Session), assign func(*Session, *MemoryEvent)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*Session)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(memoryevent.FieldSessionID)
+	}
+	query.Where(predicate.MemoryEvent(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(session.MemoryEventsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SessionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "session_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }

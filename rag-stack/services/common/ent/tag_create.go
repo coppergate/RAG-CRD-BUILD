@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"app-builds/common/ent/codeembedding"
+	"app-builds/common/ent/codeingestion"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 	"context"
@@ -72,6 +74,36 @@ func (_c *TagCreate) AddSessions(v ...*Session) *TagCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddSessionIDs(ids...)
+}
+
+// AddIngestionIDs adds the "ingestions" edge to the CodeIngestion entity by IDs.
+func (_c *TagCreate) AddIngestionIDs(ids ...uuid.UUID) *TagCreate {
+	_c.mutation.AddIngestionIDs(ids...)
+	return _c
+}
+
+// AddIngestions adds the "ingestions" edges to the CodeIngestion entity.
+func (_c *TagCreate) AddIngestions(v ...*CodeIngestion) *TagCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddIngestionIDs(ids...)
+}
+
+// AddEmbeddingIDs adds the "embeddings" edge to the CodeEmbedding entity by IDs.
+func (_c *TagCreate) AddEmbeddingIDs(ids ...uuid.UUID) *TagCreate {
+	_c.mutation.AddEmbeddingIDs(ids...)
+	return _c
+}
+
+// AddEmbeddings adds the "embeddings" edges to the CodeEmbedding entity.
+func (_c *TagCreate) AddEmbeddings(v ...*CodeEmbedding) *TagCreate {
+	ids := make([]uuid.UUID, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddEmbeddingIDs(ids...)
 }
 
 // Mutation returns the TagMutation object of the builder.
@@ -180,6 +212,38 @@ func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.IngestionsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.IngestionsTable,
+			Columns: tag.IngestionsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.EmbeddingsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   tag.EmbeddingsTable,
+			Columns: tag.EmbeddingsPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {

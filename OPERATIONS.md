@@ -485,3 +485,31 @@ Verifies multiple LLM model combinations (e.g., Llama + Granite).
 ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
   "export VERSION=2.6.1 && cd /mnt/hegemon-share/share/code/complete-build/rag-stack/tests && bash ./run-cross-model-tests.sh"
 ```
+
+### 7.5 DB Adapter Unit Tests (Ent/SQLite)
+The `db-adapter` service includes a comprehensive unit test suite using an in-memory SQLite database via the Ent ORM. These tests verify metrics persistence, health calculation, auditing, Virtual FS, and tag merging logic.
+- **Location**: `rag-stack/services/db-adapter/cmd/adapter/handlers_test.go`
+- **Execution**:
+    ```bash
+    cd rag-stack/services/db-adapter
+    go test -v ./cmd/adapter/...
+    ```
+- **Coverage**: Includes `handleCompletion`, `handleGetSessionHealth`, `handleGetSessionAudit`, `handleGetSessionMessages`, `handleGetFiles`, and `handleMaintenanceTagMerge`.
+
+## 8. RAG Explorer & Metrics (Iteration 6b)
+### 8.1 Model Execution Metrics (3NF)
+Model performance is tracked in the `model_execution_metrics` hypertable in TimescaleDB. 
+Dimensions:
+- `inference_nodes`: Track GPU/CPU stats per node.
+- `model_definitions`: Track model family and parameters.
+
+### 8.2 Virtual Filesystem
+The S3 browser in RAG Explorer is "virtual" — it queries the database metadata (`code_ingestion` and `code_embedding`) rather than S3 directly for faster filtering and sync status verification.
+
+### 8.3 Tag Maintenance
+Tag merging is performed via the `/api/db/maintenance/tags/merge` endpoint. This coordinates a "Clean-and-Reingest" process to ensure data consistency and de-duplication:
+1. Identifies all unique S3 file paths associated with the source tags.
+2. Atomically deletes existing embeddings for these paths from TimescaleDB and Qdrant.
+3. Groups paths by their new combined tag set (current tags minus sources plus target).
+4. Triggers the `rag-ingestion` service for each group to re-process the files from S3 with updated tags.
+5. Updates session-tag mappings and deletes the source tag entities from the database.

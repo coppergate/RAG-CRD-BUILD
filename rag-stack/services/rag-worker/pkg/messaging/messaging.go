@@ -198,14 +198,15 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 }
 
 // SendCompletion sends a completion event to the completion topic.
-func (c *Client) SendCompletion(ctx context.Context, id, sessionID, startTS, model, status string) {
+func (c *Client) SendCompletion(ctx context.Context, id, sessionID, startTS, model, status string, metrics *contracts.ExecutionMetrics) {
 	log.Printf("[%s] Sending completion event (status: %s)", id, status)
-	payload := map[string]interface{}{
-		"id":               id,
-		"session_id":       sessionID,
-		"start_timestamp":  startTS,
-		"model":            model,
-		"status":           status,
+	payload := contracts.ResponseCompletion{
+		ID:             id,
+		SessionID:      sessionID,
+		StartTimestamp: startTS,
+		Model:          model,
+		Status:         status,
+		Metrics:        metrics,
 	}
 	if _, err := pulsarCommon.SendJSON(ctx, c.Producers.Completion, payload); err != nil {
 		log.Printf("[%s] Failed to send completion message: %v", id, err)

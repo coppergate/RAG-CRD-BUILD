@@ -118,7 +118,10 @@ func main() {
 		time.Sleep(10 * time.Second)
 	}
 
-	if !success {
+	if success {
+		// --- Iteration 6b Extended Tests ---
+		testIteration6b(sessionID, tagID, tagName, fileName, vectorSize)
+	} else {
 		fmt.Printf("FAILURE: Secret code not found in answer after 5 minutes. Last answer: %q\n", lastAnswer)
 	}
 

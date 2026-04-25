@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"app-builds/common/contracts"
 	"app-builds/common/tlsutil"
 )
 
@@ -32,8 +33,24 @@ func NewClient(url, model string) *OllamaClient {
 	}
 }
 
-func (o *OllamaClient) Chat(messages []map[string]string) (string, error) {
-	url := fmt.Sprintf("%s/v1/chat/completions", o.url)
+type ChatResponse struct {
+	Model      string `json:"model"`
+	CreatedAt  string `json:"created_at"`
+	Message    struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	} `json:"message"`
+	Done               bool  `json:"done"`
+	TotalDuration      int64 `json:"total_duration"`
+	LoadDuration       int64 `json:"load_duration"`
+	PromptEvalCount    int   `json:"prompt_eval_count"`
+	PromptEvalDuration int64 `json:"prompt_eval_duration"`
+	EvalCount          int   `json:"eval_count"`
+	EvalDuration       int64 `json:"eval_duration"`
+}
+
+func (o *OllamaClient) Chat(messages []map[string]string) (string, interface{}, error) {
+	url := fmt.Sprintf("%s/api/chat", o.url)
 
 	payload := map[string]interface{}{
 		"model":    o.model,
@@ -43,46 +60,37 @@ func (o *OllamaClient) Chat(messages []map[string]string) (string, error) {
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal chat payload: %w", err)
+		return "", nil, fmt.Errorf("failed to marshal chat payload: %w", err)
 	}
 	resp, err := o.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("ollama returned status %d", resp.StatusCode)
+		return "", nil, fmt.Errorf("ollama returned status %d", resp.StatusCode)
 	}
 
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-
+	var result ChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	if len(result.Choices) > 0 {
-		return result.Choices[0].Message.Content, nil
-	}
-
-	return "", fmt.Errorf("no response from ollama")
+	return result.Message.Content, &result, nil
 }
 
-func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, <-chan error) {
+func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, <-chan interface{}, <-chan error) {
 	out := make(chan string)
+	resCh := make(chan interface{}, 1)
 	errCh := make(chan error, 1)
 
 	go func() {
 		defer close(out)
 		defer close(errCh)
+		defer close(resCh)
 
-		url := fmt.Sprintf("%s/v1/chat/completions", o.url)
+		url := fmt.Sprintf("%s/api/chat", o.url)
 		payload := map[string]interface{}{
 			"model":    o.model,
 			"messages": messages,
@@ -113,27 +121,18 @@ func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, 
 			if line == "" {
 				continue
 			}
-			if !strings.HasPrefix(line, "data: ") {
-				continue
-			}
-			data := strings.TrimPrefix(line, "data: ")
-			if data == "[DONE]" {
-				break
-			}
 
-			var chunk struct {
-				Choices []struct {
-					Delta struct {
-						Content string `json:"content"`
-					} `json:"delta"`
-				} `json:"choices"`
-			}
-			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-				errCh <- fmt.Errorf("failed to unmarshal chunk: %w (data: %s)", err, data)
+			var chunk ChatResponse
+			if err := json.Unmarshal([]byte(line), &chunk); err != nil {
+				errCh <- fmt.Errorf("failed to unmarshal chunk: %w (data: %s)", err, line)
 				return
 			}
-			if len(chunk.Choices) > 0 {
-				out <- chunk.Choices[0].Delta.Content
+			if chunk.Message.Content != "" {
+				out <- chunk.Message.Content
+			}
+			if chunk.Done {
+				resCh <- &chunk
+				break
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -141,11 +140,36 @@ func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, 
 		}
 	}()
 
-	return out, errCh
+	return out, resCh, errCh
+}
+
+func (o *OllamaClient) GetMetrics() *contracts.ExecutionMetrics {
+	return nil // This is a receiver on the client, but we need it on the response
+}
+
+func (r *ChatResponse) GetMetrics() *contracts.ExecutionMetrics {
+	if r == nil {
+		return nil
+	}
+
+	// Calculate tokens per second
+	var tps float64
+	if r.EvalDuration > 0 {
+		tps = float64(r.EvalCount) / (float64(r.EvalDuration) / 1e9)
+	}
+
+	return &contracts.ExecutionMetrics{
+		PromptTokens:          r.PromptEvalCount,
+		CompletionTokens:      r.EvalCount,
+		TotalDurationUsec:     r.TotalDuration / 1000,
+		LoadDurationUsec:      r.LoadDuration / 1000,
+		PromptEvalDurationUsec: r.PromptEvalDuration / 1000,
+		EvalDurationUsec:       r.EvalDuration / 1000,
+		TokensPerSecond:       tps,
+	}
 }
 
 func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
-	url := fmt.Sprintf("%s/api/embeddings", o.url)
 
 	payload := map[string]interface{}{
 		"model":  o.model,
@@ -156,7 +180,8 @@ func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal embeddings payload: %w", err)
 	}
-	resp, err := o.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
+	embeddingUrl := fmt.Sprintf("%s/api/embeddings", o.url)
+	resp, err := o.httpClient.Post(embeddingUrl, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}

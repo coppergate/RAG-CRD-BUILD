@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
 
@@ -60,6 +61,11 @@ func MemoryItemID(v uuid.UUID) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldEQ(FieldMemoryItemID, v))
 }
 
+// SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
+func SessionID(v uuid.UUID) predicate.MemoryEvent {
+	return predicate.MemoryEvent(sql.FieldEQ(FieldSessionID, v))
+}
+
 // EventType applies equality check predicate on the "event_type" field. It's identical to EventTypeEQ.
 func EventType(v string) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldEQ(FieldEventType, v))
@@ -108,6 +114,36 @@ func MemoryItemIDLT(v uuid.UUID) predicate.MemoryEvent {
 // MemoryItemIDLTE applies the LTE predicate on the "memory_item_id" field.
 func MemoryItemIDLTE(v uuid.UUID) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldLTE(FieldMemoryItemID, v))
+}
+
+// SessionIDEQ applies the EQ predicate on the "session_id" field.
+func SessionIDEQ(v uuid.UUID) predicate.MemoryEvent {
+	return predicate.MemoryEvent(sql.FieldEQ(FieldSessionID, v))
+}
+
+// SessionIDNEQ applies the NEQ predicate on the "session_id" field.
+func SessionIDNEQ(v uuid.UUID) predicate.MemoryEvent {
+	return predicate.MemoryEvent(sql.FieldNEQ(FieldSessionID, v))
+}
+
+// SessionIDIn applies the In predicate on the "session_id" field.
+func SessionIDIn(vs ...uuid.UUID) predicate.MemoryEvent {
+	return predicate.MemoryEvent(sql.FieldIn(FieldSessionID, vs...))
+}
+
+// SessionIDNotIn applies the NotIn predicate on the "session_id" field.
+func SessionIDNotIn(vs ...uuid.UUID) predicate.MemoryEvent {
+	return predicate.MemoryEvent(sql.FieldNotIn(FieldSessionID, vs...))
+}
+
+// SessionIDIsNil applies the IsNil predicate on the "session_id" field.
+func SessionIDIsNil() predicate.MemoryEvent {
+	return predicate.MemoryEvent(sql.FieldIsNull(FieldSessionID))
+}
+
+// SessionIDNotNil applies the NotNil predicate on the "session_id" field.
+func SessionIDNotNil() predicate.MemoryEvent {
+	return predicate.MemoryEvent(sql.FieldNotNull(FieldSessionID))
 }
 
 // EventTypeEQ applies the EQ predicate on the "event_type" field.
@@ -223,6 +259,29 @@ func CreatedAtLT(v time.Time) predicate.MemoryEvent {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// HasSession applies the HasEdge predicate on the "session" edge.
+func HasSession() predicate.MemoryEvent {
+	return predicate.MemoryEvent(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, SessionTable, SessionColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSessionWith applies the HasEdge predicate on the "session" edge with a given conditions (other predicates).
+func HasSessionWith(preds ...predicate.Session) predicate.MemoryEvent {
+	return predicate.MemoryEvent(func(s *sql.Selector) {
+		step := newSessionStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

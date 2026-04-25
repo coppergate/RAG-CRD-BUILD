@@ -3,11 +3,17 @@
 package ent
 
 import (
+	"app-builds/common/ent/codeembedding"
+	"app-builds/common/ent/codeingestion"
+	"app-builds/common/ent/inferencenode"
 	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
+	"app-builds/common/ent/modeldefinition"
+	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
+	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/schema"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
@@ -20,10 +26,40 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	codeembeddingFields := schema.CodeEmbedding{}.Fields()
+	_ = codeembeddingFields
+	// codeembeddingDescCreatedAt is the schema descriptor for created_at field.
+	codeembeddingDescCreatedAt := codeembeddingFields[4].Descriptor()
+	// codeembedding.DefaultCreatedAt holds the default value on creation for the created_at field.
+	codeembedding.DefaultCreatedAt = codeembeddingDescCreatedAt.Default.(func() time.Time)
+	// codeembeddingDescID is the schema descriptor for id field.
+	codeembeddingDescID := codeembeddingFields[0].Descriptor()
+	// codeembedding.DefaultID holds the default value on creation for the id field.
+	codeembedding.DefaultID = codeembeddingDescID.Default.(func() uuid.UUID)
+	codeingestionFields := schema.CodeIngestion{}.Fields()
+	_ = codeingestionFields
+	// codeingestionDescCreatedAt is the schema descriptor for created_at field.
+	codeingestionDescCreatedAt := codeingestionFields[2].Descriptor()
+	// codeingestion.DefaultCreatedAt holds the default value on creation for the created_at field.
+	codeingestion.DefaultCreatedAt = codeingestionDescCreatedAt.Default.(func() time.Time)
+	// codeingestionDescID is the schema descriptor for id field.
+	codeingestionDescID := codeingestionFields[0].Descriptor()
+	// codeingestion.DefaultID holds the default value on creation for the id field.
+	codeingestion.DefaultID = codeingestionDescID.Default.(func() uuid.UUID)
+	inferencenodeFields := schema.InferenceNode{}.Fields()
+	_ = inferencenodeFields
+	// inferencenodeDescCreatedAt is the schema descriptor for created_at field.
+	inferencenodeDescCreatedAt := inferencenodeFields[5].Descriptor()
+	// inferencenode.DefaultCreatedAt holds the default value on creation for the created_at field.
+	inferencenode.DefaultCreatedAt = inferencenodeDescCreatedAt.Default.(func() time.Time)
+	// inferencenodeDescID is the schema descriptor for id field.
+	inferencenodeDescID := inferencenodeFields[0].Descriptor()
+	// inferencenode.DefaultID holds the default value on creation for the id field.
+	inferencenode.DefaultID = inferencenodeDescID.Default.(func() uuid.UUID)
 	memoryeventFields := schema.MemoryEvent{}.Fields()
 	_ = memoryeventFields
 	// memoryeventDescCreatedAt is the schema descriptor for created_at field.
-	memoryeventDescCreatedAt := memoryeventFields[4].Descriptor()
+	memoryeventDescCreatedAt := memoryeventFields[5].Descriptor()
 	// memoryevent.DefaultCreatedAt holds the default value on creation for the created_at field.
 	memoryevent.DefaultCreatedAt = memoryeventDescCreatedAt.Default.(func() time.Time)
 	// memoryeventDescID is the schema descriptor for id field.
@@ -72,6 +108,22 @@ func init() {
 	memorylinkDescID := memorylinkFields[0].Descriptor()
 	// memorylink.DefaultID holds the default value on creation for the id field.
 	memorylink.DefaultID = memorylinkDescID.Default.(func() uuid.UUID)
+	modeldefinitionFields := schema.ModelDefinition{}.Fields()
+	_ = modeldefinitionFields
+	// modeldefinitionDescCreatedAt is the schema descriptor for created_at field.
+	modeldefinitionDescCreatedAt := modeldefinitionFields[5].Descriptor()
+	// modeldefinition.DefaultCreatedAt holds the default value on creation for the created_at field.
+	modeldefinition.DefaultCreatedAt = modeldefinitionDescCreatedAt.Default.(func() time.Time)
+	// modeldefinitionDescID is the schema descriptor for id field.
+	modeldefinitionDescID := modeldefinitionFields[0].Descriptor()
+	// modeldefinition.DefaultID holds the default value on creation for the id field.
+	modeldefinition.DefaultID = modeldefinitionDescID.Default.(func() uuid.UUID)
+	modelexecutionmetricFields := schema.ModelExecutionMetric{}.Fields()
+	_ = modelexecutionmetricFields
+	// modelexecutionmetricDescCreatedAt is the schema descriptor for created_at field.
+	modelexecutionmetricDescCreatedAt := modelexecutionmetricFields[13].Descriptor()
+	// modelexecutionmetric.DefaultCreatedAt holds the default value on creation for the created_at field.
+	modelexecutionmetric.DefaultCreatedAt = modelexecutionmetricDescCreatedAt.Default.(func() time.Time)
 	promptFields := schema.Prompt{}.Fields()
 	_ = promptFields
 	// promptDescPromptID is the schema descriptor for prompt_id field.
@@ -92,6 +144,16 @@ func init() {
 	responseDescCreatedAt := responseFields[7].Descriptor()
 	// response.DefaultCreatedAt holds the default value on creation for the created_at field.
 	response.DefaultCreatedAt = responseDescCreatedAt.Default.(func() time.Time)
+	retrievallogFields := schema.RetrievalLog{}.Fields()
+	_ = retrievallogFields
+	// retrievallogDescCreatedAt is the schema descriptor for created_at field.
+	retrievallogDescCreatedAt := retrievallogFields[5].Descriptor()
+	// retrievallog.DefaultCreatedAt holds the default value on creation for the created_at field.
+	retrievallog.DefaultCreatedAt = retrievallogDescCreatedAt.Default.(func() time.Time)
+	// retrievallogDescID is the schema descriptor for id field.
+	retrievallogDescID := retrievallogFields[0].Descriptor()
+	// retrievallog.DefaultID holds the default value on creation for the id field.
+	retrievallog.DefaultID = retrievallogDescID.Default.(func() uuid.UUID)
 	sessionFields := schema.Session{}.Fields()
 	_ = sessionFields
 	// sessionDescCreatedAt is the schema descriptor for created_at field.

@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"app-builds/common/ent/codeembedding"
+	"app-builds/common/ent/codeingestion"
 	"app-builds/common/ent/predicate"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
@@ -21,11 +23,13 @@ import (
 // TagQuery is the builder for querying Tag entities.
 type TagQuery struct {
 	config
-	ctx          *QueryContext
-	order        []tag.OrderOption
-	inters       []Interceptor
-	predicates   []predicate.Tag
-	withSessions *SessionQuery
+	ctx            *QueryContext
+	order          []tag.OrderOption
+	inters         []Interceptor
+	predicates     []predicate.Tag
+	withSessions   *SessionQuery
+	withIngestions *CodeIngestionQuery
+	withEmbeddings *CodeEmbeddingQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -77,6 +81,50 @@ func (_q *TagQuery) QuerySessions() *SessionQuery {
 			sqlgraph.From(tag.Table, tag.FieldID, selector),
 			sqlgraph.To(session.Table, session.FieldID),
 			sqlgraph.Edge(sqlgraph.M2M, true, tag.SessionsTable, tag.SessionsPrimaryKey...),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryIngestions chains the current query on the "ingestions" edge.
+func (_q *TagQuery) QueryIngestions() *CodeIngestionQuery {
+	query := (&CodeIngestionClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(tag.Table, tag.FieldID, selector),
+			sqlgraph.To(codeingestion.Table, codeingestion.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, tag.IngestionsTable, tag.IngestionsPrimaryKey...),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryEmbeddings chains the current query on the "embeddings" edge.
+func (_q *TagQuery) QueryEmbeddings() *CodeEmbeddingQuery {
+	query := (&CodeEmbeddingClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(tag.Table, tag.FieldID, selector),
+			sqlgraph.To(codeembedding.Table, codeembedding.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, tag.EmbeddingsTable, tag.EmbeddingsPrimaryKey...),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -271,12 +319,14 @@ func (_q *TagQuery) Clone() *TagQuery {
 		return nil
 	}
 	return &TagQuery{
-		config:       _q.config,
-		ctx:          _q.ctx.Clone(),
-		order:        append([]tag.OrderOption{}, _q.order...),
-		inters:       append([]Interceptor{}, _q.inters...),
-		predicates:   append([]predicate.Tag{}, _q.predicates...),
-		withSessions: _q.withSessions.Clone(),
+		config:         _q.config,
+		ctx:            _q.ctx.Clone(),
+		order:          append([]tag.OrderOption{}, _q.order...),
+		inters:         append([]Interceptor{}, _q.inters...),
+		predicates:     append([]predicate.Tag{}, _q.predicates...),
+		withSessions:   _q.withSessions.Clone(),
+		withIngestions: _q.withIngestions.Clone(),
+		withEmbeddings: _q.withEmbeddings.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -291,6 +341,28 @@ func (_q *TagQuery) WithSessions(opts ...func(*SessionQuery)) *TagQuery {
 		opt(query)
 	}
 	_q.withSessions = query
+	return _q
+}
+
+// WithIngestions tells the query-builder to eager-load the nodes that are connected to
+// the "ingestions" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TagQuery) WithIngestions(opts ...func(*CodeIngestionQuery)) *TagQuery {
+	query := (&CodeIngestionClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withIngestions = query
+	return _q
+}
+
+// WithEmbeddings tells the query-builder to eager-load the nodes that are connected to
+// the "embeddings" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *TagQuery) WithEmbeddings(opts ...func(*CodeEmbeddingQuery)) *TagQuery {
+	query := (&CodeEmbeddingClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withEmbeddings = query
 	return _q
 }
 
@@ -372,8 +444,10 @@ func (_q *TagQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Tag, err
 	var (
 		nodes       = []*Tag{}
 		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [3]bool{
 			_q.withSessions != nil,
+			_q.withIngestions != nil,
+			_q.withEmbeddings != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -398,6 +472,20 @@ func (_q *TagQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Tag, err
 		if err := _q.loadSessions(ctx, query, nodes,
 			func(n *Tag) { n.Edges.Sessions = []*Session{} },
 			func(n *Tag, e *Session) { n.Edges.Sessions = append(n.Edges.Sessions, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withIngestions; query != nil {
+		if err := _q.loadIngestions(ctx, query, nodes,
+			func(n *Tag) { n.Edges.Ingestions = []*CodeIngestion{} },
+			func(n *Tag, e *CodeIngestion) { n.Edges.Ingestions = append(n.Edges.Ingestions, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withEmbeddings; query != nil {
+		if err := _q.loadEmbeddings(ctx, query, nodes,
+			func(n *Tag) { n.Edges.Embeddings = []*CodeEmbedding{} },
+			func(n *Tag, e *CodeEmbedding) { n.Edges.Embeddings = append(n.Edges.Embeddings, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -458,6 +546,128 @@ func (_q *TagQuery) loadSessions(ctx context.Context, query *SessionQuery, nodes
 		nodes, ok := nids[n.ID]
 		if !ok {
 			return fmt.Errorf(`unexpected "sessions" node returned %v`, n.ID)
+		}
+		for kn := range nodes {
+			assign(kn, n)
+		}
+	}
+	return nil
+}
+func (_q *TagQuery) loadIngestions(ctx context.Context, query *CodeIngestionQuery, nodes []*Tag, init func(*Tag), assign func(*Tag, *CodeIngestion)) error {
+	edgeIDs := make([]driver.Value, len(nodes))
+	byID := make(map[uuid.UUID]*Tag)
+	nids := make(map[uuid.UUID]map[*Tag]struct{})
+	for i, node := range nodes {
+		edgeIDs[i] = node.ID
+		byID[node.ID] = node
+		if init != nil {
+			init(node)
+		}
+	}
+	query.Where(func(s *sql.Selector) {
+		joinT := sql.Table(tag.IngestionsTable)
+		s.Join(joinT).On(s.C(codeingestion.FieldID), joinT.C(tag.IngestionsPrimaryKey[0]))
+		s.Where(sql.InValues(joinT.C(tag.IngestionsPrimaryKey[1]), edgeIDs...))
+		columns := s.SelectedColumns()
+		s.Select(joinT.C(tag.IngestionsPrimaryKey[1]))
+		s.AppendSelect(columns...)
+		s.SetDistinct(false)
+	})
+	if err := query.prepareQuery(ctx); err != nil {
+		return err
+	}
+	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
+		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
+			assign := spec.Assign
+			values := spec.ScanValues
+			spec.ScanValues = func(columns []string) ([]any, error) {
+				values, err := values(columns[1:])
+				if err != nil {
+					return nil, err
+				}
+				return append([]any{new(uuid.UUID)}, values...), nil
+			}
+			spec.Assign = func(columns []string, values []any) error {
+				outValue := *values[0].(*uuid.UUID)
+				inValue := *values[1].(*uuid.UUID)
+				if nids[inValue] == nil {
+					nids[inValue] = map[*Tag]struct{}{byID[outValue]: {}}
+					return assign(columns[1:], values[1:])
+				}
+				nids[inValue][byID[outValue]] = struct{}{}
+				return nil
+			}
+		})
+	})
+	neighbors, err := withInterceptors[[]*CodeIngestion](ctx, query, qr, query.inters)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected "ingestions" node returned %v`, n.ID)
+		}
+		for kn := range nodes {
+			assign(kn, n)
+		}
+	}
+	return nil
+}
+func (_q *TagQuery) loadEmbeddings(ctx context.Context, query *CodeEmbeddingQuery, nodes []*Tag, init func(*Tag), assign func(*Tag, *CodeEmbedding)) error {
+	edgeIDs := make([]driver.Value, len(nodes))
+	byID := make(map[uuid.UUID]*Tag)
+	nids := make(map[uuid.UUID]map[*Tag]struct{})
+	for i, node := range nodes {
+		edgeIDs[i] = node.ID
+		byID[node.ID] = node
+		if init != nil {
+			init(node)
+		}
+	}
+	query.Where(func(s *sql.Selector) {
+		joinT := sql.Table(tag.EmbeddingsTable)
+		s.Join(joinT).On(s.C(codeembedding.FieldID), joinT.C(tag.EmbeddingsPrimaryKey[0]))
+		s.Where(sql.InValues(joinT.C(tag.EmbeddingsPrimaryKey[1]), edgeIDs...))
+		columns := s.SelectedColumns()
+		s.Select(joinT.C(tag.EmbeddingsPrimaryKey[1]))
+		s.AppendSelect(columns...)
+		s.SetDistinct(false)
+	})
+	if err := query.prepareQuery(ctx); err != nil {
+		return err
+	}
+	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
+		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
+			assign := spec.Assign
+			values := spec.ScanValues
+			spec.ScanValues = func(columns []string) ([]any, error) {
+				values, err := values(columns[1:])
+				if err != nil {
+					return nil, err
+				}
+				return append([]any{new(uuid.UUID)}, values...), nil
+			}
+			spec.Assign = func(columns []string, values []any) error {
+				outValue := *values[0].(*uuid.UUID)
+				inValue := *values[1].(*uuid.UUID)
+				if nids[inValue] == nil {
+					nids[inValue] = map[*Tag]struct{}{byID[outValue]: {}}
+					return assign(columns[1:], values[1:])
+				}
+				nids[inValue][byID[outValue]] = struct{}{}
+				return nil
+			}
+		})
+	})
+	neighbors, err := withInterceptors[[]*CodeEmbedding](ctx, query, qr, query.inters)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected "embeddings" node returned %v`, n.ID)
 		}
 		for kn := range nodes {
 			assign(kn, n)

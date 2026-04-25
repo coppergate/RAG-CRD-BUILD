@@ -8,6 +8,42 @@ import (
 	"fmt"
 )
 
+// The CodeEmbeddingFunc type is an adapter to allow the use of ordinary
+// function as CodeEmbedding mutator.
+type CodeEmbeddingFunc func(context.Context, *ent.CodeEmbeddingMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CodeEmbeddingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CodeEmbeddingMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CodeEmbeddingMutation", m)
+}
+
+// The CodeIngestionFunc type is an adapter to allow the use of ordinary
+// function as CodeIngestion mutator.
+type CodeIngestionFunc func(context.Context, *ent.CodeIngestionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CodeIngestionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CodeIngestionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CodeIngestionMutation", m)
+}
+
+// The InferenceNodeFunc type is an adapter to allow the use of ordinary
+// function as InferenceNode mutator.
+type InferenceNodeFunc func(context.Context, *ent.InferenceNodeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f InferenceNodeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.InferenceNodeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InferenceNodeMutation", m)
+}
+
 // The MemoryEventFunc type is an adapter to allow the use of ordinary
 // function as MemoryEvent mutator.
 type MemoryEventFunc func(context.Context, *ent.MemoryEventMutation) (ent.Value, error)
@@ -44,6 +80,30 @@ func (f MemoryLinkFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MemoryLinkMutation", m)
 }
 
+// The ModelDefinitionFunc type is an adapter to allow the use of ordinary
+// function as ModelDefinition mutator.
+type ModelDefinitionFunc func(context.Context, *ent.ModelDefinitionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ModelDefinitionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ModelDefinitionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ModelDefinitionMutation", m)
+}
+
+// The ModelExecutionMetricFunc type is an adapter to allow the use of ordinary
+// function as ModelExecutionMetric mutator.
+type ModelExecutionMetricFunc func(context.Context, *ent.ModelExecutionMetricMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ModelExecutionMetricFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ModelExecutionMetricMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ModelExecutionMetricMutation", m)
+}
+
 // The PromptFunc type is an adapter to allow the use of ordinary
 // function as Prompt mutator.
 type PromptFunc func(context.Context, *ent.PromptMutation) (ent.Value, error)
@@ -66,6 +126,18 @@ func (f ResponseFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ResponseMutation", m)
+}
+
+// The RetrievalLogFunc type is an adapter to allow the use of ordinary
+// function as RetrievalLog mutator.
+type RetrievalLogFunc func(context.Context, *ent.RetrievalLogMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f RetrievalLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.RetrievalLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.RetrievalLogMutation", m)
 }
 
 // The SessionFunc type is an adapter to allow the use of ordinary

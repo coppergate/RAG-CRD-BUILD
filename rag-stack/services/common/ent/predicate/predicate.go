@@ -6,6 +6,15 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// CodeEmbedding is the predicate function for codeembedding builders.
+type CodeEmbedding func(*sql.Selector)
+
+// CodeIngestion is the predicate function for codeingestion builders.
+type CodeIngestion func(*sql.Selector)
+
+// InferenceNode is the predicate function for inferencenode builders.
+type InferenceNode func(*sql.Selector)
+
 // MemoryEvent is the predicate function for memoryevent builders.
 type MemoryEvent func(*sql.Selector)
 
@@ -15,11 +24,20 @@ type MemoryItem func(*sql.Selector)
 // MemoryLink is the predicate function for memorylink builders.
 type MemoryLink func(*sql.Selector)
 
+// ModelDefinition is the predicate function for modeldefinition builders.
+type ModelDefinition func(*sql.Selector)
+
+// ModelExecutionMetric is the predicate function for modelexecutionmetric builders.
+type ModelExecutionMetric func(*sql.Selector)
+
 // Prompt is the predicate function for prompt builders.
 type Prompt func(*sql.Selector)
 
 // Response is the predicate function for response builders.
 type Response func(*sql.Selector)
+
+// RetrievalLog is the predicate function for retrievallog builders.
+type RetrievalLog func(*sql.Selector)
 
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)

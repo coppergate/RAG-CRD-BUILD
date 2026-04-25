@@ -3,35 +3,26 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
 
-	"app-builds/common/contracts"
 	"app-builds/common/dlq"
 	"app-builds/common/ent"
-	"app-builds/common/ent/prompt"
-	"app-builds/common/ent/response"
-	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 	"app-builds/common/health"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/common/telemetry"
 	"app-builds/db-adapter/internal/config"
+	"app-builds/db-adapter/internal/service"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/propagation"
 )
 
 var (
@@ -61,8 +52,6 @@ func main() {
 	cfg := config.Load()
 	healthSrv := health.NewServer()
 
-	log.Printf("DEBUG: TLS_CERT=%q, TLS_KEY=%q", cfg.TLSCert, cfg.TLSKey)
-
 	shutdown, err := telemetry.InitTracer("db-adapter")
 	if err != nil {
 		log.Printf("Warning: failed to initialize tracer: %v", err)
@@ -79,39 +68,31 @@ func main() {
 	}
 	defer entClient.Close()
 
-	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
+	pulsarClient, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
-	defer client.Close()
+	defer pulsarClient.Close()
 
-	// DLQ handler
-	dlqHandler, err := dlq.NewHandler(client, "db-adapter")
+	dlqHandler, err := dlq.NewHandler(pulsarClient, "db-adapter")
 	if err != nil {
 		log.Fatalf("Could not create DLQ handler: %v", err)
 	}
 	defer dlqHandler.Close()
 
-	// Consumer for Prompts
-	promptConsumer, err := client.NewSharedConsumer(cfg.PromptTopic, cfg.Subscription)
-	if err != nil {
-		log.Fatalf("Could not subscribe to prompts: %v", err)
-	}
-	defer promptConsumer.Close()
-
-	// Consumer for Responses
-	responseConsumer, err := client.NewSharedConsumer(cfg.ResponseTopic, cfg.Subscription)
-	if err != nil {
-		log.Fatalf("Could not subscribe to responses: %v", err)
-	}
-	defer responseConsumer.Close()
-
-	qdrantProducer, err := client.NewProducer(cfg.QdrantOpsTopic)
+	qdrantProducer, err := pulsarClient.NewProducer(cfg.QdrantOpsTopic)
 	if err != nil {
 		log.Printf("Warning: Could not create qdrant ops producer: %v", err)
 	} else {
 		defer qdrantProducer.Close()
 	}
+
+	// Initialize Services
+	sessSvc := service.NewSessionService(entClient)
+	metricsSvc := service.NewMetricsService(entClient)
+	storageSvc := service.NewStorageService(entClient)
+	maintSvc := service.NewMaintenanceService(entClient, qdrantProducer, cfg.IngestionURL)
+	processor := service.NewPulsarProcessor(entClient, queryCounter, errorCounter, queryLatency)
 
 	// Register readiness checks
 	healthSrv.RegisterCheck("database", func() error {
@@ -119,102 +100,35 @@ func main() {
 		return err
 	})
 
-	log.Printf("DB Adapter started, listening on topics: %s, %s, %s", cfg.PromptTopic, cfg.ResponseTopic, cfg.DBOpsTopic)
+	// Setup Pulsar Consumers
+	setupConsumers(ctx, pulsarClient, cfg, dlqHandler, processor)
 
-	// Consumer for DB Ops (Delete)
-	opsConsumer, err := client.NewSharedConsumer(cfg.DBOpsTopic, cfg.Subscription+"-ops")
-	if err != nil {
-		log.Printf("Warning: Could not subscribe to DB ops: %v", err)
-	} else {
-		defer opsConsumer.Close()
-		go func() {
-			for {
-				msg, err := opsConsumer.Receive(ctx)
-				if err != nil {
-					if ctx.Err() != nil {
-						return
-					}
-					log.Printf("Error receiving DB op: %v", err)
-					continue
-				}
-
-				dlqHandler.HandleMessage(ctx, msg, opsConsumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
-					return handleDBOp(mCtx, m, entClient)
-				})
-			}
-		}()
-	}
-
-	// Handle Prompts
-	go func() {
-		for {
-			msg, err := promptConsumer.Receive(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				log.Printf("Error receiving prompt: %v", err)
-				continue
-			}
-
-			dlqHandler.HandleMessage(ctx, msg, promptConsumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
-				return handlePrompt(mCtx, m, entClient)
-			})
-		}
-	}()
-
-	// Handle Responses
-	go func() {
-		for {
-			msg, err := responseConsumer.Receive(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				log.Printf("Error receiving response: %v", err)
-				continue
-			}
-
-			dlqHandler.HandleMessage(ctx, msg, responseConsumer, func(mCtx context.Context, m pulsar.Message) (dlq.ProcessResult, error) {
-				return handleResponse(mCtx, m, entClient)
-			})
-		}
-	}()
-
+	// Setup HTTP Routes
 	mux := http.NewServeMux()
 	healthSrv.RegisterRoutes(mux)
 
 	mux.HandleFunc("/sessions/", func(w http.ResponseWriter, r *http.Request) {
 		idStr := strings.TrimPrefix(r.URL.Path, "/sessions/")
 		if strings.HasSuffix(idStr, "/messages") {
-			sessionIDStr := strings.TrimSuffix(idStr, "/messages")
-			handleGetSessionMessages(w, r, entClient, sessionIDStr)
+			sessSvc.GetMessages(w, r, strings.TrimSuffix(idStr, "/messages"))
 			return
 		}
-		
-		// Fallback to list all sessions if no ID
+		if strings.HasSuffix(idStr, "/health") {
+			metricsSvc.GetHealth(w, r, strings.TrimSuffix(idStr, "/health"))
+			return
+		}
 		if idStr == "" {
-			sessions, err := entClient.Session.Query().All(r.Context())
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(sessions)
+			sessSvc.ListSessions(w, r)
 			return
 		}
-		
 		http.Error(w, "Not found", http.StatusNotFound)
 	})
 
-	mux.HandleFunc("/sessions", func(w http.ResponseWriter, r *http.Request) {
-		sessions, err := entClient.Session.Query().All(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(sessions)
+	mux.HandleFunc("/sessions", sessSvc.ListSessions)
+
+	mux.HandleFunc("/audit/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		sessionIDStr := strings.TrimPrefix(r.URL.Path, "/audit/sessions/")
+		metricsSvc.GetAudit(w, r, sessionIDStr)
 	})
 
 	mux.HandleFunc("/tags", func(w http.ResponseWriter, r *http.Request) {
@@ -235,9 +149,7 @@ func main() {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			t, err := entClient.Tag.Create().
-				SetName(payload.Name).
-				Save(r.Context())
+			t, err := entClient.Tag.Create().SetName(payload.Name).Save(r.Context())
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -257,8 +169,6 @@ func main() {
 				http.Error(w, "Invalid tag ID", http.StatusBadRequest)
 				return
 			}
-
-			// 1. Delete from Qdrant first (via Pulsar) if producer is available
 			if qdrantProducer != nil {
 				delPayload := map[string]interface{}{
 					"id":         uuid.New().String(),
@@ -267,15 +177,8 @@ func main() {
 					"tags":       []string{idStr},
 				}
 				p, _ := json.Marshal(delPayload)
-				_, perr := qdrantProducer.Send(r.Context(), &pulsar.ProducerMessage{
-					Payload: p,
-				})
-				if perr != nil {
-					log.Printf("Warning: failed to send qdrant delete for tag %s: %v", idStr, perr)
-				}
+				qdrantProducer.Send(r.Context(), &pulsar.ProducerMessage{Payload: p})
 			}
-
-			// 2. Delete from Postgres
 			err = entClient.Tag.DeleteOneID(tagID).Exec(r.Context())
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -287,20 +190,12 @@ func main() {
 		http.Error(w, "Not found or method not allowed", http.StatusNotFound)
 	})
 
-	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
-		sessionCount, _ := entClient.Session.Query().Count(r.Context())
-		promptCount, _ := entClient.Prompt.Query().Count(r.Context())
-		responseCount, _ := entClient.Response.Query().Count(r.Context())
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]int{
-			"sessions":  sessionCount,
-			"prompts":   promptCount,
-			"responses": responseCount,
-		})
-	})
+	mux.HandleFunc("/maintenance/tags/merge", maintSvc.MergeTags)
+	mux.HandleFunc("/stats", metricsSvc.GetStats)
+	mux.HandleFunc("/metrics/summary", metricsSvc.GetMetricsSummary)
+	mux.HandleFunc("/storage/files", storageSvc.GetFiles)
 
 	otelHandler := otelhttp.NewHandler(mux, "db-adapter")
-
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: otelHandler,
@@ -329,228 +224,43 @@ func main() {
 	log.Println("DB Adapter shutdown complete")
 }
 
-func handleDBOp(ctx context.Context, msg pulsar.Message, entClient *ent.Client) (dlq.ProcessResult, error) {
-	start := time.Now()
-	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-	tracer := otel.Tracer("db-adapter")
-	msgCtx, span := tracer.Start(msgCtx, "HandleDBOp")
-	defer span.End()
-
-	attrs := []attribute.KeyValue{attribute.String("op", "delete_session")}
-	defer func() {
-		duration := float64(time.Since(start).Milliseconds())
-		queryLatency.Record(msgCtx, duration, metric.WithAttributes(attrs...))
-	}()
-	queryCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
-
-	var payload struct {
-		Op string `json:"op"`
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-		return dlq.PermanentFailure, fmt.Errorf("unmarshal DB op payload: %w", err)
+func setupConsumers(ctx context.Context, client *pulsarCommon.Client, cfg *config.Config, dlqHandler *dlq.Handler, processor *service.PulsarProcessor) {
+	// Prompts
+	pc, err := client.NewSharedConsumer(cfg.PromptTopic, cfg.Subscription)
+	if err == nil {
+		go consumeLoop(ctx, pc, dlqHandler, processor.HandlePrompt)
 	}
 
-	if payload.Op == "delete_session" {
-		sessID, parseErr := uuid.Parse(payload.ID)
-		if parseErr != nil {
-			errorCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
-			return dlq.PermanentFailure, fmt.Errorf("invalid UUID in delete_session: %q: %w", payload.ID, parseErr)
-		}
-		_, err := entClient.Session.Delete().
-			Where(session.ID(sessID)).
-			Exec(ctx)
+	// Responses
+	rc, err := client.NewSharedConsumer(cfg.ResponseTopic, cfg.Subscription)
+	if err == nil {
+		go consumeLoop(ctx, rc, dlqHandler, processor.HandleResponse)
+	}
+
+	// Metrics
+	cc, err := client.NewSharedConsumer(cfg.CompletionTopic, cfg.Subscription+"-metrics")
+	if err == nil {
+		go consumeLoop(ctx, cc, dlqHandler, processor.HandleCompletion)
+	}
+
+	// Ops
+	oc, err := client.NewSharedConsumer(cfg.DBOpsTopic, cfg.Subscription+"-ops")
+	if err == nil {
+		go consumeLoop(ctx, oc, dlqHandler, processor.HandleDBOp)
+	}
+}
+
+func consumeLoop(ctx context.Context, consumer pulsar.Consumer, dlqHandler *dlq.Handler, handler func(context.Context, pulsar.Message) (dlq.ProcessResult, error)) {
+	defer consumer.Close()
+	for {
+		msg, err := consumer.Receive(ctx)
 		if err != nil {
-			errorCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
-			return dlq.TransientFailure, fmt.Errorf("delete session %s: %w", payload.ID, err)
+			if ctx.Err() != nil {
+				return
+			}
+			log.Printf("Error receiving message: %v", err)
+			continue
 		}
-		log.Printf("Deleted session %s via Pulsar op", payload.ID)
+		dlqHandler.HandleMessage(ctx, msg, consumer, handler)
 	}
-
-	return dlq.Success, nil
 }
-
-func handlePrompt(ctx context.Context, msg pulsar.Message, entClient *ent.Client) (dlq.ProcessResult, error) {
-	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-	tracer := otel.Tracer("db-adapter")
-	_, span := tracer.Start(msgCtx, "HandlePrompt")
-	defer span.End()
-
-	var payload struct {
-		ID        string `json:"id"`
-		SessionID string `json:"session_id"`
-		Content   string `json:"content"`
-	}
-	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-		return dlq.PermanentFailure, fmt.Errorf("unmarshal prompt payload: %w", err)
-	}
-
-	promptID, parseErr := uuid.Parse(payload.ID)
-	if parseErr != nil {
-		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID: %q: %w", payload.ID, parseErr)
-	}
-	sessID, parseErr := uuid.Parse(payload.SessionID)
-	if parseErr != nil {
-		return dlq.PermanentFailure, fmt.Errorf("invalid session UUID: %q: %w", payload.SessionID, parseErr)
-	}
-
-	_, err := entClient.Prompt.Create().
-		SetPromptID(promptID).
-		SetSessionID(sessID).
-		SetContent(payload.Content).
-		Save(ctx)
-	if err != nil {
-		log.Printf("Failed to insert prompt %s for session %s: %v", payload.ID, payload.SessionID, err)
-		return dlq.TransientFailure, fmt.Errorf("insert prompt: %w", err)
-	}
-
-	log.Printf("Inserted prompt %s for session %s", payload.ID, payload.SessionID)
-	return dlq.Success, nil
-}
-
-func handleResponse(ctx context.Context, msg pulsar.Message, entClient *ent.Client) (dlq.ProcessResult, error) {
-	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-	tracer := otel.Tracer("db-adapter")
-	_, span := tracer.Start(msgCtx, "HandleResponse")
-	defer span.End()
-
-	var payload struct {
-		contracts.StreamChunk
-		Result   string                 `json:"result"`
-		Metadata map[string]interface{} `json:"metadata"`
-	}
-	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
-	}
-
-	// Use metadata from payload if StreamChunk.Metadata is nil
-	if payload.StreamChunk.Metadata == nil && payload.Metadata != nil {
-		payload.StreamChunk.Metadata = payload.Metadata
-	}
-
-	// Skip streaming chunks - we only want the final aggregated results from the aggregator.
-	// Aggregated results have 'result' populated. Stream chunks have 'chunk' populated.
-	if payload.Result == "" {
-		if payload.Chunk != "" {
-			// Silently ignore chunks, we expect them.
-			return dlq.Success, nil
-		}
-		// Also ignore errors or empty messages here; aggregator/gateway handle them.
-		return dlq.Success, nil
-	}
-
-	log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)
-
-	promptUUID, parseErr := uuid.Parse(payload.ID)
-	if parseErr != nil {
-		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID in response: %q: %w", payload.ID, parseErr)
-	}
-
-	p, err := entClient.Prompt.Query().
-		Where(prompt.PromptID(promptUUID)).
-		Order(ent.Desc(prompt.FieldCreatedAt)).
-		First(ctx)
-	if err != nil {
-		return dlq.TransientFailure, fmt.Errorf("find prompt for response (ID %s): %w", payload.ID, err)
-	}
-
-	var sessID uuid.UUID
-	if payload.SessionID != "" {
-		sessID, parseErr = uuid.Parse(payload.SessionID)
-		if parseErr != nil {
-			log.Printf("Invalid session UUID in response: %q, falling back to prompt session: %v", payload.SessionID, parseErr)
-			sessID = p.SessionID
-		}
-	} else {
-		sessID = p.SessionID
-	}
-
-	var modelName *string
-	if payload.Model != "" {
-		modelName = &payload.Model
-	}
-
-	_, err = entClient.Response.Create().
-		SetPromptID(p.ID).
-		SetSessionID(sessID).
-		SetContent(payload.Result).
-		SetSequenceNumber(payload.SequenceNumber).
-		SetNillableModelName(modelName).
-		SetMetadata(payload.StreamChunk.Metadata).
-		Save(ctx)
-	if err != nil {
-		return dlq.TransientFailure, fmt.Errorf("insert response for prompt %s: %w", payload.ID, err)
-	}
-
-	log.Printf("Inserted response for prompt %s (seq %d)", payload.ID, payload.SequenceNumber)
-	return dlq.Success, nil
-}
-
-type ChatMessage struct {
-	Role      string                 `json:"role"`
-	Content   string                 `json:"content"`
-	Timestamp time.Time              `json:"timestamp"`
-	Model     string                 `json:"model,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-}
-
-func handleGetSessionMessages(w http.ResponseWriter, r *http.Request, entClient *ent.Client, sessionIDStr string) {
-	ctx := r.Context()
-	sessionID, err := uuid.Parse(sessionIDStr)
-	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
-		return
-	}
-
-	// 1. Get all prompts for the session
-	prompts, err := entClient.Prompt.Query().
-		Where(prompt.SessionID(sessionID)).
-		Order(ent.Asc(prompt.FieldCreatedAt)).
-		All(ctx)
-	if err != nil {
-		http.Error(w, "Failed to query prompts: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 2. Get all responses for the session
-	responses, err := entClient.Response.Query().
-		Where(response.SessionID(sessionID)).
-		Order(ent.Asc(response.FieldCreatedAt)).
-		All(ctx)
-	if err != nil {
-		http.Error(w, "Failed to query responses: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 3. Merge and sort
-	var messages []ChatMessage
-	for _, p := range prompts {
-		messages = append(messages, ChatMessage{
-			Role:      "user",
-			Content:   p.Content,
-			Timestamp: p.CreatedAt,
-		})
-	}
-	for _, res := range responses {
-		model := ""
-		if res.ModelName != nil {
-			model = *res.ModelName
-		}
-		messages = append(messages, ChatMessage{
-			Role:      "assistant",
-			Content:   res.Content,
-			Timestamp: res.CreatedAt,
-			Model:     model,
-			Metadata:  res.Metadata,
-		})
-	}
-
-	// Sort by timestamp to interleave prompts and responses
-	sort.SliceStable(messages, func(i, j int) bool {
-		return messages[i].Timestamp.Before(messages[j].Timestamp)
-	})
-	
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(messages)
-}
-

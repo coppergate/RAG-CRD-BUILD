@@ -194,6 +194,52 @@ func HasSessionsWith(preds ...predicate.Session) predicate.Tag {
 	})
 }
 
+// HasIngestions applies the HasEdge predicate on the "ingestions" edge.
+func HasIngestions() predicate.Tag {
+	return predicate.Tag(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, IngestionsTable, IngestionsPrimaryKey...),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasIngestionsWith applies the HasEdge predicate on the "ingestions" edge with a given conditions (other predicates).
+func HasIngestionsWith(preds ...predicate.CodeIngestion) predicate.Tag {
+	return predicate.Tag(func(s *sql.Selector) {
+		step := newIngestionsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasEmbeddings applies the HasEdge predicate on the "embeddings" edge.
+func HasEmbeddings() predicate.Tag {
+	return predicate.Tag(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, EmbeddingsTable, EmbeddingsPrimaryKey...),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasEmbeddingsWith applies the HasEdge predicate on the "embeddings" edge with a given conditions (other predicates).
+func HasEmbeddingsWith(preds ...predicate.CodeEmbedding) predicate.Tag {
+	return predicate.Tag(func(s *sql.Selector) {
+		step := newEmbeddingsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Tag) predicate.Tag {
 	return predicate.Tag(sql.AndPredicates(predicates...))
