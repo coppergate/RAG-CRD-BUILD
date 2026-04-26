@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"app-builds/common/contracts"
@@ -88,10 +89,28 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 	return dlq.Success, nil
 }
 
+func (p *PulsarProcessor) sanitizeString(s string) string {
+	return strings.ReplaceAll(s, "\x00", "")
+}
+
+func (p *PulsarProcessor) ensureSessionExists(ctx context.Context, sessionID uuid.UUID) error {
+	if sessionID == uuid.Nil {
+		return nil
+	}
+	// Upsert session to handle FK constraints for out-of-order messages
+	return p.client.Session.Create().
+		SetID(sessionID).
+		OnConflict(
+			sql.ConflictColumns(session.FieldID),
+		).
+		Ignore().
+		Exec(ctx)
+}
+
 func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
 	tracer := otel.Tracer("db-adapter")
-	_, span := tracer.Start(msgCtx, "HandlePrompt")
+	msgCtx, span := tracer.Start(msgCtx, "HandlePrompt")
 	defer span.End()
 
 	var payload struct {
@@ -112,11 +131,39 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 		return dlq.PermanentFailure, fmt.Errorf("invalid session UUID: %q: %w", payload.SessionID, parseErr)
 	}
 
-	_, err := p.client.Prompt.Create().
+	content := p.sanitizeString(payload.Content)
+
+	if err := p.ensureSessionExists(msgCtx, sessID); err != nil {
+		return dlq.TransientFailure, fmt.Errorf("ensure session exists: %w", err)
+	}
+
+	// Try to find if a ghost prompt already exists for this ID
+	existing, err := p.client.Prompt.Query().
+		Where(prompt.PromptID(promptID)).
+		Order(ent.Desc(prompt.FieldCreatedAt)).
+		First(msgCtx)
+
+	if err == nil {
+		if existing.Content == "[PENDING]" {
+			_, err = p.client.Prompt.UpdateOne(existing).
+				SetContent(content).
+				SetSessionID(sessID).
+				Save(msgCtx)
+			if err != nil {
+				return dlq.TransientFailure, fmt.Errorf("update ghost prompt: %w", err)
+			}
+			log.Printf("Updated ghost prompt %s with content", payload.ID)
+			return dlq.Success, nil
+		}
+		log.Printf("Prompt %s already exists with content, skipping", payload.ID)
+		return dlq.Success, nil
+	}
+
+	_, err = p.client.Prompt.Create().
 		SetPromptID(promptID).
 		SetSessionID(sessID).
-		SetContent(payload.Content).
-		Save(ctx)
+		SetContent(content).
+		Save(msgCtx)
 	if err != nil {
 		log.Printf("Failed to insert prompt %s for session %s: %v", payload.ID, payload.SessionID, err)
 		return dlq.TransientFailure, fmt.Errorf("insert prompt: %w", err)
@@ -129,7 +176,7 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
 	tracer := otel.Tracer("db-adapter")
-	_, span := tracer.Start(msgCtx, "HandleResponse")
+	msgCtx, span := tracer.Start(msgCtx, "HandleResponse")
 	defer span.End()
 
 	var payload struct {
@@ -159,22 +206,46 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID in response: %q: %w", payload.ID, parseErr)
 	}
 
+	var sessID uuid.UUID
+	if payload.SessionID != "" {
+		sessID, _ = uuid.Parse(payload.SessionID)
+	}
+
 	pr, err := p.client.Prompt.Query().
 		Where(prompt.PromptID(promptUUID)).
 		Order(ent.Desc(prompt.FieldCreatedAt)).
-		First(ctx)
+		First(msgCtx)
+
 	if err != nil {
-		return dlq.TransientFailure, fmt.Errorf("find prompt for response (ID %s): %w", payload.ID, err)
+		isNotFound := ent.IsNotFound(err)
+		if !isNotFound && err != nil && strings.Contains(err.Error(), "not found") {
+			isNotFound = true
+		}
+
+		if isNotFound {
+			log.Printf("Prompt %s not found for response, creating ghost prompt", payload.ID)
+
+			if err := p.ensureSessionExists(msgCtx, sessID); err != nil {
+				return dlq.TransientFailure, fmt.Errorf("ensure session exists for ghost prompt: %w", err)
+			}
+
+			// Create a ghost prompt to handle out-of-order arrival
+			ghost, err := p.client.Prompt.Create().
+				SetPromptID(promptUUID).
+				SetSessionID(sessID).
+				SetContent("[PENDING]").
+				Save(msgCtx)
+			if err != nil {
+				// Could be a race where it was just created
+				return dlq.TransientFailure, fmt.Errorf("failed to create ghost prompt: %w", err)
+			}
+			pr = ghost
+		} else {
+			return dlq.TransientFailure, fmt.Errorf("find prompt for response (ID %s): %w", payload.ID, err)
+		}
 	}
 
-	var sessID uuid.UUID
-	if payload.SessionID != "" {
-		sessID, parseErr = uuid.Parse(payload.SessionID)
-		if parseErr != nil {
-			log.Printf("Invalid session UUID in response: %q, falling back to prompt session: %v", payload.SessionID, parseErr)
-			sessID = pr.SessionID
-		}
-	} else {
+	if sessID == uuid.Nil {
 		sessID = pr.SessionID
 	}
 
@@ -183,14 +254,16 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		modelName = &payload.Model
 	}
 
+	result := p.sanitizeString(payload.Result)
+
 	_, err = p.client.Response.Create().
 		SetPromptID(pr.ID).
 		SetSessionID(sessID).
-		SetContent(payload.Result).
+		SetContent(result).
 		SetSequenceNumber(payload.SequenceNumber).
 		SetNillableModelName(modelName).
 		SetMetadata(payload.StreamChunk.Metadata).
-		Save(ctx)
+		Save(msgCtx)
 	if err != nil {
 		return dlq.TransientFailure, fmt.Errorf("insert response for prompt %s: %w", payload.ID, err)
 	}

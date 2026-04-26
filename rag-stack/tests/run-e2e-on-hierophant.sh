@@ -114,7 +114,7 @@ if command -v podman >/dev/null 2>&1; then
     -e SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     -w /app \
     golang:1.25-alpine \
-    sh -c 'cat /etc/ssl/certs/internal-ca.crt >> /etc/ssl/certs/ca-certificates.crt && go run main.go' | tee -a "${OUT_DIR}/go-e2e-driver.log"
+    sh -c 'cat /etc/ssl/certs/internal-ca.crt >> /etc/ssl/certs/ca-certificates.crt && go run .' | tee -a "${OUT_DIR}/go-e2e-driver.log"
 else
   echo "[WARN] podman not found; skipping Go E2E driver" | tee -a "${OUT_DIR}/go-e2e-driver.log"
 fi

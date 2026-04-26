@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
+	_ "github.com/lib/pq"
 )
 
 var (

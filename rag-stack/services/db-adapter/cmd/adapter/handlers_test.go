@@ -86,6 +86,48 @@ func TestHandleCompletion(t *testing.T) {
 	assert.Equal(t, int64(1000000), metrics[0].TotalDurationUsec)
 }
 
+func TestHandleResponseGhostPrompt(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	promptID := uuid.New()
+	sessionID := uuid.New()
+
+	payload := struct {
+		contracts.StreamChunk
+		Result string `json:"result"`
+	}{
+		StreamChunk: contracts.StreamChunk{
+			ID:             promptID.String(),
+			SessionID:      sessionID.String(),
+			SequenceNumber: 0,
+			Model:          "test-model",
+		},
+		Result: "Test result",
+	}
+	data, _ := json.Marshal(payload)
+	msg := &mockMessage{payload: data}
+
+	processor := service.NewPulsarProcessor(client, nil, nil, nil)
+
+	// Ensure prompt does NOT exist
+	res, err := processor.HandleResponse(context.Background(), msg)
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, res)
+
+	// Verify ghost prompt was created
+	pr, err := client.Prompt.Query().First(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, promptID, pr.PromptID)
+	assert.Equal(t, "[PENDING]", pr.Content)
+
+	// Verify response was created
+	resp, err := client.Response.Query().First(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, pr.ID, resp.PromptID)
+	assert.Equal(t, "Test result", resp.Content)
+}
+
 func TestHandleGetSessionHealth(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	defer client.Close()

@@ -26,16 +26,19 @@ JOURNAL_DIR="${JOURNAL_DIR:-$HOME/.complete-build/journal/build-hashing}"
 
 mkdir -p "$JOURNAL_DIR"
 
-acquire_lock() {
-    if [[ -f "$LOCKFILE" ]]; then
-        local pid=$(cat "$LOCKFILE" 2>/dev/null || echo "")
-        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-            log "ERROR: Another build process (PID $pid) is already running."
-            exit 1
-        fi
-    fi
-    echo $$ > "$LOCKFILE" || { log "ERROR: Failed to write to lockfile $LOCKFILE"; exit 1; }
-}
+	acquire_lock() {
+		if [[ -f "$LOCKFILE" ]]; then
+			local pid=$(cat "$LOCKFILE" 2>/dev/null || echo "")
+			if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+				log "ERROR: Another build process (PID $pid) is already running."
+				exit 1
+			fi
+		fi
+		echo $$ > "$LOCKFILE" || {
+			log "ERROR: Failed to write to lockfile $LOCKFILE"
+			exit 1
+		}
+	}
 
 release_lock() {
     rm -f "$LOCKFILE"
@@ -264,69 +267,79 @@ main() {
         shift
     done
 
-    cleanup_old_jobs
-    acquire_lock
+	cleanup_old_jobs
+	acquire_lock
 
-    if [[ -n "$SELECTED_SERVICE" ]]; then
-        build_service "$SELECTED_SERVICE"
-    else
-        log "Starting parallel build of all services (Parallelism: $PARALLELISM)"
-        
-        # Export functions and variables for subshells
-        # NOTE: update_svc_info and mark_unchanged modify files, so we should be careful in parallel.
-        # Actually, if we do the versioning/hash check sequentially first, then parallelize the builds, it's safer.
-        
-        log "Pre-build check and versioning..."
-        SERVICES_TO_BUILD=()
-        for svc in "${SERVICES[@]}"; do
-             # Check if we need build (we reuse the logic but don't trigger yet)
-             local ver=$(get_svc_version "$svc")
-             local last_build=$(get_svc_last_build "$svc")
-             local current_hash=$(hash_context "$svc")
-             local needs_build=false
-             
-             if [[ -n "$OVERRIDE_VERSION" ]] || [[ "$FORCE_BUILD" == "true" ]]; then
-                 needs_build=true
-             elif ! is_unchanged "$svc" "$current_hash"; then
-                 needs_build=true
-             elif [[ "$last_build" == "null" || -z "$last_build" ]]; then
-                 needs_build=true
-             fi
+	if [[ -n "$SELECTED_SERVICE" ]]; then
+		build_service "$SELECTED_SERVICE"
+	else
+		# Pre-calculate what needs building
+		log "Pre-build check and versioning..."
+		SERVICES_TO_BUILD=()
+		ORCHESTRATOR_NEEDS_BUILD=false
 
-             if [[ "$needs_build" == "true" ]]; then
-                 # Check registry before confirming build
-                 local target_ver="$ver"
-                 [[ -n "$OVERRIDE_VERSION" ]] && target_ver="$OVERRIDE_VERSION"
-                 if ! is_unchanged "$svc" "$current_hash" && [[ -z "$OVERRIDE_VERSION" ]]; then
-                     target_ver=$(increment_version "$ver")
-                 fi
+		for svc in "${SERVICES[@]}"; do
+			local ver=$(get_svc_version "$svc")
+			local last_build=$(get_svc_last_build "$svc")
+			local current_hash=$(hash_context "$svc")
+			local needs_build=false
 
-                 if [[ "$FORCE_BUILD" != "true" ]] && image_exists "$svc" "$target_ver"; then
-                     # Service already exists in registry, skip build but update version/deploy
-                     build_service "$svc"
-                 else
-                     SERVICES_TO_BUILD+=("$svc")
-                 fi
-             fi
-        done
+			if [[ -n "$OVERRIDE_VERSION" ]] || [[ "$FORCE_BUILD" == "true" ]]; then
+				needs_build=true
+			elif ! is_unchanged "$svc" "$current_hash"; then
+				needs_build=true
+			elif [[ "$last_build" == "null" || -z "$last_build" ]]; then
+				needs_build=true
+			fi
 
-        if [[ ${#SERVICES_TO_BUILD[@]} -gt 0 && "$MODE" == "cluster" ]]; then
-            log "Preparing shared source context for ${#SERVICES_TO_BUILD[@]} services..."
-            # Capture both stdout (URLs) and stderr (logging)
-            local UPLOAD_OUT=$(bash "$REPO_DIR/infrastructure/build-pipeline/trigger-build.sh" --upload-only 2>&1)
-            export SOURCE_URL=$(echo "$UPLOAD_OUT" | grep "SOURCE_URL=" | cut -d= -f2-)
-            export SOURCE_TARBALL=$(echo "$UPLOAD_OUT" | grep "SOURCE_TARBALL=" | cut -d= -f2-)
-            log "Shared Context: $SOURCE_TARBALL"
-        fi
+			if [[ "$needs_build" == "true" ]]; then
+				local target_ver="$ver"
+				[[ -n "$OVERRIDE_VERSION" ]] && target_ver="$OVERRIDE_VERSION"
+				if ! is_unchanged "$svc" "$current_hash" && [[ -z "$OVERRIDE_VERSION" ]]; then
+					target_ver=$(increment_version "$ver")
+				fi
 
-        log "Building services: ${SERVICES_TO_BUILD[*]:-none}"
-        for svc in "${SERVICES_TO_BUILD[@]}"; do
-             build_service "$svc" &
-             # Manage parallelism (simple implementation)
-             while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
-        done
-        wait
-    fi
+				if [[ "$FORCE_BUILD" != "true" ]] && image_exists "$svc" "$target_ver"; then
+					# Update version/deploy without build
+					build_service "$svc"
+				else
+					if [[ "$svc" == "build-orchestrator" ]]; then
+						ORCHESTRATOR_NEEDS_BUILD=true
+					else
+						SERVICES_TO_BUILD+=("$svc")
+					fi
+				fi
+			fi
+		done
+
+		# Build orchestrator first if needed
+		if [[ "$ORCHESTRATOR_NEEDS_BUILD" == "true" ]]; then
+			log "CRITICAL: build-orchestrator needs update. Building it first to avoid conflicts."
+			build_service "build-orchestrator"
+			if [[ "$MODE" == "cluster" ]]; then
+				log "Waiting for build-orchestrator rollout..."
+				"$KUBECTL" rollout status deployment/build-orchestrator -n build-pipeline --timeout=300s || true
+				sleep 10 # Allow new orchestrator to stabilize
+			fi
+		fi
+
+		if [[ ${#SERVICES_TO_BUILD[@]} -gt 0 ]]; then
+			if [[ "$MODE" == "cluster" ]]; then
+				log "Preparing shared source context for ${#SERVICES_TO_BUILD[@]} services..."
+				local UPLOAD_OUT=$(bash "$REPO_DIR/infrastructure/build-pipeline/trigger-build.sh" --upload-only 2>&1)
+				export SOURCE_URL=$(echo "$UPLOAD_OUT" | grep "SOURCE_URL=" | cut -d= -f2-)
+				export SOURCE_TARBALL=$(echo "$UPLOAD_OUT" | grep "SOURCE_TARBALL=" | cut -d= -f2-)
+				log "Shared Context: $SOURCE_TARBALL"
+			fi
+
+			log "Starting parallel build of remaining services: ${SERVICES_TO_BUILD[*]:-none} (Parallelism: $PARALLELISM)"
+			for svc in "${SERVICES_TO_BUILD[@]}"; do
+				build_service "$svc" &
+				while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
+			done
+			wait
+		fi
+	fi
 
     if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
         log "Waiting for cluster builds to complete..."

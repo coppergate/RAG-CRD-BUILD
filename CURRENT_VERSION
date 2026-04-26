@@ -1,10 +1,10 @@
 {
   "rag-worker": {
-    "version": "2.7.5",
+    "version": "2.7.9",
     "last_build": "2026-04-18T19:11:53Z"
   },
   "rag-ingestion": {
-    "version": "2.7.5",
+    "version": "2.7.9",
     "last_build": "2026-04-18T19:16:08Z"
   },
   "rag-web-ui": {
@@ -16,12 +16,12 @@
     "last_build": null
   },
   "db-adapter": {
-    "version": "2.8.4",
+    "version": "2.8.13",
     "last_build": "2026-04-18T19:16:09Z"
   },
   "qdrant-adapter": {
-    "version": "2.8.2",
-    "last_build": null
+    "version": "2.8.8",
+    "last_build": "2026-04-25T19:13:34Z"
   },
   "object-store-mgr": {
     "version": "2.7.5",
@@ -40,8 +40,8 @@
     "last_build": null
   },
   "build-orchestrator": {
-    "version": "2.7.4",
-    "last_build": null
+    "version": "2.7.11",
+    "last_build": "2026-04-25T12:50:00Z"
   },
   "prompt-aggregator": {
     "version": "2.7.2",

@@ -33,6 +33,10 @@ func (q *QdrantClient) Search(collection string, vectorSize int, vector []float3
 }
 
 func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID string, retry bool) ([]string, error) {
+	if len(vector) == 0 {
+		return nil, nil // Cannot search with empty vector
+	}
+
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
@@ -64,10 +68,20 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 	}
 
 	if sessionID != "" {
+		// Allow points that match the session ID OR have no session ID (global context)
 		mustFilters = append(mustFilters, map[string]interface{}{
-			"key": "session_id",
-			"match": map[string]interface{}{
-				"value": sessionID,
+			"should": []map[string]interface{}{
+				{
+					"key": "session_id",
+					"match": map[string]interface{}{
+						"value": sessionID,
+					},
+				},
+				{
+					"is_empty": map[string]interface{}{
+						"key": "session_id",
+					},
+				},
 			},
 		})
 	}
@@ -113,7 +127,10 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 
 	var contexts []string
 	for _, r := range result.Result {
-		if text, ok := r.Payload["text"].(string); ok {
+		// Support both "text" and "content" fields
+		if text, ok := r.Payload["content"].(string); ok {
+			contexts = append(contexts, text)
+		} else if text, ok := r.Payload["text"].(string); ok {
 			contexts = append(contexts, text)
 		}
 	}
@@ -156,6 +173,10 @@ func (q *QdrantClient) CreateCollection(collection string, vectorSize int) error
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusConflict && effectiveColl != "" {
+			// Collection already exists, ignore 409
+			return nil
+		}
 		return fmt.Errorf("failed to create collection %s: %d", effectiveColl, resp.StatusCode)
 	}
 

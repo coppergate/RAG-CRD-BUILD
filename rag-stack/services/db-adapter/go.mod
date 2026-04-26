@@ -7,6 +7,7 @@ require (
 	entgo.io/ent v0.14.6
 	github.com/apache/pulsar-client-go v0.18.0
 	github.com/google/uuid v1.6.0
+	github.com/lib/pq v1.12.3
 	github.com/mattn/go-sqlite3 v1.14.38
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.59.0

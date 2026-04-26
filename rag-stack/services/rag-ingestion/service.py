@@ -243,6 +243,15 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
         logger.info(f"Found {len(files)} files to process.")
 
         conn = pool.getconn()
+
+        # Ensure ingestion entry exists to satisfy FK for code_embedding
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO code_ingestion (ingestion_id, s3_bucket_id) VALUES (%s, %s) ON CONFLICT (ingestion_id) DO NOTHING",
+                (ingestion_id, BUCKET_NAME)
+            )
+            conn.commit()
+
         points = []
         idx = 0
 

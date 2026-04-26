@@ -251,7 +251,11 @@ func main() {
 	}
 	defer pulsarClient.Close()
 
-	consumer, err := pulsarClient.NewSharedConsumer(topic, "build-orchestrator-sub")
+	consumer, err := pulsarClient.Subscribe(pulsar.ConsumerOptions{
+		Topic:            topic,
+		SubscriptionName: "build-orchestrator-sub",
+		Type:             pulsar.Shared,
+	})
 	if err != nil {
 		log.Fatalf("Could not subscribe to topic: %v", err)
 	}
@@ -282,6 +286,8 @@ func main() {
 	defer cancel()
 
 	var activeBuilds int32
+	var muInProgress sync.Mutex
+	inProgress := make(map[string]bool)
 
 	// Launch HTTP server
 	taskQueue := make(chan buildTaskEnvelope, maxConcurrent*8)
@@ -300,6 +306,9 @@ func main() {
 
 					jobName := env.jobName
 					atomic.AddInt32(&activeBuilds, 1)
+
+					key := env.task.ServiceName + ":" + env.task.Version
+
 					publisher.Publish(BuildStatusEvent{
 						ServiceName: env.task.ServiceName,
 						Version:     env.task.Version,
@@ -341,6 +350,10 @@ func main() {
 						})
 						consumer.Ack(env.msg)
 					}
+					muInProgress.Lock()
+					delete(inProgress, key)
+					muInProgress.Unlock()
+
 					atomic.AddInt32(&activeBuilds, -1)
 				}
 			}
@@ -374,6 +387,18 @@ func main() {
 
 			requestID := requestIDFromMessage(msg)
 			jobName := buildJobName(task, requestID)
+
+			key := task.ServiceName + ":" + task.Version
+			muInProgress.Lock()
+			if inProgress[key] {
+				muInProgress.Unlock()
+				log.Printf("Build already in progress or queued for %s, skipping duplicate request", key)
+				consumer.Ack(msg)
+				continue
+			}
+			inProgress[key] = true
+			muInProgress.Unlock()
+
 			publisher.Publish(BuildStatusEvent{
 				ServiceName: task.ServiceName,
 				Version:     task.Version,
