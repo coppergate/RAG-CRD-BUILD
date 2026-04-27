@@ -10,9 +10,9 @@ PLAN_FILE="${PLAN_FILE:-$SCRIPT_DIR/install-image-plan.sh}"
 TARGET_REGISTRY="${TARGET_REGISTRY:-registry.hierocracy.home:5000}"
 APPLY="${APPLY:-false}"
 PARALLELISM="${PARALLELISM:-3}"
-SKOPEO_TLS_VERIFY="${SKOPEO_TLS_VERIFY:-false}"
+SKOPEO_TLS_VERIFY="${SKOPEO_TLS_VERIFY:-true}"
 SKOPEO_SRC_TLS_VERIFY="${SKOPEO_SRC_TLS_VERIFY:-true}"
-SOURCE_CACHE_ROOT="${SOURCE_CACHE_ROOT:-/mnt/hegemon-share/share/code/complete-build/image-source-cache}"
+SOURCE_CACHE_ROOT="${SOURCE_CACHE_ROOT:-/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/image-source-cache}"
 GROUPS_CSV="${MIRROR_GROUPS:-}"
 STEP_NAME="${STEP:-}"
 LIST_GROUPS="false"
@@ -188,8 +188,10 @@ copy_cmd() {
   local src="$1"
   local dst="$TARGET_REGISTRY/$src"
   local last_path_part repo tag cache_dir
-  last_path_part="${src##*/}"
-  if [[ "$last_path_part" == *:* ]]; then
+  if [[ "$src" == *@sha256:* ]]; then
+    repo="${src%@sha256:*}"
+    tag="sha256-${src##*@sha256:}"
+  elif [[ "$src" == *:* ]]; then
     repo="${src%:*}"
     tag="${src##*:}"
   else
@@ -241,8 +243,10 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
   err_msg=""
   cache_status="miss"
 
-  last_path_part="${src##*/}"
-  if [[ "$last_path_part" == *:* ]]; then
+  if [[ "$src" == *@sha256:* ]]; then
+    repo="${src%@sha256:*}"
+    tag="sha256-${src##*@sha256:}"
+  elif [[ "$src" == *:* ]]; then
     repo="${src%:*}"
     tag="${src##*:}"
   else
@@ -255,19 +259,23 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
 
   # Skip all work if target image:tag is already present in local registry.
   if skopeo inspect --tls-verify="$tls_verify_dest" "docker://$dst" >/dev/null 2>&1; then
+    echo "[SKIP] $src (already in registry)"
     status="skip"
     cache_status="registry-hit"
     err_msg="already_present"
   else
     if [[ -f "$cache_dir/.cached" ]]; then
+      echo "[CACHE-HIT] $src"
       cache_status="hit"
     else
+      echo "[CACHE-MISS] $src (mirroring to cache...)"
       cache_status="update"
       # Populate/refresh source cache with exact image:tag first.
       tmp_cache_dir="${cache_dir}.tmp.$$"
       rm -rf "$tmp_cache_dir"
       mkdir -p "$tmp_cache_dir"
       if ! skopeo copy --all --src-tls-verify="$tls_verify_src" "docker://$src" "dir:$tmp_cache_dir"; then
+        echo "[ERROR] Failed to mirror $src to cache"
         status="fail"
         err_msg="cache_fill_failed"
         rm -rf "$tmp_cache_dir"
@@ -281,9 +289,13 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
   fi
 
   # Push to local registry from cache artifact (avoids re-downloading source image).
-  if [[ "$status" == "ok" ]] && ! skopeo copy --all --dest-tls-verify="$tls_verify_dest" "dir:$cache_dir" "docker://$dst"; then
-    status="fail"
-    err_msg="copy_to_registry_failed"
+  if [[ "$status" == "ok" ]]; then
+    echo "[PUSH] $src -> $dst"
+    if ! skopeo copy --all --dest-tls-verify="$tls_verify_dest" "dir:$cache_dir" "docker://$dst"; then
+      echo "[ERROR] Failed to push $src to registry"
+      status="fail"
+      err_msg="copy_to_registry_failed"
+    fi
   fi
 
   end_epoch="$(date +%s)"

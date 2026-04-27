@@ -4,9 +4,9 @@ set -euo pipefail
 # E2E test runner for hierophant host
 # - Runs Kubernetes job-based integration tests
 # - Runs Go E2E driver via Podman
-# - Stores logs under /mnt/hegemon-share/share/code/complete-build/ai-changes/logs
+# - Stores logs under /mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/logs
 
-LOG_ROOT="${LOG_ROOT:-/mnt/hegemon-share/share/code/complete-build/ai-changes/logs}"
+LOG_ROOT="${LOG_ROOT:-/tmp/rag-logs}"
 TS=$(date +%Y%m%d-%H%M%S)
 OUT_DIR="${LOG_ROOT}/e2e-${TS}"
 mkdir -p "$OUT_DIR"
@@ -14,7 +14,12 @@ mkdir -p "$OUT_DIR"
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-1.5.7}"
+VERSION_FILE="/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION"
+VERSION="${VERSION:-}"
+if [ -z "$VERSION" ]; then
+    VERSION=$(jq -r '."rag-test-runner".version' "$VERSION_FILE")
+fi
+echo "[INFO] Using rag-test-runner version: ${VERSION}"
 
 echo "[INFO] Preflight: Checking connectivity to hierophant and cluster..."
 # 1. Ping hierophant
@@ -54,9 +59,28 @@ echo "[STEP] Refresh tests ConfigMap" | tee -a "${OUT_DIR}/job.log"
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/integration_test.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/context_verification.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/pulsar_crud_test.py \
-  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/test_contracts.py | tee -a "${OUT_DIR}/job.log"
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/test_contracts.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/recursive_rag_test.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/seed_qdrant_context.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/sad_path_test.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/ingestion_isolation.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/cleanup_test_data.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/aggregator_test.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/aggregator_failure_test.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/api_health_test.py | tee -a "${OUT_DIR}/job.log"
 
-# 2) Launch the test job
+# 2) Run Cleanup Job
+echo "[STEP] Apply cleanup job" | tee -a "${OUT_DIR}/job.log"
+"$KUBECTL" -n "$NAMESPACE" delete job rag-test-cleanup --ignore-not-found | tee -a "${OUT_DIR}/job.log"
+RENDERED_CLEANUP="/tmp/rag-test-cleanup-${VERSION}.yaml"
+sed "s|:__VERSION__|:${VERSION}|g" /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/cleanup-job.yaml > "$RENDERED_CLEANUP"
+"$KUBECTL" apply -f "$RENDERED_CLEANUP" | tee -a "${OUT_DIR}/job.log"
+rm -f "$RENDERED_CLEANUP"
+
+echo "[STEP] Wait for cleanup job to complete" | tee -a "${OUT_DIR}/job.log"
+"$KUBECTL" -n "$NAMESPACE" wait --for=condition=complete job/rag-test-cleanup --timeout=120s || echo "[WARN] Cleanup job timed out or failed." | tee -a "${OUT_DIR}/job.log"
+
+# 3) Launch the test job
 echo "[STEP] Apply test job" | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" delete job rag-integration-test --ignore-not-found | tee -a "${OUT_DIR}/job.log"
 RENDERED_JOB="/tmp/rag-integration-test-${VERSION}.yaml"
@@ -81,14 +105,54 @@ echo "[STEP] Stream job logs" | tee -a "${OUT_DIR}/job.log"
 # 4) Run Go E2E driver via Podman (optional)
 echo "[STEP] Run Go E2E driver via Podman" | tee -a "${OUT_DIR}/go-e2e-driver.log"
 if command -v podman >/dev/null 2>&1; then
+  # Mount internal CA to podman container and set SSL_CERT_FILE
+  # We assume combined-ca-inspect.crt in root is available as it was mentioned earlier.
+  # Better: mount the same one we use elsewhere if available.
   podman run --rm \
     -v /mnt/hegemon-share/share/code/complete-build/rag-stack/tests:/app:Z \
+    -v /mnt/hegemon-share/share/code/complete-build/combined-ca-inspect.crt:/etc/ssl/certs/internal-ca.crt:Z \
+    -e SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     -w /app \
     golang:1.25-alpine \
-    sh -c 'go run main.go' | tee -a "${OUT_DIR}/go-e2e-driver.log"
+    sh -c 'cat /etc/ssl/certs/internal-ca.crt >> /etc/ssl/certs/ca-certificates.crt && go run .' | tee -a "${OUT_DIR}/go-e2e-driver.log"
 else
   echo "[WARN] podman not found; skipping Go E2E driver" | tee -a "${OUT_DIR}/go-e2e-driver.log"
 fi
 
-# 5) Summary
+# 5) Summary & Scan for failures
+echo ""
+echo "--- E2E Scan Summary ---"
+# Check both the Go E2E driver and the integration-tests.log
+ERROR_COUNT=0
+
+# Scan integration tests log
+INTEGRATION_LOG="${OUT_DIR}/integration-tests.log"
+if [ -f "$INTEGRATION_LOG" ]; then
+  INTEGRATION_ERRORS=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError|Errno" "$INTEGRATION_LOG" | grep -v "expected" | wc -l)
+  ERROR_COUNT=$((ERROR_COUNT + INTEGRATION_ERRORS))
+  if [ "$INTEGRATION_ERRORS" -gt 0 ]; then
+    echo "[WARN] Found ${INTEGRATION_ERRORS} possible errors in integration tests log:"
+    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError|Errno" "$INTEGRATION_LOG" | grep -v "expected" | head -n 10
+  fi
+fi
+
+# Scan Go E2E driver log
+GO_E2E_LOG="${OUT_DIR}/go-e2e-driver.log"
+if [ -f "$GO_E2E_LOG" ]; then
+  GO_ERRORS=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|stale timestamp|Panic:|Errno" "$GO_E2E_LOG" | grep -v "expected" | wc -l)
+  ERROR_COUNT=$((ERROR_COUNT + GO_ERRORS))
+  if [ "$GO_ERRORS" -gt 0 ]; then
+    echo "[WARN] Found ${GO_ERRORS} possible errors in Go E2E driver log:"
+    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|stale timestamp|Panic:|Errno" "$GO_E2E_LOG" | grep -v "expected" | head -n 10
+  fi
+fi
+
+if [ "$ERROR_COUNT" -eq 0 ]; then
+  echo "[OK] No obvious errors found in log scan."
+else
+  echo "[FAILURE] Detected ${ERROR_COUNT} possible failures/errors during the E2E run."
+  # If we have errors, we should exit with a non-zero code to indicate failure to caller/CI
+  exit 1
+fi
+
 echo "[DONE] E2E run complete. Logs saved to ${OUT_DIR}"

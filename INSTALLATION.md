@@ -7,9 +7,9 @@ This document provides instructions for executing the RAG stack installation usi
 To perform a complete, from-scratch installation of the basic infrastructure, build pipeline, and RAG services:
 
 ```bash
-ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+ssh -i ~/.ssh/id_hierophant_access -o BatchMode=yes -o StrictHostKeyChecking=no junie@hierophant \
 "cd /mnt/hegemon-share/share/code/complete-build && \
-FRESH_INSTALL=true VERSION=1.5.7 ./setup-complete.sh"
+FRESH_INSTALL=true VERSION=2.4.5 ./setup-complete.sh"
 ```
 
 ---
@@ -32,9 +32,9 @@ The `setup-complete.sh` script supports several environment variables to control
 The installation process is **resumable**. If a step fails, you can investigate the logs on `hierophant`, fix the issue, and then run the command **without** `FRESH_INSTALL=true` to pick up exactly where it left off:
 
 ```bash
-ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+ssh -i ~/.ssh/id_hierophant_access -o BatchMode=yes -o StrictHostKeyChecking=no junie@hierophant \
 "cd /mnt/hegemon-share/share/code/complete-build && \
-VERSION=1.5.7 ./setup-complete.sh"
+VERSION=2.4.5 ./setup-complete.sh"
 ```
 
 ---
@@ -47,14 +47,14 @@ The master script orchestrates the following major steps:
 3. **NVIDIA stack**: Configures GPU support for inference nodes.
 4. **Local Registry**: Sets up the internal container registry.
 5. **Build Pipeline**: Configures the Kaniko + S3 cluster-native build system.
-6. **RAG Images**: Builds all Go and Python services (v1.5.7) and pushes them to the registry.
+6. **RAG Images**: Builds all Go and Python services (v2.4.5) and pushes them to the registry.
 7. **RAG Stack**: Deploys all services (LLM Gateway, Worker, Adapters, etc.) to the `rag-system` namespace.
 
 ---
 
 ## Troubleshooting
 
-- **Logs**: Detailed logs for each service build are stored in `ai-changes/build-output/` on `hierophant`.
+- **Logs**: Detailed logs for each service build are stored in `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/build-output/` on `hierophant`.
 - **Journal**: Installation progress is tracked per-user under `~/.complete-build/journal/` on `hierophant`. Override with `INSTALL_JOURNAL_DIR` if needed.
 - **Temporary Files**: Scripts use a private, user-specific temporary directory at `~/.complete-build/tmp/` on `hierophant`. Override with `INSTALL_TMP_DIR` if needed.
 - **Kubernetes**: Use `/home/k8s/kube/kubectl` with `/home/k8s/kube/config/kubeconfig` on `hierophant` for cluster status.

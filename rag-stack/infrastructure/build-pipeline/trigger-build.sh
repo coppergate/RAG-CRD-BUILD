@@ -5,12 +5,36 @@
 set -Eeuo pipefail
 
 SERVICE="${1:-}"
-VERSION="${2:-1.5.7}"
+VERSION="${2:-${VERSION:-}}"
+
+if [[ "$SERVICE" == "--upload-only" ]]; then
+    SERVICE=""
+    UPLOAD_ONLY="true"
+else
+    UPLOAD_ONLY="false"
+fi
+
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
+SAFE_TMP_DIR="${SAFE_TMP_DIR:-/tmp}"
+
+# Source of truth for versioning
+if [[ -z "$VERSION" ]]; then
+    if [[ -f "$REPO_DIR/../CURRENT_VERSION" ]]; then
+        if jq . "$REPO_DIR/../CURRENT_VERSION" >/dev/null 2>&1; then
+            VERSION=$(jq -r ".\"$SERVICE\".version // \"1.0.0\"" "$REPO_DIR/../CURRENT_VERSION")
+        else
+            VERSION=$(cat "$REPO_DIR/../CURRENT_VERSION" | tr -d '[:space:]')
+        fi
+    else
+        VERSION="1.0.0"
+    fi
+fi
+export VERSION
 NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-TOOLING_REGISTRY="${TOOLING_REGISTRY:-registry.hierocracy.home:5000}"
+INTERNAL_REGISTRY="${INTERNAL_REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
+TOOLING_REGISTRY="${TOOLING_REGISTRY:-$INTERNAL_REGISTRY}"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 
 source "$REPO_DIR/../scripts/journal-helper.sh"
@@ -36,20 +60,34 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
-    echo "--- 1. Packaging sources for $SERVICE ---"
+    if [[ "$UPLOAD_ONLY" != "true" ]]; then
+        echo "--- 1. Packaging sources for $SERVICE ---"
+    else
+        echo "--- 1. Packaging sources (Upload Only) ---" >&2
+    fi
     TARBALL="sources-$(date +%s)-$$.tar.gz"
     CREATED_TARBALL="true"
     # Pack 'services' folder so Kaniko sees 'common/' and the target service
     cd "$REPO_DIR/services"
-    tar -czf "$SAFE_TMP_DIR/$TARBALL" .
+    tar \
+        --exclude="*/build" --exclude="*/.dart_tool" \
+        --exclude="*/bin" --exclude="*/*.exe" --exclude="*/main" \
+        -czf "$SAFE_TMP_DIR/$TARBALL" .
     cd - > /dev/null
 
-    echo "--- 2. Uploading sources to S3 ---"
+    if [[ "$UPLOAD_ONLY" != "true" ]]; then
+        echo "--- 2. Uploading sources to S3 ---"
+    else
+        echo "--- 2. Uploading sources to S3 (Upload Only) ---" >&2
+    fi
     # Create a temporary uploader pod that has the S3 bucket access
     # Using a more restricted security context to avoid PodSecurity violations
     $KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image="${TOOLING_REGISTRY}/amazon/aws-cli:2.34.4" --overrides='
 {
   "spec": {
+    "nodeSelector": {
+      "role": "storage-node"
+    },
     "containers": [{
       "name": "uploader",
         "image": "'"$TOOLING_REGISTRY"'/amazon/aws-cli:2.34.4",
@@ -85,6 +123,15 @@ if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
     # Capture pre-signed URL to avoid AWS SDK credential issues in Kaniko
     PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n "$NAMESPACE" "$UPLOADER_POD" -- \
       sh -c "aws --endpoint-url http://\$S3_ENDPOINT s3 cp - s3://\$BUCKET_NAME/$TARBALL > /dev/null && aws --endpoint-url http://\$S3_ENDPOINT s3 presign s3://\$BUCKET_NAME/$TARBALL --expires-in 3600")
+
+    if [[ "$UPLOAD_ONLY" == "true" ]]; then
+        echo "SOURCE_URL=$PRESIGNED_URL"
+        echo "SOURCE_TARBALL=$TARBALL"
+        # Don't cleanup the tarball yet if we need to reuse it? 
+        # Actually, once it's in S3, we don't need the local file.
+        # But cleanup() trap will remove it. That's fine.
+        exit 0
+    fi
 
     # Cleanup uploader pod early
     $KUBECTL delete pod "$UPLOADER_POD" -n "$NAMESPACE" --now >/dev/null 2>&1 || true

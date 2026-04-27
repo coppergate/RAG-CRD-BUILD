@@ -9,7 +9,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: tester
-        image: registry.hierocracy.home:5000/rag-test-runner:__VERSION__
+        image: registry.container-registry.svc.cluster.local:5000/rag-test-runner:__VERSION__
         imagePullPolicy: Always
         resources:
           requests:
@@ -21,12 +21,44 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
+            echo "--- Preparing Certificates ---"
+            COMBINED_CA="/tmp/combined-ca.crt"
+            # Start with existing system certificates
+            if [ -f /etc/ssl/certs/ca-certificates.crt ]; then
+              cat /etc/ssl/certs/ca-certificates.crt > "$COMBINED_CA"
+            elif [ -f /etc/ssl/cert.pem ]; then
+              cat /etc/ssl/cert.pem > "$COMBINED_CA"
+            else
+              echo "WARNING: Could not find system CA bundle, starting fresh."
+              touch "$COMBINED_CA"
+            fi
+            
+            # Append internal CA
+            if [ -f /etc/ssl/internal/ca.crt ]; then
+              echo "Appending internal CA to bundle..."
+              cat /etc/ssl/internal/ca.crt >> "$COMBINED_CA"
+            fi
+            
+            export SSL_CERT_FILE="$COMBINED_CA"
+            export REQUESTS_CA_BUNDLE="$COMBINED_CA"
+            
+            # Update DB_CONN_STRING to use combined bundle
+            export DB_CONN_STRING=$(echo "$DB_CONN_STRING" | sed "s|/etc/ssl/certs/ca-certificates.crt|$COMBINED_CA|g")
+            
             echo "--- Running Integration Tests ---"
             python /tests/integration_test.py
+            echo "--- Running API Health and Functionality Tests ---"
+            python /tests/api_health_test.py
+            echo "--- Running Isolated Ingestion Pipeline Test ---"
+            python /tests/ingestion_isolation.py
             echo "--- Running Recursive RAG Flow Tests ---"
             python /tests/recursive_rag_test.py
             echo "--- Running Pulsar CRUD Tests ---"
             python /tests/pulsar_crud_test.py
+            echo "--- Running Aggregator Flow Tests ---"
+            python /tests/aggregator_test.py
+            echo "--- Running Aggregator Failure Tests ---"
+            python /tests/aggregator_failure_test.py
             echo "--- Seeding Qdrant Context ---"
             python /tests/seed_qdrant_context.py
             echo "--- Running Context Verification (Query) ---"
@@ -40,15 +72,19 @@ spec:
               name: timescaledb-secret
               key: url
         - name: S3_ENDPOINT
-          valueFrom:
-            configMapKeyRef:
-              name: rag-codebase-bucket
-              key: BUCKET_HOST
+          value: "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc"
         - name: BUCKET_NAME
           valueFrom:
             configMapKeyRef:
               name: rag-codebase-bucket
               key: BUCKET_NAME
+        - name: BUCKET_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_PORT
+        - name: OLLAMA_MODEL
+          value: "llama3.1:latest"
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
@@ -61,14 +97,18 @@ spec:
               key: AWS_SECRET_ACCESS_KEY
         - name: QDRANT_HOST
           value: "qdrant"
+        - name: QDRANT_USE_TLS
+          value: "true"
         - name: GATEWAY_URL
-          value: "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
+          value: "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
         - name: PULSAR_URL
-          value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: PULSAR_PROMPT_TOPIC
           value: "persistent://rag-pipeline/data/chat-prompts"
         - name: PULSAR_RESPONSE_TOPIC
           value: "persistent://rag-pipeline/stage/results"
+        - name: PULSAR_COMPLETION_TOPIC
+          value: "persistent://rag-pipeline/stage/completion"
         - name: PULSAR_INGRESS_TOPIC
           value: "persistent://rag-pipeline/stage/ingress"
         - name: PULSAR_RESULTS_TOPIC
@@ -88,9 +128,19 @@ spec:
         volumeMounts:
         - name: tests
           mountPath: /tests
+        - name: registry-ca
+          mountPath: /etc/ssl/internal
       volumes:
       - name: tests
         configMap:
           name: rag-integration-tests
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+          items:
+          - key: ca.crt
+            path: ca.crt
       restartPolicy: Never
+      nodeSelector:
+        role: storage-node
   backoffLimit: 0

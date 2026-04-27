@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rag-test-cleanup
+  namespace: rag-system
+spec:
+  template:
+    spec:
+      containers:
+      - name: cleanup
+        image: registry.hierocracy.home:5000/rag-test-runner:__VERSION__
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "--- Preparing Certificates ---"
+            COMBINED_CA="/tmp/combined-ca.crt"
+            # Start with existing system certificates
+            if [ -f /etc/ssl/certs/ca-certificates.crt ]; then
+              cat /etc/ssl/certs/ca-certificates.crt > "$COMBINED_CA"
+            elif [ -f /etc/ssl/cert.pem ]; then
+              cat /etc/ssl/cert.pem > "$COMBINED_CA"
+            else
+              echo "WARNING: Could not find system CA bundle, starting fresh."
+              touch "$COMBINED_CA"
+            fi
+            
+            # Append internal CA
+            if [ -f /etc/ssl/internal/ca.crt ]; then
+              echo "Appending internal CA to bundle..."
+              cat /etc/ssl/internal/ca.crt >> "$COMBINED_CA"
+            fi
+            
+            export SSL_CERT_FILE="$COMBINED_CA"
+            export REQUESTS_CA_BUNDLE="$COMBINED_CA"
+            
+            # Update DB_CONN_STRING to use combined bundle
+            if [ -n "$DB_CONN_STRING" ]; then
+              export DB_CONN_STRING=$(echo "$DB_CONN_STRING" | sed "s|/etc/ssl/certs/ca-certificates.crt|$COMBINED_CA|g")
+            fi
+
+            echo "--- Starting Cleanup Task ---"
+            python3 cleanup_test_data.py
+        env:
+        - name: DB_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secret
+              key: url
+        - name: QDRANT_HOST
+          value: "qdrant.rag-system.svc.cluster.local"
+        - name: QDRANT_PORT
+          value: "6333"
+        - name: QDRANT_USE_TLS
+          value: "true"
+        - name: RETAIN_RUNS
+          value: "2"
+        - name: TEST_TAG_PREFIXES
+          value: "test-tag-,iso-test-"
+        - name: DRY_RUN
+          value: "false"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: tests
+          mountPath: /tests
+        - name: registry-ca
+          mountPath: /etc/ssl/internal
+      restartPolicy: Never
+      volumes:
+      - name: tests
+        configMap:
+          name: rag-integration-tests
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+          items:
+          - key: ca.crt
+            path: ca.crt
+  backoffLimit: 0

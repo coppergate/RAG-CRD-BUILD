@@ -11,7 +11,7 @@ spec:
       enableServiceLinks: false
       containers:
       - name: manager
-        image: registry.hierocracy.home:5000/object-store-mgr:__VERSION__
+        image: registry.container-registry.svc.cluster.local:5000/object-store-mgr:__VERSION__
         imagePullPolicy: Always
         resources:
           requests:
@@ -41,3 +41,13 @@ spec:
             secretKeyRef:
               name: rag-codebase-bucket
               key: AWS_SECRET_ACCESS_KEY
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm

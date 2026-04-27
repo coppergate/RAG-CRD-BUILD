@@ -1,0 +1,129 @@
+graph TD
+    subgraph "External Clients"
+        Browser[Web Browser]
+        Explorer[RAG Explorer - Desktop]
+        DevDB[Dev Database Tools]
+    end
+
+    subgraph "Kubernetes: rag-system namespace: TLS-SSL"
+        UI[rag-web-ui]
+        Flutter[rag-explorer]
+        Gateway[llm-gateway]
+        Worker[rag-worker]
+        DBAdapter[db-adapter]
+        Aggregator[prompt-aggregator]
+        Ingestor[rag-ingestion-service]
+        QAdapter[qdrant-adapter]
+        OSMgr[object-store-mgr]
+        Qdrant[Qdrant Vector DB]
+    end
+
+    subgraph "Kubernetes: monitoring namespace: APM"
+        Alloy[Grafana Alloy - DaemonSet]
+        Loki[Loki - Gateway TLS]
+        Mimir[Mimir - Gateway TLS]
+        Tempo[Tempo - HTTPS Push]
+        Grafana[Grafana Dashboards]
+    end
+
+    subgraph "Kubernetes: build-pipeline namespace"
+        Orch[Build Orchestrator]
+        Kaniko[Kaniko Builder]
+        BuildS3[Build S3-OBC]
+    end
+
+    subgraph "Kubernetes: llms-ollama namespace"
+        Ollama[Ollama - Planner]
+        OllamaCode[Ollama - Executor]
+    end
+
+    subgraph "Pulsar Message Bus: rag-pipeline: TLS-SSL"
+        direction LR
+        Ingress[stage/ingress]
+        Plan[stage/plan]
+        Search[stage/search]
+        Exec[stage/exec]
+        Results[stage/results]
+        Completion[stage/completion]
+        Prompts[data/chat-prompts]
+        Sessions[sessions/UUID-topic]
+        Ops[operations/db-ops]
+        QOps[operations/qdrant-ops]
+        QRes[operations/qdrant-ops-results]
+        BuildTopic[operations/builds]
+    end
+
+    subgraph "Storage & Infrastructure: TLS-SSL"
+        S3[Rook-Ceph S3]
+        TDB[TimescaleDB]
+        Reg[Local Registry]
+    end
+
+    %% Interaction Flows: HTTPS
+    Browser <-->|HTTPS/443| UI
+    Explorer <-->|Websocket/HTTPS| Gateway
+
+    %% Registry Flow
+    UI & Flutter & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
+    S3 & Qdrant & TDB & Ollama & OllamaCode -.->|Pull TLS| Reg
+
+    %% Ingestion Flow
+    Flutter -->|Upload: S3 API| S3
+    Flutter -->|Trigger: HTTPS| Ingestor
+    Ingestor -->|Store Metadata: TLS| TDB
+    Ingestor -.->|1- Publish: Pulsar+SSL| QOps
+    QAdapter -.->|2- Consume: Pulsar+SSL| QOps
+    QAdapter -->|3- Upsert: GRPC+TLS| Qdrant
+    Ingestor -->|Read Files: S3 API| S3
+    Ingestor -->|Embeddings: HTTP| Ollama
+
+    %% Chat Flow: Isolated Session Streaming
+    Gateway -.->|1- Publish| Prompts
+    Gateway -.->|2- Publish| Ingress
+
+    Ingress -.->|3- Consume| Worker
+    Worker -.->|4- Search Op| QOps
+    QOps -.->|5- Consume| QAdapter
+    QAdapter -->|6- GRPC+TLS| Qdrant
+    QAdapter -.->|7- Publish| QRes
+    QRes -.->|8- Consume| Worker
+
+    %% Worker transitions
+    Worker -.->|9- Publish| Plan
+    Plan -.->|10- Consume| Worker
+    Worker -.->|11- Publish| Search
+    Search -.->|12- Consume| Worker
+    Worker -.->|13- Publish| Exec
+    Exec -.->|14- Consume| Worker
+
+    Worker -->|15- Inference| Ollama
+    Worker -->|16- Inference| OllamaCode
+    Worker -.->|17- Stream Chunks| Sessions
+    Worker -.->|18- Completion Signal| Completion
+
+    Sessions -.->|19- Read Stream| Gateway
+    Completion -.->|20- Trigger| Aggregator
+    Aggregator -.->|21- Read Session Data| Sessions
+    Aggregator -.->|22- Publish| Results
+    Results -.->|23- Consume| DBAdapter
+    Gateway -->|24- Final Response| Explorer
+
+    %% Persistent Flow: DB Adapter
+    Prompts -.->|Consume| DBAdapter
+    Results -.->|Consume| DBAdapter
+    Ops -.->|Consume| DBAdapter
+    DBAdapter -->|Persist: TLS| TDB
+
+    %% Observability Flow: OTLP & Logs over HTTPS
+    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|OTLP/HTTPS| Alloy
+    Alloy -->|Metrics: HTTPS| Mimir
+    Alloy -->|Logs: HTTPS| Loki
+    Alloy -->|Traces: HTTPS/4318| Tempo
+    Tempo -->|Generated Metrics| Mimir
+    Mimir & Loki & Tempo --> Grafana
+
+    %% Build Pipeline Flow
+    Orch -.->|Listen| BuildTopic
+    Orch -->|Trigger Job| Kaniko
+    Kaniko -->|Download Source| BuildS3
+    Kaniko -->|Push Image: TLS| Reg

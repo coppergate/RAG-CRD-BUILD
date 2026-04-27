@@ -23,7 +23,7 @@ knative:
 # Docker image
 image:
   # -- Docker image registry
-  repository: registry.hierocracy.home:5000/ollama/ollama
+  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
 
   # -- Docker pull policy
   pullPolicy: IfNotPresent
@@ -122,7 +122,7 @@ ollama:
     clean: false
 
   # -- Add insecure flag for pulling at container startup
-  insecure: true
+  insecure: false
 
   # -- Override ollama-data volume mount path, default: "/root/.ollama"
   mountPath: ""
@@ -191,7 +191,7 @@ ingress:
 
   # The list of hostnames to be covered with this ingress record.
   hosts:
-    - host: ollama.local
+    - host: ollama.hierocracy.home
       paths:
         - path: /
           pathType: Prefix
@@ -286,17 +286,19 @@ autoscaling:
   # -- targetMemoryUtilizationPercentage: 80
 
 # -- Additional volumes on the output Deployment definition.
-volumes: [ ]
-# -- - name: foo
-#   secret:
-#     secretName: mysecret
-#     optional: false
+volumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+# NOTE: ollama-tls volume removed — Ollama does not honor OLLAMA_TLS_CERT/KEY env vars
+# TLS will be revisited when migrating to vLLM
 
 # -- Additional volumeMounts on the output Deployment definition.
-volumeMounts: [ ]
-# -- - name: foo
-#   mountPath: "/etc/foo"
-#   readOnly: true
+volumeMounts:
+  - name: registry-ca
+    mountPath: /etc/ssl/certs/ca-certificates.crt
+    subPath: ca.crt
+# NOTE: ollama-tls mounts removed — Ollama does not honor OLLAMA_TLS_CERT/KEY env vars
 
 # -- Additional arguments on the output Deployment definition.
 extraArgs: [ ]
@@ -304,8 +306,14 @@ extraArgs: [ ]
 # -- Additional environments variables on the output Deployment definition.
 # For extra OLLAMA env, please refer to https://github.com/ollama/ollama/blob/main/envconfig/config.go
 extraEnv:
+  # Ollama runs HTTP internally — TLS cert/key env vars are NOT honored by current Ollama.
+  # Will be revisited when migrating to vLLM.
+  - name: OLLAMA_HOST
+    value: "0.0.0.0:11434"
   - name: OLLAMA_REGISTRY_INSECURE
-    value: "1"
+    value: "0"
+  - name: SSL_CERT_FILE
+    value: "/etc/ssl/certs/ca-certificates.crt"
 #  - name: OLLAMA_DEBUG
 #    value: "1"
 

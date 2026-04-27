@@ -11,8 +11,8 @@ PLAN_FILE="${PLAN_FILE:-$SCRIPT_DIR/install-image-plan.sh}"
 BACKUP_SCRIPT="${BACKUP_SCRIPT:-$SCRIPT_DIR/cache-registry-images.sh}"
 
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-CACHE_ROOT="${CACHE_ROOT:-/mnt/hegemon-share/share/code/complete-build/registry-cache}"
-SOURCE_CACHE_ROOT="${SOURCE_CACHE_ROOT:-/mnt/hegemon-share/share/code/complete-build/image-source-cache}"
+CACHE_ROOT="${CACHE_ROOT:-/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache}"
+SOURCE_CACHE_ROOT="${SOURCE_CACHE_ROOT:-/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/image-source-cache}"
 BUNDLE_DIR="${BUNDLE_DIR:-}"
 
 SKOPEO_DEST_TLS_VERIFY="${SKOPEO_DEST_TLS_VERIFY:-false}"

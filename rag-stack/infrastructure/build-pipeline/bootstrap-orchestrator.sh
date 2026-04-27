@@ -8,27 +8,39 @@ REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="latest"
+VERSION="${VERSION:-2.2.8}"
 REGISTRY="registry.hierocracy.home:5000"
+INTERNAL_REGISTRY="registry.container-registry.svc.cluster.local:5000"
 ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
+
+# Check if image already exists in registry to avoid redundant bootstrap builds
+echo "--- Checking if Build Orchestrator image $ORCHESTRATOR_TAG already exists ---"
+if command -v skopeo >/dev/null 2>&1; then
+    if skopeo inspect --tls-verify=false "docker://$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG" >/dev/null 2>&1; then
+        echo "Image build-orchestrator:$ORCHESTRATOR_TAG already exists in registry. Skipping bootstrap build."
+        exit 0
+    fi
+else
+    echo "Warning: skopeo not found, cannot check if image exists. Proceeding with build."
+fi
 
 source "$REPO_DIR/../scripts/journal-helper.sh"
 
 echo "--- 1. Packaging Build Orchestrator sources ---"
 TARBALL="orchestrator-bootstrap.tar.gz"
-# We only need the orchestrator folder for the bootstrap
-cd "$REPO_DIR/services/build-orchestrator"
-tar -czf "$SAFE_TMP_DIR/$TARBALL" .
+# Package orchestrator and common for bootstrap
+cd "$REPO_DIR/services"
+tar -czf "$SAFE_TMP_DIR/$TARBALL" build-orchestrator common
 cd - > /dev/null
 
 echo "--- 2. Uploading sources to S3 ---"
 # Create a temporary uploader pod
-$KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=registry.hierocracy.home:5000/amazon/aws-cli:2.34.4 --overrides='
+$KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=$INTERNAL_REGISTRY/amazon/aws-cli:2.34.4 --overrides='
 {
   "spec": {
     "containers": [{
       "name": "uploader",
-      "image": "registry.hierocracy.home:5000/amazon/aws-cli:2.34.4",
+      "image": "'"$INTERNAL_REGISTRY"'/amazon/aws-cli:2.34.4",
       "command": ["sleep", "300"],
       "securityContext": {
         "allowPrivilegeEscalation": false,
@@ -57,6 +69,46 @@ PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n $NAMESPACE s3
 $KUBECTL delete pod s3-bootstrap-uploader -n $NAMESPACE --now
 
 echo "--- 3. Launching Bootstrap Kaniko Job ---"
+# Apply the CA ConfigMap first
+# Ensure SAFE_TMP_DIR exists
+mkdir -p "$SAFE_TMP_DIR"
+
+# Try to extract the CA from the in-cluster secret first, then fallback to Talos patch
+echo "--- Ensuring combined Registry & Pulsar CA in $NAMESPACE ---"
+mkdir -p "$SAFE_TMP_DIR"
+COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+rm -f "$COMBINED_CA"
+touch "$COMBINED_CA"
+
+# 1. Extract Registry CA
+if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+    echo "Extracting Registry CA from container-registry/in-cluster-registry-tls..."
+    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+else
+    echo "Fallback: Extracting Registry CA from Talos registry patch..."
+    CA_B64=$(grep "ca: " "/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+    if [ -n "$CA_B64" ]; then
+        echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
+    fi
+fi
+
+# 2. Extract Pulsar CA
+if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+    echo "Extracting Pulsar CA from apache-pulsar/pulsar-ca-tls..."
+    echo "" >> "$COMBINED_CA" # Ensure newline
+    $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+
+if [ -s "$COMBINED_CA" ]; then
+    $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+    # Also create 'registry-ca' for legacy compatibility
+    $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+else
+    echo "WARNING: Could not find any CA to inject."
+fi
+# Clean up the temporary combined CA file
+rm -f "$COMBINED_CA"
+
 # Delete existing job if it exists (for retries)
 $KUBECTL delete job kaniko-bootstrap-orchestrator -n $NAMESPACE --ignore-not-found=true
 # We define the job inline to avoid needing a separate file for the one-shot bootstrap
@@ -67,11 +119,12 @@ metadata:
   name: kaniko-bootstrap-orchestrator
   namespace: $NAMESPACE
 spec:
+  ttlSecondsAfterFinished: 600
   template:
     spec:
       initContainers:
       - name: fetch-context
-        image: registry.hierocracy.home:5000/busybox:1.37.0
+        image: $INTERNAL_REGISTRY/busybox:1.37.0
         command: ["sh", "-c"]
         args: ["wget -O /workspace/context.tar.gz \"$PRESIGNED_URL\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz"]
         securityContext:
@@ -87,25 +140,25 @@ spec:
           mountPath: /workspace
       containers:
       - name: kaniko
-        image: registry.hierocracy.home:5000/martizih/kaniko:v1.27.0
+        image: $INTERNAL_REGISTRY/martizih/kaniko:v1.27.0
         args:
-        - "--dockerfile=Dockerfile"
+        - "--dockerfile=build-orchestrator/Dockerfile"
         - "--context=dir:///workspace"
-        - "--destination=$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
-        - "--destination=$REGISTRY/build-orchestrator:latest"
-        - "--insecure"
-        - "--insecure-pull"
-        - "--insecure-registry=$REGISTRY"
-        - "--skip-tls-verify"
-        - "--skip-tls-verify-registry=$REGISTRY"
-        securityContext:
-          allowPrivilegeEscalation: true
+        - "--destination=$INTERNAL_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
+        - "--destination=$INTERNAL_REGISTRY/build-orchestrator:latest"
+        - "--registry-certificate=$INTERNAL_REGISTRY=/kaniko/ssl/certs/ca-certificates.crt"
         volumeMounts:
         - name: workspace
           mountPath: /workspace
+        - name: registry-ca
+          mountPath: /kaniko/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
       volumes:
       - name: workspace
         emptyDir: {}
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
       restartPolicy: Never
   backoffLimit: 0
 EOF

@@ -8,8 +8,19 @@ REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
-REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-latest}"
+REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$REPO_DIR/../../../CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$REPO_DIR/../../../CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
+
+ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
 
 source "$REPO_DIR/../../../scripts/journal-helper.sh"
 init_journal
@@ -17,14 +28,24 @@ init_journal
 should_run_step() {
     local step_name="$1"
     local verify_cmd="$2"
-    if ! is_step_done "$step_name"; then
-        return 0
+
+    if is_step_done "$step_name"; then
+        if [[ -z "$verify_cmd" ]] || eval "$verify_cmd" >/dev/null 2>&1; then
+            return 1 # Skip
+        else
+            echo "Journal has '$step_name' but live verification failed. Re-running step..."
+            return 0 # Run
+        fi
     fi
-    if ! eval "$verify_cmd" >/dev/null 2>&1; then
-        echo "Journal has '$step_name' but live verification failed. Re-running step..."
-        return 0
+
+    # Even if NOT in journal, skip if verification passes
+    if [[ -n "$verify_cmd" ]] && eval "$verify_cmd" >/dev/null 2>&1; then
+        echo "Step '$step_name' is not in journal but live verification succeeded. Skipping."
+        mark_step_done "$step_name"
+        return 1 # Skip
     fi
-    return 1
+
+    return 0
 }
 
 if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
@@ -38,13 +59,55 @@ if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
     mark_step_done "build-pipeline-ns"
 fi
 
-if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1 && skopeo inspect --tls-verify=false docker://$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"; then
+echo "--- Applying Combined Registry & Pulsar CA ---"
+
+# Ensure SAFE_TMP_DIR exists
+mkdir -p "$SAFE_TMP_DIR"
+
+COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+rm -f "$COMBINED_CA"
+touch "$COMBINED_CA"
+
+# 1. Extract Registry CA
+if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+    echo "Extracting CA from container-registry/in-cluster-registry-tls..."
+    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+else
+    echo "Fallback: Extracting Registry CA from Talos registry patch..."
+    CA_B64=$(grep "ca: " "$REPO_DIR/../../../infrastructure/registry/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+    if [ -n "$CA_B64" ]; then
+        echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
+    fi
+fi
+
+# 2. Extract Pulsar CA
+if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+    echo "Extracting CA from apache-pulsar/pulsar-ca-tls..."
+    echo "" >> "$COMBINED_CA" # Ensure newline
+    $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+
+if [ -s "$COMBINED_CA" ]; then
+    $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+    # Also create 'registry-ca' for legacy/outdated images
+    $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+else
+    echo "WARNING: Could not find any CA to inject."
+fi
+
+# Clean up
+rm -f "$COMBINED_CA"
+mark_step_done "build-pipeline-ca"
+
+# Use the external registry URL for skopeo if running on hierophant
+SKOPEO_REGISTRY="registry.hierocracy.home:5000"
+if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1 && skopeo inspect --tls-verify=false docker://$SKOPEO_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"; then
     echo "--- Bootstrapping Build Orchestrator Image (Cluster-Native) ---"
     ORCHESTRATOR_TAG="$ORCHESTRATOR_TAG" REGISTRY="$REGISTRY" bash "$REPO_DIR/bootstrap-orchestrator.sh"
     mark_step_done "build-orchestrator-image"
 fi
 
-if should_run_step "build-orchestrator" "$KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=30s"; then
+if should_run_step "build-orchestrator" "$KUBECTL get deployment build-orchestrator -n $NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | grep -q \":$ORCHESTRATOR_TAG$\" && $KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=30s"; then
     echo "--- Deploying Build Orchestrator ---"
     $KUBECTL apply -f "$REPO_DIR/orchestrator-deployment.yaml"
     $KUBECTL -n "$NAMESPACE" set image deploy/build-orchestrator orchestrator="$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"

@@ -1,0 +1,344 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: llm-gateway-cert
+  namespace: rag-system
+spec:
+  secretName: llm-gateway-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: llm-gateway.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - llm-gateway
+    - llm-gateway.rag-system
+    - llm-gateway.rag-system.svc
+    - llm-gateway.rag-system.svc.cluster.local
+    - gateway.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rag-ingestion-cert
+  namespace: rag-system
+spec:
+  secretName: rag-ingestion-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: rag-ingestion-service.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - rag-ingestion-service
+    - rag-ingestion-service.rag-system
+    - rag-ingestion-service.rag-system.svc
+    - rag-ingestion-service.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rag-web-ui-cert
+  namespace: rag-system
+spec:
+  secretName: rag-web-ui-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: rag-web-ui.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - rag-web-ui
+    - rag-web-ui.rag-system
+    - rag-web-ui.rag-system.svc
+    - rag-web-ui.rag-system.svc.cluster.local
+    - ui.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: db-adapter-cert
+  namespace: rag-system
+spec:
+  secretName: db-adapter-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: db-adapter.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - db-adapter
+    - db-adapter.rag-system
+    - db-adapter.rag-system.svc
+    - db-adapter.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: qdrant-adapter-cert
+  namespace: rag-system
+spec:
+  secretName: qdrant-adapter-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: qdrant-adapter.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - qdrant-adapter
+    - qdrant-adapter.rag-system
+    - qdrant-adapter.rag-system.svc
+    - qdrant-adapter.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rag-admin-api-cert
+  namespace: rag-system
+spec:
+  secretName: rag-admin-api-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: rag-admin-api.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - rag-admin-api
+    - rag-admin-api.rag-system
+    - rag-admin-api.rag-system.svc
+    - rag-admin-api.rag-system.svc.cluster.local
+    - rag-admin-api.rag.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: object-store-mgr-cert
+  namespace: rag-system
+spec:
+  secretName: object-store-mgr-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: object-store-mgr.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - object-store-mgr
+    - object-store-mgr.rag-system
+    - object-store-mgr.rag-system.svc
+    - object-store-mgr.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: memory-controller-cert
+  namespace: rag-system
+spec:
+  secretName: memory-controller-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: memory-controller.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - memory-controller
+    - memory-controller.rag-system
+    - memory-controller.rag-system.svc
+    - memory-controller.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rag-worker-cert
+  namespace: rag-system
+spec:
+  secretName: rag-worker-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: rag-worker.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - rag-worker
+    - rag-worker.rag-system
+    - rag-worker.rag-system.svc
+    - rag-worker.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rag-explorer-cert
+  namespace: rag-system
+spec:
+  secretName: rag-explorer-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: rag-explorer.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - rag-explorer
+    - rag-explorer.rag-system
+    - rag-explorer.rag-system.svc
+    - rag-explorer.rag-system.svc.cluster.local
+    - rag-explorer.rag.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: prompt-aggregator-cert
+  namespace: rag-system
+spec:
+  secretName: prompt-aggregator-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: prompt-aggregator.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - prompt-aggregator
+    - prompt-aggregator.rag-system
+    - prompt-aggregator.rag-system.svc
+    - prompt-aggregator.rag-system.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

@@ -7,17 +7,47 @@ set -Eeuo pipefail
 
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export REPO_DIR
+
+# Versioning
+VERSION_FILE="$REPO_DIR/../CURRENT_VERSION"
+# Global fallback version
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$VERSION_FILE" ]]; then
+        # Try to get a global version if it's still a simple file, or use a default
+        if jq . "$VERSION_FILE" >/dev/null 2>&1; then
+            VERSION="2.4.11"
+        else
+            VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+        fi
+    else
+        VERSION="2.4.11"
+    fi
+fi
+export VERSION
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION="${VERSION:-1.5.7}"
+REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
 
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/journal-helper.sh"
 init_journal
 
 apply_manifest() {
   local manifest="$1"
-  sed "s#__VERSION__#${VERSION}#g" "$manifest" | "$KUBECTL" apply -f -
+  local ver="$VERSION"
+  
+  # Try to extract service name from path to get per-service version
+  if [[ "$manifest" == *"/services/"* ]]; then
+      local svc=$(echo "$manifest" | sed -n 's#.*/services/\([^/]*\).*#\1#p' | cut -d/ -f1)
+      if [[ -f "$VERSION_FILE" ]] && jq . "$VERSION_FILE" >/dev/null 2>&1; then
+          local svc_ver=$(jq -r ".\"$svc\".version // empty" "$VERSION_FILE")
+          if [[ -n "$svc_ver" ]]; then
+              ver="$svc_ver"
+          fi
+      fi
+  fi
+
+  sed -e "s#__VERSION__#${ver}#g" -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" "$manifest" | "$KUBECTL" apply -f -
 }
 
 if ! is_step_done "namespace"; then
@@ -26,10 +56,64 @@ $KUBECTL apply -f "$REPO_DIR/namespace.yaml"
 mark_step_done "namespace"
 fi
 
+if ! is_step_done "rag-system-tls"; then
+echo "--- 1.1 Applying RAG System TLS Certificates ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/rag-system-tls.yaml"
+echo "Waiting for RAG System certificates to be issued..."
+$KUBECTL wait --for=condition=Ready certificate/llm-gateway-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/rag-ingestion-cert -n $NAMESPACE --timeout=60s
+# $KUBECTL wait --for=condition=Ready certificate/rag-web-ui-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/db-adapter-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/qdrant-adapter-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/rag-admin-api-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/object-store-mgr-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=60s
+# $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=60s
+mark_step_done "rag-system-tls"
+fi
+
+# Inject Registry & Pulsar CA ConfigMap into rag-system
+echo "--- Injecting Combined Registry & Pulsar CA into $NAMESPACE ---"
+mkdir -p "$SAFE_TMP_DIR"
+COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+rm -f "$COMBINED_CA"
+touch "$COMBINED_CA"
+
+# 1. Extract Registry CA
+if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+    echo "Extracting Registry CA from container-registry/in-cluster-registry-tls..."
+    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+else
+    echo "Fallback: Extracting Registry CA from Talos registry patch..."
+    CA_B64=$(grep "ca: " "/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+    if [ -n "$CA_B64" ]; then
+        echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
+    fi
+fi
+
+# 2. Extract Pulsar CA
+if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+    echo "Extracting Pulsar CA from apache-pulsar/pulsar-ca-tls..."
+    echo "" >> "$COMBINED_CA" # Ensure newline
+    $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+
+if [ -s "$COMBINED_CA" ]; then
+    $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+    # Also create 'registry-ca' for legacy compatibility
+    $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+else
+    echo "WARNING: Could not find any CA to inject into $NAMESPACE."
+fi
+rm -f "$COMBINED_CA"
+mark_step_done "registry-ca"
+
 if ! is_step_done "ollama"; then
-echo "--- 1.5. Deploying LLM: Ollama ---"
-bash "$REPO_DIR/infrastructure/ollama/ollama.sh"
-mark_step_done "ollama"
+  echo "--- 1.5. Deploying LLM: Ollama ---"
+  bash "$REPO_DIR/infrastructure/ollama/ollama.sh"
+  mark_step_done "ollama"
 fi
 
 if ! is_step_done "timescaledb"; then
@@ -102,31 +186,57 @@ else
 fi
 fi
 
-if ! is_step_done "pulsar"; then
-echo "--- 3. Deploying Infrastructure: Apache Pulsar ---"
-$REPO_DIR/infrastructure/pulsar/install.sh
-mark_step_done "pulsar"
+echo "--- 3. Verifying Pulsar Prerequisite ---"
+# Pulsar infrastructure is installed by setup-complete.sh (Step 1.5.8).
+# setup-all.sh only deploys RAG services and assumes infrastructure is ready.
+# Verify Pulsar is running before deploying services that depend on it.
+PULSAR_NS="apache-pulsar"
+PULSAR_READY=false
+echo "Checking for running Pulsar broker pods in namespace $PULSAR_NS..."
+BROKER_READY=$($KUBECTL get pods -n "$PULSAR_NS" -l "component=broker" -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null || echo "")
+if [[ -n "$BROKER_READY" ]]; then
+    echo "Pulsar brokers running: $BROKER_READY"
+    PULSAR_READY=true
 fi
 
-if ! is_step_done "pulsar-init"; then
-echo "--- 3.1 Initializing Pulsar Tenants and Namespaces ---"
-bash "$REPO_DIR/infrastructure/pulsar/init-rag-pulsar.sh"
-mark_step_done "pulsar-init"
+if [[ "$PULSAR_READY" != "true" ]]; then
+    echo ""
+    echo "ERROR: Apache Pulsar is not running in namespace '$PULSAR_NS'."
+    echo "Pulsar must be installed BEFORE deploying RAG services."
+    echo ""
+    echo "To install Pulsar, either:"
+    echo "  1. Run the full setup:  ./setup-complete.sh"
+    echo "  2. Install Pulsar only: bash rag-stack/infrastructure/pulsar/install.sh"
+    echo ""
+    echo "Current pods in $PULSAR_NS:"
+    $KUBECTL get pods -n "$PULSAR_NS" 2>&1 || echo "  (namespace does not exist)"
+    exit 1
 fi
+
+# Ensure tenants/namespaces are initialized (idempotent — safe to re-run)
+# if ! is_step_done "pulsar-init"; then
+# echo "--- 3.1 Initializing Pulsar Tenants and Namespaces ---"
+# bash "$REPO_DIR/infrastructure/pulsar/init-rag-pulsar.sh"
+# mark_step_done "pulsar-init"
+# fi
 
 if ! is_step_done "qdrant"; then
 echo "--- 4. Deploying Vector Database: Qdrant ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-tls.yaml"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-config.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-pvc.yaml"
-$KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-deploy.yaml"
+echo "Waiting for Qdrant certificate..."
+$KUBECTL wait --for=condition=Ready certificate/qdrant-cert -n $NAMESPACE --timeout=60s
+apply_manifest "$REPO_DIR/infrastructure/qdrant/qdrant-deploy.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-service.yaml"
 mark_step_done "qdrant"
 fi
 
-# APM ConfigMap for tests and services to export OTEL traces
-if ! is_step_done "apm-config"; then
-echo "--- 4.1 Creating/Updating APM ConfigMap for OTLP endpoint ---"
-APM_OTLP_ENDPOINT="${APM_OTLP_ENDPOINT:-http://alloy.observability.svc.cluster.local:4318}"
-cat <<EOF | $KUBECTL -n $NAMESPACE apply -f -
+  # APM ConfigMap for tests and services to export OTEL traces
+  if ! is_step_done "apm-config"; then
+  echo "--- 4.1 Creating/Updating APM ConfigMap for OTLP endpoint ---"
+  APM_OTLP_ENDPOINT="${APM_OTLP_ENDPOINT:-http://otel-collector.monitoring.svc.cluster.local:4318}"
+  cat <<EOF | $KUBECTL -n $NAMESPACE apply -f -
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -148,12 +258,32 @@ done
 mark_step_done "s3-obc"
 fi
 
+if ! is_step_done "timescaledb-secret"; then
+echo "--- 5.5 Creating TimescaleDB connection secret (dynamic password) ---"
+# Fetch the real 'app' user password from the CloudNativePG-managed secret
+REAL_PW=$($KUBECTL get secret timescaledb-app -n timescaledb \
+  -o jsonpath='{.data.password}' | base64 -d)
+if [ -z "$REAL_PW" ]; then
+  echo "ERROR: Could not fetch timescaledb-app password from timescaledb namespace."
+  exit 1
+fi
+DB_URL="postgres://app:${REAL_PW}@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=require"
+$KUBECTL create secret generic timescaledb-secret -n $NAMESPACE \
+  --from-literal=url="${DB_URL}" \
+  --dry-run=client -o yaml | $KUBECTL apply -f -
+mark_step_done "timescaledb-secret"
+fi
+
 if ! is_step_done "llm-gateway"; then
 echo "--- 6. Deploying LLM Gateway (Go) ---"
-$KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-secret.yaml"
 $KUBECTL apply -f "$REPO_DIR/services/llm-gateway/k8s/configmap.yaml"
 apply_manifest "$REPO_DIR/services/llm-gateway/k8s/deployment.yaml"
 mark_step_done "llm-gateway"
+fi
+if ! is_step_done "build-orchestrator"; then
+echo "--- 6.5 Deploying Build Orchestrator (Go) ---"
+apply_manifest "$REPO_DIR/infrastructure/build-pipeline/orchestrator-deployment.yaml"
+mark_step_done "build-orchestrator"
 fi
 
 if ! is_step_done "rag-worker"; then
@@ -162,29 +292,53 @@ apply_manifest "$REPO_DIR/services/rag-worker/k8s/deployment.yaml"
 mark_step_done "rag-worker"
 fi
 
+if ! is_step_done "prompt-aggregator"; then
+echo "--- 7.5 Deploying Prompt Aggregator (Go) ---"
+apply_manifest "$REPO_DIR/services/prompt-aggregator/k8s/deployment.yaml"
+mark_step_done "prompt-aggregator"
+fi
+
 if ! is_step_done "object-store-mgr"; then
-echo "--- 8. Running Object Store Manager Job (one-shot) ---"
-# Remove old Deployment if it exists, then run the Job
-$KUBECTL -n $NAMESPACE delete deploy/object-store-mgr --ignore-not-found
-apply_manifest "$REPO_DIR/services/object-store-mgr/mgr-job.yaml"
+echo "--- 8. Deploying Object Store Manager (Go) ---"
+apply_manifest "$REPO_DIR/services/object-store-mgr/mgr-deployment.yaml"
+$KUBECTL apply -f "$REPO_DIR/services/object-store-mgr/mgr-service.yaml"
 mark_step_done "object-store-mgr"
 fi
 
-if ! is_step_done "rag-web-ui"; then
-echo "--- 9. Deploying RAG Web UI (Go) ---"
-apply_manifest "$REPO_DIR/services/rag-web-ui/ui-deployment.yaml"
-mark_step_done "rag-web-ui"
+if ! is_step_done "memory-controller"; then
+echo "--- 8.5 Deploying Memory Controller (Go) ---"
+apply_manifest "$REPO_DIR/services/memory-controller/k8s/deployment.yaml"
+mark_step_done "memory-controller"
 fi
+
+# if ! is_step_done "rag-web-ui"; then
+# echo "--- 9. Deploying RAG Web UI (Go) ---"
+# apply_manifest "$REPO_DIR/services/rag-web-ui/ui-deployment.yaml"
+# mark_step_done "rag-web-ui"
+# fi
+# if ! is_step_done "rag-explorer"; then
+# echo "--- 9.5 Deploying RAG Explorer (Flutter) ---"
+# apply_manifest "$REPO_DIR/services/rag-explorer/k8s/deployment.yaml"
+# mark_step_done "rag-explorer"
+# fi
 
 if ! is_step_done "db-adapter"; then
 echo "--- 10. Deploying DB Adapter (Go) ---"
 apply_manifest "$REPO_DIR/services/db-adapter/k8s/deployment.yaml"
+$KUBECTL apply -f "$REPO_DIR/services/db-adapter/k8s/service.yaml"
 mark_step_done "db-adapter"
+fi
+
+if ! is_step_done "rag-admin-api"; then
+echo "--- 10.5 Deploying RAG Admin API (Go BFF) ---"
+apply_manifest "$REPO_DIR/services/rag-admin-api/k8s/deployment.yaml"
+mark_step_done "rag-admin-api"
 fi
 
 if ! is_step_done "qdrant-adapter"; then
 echo "--- 11. Deploying Qdrant Adapter (Go) ---"
 apply_manifest "$REPO_DIR/services/qdrant-adapter/k8s/deployment.yaml"
+$KUBECTL apply -f "$REPO_DIR/services/qdrant-adapter/k8s/service.yaml"
 mark_step_done "qdrant-adapter"
 fi
 
@@ -198,6 +352,18 @@ if ! is_step_done "ingestion-job"; then
 echo "--- 12. Preparing Ingestion Pipeline ---"
 $KUBECTL apply -f "$REPO_DIR/ingestion/ingest-job-s3.yaml"
 mark_step_done "ingestion-job"
+fi
+
+if ! is_step_done "k8s-resilience"; then
+echo "--- 13. Applying Kubernetes Resilience Primitives ---"
+RESILIENCE_DIR="$REPO_DIR/services/k8s-resilience"
+echo "  Applying PodDisruptionBudgets..."
+$KUBECTL apply -f "$RESILIENCE_DIR/pod-disruption-budgets.yaml"
+echo "  Applying HorizontalPodAutoscalers..."
+$KUBECTL apply -f "$RESILIENCE_DIR/horizontal-pod-autoscalers.yaml"
+echo "  Applying NetworkPolicies..."
+$KUBECTL apply -f "$RESILIENCE_DIR/network-policies.yaml"
+mark_step_done "k8s-resilience"
 fi
 
 clear_journal

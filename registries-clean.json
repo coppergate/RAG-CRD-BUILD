@@ -12,8 +12,8 @@
         }
       },
       "config": {
-        "registry.container-registry.svc.cluster.local:5000": { "tls": { "insecureSkipVerify": true } },
-        "172.20.1.26:5000": { "tls": { "insecureSkipVerify": true } }
+        "registry.container-registry.svc.cluster.local:5000": { "insecure": true },
+        "172.20.1.26:5000": { "insecure": true }
       }
     }
   }

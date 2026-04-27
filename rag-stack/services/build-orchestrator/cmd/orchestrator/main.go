@@ -16,6 +16,10 @@ import (
 	"syscall"
 	"time"
 
+	"app-builds/common/health"
+	pulsarCommon "app-builds/common/pulsar"
+	"app-builds/common/telemetry"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"github.com/apache/pulsar-client-go/pulsar"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -206,6 +210,13 @@ func (p *failedTaskPublisher) Publish(task BuildTask, msg pulsar.Message, reason
 }
 
 func main() {
+	shutdown, err := telemetry.InitTracer("build-orchestrator")
+	if err != nil {
+		log.Printf("Warning: failed to initialize tracer: %v", err)
+	} else {
+		defer shutdown(context.Background())
+	}
+
 	pulsarURL := os.Getenv("PULSAR_URL")
 	topic := os.Getenv("BUILD_TOPIC")
 	if pulsarURL == "" || topic == "" {
@@ -215,6 +226,7 @@ func main() {
 	statusTopic := getenvDefault("BUILD_STATUS_TOPIC", "persistent://public/default/build-status")
 	failedTaskTopic := strings.TrimSpace(os.Getenv("FAILED_TASK_TOPIC"))
 	httpAddr := getenvDefault("HTTP_ADDR", ":8080")
+	healthAddr := getenvDefault("HEALTH_ADDR", ":8081")
 	maxConcurrent := getenvIntDefault("MAX_CONCURRENT_BUILDS", 3)
 	maxTaskRetries := getenvIntDefault("MAX_TASK_RETRIES", 2)
 	if maxConcurrent < 1 {
@@ -228,18 +240,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error building in-cluster config: %v", err)
 	}
-	clientset, err := kubernetes.NewForConfig(config)
+	k8sClientset, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		log.Fatalf("Error creating kubernetes client: %v", err)
 	}
 
-	client, err := pulsar.NewClient(pulsar.ClientOptions{URL: pulsarURL})
+	pulsarClient, err = pulsarCommon.NewClient(pulsarCommon.Config{URL: pulsarURL})
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
-	defer client.Close()
+	defer pulsarClient.Close()
 
-	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
+	consumer, err := pulsarClient.Subscribe(pulsar.ConsumerOptions{
 		Topic:            topic,
 		SubscriptionName: "build-orchestrator-sub",
 		Type:             pulsar.Shared,
@@ -251,7 +263,7 @@ func main() {
 
 	var statusProducer pulsar.Producer
 	if statusTopic != "" {
-		statusProducer, err = client.CreateProducer(pulsar.ProducerOptions{Topic: statusTopic})
+		statusProducer, err = pulsarClient.NewProducer(statusTopic)
 		if err != nil {
 			log.Fatalf("Could not create status topic producer: %v", err)
 		}
@@ -259,7 +271,7 @@ func main() {
 	}
 	var failedProducer pulsar.Producer
 	if failedTaskTopic != "" {
-		failedProducer, err = client.CreateProducer(pulsar.ProducerOptions{Topic: failedTaskTopic})
+		failedProducer, err = pulsarClient.NewProducer(failedTaskTopic)
 		if err != nil {
 			log.Fatalf("Could not create failed-task topic producer: %v", err)
 		}
@@ -274,6 +286,10 @@ func main() {
 	defer cancel()
 
 	var activeBuilds int32
+	var muInProgress sync.Mutex
+	inProgress := make(map[string]bool)
+
+	// Launch HTTP server
 	taskQueue := make(chan buildTaskEnvelope, maxConcurrent*8)
 
 	for i := 0; i < maxConcurrent; i++ {
@@ -290,6 +306,9 @@ func main() {
 
 					jobName := env.jobName
 					atomic.AddInt32(&activeBuilds, 1)
+
+					key := env.task.ServiceName + ":" + env.task.Version
+
 					publisher.Publish(BuildStatusEvent{
 						ServiceName: env.task.ServiceName,
 						Version:     env.task.Version,
@@ -298,7 +317,7 @@ func main() {
 						Message:     fmt.Sprintf("Picked up by worker-%d", workerID),
 					})
 
-					err := processTask(ctx, clientset, env.task, jobName, publisher)
+					err := processTask(ctx, k8sClientset, env.task, jobName, publisher)
 					if err != nil {
 						redelivery := int(env.msg.RedeliveryCount())
 						if redelivery >= maxTaskRetries {
@@ -331,13 +350,18 @@ func main() {
 						})
 						consumer.Ack(env.msg)
 					}
+					muInProgress.Lock()
+					delete(inProgress, key)
+					muInProgress.Unlock()
+
 					atomic.AddInt32(&activeBuilds, -1)
 				}
 			}
 		}()
 	}
 
-	go runHTTPServer(ctx, httpAddr, hub, &activeBuilds, maxConcurrent)
+	go runStatusServer(ctx, httpAddr, hub, &activeBuilds, maxConcurrent)
+	go runHealthServer(ctx, healthAddr)
 
 	go func() {
 		for {
@@ -363,6 +387,18 @@ func main() {
 
 			requestID := requestIDFromMessage(msg)
 			jobName := buildJobName(task, requestID)
+
+			key := task.ServiceName + ":" + task.Version
+			muInProgress.Lock()
+			if inProgress[key] {
+				muInProgress.Unlock()
+				log.Printf("Build already in progress or queued for %s, skipping duplicate request", key)
+				consumer.Ack(msg)
+				continue
+			}
+			inProgress[key] = true
+			muInProgress.Unlock()
+
 			publisher.Publish(BuildStatusEvent{
 				ServiceName: task.ServiceName,
 				Version:     task.Version,
@@ -458,13 +494,17 @@ func waitForJobCompletion(ctx context.Context, clientset *kubernetes.Clientset, 
 	}
 }
 
-func runHTTPServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int) {
-	mux := http.NewServeMux()
+var (
+	pulsarClient *pulsarCommon.Client
+	k8sClientset *kubernetes.Clientset
+)
 
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("ok"))
-	})
+func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int) {
+	certFile := os.Getenv("TLS_CERT")
+	keyFile := os.Getenv("TLS_KEY")
+	log.Printf("Starting status dashboard server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
+
+	mux := http.NewServeMux()
 
 	mux.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -517,7 +557,8 @@ func runHTTPServer(ctx context.Context, addr string, hub *statusHub, activeBuild
 		_, _ = w.Write([]byte(dashboardHTML))
 	})
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	otelHandler := otelhttp.NewHandler(mux, "build-orchestrator-status")
+	srv := &http.Server{Addr: addr, Handler: otelHandler}
 
 	go func() {
 		<-ctx.Done()
@@ -526,8 +567,61 @@ func runHTTPServer(ctx context.Context, addr string, hub *statusHub, activeBuild
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Printf("HTTP server error: %v", err)
+	if certFile != "" && keyFile != "" {
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+			log.Printf("Status HTTPS server error: %v", err)
+		}
+	} else {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Status HTTP server error: %v", err)
+		}
+	}
+}
+
+func runHealthServer(ctx context.Context, addr string) {
+	certFile := os.Getenv("TLS_CERT")
+	keyFile := os.Getenv("TLS_KEY")
+	log.Printf("Starting health server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
+
+	mux := http.NewServeMux()
+	healthSrv := health.NewServer()
+	healthSrv.RegisterCheck("pulsar", func() error {
+		if pulsarClient == nil {
+			return fmt.Errorf("pulsar client is nil")
+		}
+		return nil
+	})
+	healthSrv.RegisterCheck("kubernetes", func() error {
+		if k8sClientset == nil {
+			return fmt.Errorf("kubernetes clientset is nil")
+		}
+		ns := os.Getenv("POD_NAMESPACE")
+		if ns == "" {
+			ns = "build-pipeline"
+		}
+		_, err := k8sClientset.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{Limit: 1})
+		return err
+	})
+	healthSrv.RegisterRoutes(mux)
+
+	otelHandler := otelhttp.NewHandler(mux, "build-orchestrator-health")
+	srv := &http.Server{Addr: addr, Handler: otelHandler}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
+
+	if certFile != "" && keyFile != "" {
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+			log.Printf("Health HTTPS server error: %v", err)
+		}
+	} else {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Health HTTP server error: %v", err)
+		}
 	}
 }
 
@@ -535,6 +629,18 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 	namespace := "build-pipeline"
 
 	contextURL := task.SourceURL
+	internalRegistryAddr := getenvDefault("INTERNAL_REGISTRY_ADDR", "")
+	externalRegistryName := getenvDefault("EXTERNAL_REGISTRY_NAME", "registry.hierocracy.home:5000")
+
+	pushRegistry := task.Registry
+	if pushRegistry == "" {
+		pushRegistry = externalRegistryName
+	}
+	if internalRegistryAddr != "" && pushRegistry == externalRegistryName {
+		pushRegistry = internalRegistryAddr
+	}
+
+	toolingRegistry := pushRegistry
 	if contextURL == "" {
 		contextURL = "s3://$(BUCKET_NAME)/" + task.SourceTarball
 	}
@@ -543,14 +649,20 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: namespace,
+			Labels: map[string]string{
+				"app":     "kaniko-build",
+				"service": sanitizeNamePart(task.ServiceName),
+				"version": sanitizeNamePart(task.Version),
+			},
 		},
 		Spec: batchv1.JobSpec{
+			TTLSecondsAfterFinished: ptr(int32(600)),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					InitContainers: []corev1.Container{
 						{
 							Name:    "fetch-context",
-							Image:   "registry.hierocracy.home:5000/busybox:1.37.0",
+							Image:   toolingRegistry + "/busybox:1.37.0",
 							Command: []string{"sh", "-c"},
 							Args: []string{
 								fmt.Sprintf("wget -O /workspace/context.tar.gz \"%s\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz", contextURL),
@@ -568,29 +680,26 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
+								{Name: "registry-ca", MountPath: "/etc/ssl/certs/ca-certificates.crt", SubPath: "ca.crt"},
 							},
 						},
 					},
 					Containers: []corev1.Container{
 						{
 							Name:  "kaniko",
-							Image: "registry.hierocracy.home:5000/gcr.io/kaniko-project/executor:v1.24.0",
+							Image: toolingRegistry + "/martizih/kaniko:v1.27.0",
 							Args: []string{
 								"--dockerfile=" + task.DockerfilePath,
 								"--context=dir:///workspace",
-								"--destination=" + task.Registry + "/" + task.ServiceName + ":" + task.Version,
-								"--destination=" + task.Registry + "/" + task.ServiceName + ":latest",
+								"--destination=" + pushRegistry + "/" + task.ServiceName + ":" + task.Version,
+								"--destination=" + pushRegistry + "/" + task.ServiceName + ":latest",
 								"--cache=true",
-								"--cache-repo=" + task.Registry + "/kaniko-cache",
-								"--insecure",
-								"--insecure-pull",
-								"--insecure-registry=" + task.Registry,
-								"--skip-tls-verify",
-								"--skip-tls-verify-registry=" + task.Registry,
+								"--cache-repo=" + pushRegistry + "/kaniko-cache",
+								"--registry-certificate=" + pushRegistry + "=/kaniko/ssl/certs/ca-certificates.crt",
 							},
-							SecurityContext: &corev1.SecurityContext{AllowPrivilegeEscalation: ptr(true)},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
+								{Name: "registry-ca", MountPath: "/kaniko/ssl/certs/ca-certificates.crt", SubPath: "ca.crt"},
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -604,8 +713,14 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 							},
 						},
 					},
-					Volumes:       []corev1.Volume{{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
+					Volumes: []corev1.Volume{
+						{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						{Name: "registry-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "registry-ca-cm"}}}},
+					},
 					RestartPolicy: corev1.RestartPolicyNever,
+					NodeSelector: map[string]string{
+						"role": "storage-node",
+					},
 				},
 			},
 			BackoffLimit: ptr(int32(1)),

@@ -1,0 +1,92 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: loki-gateway-cert
+  namespace: monitoring
+spec:
+  secretName: loki-gateway-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: loki-gateway.monitoring.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - loki-gateway
+    - loki-gateway.monitoring
+    - loki-gateway.monitoring.svc
+    - loki-gateway.monitoring.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tempo-cert
+  namespace: monitoring
+spec:
+  secretName: tempo-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: tempo.monitoring.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - tempo
+    - tempo.monitoring
+    - tempo.monitoring.svc
+    - tempo.monitoring.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mimir-gateway-cert
+  namespace: monitoring
+spec:
+  secretName: mimir-gateway-tls
+  duration: 8760h
+  renewBefore: 720h
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: mimir-gateway.monitoring.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - mimir-gateway
+    - mimir-gateway.monitoring
+    - mimir-gateway.monitoring.svc
+    - mimir-gateway.monitoring.svc.cluster.local
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

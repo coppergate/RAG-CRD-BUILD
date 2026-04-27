@@ -481,11 +481,9 @@ machine:
           - "${REGISTRY_HTTP_ENDPOINT}"
     config:
       "${REGISTRY_SVC_FQDN}":
-        tls:
-          insecureSkipVerify: true
+        insecure: true
       "${REGISTRY_LB_IP}":
-        tls:
-          insecureSkipVerify: true
+        insecure: true
 PATCH
 
   echo "[STEP] Applying registries patch to all nodes"

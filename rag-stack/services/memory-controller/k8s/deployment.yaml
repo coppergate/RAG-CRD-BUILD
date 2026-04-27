@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-controller
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memory-controller
+  template:
+    metadata:
+      labels:
+        app: memory-controller
+    spec:
+      nodeSelector:
+        role: storage-node
+      containers:
+      - name: controller
+        image: registry.container-registry.svc.cluster.local:5000/memory-controller:__VERSION__
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 256Mi
+        env:
+        - name: DB_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secret
+              key: url
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OTEL_USE_TLS
+          value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "otel-collector.monitoring.svc.cluster.local:4317"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: memory-controller-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-controller
+  namespace: rag-system
+spec:
+  selector:
+    app: memory-controller
+  ports:
+  - port: 443
+    targetPort: 8080
+    name: https

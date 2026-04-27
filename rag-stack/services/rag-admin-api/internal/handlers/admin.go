@@ -1,0 +1,115 @@
+package handlers
+
+import (
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"strings"
+	"app-builds/rag-admin-api/internal/config"
+	"app-builds/common/tlsutil"
+	"time"
+)
+
+type AdminHandler struct {
+	Cfg *config.Config
+}
+
+func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.HandlerFunc {
+	target, _ := url.Parse(targetURL)
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	
+	// Configure TLS transport for internal proxy calls
+	if strings.HasPrefix(targetURL, "https") {
+		client, err := tlsutil.NewHTTPClient(true, 30*time.Second)
+		if err == nil {
+			proxy.Transport = client.Transport
+		} else {
+			log.Printf("[PROXY] Warning: failed to initialize TLS transport for %s: %v", targetURL, err)
+		}
+	}
+
+	// Customize the director to strip prefix if needed
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		oldPath := req.URL.Path
+		originalDirector(req)
+		if prefixToStrip != "" {
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefixToStrip)
+			if !strings.HasPrefix(req.URL.Path, "/") {
+				req.URL.Path = "/" + req.URL.Path
+			}
+			log.Printf("[PROXY] Stripped prefix %s: %s -> %s", prefixToStrip, oldPath, req.URL.Path)
+		}
+	}
+
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("[PROXY] Error proxying %s %s to %s: %v", r.Method, r.URL.Path, targetURL, err)
+		http.Error(w, "Proxy error: "+err.Error(), http.StatusBadGateway)
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[PROXY] %s %s -> %s", r.Method, r.URL.Path, targetURL)
+		proxy.ServeHTTP(w, r)
+	}
+}
+
+func (h *AdminHandler) HandleHealthAggregation(w http.ResponseWriter, r *http.Request) {
+	services := map[string]string{
+		"db-adapter":        h.Cfg.DBAdapterURL,
+		"object-store-mgr":  h.Cfg.S3ManagerURL,
+		"qdrant-adapter":    h.Cfg.QdrantAdapterURL,
+		"llm-gateway":       h.Cfg.LLMGatewayURL,
+		"memory-controller": h.Cfg.MemoryControllerURL,
+		"rag-ingestion":     h.Cfg.IngestionURL,
+	}
+
+	client, err := tlsutil.NewHTTPClient(true, 5*time.Second)
+	if err != nil {
+		// Fallback to default if TLS fails to load (might be in dev)
+		client = &http.Client{Timeout: 5 * time.Second}
+	}
+
+	results := make(map[string]interface{})
+	for name, baseURL := range services {
+		var resp *http.Response
+		var lastErr error
+
+		for _, endpoint := range []string{"/readyz", "/healthz", "/health"} {
+			healthURL := baseURL + endpoint
+			resp, lastErr = client.Get(healthURL)
+			if lastErr == nil {
+				if resp.StatusCode == http.StatusNotFound {
+					resp.Body.Close()
+					resp = nil
+					continue
+				}
+				break
+			}
+			resp = nil
+		}
+
+		if lastErr != nil {
+			results[name] = map[string]string{"status": "DOWN", "error": lastErr.Error()}
+			continue
+		}
+		if resp == nil {
+			results[name] = map[string]string{"status": "DOWN", "error": "No health endpoint found"}
+			continue
+		}
+		defer resp.Body.Close()
+		
+		body, _ := io.ReadAll(resp.Body)
+		var healthInfo interface{}
+		if err := json.Unmarshal(body, &healthInfo); err == nil {
+			results[name] = healthInfo
+		} else {
+			results[name] = string(body)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}

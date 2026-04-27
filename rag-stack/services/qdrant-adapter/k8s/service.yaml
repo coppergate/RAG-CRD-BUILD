@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-adapter
+  namespace: rag-system
+spec:
+  selector:
+    app: qdrant-adapter
+  ports:
+  - port: 443
+    targetPort: 8080
+    name: https

@@ -2,35 +2,58 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
-	"app-builds/db-adapter/internal/config"
+	"app-builds/common/dlq"
+	"app-builds/common/contracts"
+	"app-builds/common/ent"
+	"app-builds/common/ent/tag"
+	"app-builds/common/health"
+	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/common/telemetry"
+	"app-builds/db-adapter/internal/config"
+	"app-builds/db-adapter/internal/service"
 	"github.com/apache/pulsar-client-go/pulsar"
-	_ "github.com/lib/pq"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
+	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protojson"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/propagation"
+	_ "github.com/lib/pq"
 )
 
 var (
-	meter          = telemetry.Meter("db-adapter")
-	queryCounter, _ = meter.Int64Counter("db_queries_total")
-	errorCounter, _ = meter.Int64Counter("db_errors_total")
-	queryLatency, _ = meter.Float64Histogram("db_query_duration_ms", metric.WithUnit("ms"))
+	meter        = telemetry.Meter("db-adapter")
+	queryCounter metric.Int64Counter
+	errorCounter metric.Int64Counter
+	queryLatency metric.Float64Histogram
 )
+
+func init() {
+	var err error
+	queryCounter, err = meter.Int64Counter("db_queries_total")
+	if err != nil {
+		log.Printf("Warning: failed to create query counter metric: %v", err)
+	}
+	errorCounter, err = meter.Int64Counter("db_errors_total")
+	if err != nil {
+		log.Printf("Warning: failed to create error counter metric: %v", err)
+	}
+	queryLatency, err = meter.Float64Histogram("db_query_duration_ms", metric.WithUnit("ms"))
+	if err != nil {
+		log.Printf("Warning: failed to create query latency metric: %v", err)
+	}
+}
 
 func main() {
 	cfg := config.Load()
-	startHealthServer(":8080")
+	healthSrv := health.NewServer()
 
 	shutdown, err := telemetry.InitTracer("db-adapter")
 	if err != nil {
@@ -42,202 +65,176 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db, err := sql.Open("postgres", cfg.DBConnString)
+	entClient, err := ent.Open("postgres", cfg.DBConnString)
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %v", err)
 	}
-	defer db.Close()
+	defer entClient.Close()
 
-	client, err := pulsar.NewClient(pulsar.ClientOptions{
-		URL: cfg.PulsarURL,
-	})
+	pulsarClient, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
-	defer client.Close()
+	defer pulsarClient.Close()
 
-	// Consumer for Prompts
-	promptConsumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.PromptTopic,
-		SubscriptionName: cfg.Subscription,
-		Type:             pulsar.Shared,
-	})
+	dlqHandler, err := dlq.NewHandler(pulsarClient, "db-adapter")
 	if err != nil {
-		log.Fatalf("Could not subscribe to prompts: %v", err)
+		log.Fatalf("Could not create DLQ handler: %v", err)
 	}
-	defer promptConsumer.Close()
+	defer dlqHandler.Close()
 
-	// Consumer for Responses
-	responseConsumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.ResponseTopic,
-		SubscriptionName: cfg.Subscription,
-		Type:             pulsar.Shared,
-	})
+	qdrantProducer, err := pulsarClient.NewProducer(cfg.QdrantOpsTopic)
 	if err != nil {
-		log.Fatalf("Could not subscribe to responses: %v", err)
-	}
-	defer responseConsumer.Close()
-
-	log.Printf("DB Adapter started, listening on topics: %s, %s, %s", cfg.PromptTopic, cfg.ResponseTopic, cfg.DBOpsTopic)
-
-	// Consumer for DB Ops (Delete)
-	opsConsumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.DBOpsTopic,
-		SubscriptionName: cfg.Subscription + "-ops",
-		Type:             pulsar.Shared,
-	})
-	if err != nil {
-		log.Printf("Warning: Could not subscribe to DB ops: %v", err)
+		log.Printf("Warning: Could not create qdrant ops producer: %v", err)
 	} else {
-		defer opsConsumer.Close()
-		go func() {
-			for {
-				msg, err := opsConsumer.Receive(ctx)
-				if err != nil {
-					if ctx.Err() != nil {
-						return
-					}
-					log.Printf("Error receiving DB op: %v", err)
-					continue
-				}
-
-				start := time.Now()
-				// Extract tracing context from Pulsar message properties
-				msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-				tracer := otel.Tracer("db-adapter")
-				msgCtx, span := tracer.Start(msgCtx, "HandleDBOp")
-
-				attrs := []attribute.KeyValue{attribute.String("op", "delete_session")}
-				defer func() {
-					duration := float64(time.Since(start).Milliseconds())
-					queryLatency.Record(msgCtx, duration, metric.WithAttributes(attrs...))
-				}()
-				queryCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
-
-				var payload struct {
-					Op string `json:"op"` // "delete_session"
-					ID string `json:"id"` // session_id
-				}
-				if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-					log.Printf("Error unmarshaling DB op payload: %v. Raw: %s", err, string(msg.Payload()))
-				} else {
-					if payload.Op == "delete_session" {
-						_, err := db.Exec("DELETE FROM sessions WHERE session_id = $1", payload.ID)
-						if err != nil {
-							log.Printf("Failed to delete session %s: %v", payload.ID, err)
-						} else {
-							log.Printf("Deleted session %s via Pulsar op", payload.ID)
-						}
-					}
-				}
-				span.End()
-				opsConsumer.Ack(msg)
-			}
-		}()
+		defer qdrantProducer.Close()
 	}
 
-	// Handle Prompts
-	go func() {
-		for {
-			msg, err := promptConsumer.Receive(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				log.Printf("Error receiving prompt: %v", err)
-				continue
-			}
+	// Initialize Services
+	sessSvc := service.NewSessionService(entClient)
+	metricsSvc := service.NewMetricsService(entClient)
+	storageSvc := service.NewStorageService(entClient)
+	maintSvc := service.NewMaintenanceService(entClient, qdrantProducer, cfg.IngestionURL)
+	processor := service.NewPulsarProcessor(entClient, queryCounter, errorCounter, queryLatency)
 
-			// Extract tracing context from Pulsar message properties
-			msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-			tracer := otel.Tracer("db-adapter")
-			_, span := tracer.Start(msgCtx, "HandlePrompt")
+	// Register readiness checks
+	healthSrv.RegisterCheck("database", func() error {
+		_, err := entClient.Session.Query().Limit(1).Count(context.Background())
+		return err
+	})
 
-			var payload struct {
-				ID        string `json:"id"`
-				SessionID string `json:"session_id"`
-				Content   string `json:"content"`
-			}
-			if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-				log.Printf("Error unmarshaling prompt payload: %v. Raw: %s", err, string(msg.Payload()))
-			} else {
-				_, err := db.Exec(`
-					INSERT INTO prompts (prompt_id, session_id, content) 
-					VALUES ($1, $2, $3)`,
-					payload.ID, payload.SessionID, payload.Content)
-				if err != nil {
-					log.Printf("Failed to insert prompt %s for session %s: %v", payload.ID, payload.SessionID, err)
-				} else {
-					log.Printf("Inserted prompt %s for session %s", payload.ID, payload.SessionID)
-				}
-			}
-			span.End()
-			promptConsumer.Ack(msg)
+	// Setup Pulsar Consumers
+	setupConsumers(ctx, pulsarClient, cfg, dlqHandler, processor)
+
+	// Setup HTTP Routes
+	mux := http.NewServeMux()
+	healthSrv.RegisterRoutes(mux)
+
+	// Logging Middleware
+	loggingMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		log.Printf("Incoming request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		mux.ServeHTTP(w, r)
+		log.Printf("Completed request: %s %s in %v", r.Method, r.URL.Path, time.Since(start))
+	})
+
+	mux.HandleFunc("/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		idStr := strings.TrimPrefix(r.URL.Path, "/sessions/")
+		if strings.HasSuffix(idStr, "/messages") {
+			sessSvc.GetMessages(w, r, strings.TrimSuffix(idStr, "/messages"))
+			return
 		}
-	}()
+		if strings.HasSuffix(idStr, "/health") {
+			metricsSvc.GetHealth(w, r, strings.TrimSuffix(idStr, "/health"))
+			return
+		}
+		if idStr == "" {
+			sessSvc.ListSessions(w, r)
+			return
+		}
+		http.Error(w, "Not found", http.StatusNotFound)
+	})
 
-	// Handle Responses
-	go func() {
-		for {
-			msg, err := responseConsumer.Receive(ctx)
+	mux.HandleFunc("/sessions", sessSvc.ListSessions)
+
+	mux.HandleFunc("/metrics/sessions/health", func(w http.ResponseWriter, r *http.Request) {
+		sessionIDStr := r.URL.Query().Get("session_id")
+		metricsSvc.GetHealth(w, r, sessionIDStr)
+	})
+
+	mux.HandleFunc("/audit/retrieval", func(w http.ResponseWriter, r *http.Request) {
+		sessionIDStr := r.URL.Query().Get("session_id")
+		metricsSvc.GetAudit(w, r, sessionIDStr)
+	})
+
+	mux.HandleFunc("/audit/sessions/", func(w http.ResponseWriter, r *http.Request) {
+		sessionIDStr := strings.TrimPrefix(r.URL.Path, "/audit/sessions/")
+		metricsSvc.GetAudit(w, r, sessionIDStr)
+	})
+
+	mux.HandleFunc("/metrics/models", metricsSvc.GetMetricsSummary)
+
+	mux.HandleFunc("/tags", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			tags, err := entClient.Tag.Query().Order(ent.Asc(tag.FieldName)).All(r.Context())
 			if err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				log.Printf("Error receiving response: %v", err)
-				continue
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
-
-			// Extract tracing context from Pulsar message properties
-			msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
-			tracer := otel.Tracer("db-adapter")
-			_, span := tracer.Start(msgCtx, "HandleResponse")
-
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(tags)
+		case http.MethodPost:
 			var payload struct {
-				ID             string `json:"id"` // This is the prompt_id (UUID)
-				SessionID      string `json:"session_id"`
-				Result         string `json:"result"`
-				SequenceNumber int    `json:"sequence_number"`
-				Model          string `json:"model"`
+				Name string `json:"name"`
 			}
-			if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-				log.Printf("Error unmarshaling response payload: %v. Raw: %s", err, string(msg.Payload()))
-			} else {
-				log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)
-				// Handle empty model name to avoid UUID syntax error if it's treated as one
-				var modelName interface{}
-				if payload.Model != "" {
-					modelName = payload.Model
-				} else {
-					modelName = nil
-				}
-
-				// Handle potentially empty SessionID
-				var sessionID interface{}
-				if payload.SessionID != "" {
-					sessionID = payload.SessionID
-				} else {
-					// Try to find session_id from prompts if missing
-					sessionID = nil // We'll see if the SQL can handle this or if we need a subselect
-				}
-
-				// Map UUID prompt_id to the BIGINT primary key of prompts via subselect
-				_, err := db.Exec(`
-					INSERT INTO responses (prompt_id, session_id, content, sequence_number, model_name)
-					VALUES (
-						(SELECT id FROM prompts WHERE prompt_id = $1 ORDER BY created_at DESC LIMIT 1), 
-						COALESCE($2, (SELECT session_id FROM prompts WHERE prompt_id = $1 ORDER BY created_at DESC LIMIT 1)), 
-						$3, $4, $5
-					)`,
-					payload.ID, sessionID, payload.Result, payload.SequenceNumber, modelName)
-				if err != nil {
-					log.Printf("Failed to insert response for prompt %s (session %v): %v", payload.ID, sessionID, err)
-				} else {
-					log.Printf("Inserted response for prompt %s (seq %d)", payload.ID, payload.SequenceNumber)
-				}
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
 			}
-			span.End()
-			responseConsumer.Ack(msg)
+			t, err := entClient.Tag.Create().SetName(payload.Name).Save(r.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(t)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/tags/", func(w http.ResponseWriter, r *http.Request) {
+		idStr := strings.TrimPrefix(r.URL.Path, "/tags/")
+		if r.Method == http.MethodDelete && idStr != "" {
+			tagID, err := uuid.Parse(idStr)
+			if err != nil {
+				http.Error(w, "Invalid tag ID", http.StatusBadRequest)
+				return
+			}
+			if qdrantProducer != nil {
+				op := &contracts.QdrantOp{
+					Id:         uuid.New().String(),
+					Action:     "delete",
+					Collection: "vectors",
+					Tags:       []string{idStr},
+				}
+				p, _ := protojson.Marshal(op)
+				qdrantProducer.Send(r.Context(), &pulsar.ProducerMessage{Payload: p})
+			}
+			err = entClient.Tag.DeleteOneID(tagID).Exec(r.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(w, "Not found or method not allowed", http.StatusNotFound)
+	})
+
+	mux.HandleFunc("/maintenance/tags/merge", maintSvc.MergeTags)
+	mux.HandleFunc("/stats", metricsSvc.GetStats)
+	mux.HandleFunc("/metrics/summary", metricsSvc.GetMetricsSummary)
+	mux.HandleFunc("/storage/files", storageSvc.GetFiles)
+
+	otelHandler := otelhttp.NewHandler(loggingMux, "db-adapter")
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: otelHandler,
+	}
+
+	go func() {
+		if cfg.TLSCert != "" && cfg.TLSKey != "" {
+			log.Printf("Starting DB Adapter REST API with TLS on :8080")
+			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("REST server failed: %v", err)
+			}
+		} else {
+			log.Printf("Starting DB Adapter REST API on :8080")
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("REST server failed: %v", err)
+			}
 		}
 	}()
 
@@ -245,18 +242,48 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Println("Shutting down DB Adapter...")
+	cancel()
+	time.Sleep(2 * time.Second)
+	log.Println("DB Adapter shutdown complete")
 }
 
-func startHealthServer(addr string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
+func setupConsumers(ctx context.Context, client *pulsarCommon.Client, cfg *config.Config, dlqHandler *dlq.Handler, processor *service.PulsarProcessor) {
+	// Prompts
+	pc, err := client.NewSharedConsumer(cfg.PromptTopic, cfg.Subscription)
+	if err == nil {
+		go consumeLoop(ctx, pc, dlqHandler, processor.HandlePrompt)
+	}
 
-	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Printf("Health server stopped: %v", err)
+	// Responses
+	rc, err := client.NewSharedConsumer(cfg.ResponseTopic, cfg.Subscription)
+	if err == nil {
+		go consumeLoop(ctx, rc, dlqHandler, processor.HandleResponse)
+	}
+
+	// Metrics
+	cc, err := client.NewSharedConsumer(cfg.CompletionTopic, cfg.Subscription+"-metrics")
+	if err == nil {
+		go consumeLoop(ctx, cc, dlqHandler, processor.HandleCompletion)
+	}
+
+	// Ops
+	oc, err := client.NewSharedConsumer(cfg.DBOpsTopic, cfg.Subscription+"-ops")
+	if err == nil {
+		go consumeLoop(ctx, oc, dlqHandler, processor.HandleDBOp)
+	}
+}
+
+func consumeLoop(ctx context.Context, consumer pulsar.Consumer, dlqHandler *dlq.Handler, handler func(context.Context, pulsar.Message) (dlq.ProcessResult, error)) {
+	defer consumer.Close()
+	for {
+		msg, err := consumer.Receive(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			log.Printf("Error receiving message: %v", err)
+			continue
 		}
-	}()
+		dlqHandler.HandleMessage(ctx, msg, consumer, handler)
+	}
 }

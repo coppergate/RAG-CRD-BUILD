@@ -21,7 +21,7 @@ spec:
       serviceAccountName: rook-ceph-default
       containers:
         - name: rook-ceph-tools
-          image: registry.hierocracy.home:5000/quay.io/ceph/ceph:v19
+          image: 10.0.0.1:5000/quay.io/ceph/ceph:v19
           command:
             - /bin/bash
             - -c

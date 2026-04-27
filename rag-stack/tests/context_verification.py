@@ -3,18 +3,19 @@ import os
 import time
 import requests
 import json
+from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 # Environment Configuration
-endpoint_env = os.getenv("S3_ENDPOINT", "http://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
+endpoint_env = os.getenv("S3_ENDPOINT", "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
 if endpoint_env and not endpoint_env.startswith("http"):
-    S3_ENDPOINT = "http://" + endpoint_env
+    S3_ENDPOINT = "https://" + endpoint_env
 else:
     S3_ENDPOINT = endpoint_env
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
-GATEWAY_URL = os.getenv("GATEWAY_URL", "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase-bucket")
 
 # A set of facts that are NOT in the model's base training but will be in the context
@@ -41,14 +42,15 @@ CONTEXT_QUERIES = [
 ]
 
 def setup_test_data():
-    print("[SETUP] Injecting fixed test context into S3...")
-    s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT)
+    print(f"[{datetime.utcnow().isoformat()}] [SETUP] Injecting fixed test context into S3...")
+    ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
+    s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT, verify=ca_bundle)
     for path, content in TEST_CODEBASE.items():
         s3.put_object(Bucket=BUCKET_NAME, Key=path, Body=content)
         print(f"  - Uploaded {path}")
 
 def trigger_ingestion():
-    print("[SETUP] Triggering Ingestion Job...")
+    print(f"[{datetime.utcnow().isoformat()}] [SETUP] Triggering Ingestion Job...")
     # In this environment, we manually trigger the logic or wait for the existing job
     # For a deterministic test, we'll wait a bit for the ingestor to pick it up if automated
     # or print instructions. 
@@ -57,7 +59,7 @@ def trigger_ingestion():
     time.sleep(5) 
 
 def run_context_tests():
-    print("[TEST] Running Context Verification Queries (Heat 0)...")
+    print(f"[{datetime.utcnow().isoformat()}] [TEST] Running Context Verification Queries (Heat 0)...")
     results = []
     
     # We use a unique session for this test run to track it in TimescaleDB
@@ -66,8 +68,9 @@ def run_context_tests():
     for query in CONTEXT_QUERIES:
         print(f"  - Query: {query['question']}")
         payload = {
-            "model": "llama3.1",
+            "model": "llama3.1:latest",
             "session_id": session_id,
+            "tags": ["test-tag"],
             "messages": [{"role": "user", "content": query['question']}],
             "temperature": 0.0 # Heat 0 for deterministic output
         }

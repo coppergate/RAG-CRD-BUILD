@@ -1,0 +1,18 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ollama-tls
+  namespace: llms-ollama
+spec:
+  secretName: ollama-tls
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+  duration: 8760h   # 1 year
+  renewBefore: 720h # 30 days
+  dnsNames:
+    - ollama.hierocracy.home
+    - ollama.llms-ollama.svc.cluster.local
+    - ollama.llms-ollama.svc
+    - ollama-code.llms-ollama.svc.cluster.local
+    - ollama-code.llms-ollama.svc

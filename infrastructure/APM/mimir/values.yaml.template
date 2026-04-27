@@ -1,3 +1,16 @@
+global:
+  extraEnv:
+    - name: SSL_CERT_FILE
+      value: /etc/ssl/certs/ca.crt
+  extraVolumes:
+    - name: registry-ca
+      configMap:
+        name: registry-ca-cm
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
+
 mimir:
   structuredConfig:
     common:
@@ -7,26 +20,36 @@ mimir:
           endpoint: ${S3_ENDPOINT}
           access_key_id: ${AWS_ACCESS_KEY_ID}
           secret_access_key: ${AWS_SECRET_ACCESS_KEY}
-          insecure: true
-          bucket_name: ${BUCKET_NAME}
+          insecure: false
     blocks_storage:
       s3:
         bucket_name: ${BUCKET_NAME}
+        endpoint: ${S3_ENDPOINT}
+        access_key_id: ${AWS_ACCESS_KEY_ID}
+        secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+        insecure: false
       backend: s3
       tsdb:
         dir: /data/tsdb
+        head_compaction_interval: 15m
+        wal_replay_concurrency: 3
+        retention_period: 168h
     alertmanager_storage:
       backend: s3
       s3:
         bucket_name: ${ALERTMANAGER_BUCKET_NAME}
+        endpoint: ${S3_ENDPOINT}
         access_key_id: ${ALERTMANAGER_ACCESS_KEY}
         secret_access_key: ${ALERTMANAGER_SECRET_KEY}
+        insecure: false
     ruler_storage:
       backend: s3
       s3:
         bucket_name: ${RULER_BUCKET_NAME}
+        endpoint: ${S3_ENDPOINT}
         access_key_id: ${RULER_ACCESS_KEY}
         secret_access_key: ${RULER_SECRET_KEY}
+        insecure: false
     distributor:
       ring:
         instance_id: distributor
@@ -130,10 +153,138 @@ memcached:
 gateway:
   nodeSelector:
     role: storage-node
+  service:
+    port: 443
+    targetPort: 8443
+  tls:
+    enabled: true
+    secretName: mimir-gateway-tls
+  extraVolumes:
+    - name: service-tls
+      secret:
+        secretName: mimir-gateway-tls
+  extraVolumeMounts:
+    - name: service-tls
+      mountPath: /etc/nginx/certs
+      readOnly: true
 
-nginx:
-  nodeSelector:
-    role: storage-node
+  nginx:
+    config:
+      file: |
+        worker_processes  5;  ## Default: 1
+        error_log  /dev/stderr error;
+        pid        /tmp/nginx.pid;
+        worker_rlimit_nofile 8192;
+        events {
+          worker_connections  4096;  ## Default: 1024
+        }
+        http {
+          client_body_temp_path /tmp/client_temp;
+          proxy_temp_path       /tmp/proxy_temp_path;
+          fastcgi_temp_path     /tmp/fastcgi_temp;
+          uwsgi_temp_path       /tmp/uwsgi_temp;
+          scgi_temp_path        /tmp/scgi_temp;
+          default_type application/octet-stream;
+          log_format   main '$remote_addr - $remote_user [$time_local]  $status '
+                '"$request" $body_bytes_sent "$http_referer" '
+                '"$http_user_agent" "$http_x_forwarded_for"';
+          access_log   /dev/stderr  main;
+          sendfile           on;
+          tcp_nopush         on;
+          proxy_http_version 1.1;
+          resolver kube-dns.kube-system.svc.cluster.local.;
+          map $http_x_scope_orgid $ensured_x_scope_orgid {
+            default "$http_x_scope_orgid";
+            "" anonymous;
+          }
+          map $http_x_scope_orgid $has_multiple_orgid_headers {
+            default 0;
+            "~^.+,.+$" 1;
+          }
+          proxy_read_timeout 300;
+          server {
+            listen 8443 ssl;
+            ssl_certificate /etc/nginx/certs/tls.crt;
+            ssl_certificate_key /etc/nginx/certs/tls.key;
+            listen 8080;
+            listen [::]:8080;
+            client_max_body_size 540M;
+            if ($has_multiple_orgid_headers = 1) {
+                return 400 'Sending multiple X-Scope-OrgID headers is not allowed. Use a single header with | as separator instead.';
+            }
+            location = / {
+              return 200 'OK';
+              auth_basic off;
+            }
+            location = /ready {
+              return 200 'OK';
+              auth_basic off;
+            }
+            proxy_set_header X-Scope-OrgID $ensured_x_scope_orgid;
+            # Distributor endpoints
+            location /distributor {
+              set $distributor mimir-distributor-headless.monitoring.svc.cluster.local.;
+              proxy_pass      http://$distributor:8080$request_uri;
+            }
+            location = /api/v1/push {
+              set $distributor mimir-distributor-headless.monitoring.svc.cluster.local.;
+              proxy_pass      http://$distributor:8080$request_uri;
+            }
+            location /otlp/v1/metrics {
+              set $distributor mimir-distributor-headless.monitoring.svc.cluster.local.;
+              proxy_pass      http://$distributor:8080$request_uri;
+            }
+            # Alertmanager endpoints
+            location /alertmanager {
+              set $alertmanager mimir-alertmanager-headless.monitoring.svc.cluster.local.;
+              proxy_pass      http://$alertmanager:8080$request_uri;
+            }
+            location = /multitenant_alertmanager/status {
+              set $alertmanager mimir-alertmanager-headless.monitoring.svc.cluster.local.;
+              proxy_pass      http://$alertmanager:8080$request_uri;
+            }
+            location = /multitenant_alertmanager/configs {
+              set $alertmanager mimir-alertmanager-headless.monitoring.svc.cluster.local.;
+              proxy_pass      http://$alertmanager:8080$request_uri;
+            }
+            location = /api/v1/alerts {
+              set $alertmanager mimir-alertmanager-headless.monitoring.svc.cluster.local.;
+              proxy_pass      http://$alertmanager:8080$request_uri;
+            }
+            # Ruler endpoints
+            location /prometheus/config/v1/rules {
+              set $ruler mimir-ruler.monitoring.svc.cluster.local.;
+              proxy_pass      http://$ruler:8080$request_uri;
+            }
+            location /prometheus/api/v1/rules {
+              set $ruler mimir-ruler.monitoring.svc.cluster.local.;
+              proxy_pass      http://$ruler:8080$request_uri;
+            }
+            location /prometheus/api/v1/alerts {
+              set $ruler mimir-ruler.monitoring.svc.cluster.local.;
+              proxy_pass      http://$ruler:8080$request_uri;
+            }
+            location = /ruler/ring {
+              set $ruler mimir-ruler.monitoring.svc.cluster.local.;
+              proxy_pass      http://$ruler:8080$request_uri;
+            }
+            # Rest of /prometheus goes to the query frontend
+            location /prometheus {
+              set $query_frontend mimir-query-frontend.monitoring.svc.cluster.local.;
+              proxy_pass      http://$query_frontend:8080$request_uri;
+            }
+            # Buildinfo endpoint can go to any component
+            location = /api/v1/status/buildinfo {
+              set $query_frontend mimir-query-frontend.monitoring.svc.cluster.local.;
+              proxy_pass      http://$query_frontend:8080$request_uri;
+            }
+            # Compactor endpoint for uploading blocks
+            location /api/v1/upload/block/ {
+              set $compactor mimir-compactor.monitoring.svc.cluster.local.;
+              proxy_pass      http://$compactor:8080$request_uri;
+            }
+          }
+        }
 
 smoke_test:
   nodeSelector:

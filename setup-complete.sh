@@ -23,7 +23,21 @@ set -Eeuo pipefail
 #
 BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
-VERSION="${VERSION:-1.5.7}"
+
+# Source of truth for versioning
+VERSION_FILE="$BASE_DIR/CURRENT_VERSION"
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$VERSION_FILE" ]]; then
+        if jq . "$VERSION_FILE" >/dev/null 2>&1; then
+            # Use a default version if we need a global one for tools
+            VERSION="2.4.11"
+        else
+            VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+        fi
+    else
+        VERSION="2.4.11"
+    fi
+fi
 export VERSION
 IMAGE_PREFETCH_ON_START="${IMAGE_PREFETCH_ON_START:-true}"
 IMAGE_PREFETCH_GROUPS="${IMAGE_PREFETCH_GROUPS:-bootstrap,storage,apm-core,pulsar-core,registry,data-services,ollama}"
@@ -109,26 +123,8 @@ if ! is_step_done "registry-trust-verified"; then
     log_step_timing "registry-trust-verified" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-echo "--- 0.5. Labeling Worker Nodes ---"
-if ! is_step_done "worker-labeling"; then
-    STEP_TS_START=$(date +%s)
-    echo "Labeling nodes starting with 'worker' as 'role=storage-node'..."
-    # Get all node names starting with worker
-    WORKER_NODES=$($KUBECTL get nodes -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^worker' || echo "")
-    
-    if [[ -n "$WORKER_NODES" ]]; then
-        for node in $WORKER_NODES; do
-            echo "  - Labeling $node..."
-            $KUBECTL label node "$node" role=storage-node --overwrite
-        done
-        echo "Worker nodes labeled successfully."
-    else
-        echo "No nodes matching 'worker*' found. Skipping labeling."
-    fi
-    mark_step_done "worker-labeling"
-    STEP_TS_END=$(date +%s)
-    log_step_timing "worker-labeling" "$STEP_TS_START" "$STEP_TS_END" "ok"
-fi
+echo "--- 0.5. Node Labeling (Idempotent) ---"
+bash "$BASE_DIR/scripts/setup-node-labels.sh"
 
 echo "===================================================="
 echo "Starting Complete Kubernetes Build and RAG Stack"
@@ -146,21 +142,27 @@ STEP_TS_END=$(date +%s)
 log_step_timing "basic" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "kubernetes-dashboard"; then
+if ! is_step_done "headlamp"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.1: Kubernetes Dashboard Setup"
+echo "Step 1.1: Headlamp Setup (Replacing Kubernetes Dashboard)"
 echo "----------------------------------------------------"
-bash $BASE_DIR/infrastructure/kubernetes-dashboard/dashboard.sh
+if [[ -d "$BASE_DIR/infrastructure/kubernetes-dashboard" ]]; then
+    # Try to uninstall if the directory still exists
+    bash $BASE_DIR/infrastructure/headlamp/uninstall-old-dashboard.sh || true
+fi
+bash $BASE_DIR/infrastructure/headlamp/headlamp.sh
+mark_step_done "headlamp"
 mark_step_done "kubernetes-dashboard"
 STEP_TS_END=$(date +%s)
-log_step_timing "kubernetes-dashboard" "$STEP_TS_START" "$STEP_TS_END" "ok"
+log_step_timing "headlamp" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "registry" || ! $KUBECTL get namespace registry >/dev/null 2>&1; then
+# Step 1.5 moved to setup-01-basic.sh
+if ! is_step_done "registry" || ! $KUBECTL get namespace container-registry >/dev/null 2>&1; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5: Local Registry Setup"
+echo "Step 1.1.1: Local Registry Setup (Ensuring Ready)"
 echo "----------------------------------------------------"
 $BASE_DIR/infrastructure/registry/install.sh
 mark_step_done "registry"
@@ -168,10 +170,22 @@ STEP_TS_END=$(date +%s)
 log_step_timing "registry" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+if ! is_step_done "llm-models-pre-populate"; then
+STEP_TS_START=$(date +%s)
+echo ""
+echo "Step 1.1.2: LLM Model Pre-population into Local Registry"
+echo "----------------------------------------------------"
+# This ensures that Step 2 (Deployment) can seed models from the local registry
+bash "$BASE_DIR/rag-stack/infrastructure/ollama/push-models-to-cluster.sh"
+mark_step_done "llm-models-pre-populate"
+STEP_TS_END=$(date +%s)
+log_step_timing "llm-models-pre-populate" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
 if [[ "$IMAGE_PREFETCH_ON_START" == "true" ]] && ! is_step_done "image-prefetch-initial"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5.1: Initial Image Prefetch to Local Registry"
+echo "Step 1.1.3: Initial Image Prefetch to Local Registry"
 echo "----------------------------------------------------"
 APPLY=true MIRROR_GROUPS="$IMAGE_PREFETCH_GROUPS" PARALLELISM="$IMAGE_PREFETCH_PARALLELISM" \
   bash "$BASE_DIR/scripts/mirror-all-images.sh"
@@ -206,8 +220,16 @@ fi
 if ! is_step_done "pulsar"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5.7: Apache Pulsar Infrastructure"
+echo "Step 1.5.8: Apache Pulsar Infrastructure"
 echo "----------------------------------------------------"
+# Verify Rook-Ceph storage is available (Pulsar PVCs depend on it)
+echo "Verifying rook-ceph-block StorageClass exists..."
+if ! $KUBECTL get storageclass rook-ceph-block >/dev/null 2>&1; then
+    echo "ERROR: StorageClass 'rook-ceph-block' not found."
+    echo "Pulsar requires Rook-Ceph storage. Ensure Step 1 (basic infra) completed successfully."
+    exit 1
+fi
+echo "StorageClass rook-ceph-block found."
 # REPO_DIR is needed for pulsar scripts
 export REPO_DIR="$BASE_DIR/rag-stack"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/install.sh
@@ -219,9 +241,24 @@ fi
 if ! is_step_done "pulsar-init"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 1.5.7.1: Pulsar Initialization"
+echo "Step 1.5.8.1: Pulsar Initialization"
 echo "----------------------------------------------------"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh
+
+# Verify tenant and namespaces were created
+echo "Verifying Pulsar tenants and namespaces..."
+TOOLSET_POD=$($KUBECTL get pods -n apache-pulsar -l component=toolset -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [[ -n "$TOOLSET_POD" ]]; then
+    TENANTS=$($KUBECTL exec -n apache-pulsar "$TOOLSET_POD" -- /pulsar/bin/pulsar-admin tenants list 2>/dev/null || echo "")
+    if echo "$TENANTS" | grep -q "rag-pipeline"; then
+        echo "Pulsar init verified: rag-pipeline tenant exists."
+    else
+        echo "WARNING: rag-pipeline tenant not found after init. Tenants: $TENANTS"
+    fi
+else
+    echo "WARNING: Could not find toolset pod to verify Pulsar init."
+fi
+
 mark_step_done "pulsar-init"
 STEP_TS_END=$(date +%s)
 log_step_timing "pulsar-init" "$STEP_TS_START" "$STEP_TS_END" "ok"
@@ -246,7 +283,7 @@ echo "----------------------------------------------------"
 # Use the new cluster-native build pipeline (Kaniko + S3 + Pulsar)
 # This prevents host resource exhaustion during builds
 # We wait for completion here to ensure Step 2 has the images it needs.
-    VERSION="$VERSION" bash $BASE_DIR/rag-stack/build-all-on-cluster.sh --wait
+    bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
 mark_step_done "rag-images"
 STEP_TS_END=$(date +%s)
 log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"

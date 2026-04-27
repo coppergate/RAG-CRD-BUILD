@@ -4,11 +4,12 @@ metadata:
   name: kaniko-build-${SERVICE_NAME}-${VERSION}
   namespace: build-pipeline
 spec:
+  ttlSecondsAfterFinished: 600
   template:
     spec:
       initContainers:
       - name: fetch-context
-        image: registry.hierocracy.home:5000/busybox:1.37.0
+        image: registry.container-registry.svc.cluster.local:5000/busybox:1.37.0
         command: ["sh", "-c"]
         args: ["wget -O /workspace/context.tar.gz \"${SOURCE_URL}\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz"]
         securityContext:
@@ -22,24 +23,24 @@ spec:
         volumeMounts:
         - name: workspace
           mountPath: /workspace
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/registry-ca.crt
+          subPath: ca.crt
       containers:
       - name: kaniko
-        image: registry.hierocracy.home:5000/martizih/kaniko:v1.27.0
+        image: registry.container-registry.svc.cluster.local:5000/martizih/kaniko:v1.27.0
         args:
         - "--dockerfile=${DOCKERFILE_PATH}"
         - "--context=dir:///workspace"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:${VERSION}"
         - "--destination=${REGISTRY}/${SERVICE_NAME}:latest"
-        - "--insecure" # Assuming local registry without TLS
-        - "--insecure-pull"
-        - "--insecure-registry=${REGISTRY}"
-        - "--skip-tls-verify"
-        - "--skip-tls-verify-registry=${REGISTRY}"
-        securityContext:
-          allowPrivilegeEscalation: true
+        - "--registry-certificate=${REGISTRY}=/kaniko/ssl/certs/registry-ca.crt"
         volumeMounts:
         - name: workspace
           mountPath: /workspace
+        - name: registry-ca
+          mountPath: /kaniko/ssl/certs/registry-ca.crt
+          subPath: ca.crt
         resources:
           requests:
             cpu: "2"
@@ -50,5 +51,8 @@ spec:
       volumes:
       - name: workspace
         emptyDir: {}
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
       restartPolicy: Never
   backoffLimit: 1

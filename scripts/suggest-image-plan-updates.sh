@@ -105,7 +105,6 @@ find_related_files() {
   local old_ref="$1"
   grep -RIl \
     --exclude-dir=.git \
-    --exclude-dir=ai-changes \
     --exclude "$(basename "$PLAN_FILE")" \
     -- "$old_ref" . || true
 }

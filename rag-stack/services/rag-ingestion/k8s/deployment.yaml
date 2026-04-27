@@ -18,22 +18,25 @@ spec:
       enableServiceLinks: false
       containers:
       - name: ingestor
-        image: registry.hierocracy.home:5000/rag-ingestion:__VERSION__
+        image: registry.container-registry.svc.cluster.local:5000/rag-ingestion:__VERSION__
         imagePullPolicy: Always
+        command: ["python", "service.py"]
         ports:
         - containerPort: 8000
         readinessProbe:
           httpGet:
-            path: /health
+            path: /readyz
             port: 8000
+            scheme: HTTPS
           initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 6
         livenessProbe:
           httpGet:
-            path: /health
+            path: /healthz
             port: 8000
+            scheme: HTTPS
           initialDelaySeconds: 45
           periodSeconds: 20
           timeoutSeconds: 3
@@ -48,6 +51,14 @@ spec:
         env:
         - name: OLLAMA_URL
           value: "http://ollama.llms-ollama.svc.cluster.local:11434"
+        - name: OLLAMA_MODEL
+          value: "llama3.1:latest"
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
         - name: DB_CONN_STRING
           valueFrom:
             secretKeyRef:
@@ -55,11 +66,14 @@ spec:
               key: url
         - name: QDRANT_HOST
           value: "qdrant"
+        - name: QDRANT_COLLECTION
+          value: "vectors"
+        - name: INGEST_BATCH_SIZE
+          value: "20"
+        - name: CHUNK_SIZE
+          value: "1000"
         - name: S3_ENDPOINT
-          valueFrom:
-            configMapKeyRef:
-              name: rag-codebase-bucket
-              key: BUCKET_HOST
+          value: "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc"
         - name: BUCKET_NAME
           valueFrom:
             configMapKeyRef:
@@ -75,6 +89,40 @@ spec:
             secretKeyRef:
               name: rag-codebase-bucket
               key: AWS_SECRET_ACCESS_KEY
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: REQUESTS_CA_BUNDLE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: AWS_CA_BUNDLE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OTEL_USE_TLS
+          value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "otel-collector.monitoring.svc.cluster.local:4317"
+        - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: BUCKET_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_PORT
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: rag-ingestion-tls
 ---
 apiVersion: v1
 kind: Service
@@ -85,5 +133,6 @@ spec:
   selector:
     app: rag-ingestion-service
   ports:
-  - port: 80
+  - port: 443
     targetPort: 8000
+    name: https

@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package rag_stack;
+
+option go_package = "app-builds/common/contracts";
+
+import "google/protobuf/struct.proto";
+
+message InternalRequest {
+  string id = 1;
+  string session_id = 2;
+  string session_name = 3;
+  string prompt = 4;
+  string system_prompt = 5;
+  string planner_model = 6;
+  string executor_model = 7;
+  google.protobuf.Struct metadata = 8;
+  repeated string tags = 9;
+  string timestamp = 10;
+  bool stream = 11;
+}
+
+message StreamChunk {
+  string id = 1;
+  string session_id = 2;
+  string result = 3;
+  int32 sequence_number = 4;
+  bool is_last = 5;
+  string model = 6;
+  google.protobuf.Struct metadata = 7;
+  string error = 8;
+  bool in_conversation = 9;
+}
+
+message ResponseCompletion {
+  string id = 1;
+  string session_id = 2;
+  string start_timestamp = 3;
+  string model = 4;
+  string status = 5;
+  ExecutionMetrics metrics = 6;
+}
+
+message ExecutionMetrics {
+  int32 prompt_tokens = 1;
+  int32 completion_tokens = 2;
+  int64 total_duration_usec = 3;
+  int64 load_duration_usec = 4;
+  int64 prompt_eval_duration_usec = 5;
+  int64 eval_duration_usec = 6;
+  double tokens_per_second = 7;
+  string hostname = 8;
+  string model_family = 9;
+}
+
+// Memory Contracts
+message MemoryScope {
+  string session_id = 1;
+  string user_id = 2;
+  string project_id = 3;
+  repeated string tags = 4;
+}
+
+message MemorySourceRef {
+  string source_kind = 1;
+  string source_id = 2;
+  string relation_type = 3;
+  double weight = 4;
+  google.protobuf.Struct metadata = 5;
+}
+
+message MemoryWriteItem {
+  string memory_id = 1;
+  string memory_type = 2;
+  string summary = 3;
+  string content = 4;
+  double salience_hint = 5;
+  double retention_hint = 6;
+  bool pinned = 7;
+  string expires_at = 8;
+  google.protobuf.Struct metadata = 9;
+  repeated MemorySourceRef source_refs = 10;
+}
+
+message MemoryWriteRequest {
+  string request_id = 1;
+  string correlation_id = 2;
+  MemoryScope scope = 3;
+  repeated MemoryWriteItem writes = 4;
+}
+
+message MemoryRetrieveRequest {
+  string request_id = 1;
+  string correlation_id = 2;
+  MemoryScope scope = 3;
+  string query = 4;
+  int32 limit = 5;
+  double min_salience = 6;
+}
+
+message MemoryPack {
+  repeated MemoryWriteItem items = 1;
+}
+
+message StatusMessage {
+  string id = 1;
+  string session_id = 2;
+  string state = 3;
+  string details = 4;
+  string timestamp = 5;
+}
+
+message IngestRequest {
+  string ingestion_id = 1;
+  repeated string tag_names = 2;
+  repeated string tag_ids = 3;
+  string session_id = 4;
+  int32 vector_size = 5;
+  repeated string file_names = 6;
+}
+
+message QdrantPoint {
+  string id = 1;
+  repeated float vector = 2;
+  google.protobuf.Struct payload = 3;
+}
+
+message QdrantOp {
+  string id = 1;
+  string action = 2;
+  string collection = 3;
+  int32 vector_size = 4;
+  repeated QdrantPoint points = 5;
+  repeated float vector = 6;
+  int32 limit = 7;
+  repeated string tags = 8;
+  string session_id = 9;
+  repeated string paths = 10;
+  string source_tag = 11;
+  string target_tag = 12;
+}
+
+message QdrantResponse {
+  string id = 1;
+  string action = 2;
+  string collection = 3;
+  google.protobuf.Value result = 4;
+  string error = 5;
+  string timestamp = 6;
+}

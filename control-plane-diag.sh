@@ -7,6 +7,8 @@ set -o pipefail
 
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
+TALOSCTL="/home/k8s/talos/talosctl"
+export TALOSCONFIG="/home/k8s/talos/config/talosconfig"
 # Ensure proxies do not interfere with cluster traffic
 export HTTP_PROXY="" HTTPS_PROXY="" http_proxy="" https_proxy=""
 export NO_PROXY="127.0.0.1,localhost,10.0.0.0/8,10.96.0.0/12,.cluster.local,.hierocracy.home,10.0.0.15"
@@ -100,14 +102,19 @@ else
   echo "[WARN] etcd pod not found via label component=etcd" | tee -a "$OUT"
 fi
 
-# 6) Control-plane node resource checks (SSH into each)
+# 6) Control-plane node resource checks (using talosctl)
 section "Control-plane nodes resource snapshot"
 CP_NODES=$($KUBECTL get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)
 echo "Nodes: $CP_NODES" | tee -a "$OUT"
 for n in $CP_NODES; do
   ip=$($KUBECTL get node "$n" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
-  section "Node $n ($ip) — resource snapshot"
-  run bash -lc "ssh -o BatchMode=yes -o ConnectTimeout=5 junie@$ip 'set -o pipefail; echo [timedatectl]; timedatectl 2>/dev/null | sed -n 1,6p; echo; echo [uptime]; uptime; echo; echo [df -h roots]; df -h / /var/lib/etcd /var/lib/kubelet 2>/dev/null || df -h; echo; echo [free -m]; free -m; echo; echo [conntrack]; sysctl -n net.netfilter.nf_conntrack_count net.netfilter.nf_conntrack_max 2>/dev/null || true; echo; echo [dmesg tail]; dmesg -T | tail -n 50; echo; echo [kubelet logs 10m]; journalctl -u kubelet --since "10 min ago" --no-pager | tail -n 200'"
+  section "Node $n ($ip) — resource snapshot (talosctl)"
+  # Talos doesn't have SSH; use talosctl to gather equivalent info
+  run $TALOSCTL -n "$ip" version
+  run $TALOSCTL -n "$ip" stats
+  run $TALOSCTL -n "$ip" list /var/lib/etcd
+  run $TALOSCTL -n "$ip" logs kubelet --tail 200
+  run $TALOSCTL -n "$ip" dmesg | tail -n 50
 done
 
 # 7) VIP reachability and TLS handshake

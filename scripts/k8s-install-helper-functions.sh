@@ -92,6 +92,7 @@ function WaitForPodsRunning() {
 	echo ""
 	if  [[ $notRunning -eq 1 ]]; then
 		echo "ERROR *******  CHECK EXITING WITHOUT 'STARTED' CONDITION"
+		return 1
 	fi
 
 }
@@ -165,6 +166,7 @@ function WaitForDeploymentToComplete() {
 	done
 	if  [[ $notRunning -eq 1 ]]; then
 		echo "ERROR *******  CHECK EXITING WITHOUT 'STARTED' CONDITION"
+		return 1
 	fi
 }
 
@@ -235,6 +237,7 @@ function WaitForServiceToStart() {
 	done
 	if  [[ $notRunning -eq 1 ]]; then
 		echo "ERROR *******  CHECK EXITING WITHOUT 'STARTED' CONDITION"
+		return 1
 	fi
 }
 

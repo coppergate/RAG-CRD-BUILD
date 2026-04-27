@@ -5,17 +5,19 @@
 # - Avoid permission issues and collisions between different scripts with the same name (e.g., install.sh)
 # - Prefer per-user writable location, overridable via INSTALL_JOURNAL_DIR
 
-# Determine journal directory (override with INSTALL_JOURNAL_DIR, else per-user dir)
-JOURNAL_FILE_DIR="${INSTALL_JOURNAL_DIR:-$HOME/.complete-build/journal}"
+# Determine journal directory (override with INSTALL_JOURNAL_DIR, else global dir)
+GLOBAL_JOURNAL_ROOT="$HOME/.complete-build/journal"
+JOURNAL_FILE_DIR="${INSTALL_JOURNAL_DIR:-$GLOBAL_JOURNAL_ROOT}"
 
 # Determine a safe temporary directory for the user (override with INSTALL_TMP_DIR)
-SAFE_TMP_DIR="${INSTALL_TMP_DIR:-$HOME/.complete-build/tmp}"
+# Prefer per-user /tmp directory to avoid permission issues in shared environments
+SAFE_TMP_DIR="${INSTALL_TMP_DIR:-/tmp/k8s-setup-${USER:-junie}}"
 export SAFE_TMP_DIR
 export TMPDIR="$SAFE_TMP_DIR"
 
-# Ensure directory exists and is private to the user
+# Ensure directory exists and is shared
 mkdir -p "$JOURNAL_FILE_DIR" "$SAFE_TMP_DIR"
-chmod 700 "$JOURNAL_FILE_DIR" "$SAFE_TMP_DIR" 2>/dev/null || true
+chmod 777 "$JOURNAL_FILE_DIR" "$SAFE_TMP_DIR" 2>/dev/null || true
 
 # Resolve the calling script path for uniqueness (works when sourced)
 # BASH_SOURCE[0] = this file, BASH_SOURCE[1] = caller when sourced; fall back to $0
@@ -55,9 +57,9 @@ function is_step_done() {
 
 function mark_step_done() {
     local step_name="$1"
-    # Ensure file exists with user-only write perms to avoid future removal prompts
+    # Ensure file exists with shared write perms to allow multiple users to continue
     touch "$JOURNAL_FILE"
-    chmod 600 "$JOURNAL_FILE" 2>/dev/null || true
+    chmod 666 "$JOURNAL_FILE" 2>/dev/null || true
     echo "$step_name" >> "$JOURNAL_FILE"
     echo "Completed step: $step_name"
 }

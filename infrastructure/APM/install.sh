@@ -57,6 +57,52 @@ else
     echo "--- Step 'monitoring-ns' already completed, skipping ---"
 fi
 
+echo "--- Ensuring Registry & Pulsar CA ConfigMap in $NAMESPACE ---"
+# Ensure SAFE_TMP_DIR exists (it's initialized in journal-helper.sh)
+mkdir -p "$SAFE_TMP_DIR"
+
+COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+rm -f "$COMBINED_CA"
+touch "$COMBINED_CA"
+
+# 1. Extract Registry CA
+if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+    echo "Extracting Registry CA from container-registry/in-cluster-registry-tls..."
+    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+else
+    echo "Fallback: Extracting Registry CA from Talos registry patch..."
+    CA_B64=$(grep "ca: " "/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+    if [ -n "$CA_B64" ]; then
+        echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
+    fi
+fi
+
+# 2. Extract Pulsar CA (if available)
+if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+    echo "Extracting Pulsar CA from apache-pulsar/pulsar-ca-tls..."
+    echo "" >> "$COMBINED_CA" # Ensure newline
+    $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+
+if [ -s "$COMBINED_CA" ]; then
+    $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+    # Also create 'registry-ca' for legacy compatibility
+    $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+else
+    echo "WARNING: Could not find any CA to inject into $NAMESPACE."
+fi
+rm -f "$COMBINED_CA"
+mark_step_done "registry-ca-cm"
+
+if ! is_step_done "apm-gateways-tls"; then
+    echo "--- Applying APM Gateway TLS Certificates ---"
+    $KUBECTL apply -f "$REPO_DIR/common/apm-gateways-tls.yaml"
+    $KUBECTL wait --for=condition=Ready certificate/loki-gateway-cert -n $NAMESPACE --timeout=60s
+    $KUBECTL wait --for=condition=Ready certificate/tempo-cert -n $NAMESPACE --timeout=60s
+    $KUBECTL wait --for=condition=Ready certificate/mimir-gateway-cert -n $NAMESPACE --timeout=60s
+    mark_step_done "apm-gateways-tls"
+fi
+
 if ! is_step_done "s3-obc"; then
     echo "--- Provisioning S3 Buckets for APM ---"
     $KUBECTL apply -f "$REPO_DIR/common/s3-storage.yaml"
@@ -83,10 +129,10 @@ function deploy_lgtm_component() {
         # Cleanup potential leftovers from previous failed attempts
         if [[ "$name" == "tempo" ]]; then
             echo "Checking for legacy tempo resources..."
-            $KUBECTL delete statefulset tempo -n $NAMESPACE --ignore-not-found
-            $KUBECTL delete svc tempo -n $NAMESPACE --ignore-not-found
+            $KUBECTL delete statefulset tempo -n $NAMESPACE --ignore-not-found || true
+            $KUBECTL delete svc tempo -n $NAMESPACE --ignore-not-found || true
             # Also clean up any other resources with the old name to avoid conflicts with tempo-distributed
-            $KUBECTL delete all -n $NAMESPACE -l app.kubernetes.io/instance=tempo --ignore-not-found
+            $KUBECTL delete all -n $NAMESPACE -l app.kubernetes.io/instance=tempo --ignore-not-found || true
         fi
 
         # Extract S3 credentials
@@ -101,20 +147,23 @@ function deploy_lgtm_component() {
         export S3_ENDPOINT BUCKET_NAME AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
         
         # Additional bucket extraction for Mimir dedicated storage
+        VAR_LIST='$S3_ENDPOINT,$BUCKET_NAME,$AWS_ACCESS_KEY_ID,$AWS_SECRET_ACCESS_KEY'
+
         if [[ "$name" == "mimir" ]]; then
-            RULER_BUCKET_NAME=$($KUBECTL get configmap mimir-ruler-s3-bucket -n $NAMESPACE -o jsonpath='{.data.BUCKET_NAME}')
-            ALERTMANAGER_BUCKET_NAME=$($KUBECTL get configmap mimir-alertmanager-s3-bucket -n $NAMESPACE -o jsonpath='{.data.BUCKET_NAME}')
+            RULER_BUCKET_NAME=$($KUBECTL get configmap mimir-ruler-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.BUCKET_NAME}')
+            ALERTMANAGER_BUCKET_NAME=$($KUBECTL get configmap mimir-alertmanager-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.BUCKET_NAME}')
             
-            RULER_ACCESS_KEY=$($KUBECTL get secret mimir-ruler-s3-bucket -n $NAMESPACE -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
-            RULER_SECRET_KEY=$($KUBECTL get secret mimir-ruler-s3-bucket -n $NAMESPACE -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
+            RULER_ACCESS_KEY=$($KUBECTL get secret mimir-ruler-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
+            RULER_SECRET_KEY=$($KUBECTL get secret mimir-ruler-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
             
-            ALERTMANAGER_ACCESS_KEY=$($KUBECTL get secret mimir-alertmanager-s3-bucket -n $NAMESPACE -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
-            ALERTMANAGER_SECRET_KEY=$($KUBECTL get secret mimir-alertmanager-s3-bucket -n $NAMESPACE -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
+            ALERTMANAGER_ACCESS_KEY=$($KUBECTL get secret mimir-alertmanager-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 --decode)
+            ALERTMANAGER_SECRET_KEY=$($KUBECTL get secret mimir-alertmanager-s3-bucket -n "$NAMESPACE" -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 --decode)
             
             export RULER_BUCKET_NAME ALERTMANAGER_BUCKET_NAME RULER_ACCESS_KEY RULER_SECRET_KEY ALERTMANAGER_ACCESS_KEY ALERTMANAGER_SECRET_KEY
+            VAR_LIST="${VAR_LIST},\$RULER_BUCKET_NAME,\$ALERTMANAGER_BUCKET_NAME,\$RULER_ACCESS_KEY,\$RULER_SECRET_KEY,\$ALERTMANAGER_ACCESS_KEY,\$ALERTMANAGER_SECRET_KEY"
         fi
         
-        envsubst < "$REPO_DIR/$name/values.yaml.template" > "$SAFE_TMP_DIR/$name-values.yaml"
+        envsubst "$VAR_LIST" < "$REPO_DIR/$name/values.yaml.template" > "$SAFE_TMP_DIR/$name-values.yaml"
         
         echo "Adding Helm repo $repo_url..."
         helm repo add grafana $repo_url
@@ -127,6 +176,12 @@ function deploy_lgtm_component() {
             --values "$SAFE_TMP_DIR/$name-values.yaml" \
             --wait --timeout 15m \
             --debug
+
+        # Patch gateway service if it's loki or mimir to ensure port 443 maps to 8443 (SSL)
+        if [[ "$name" == "loki" || "$name" == "mimir" ]]; then
+            echo "Patching $name-gateway service to map port 443 to targetPort 8443 (SSL)..."
+            $KUBECTL patch svc -n $NAMESPACE "$name-gateway" --type='json' -p='[{"op": "replace", "path": "/spec/ports/0/targetPort", "value": 8443}]' || true
+        fi
         
         mark_step_done "deploy-$name"
     else
@@ -135,10 +190,14 @@ function deploy_lgtm_component() {
 }
 
 deploy_lgtm_component "loki" "grafana/loki" "https://grafana.github.io/helm-charts" "loki-s3-bucket"
-deploy_lgtm_component "tempo" "grafana/tempo-distributed" "https://grafana.github.io/helm-charts" "tempo-s3-bucket"
+deploy_lgtm_component "tempo" "grafana/tempo" "https://grafana.github.io/helm-charts" "tempo-s3-bucket"
 deploy_lgtm_component "mimir" "grafana/mimir-distributed" "https://grafana.github.io/helm-charts" "mimir-s3-bucket"
 
 if ! is_step_done "deploy-otel-collector"; then
+    echo "--- Applying OTEL Collector TLS ---"
+    $KUBECTL apply -f "$REPO_DIR/otel-collector/otel-tls.yaml"
+    $KUBECTL wait --for=condition=Ready certificate/otel-collector-cert -n $NAMESPACE --timeout=60s
+        
     echo "--- Deploying OpenTelemetry Collector ---"
     $KUBECTL apply -f "$REPO_DIR/otel-collector/otel-collector.yaml"
     mark_step_done "deploy-otel-collector"
@@ -146,7 +205,11 @@ fi
 
 if ! is_step_done "deploy-grafana"; then
     echo "--- Deploying Grafana Operator and Instance ---"
-    
+        
+    echo "Applying Grafana TLS..."
+    $KUBECTL apply -f "$REPO_DIR/grafana/grafana-tls.yaml"
+    $KUBECTL wait --for=condition=Ready certificate/grafana-cert -n $NAMESPACE --timeout=60s
+
     echo "Adding Grafana Operator repo..."
     helm repo add grafana https://grafana.github.io/helm-charts
     helm repo update

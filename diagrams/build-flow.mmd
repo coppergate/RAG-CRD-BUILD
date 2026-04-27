@@ -1,0 +1,41 @@
+flowchart TD
+    subgraph "Phase 0 - Infrastructure Bootstrap - Hierophant"
+        Talos[Talos Registry Trust Patch] --> Labels[Label storage-nodes]
+        Labels --> Basic[setup-01-basic-sh - Rook-Ceph - Traefik - k8tz]
+        Basic --> Reg[Registry Install]
+        Reg --> Prefetch[Image Prefetch to Local Registry]
+    end
+
+    subgraph "Phase 1 - RAG Build Pipeline Bootstrap"
+        Prefetch --> S3_1[Build S3-OBC]
+        S3_1 --> BootstrapJob[Kaniko Bootstrap Job]
+        BootstrapJob --> RegistryNode[Local Registry - registry-hierocracy-home:5000]
+        RegistryNode --> OrchDeploy[Deploy Build Orchestrator]
+    end
+
+    subgraph "Phase 2 - RAG Service Builds - Optimized Parallel"
+        Trigger[trigger-build-sh] --> Package[Shared Source Context Packaging]
+        Package --> S3_2[Upload Batch to S3]
+        S3_2 -.->|Pulsar Msg| Orch[Build Orchestrator]
+        Orch --> Kaniko[Parallel Kaniko K8s Jobs]
+        S3_2 --> Kaniko
+        Kaniko --> RegistryNode
+    end
+
+    subgraph "Phase 3 - RAG Stack Deployment"
+        RegistryNode --> Deploy[Deploy RAG Services]
+        Deploy --> Migrate[Apply TimescaleDB schema updates]
+        Migrate --> TopicInit[Create Pulsar topics]
+    end
+
+    RegistryNode --> K8s[Kubernetes Cluster]
+
+    subgraph "Orchestration"
+        Setup[setup-complete-sh]
+    end
+
+    Setup --> Phase0
+    Phase0 --> Phase1
+    Phase1 --> Phase2
+    Phase2 --> Deploy
+    Deploy --> Phase3

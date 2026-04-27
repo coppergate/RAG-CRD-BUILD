@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import requests
+import logging
 from datetime import datetime
 from pulsar import Client
 
@@ -10,7 +11,7 @@ from pulsar import Client
 PULSAR_URL = os.getenv("PULSAR_URL", "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "http://llm-gateway.rag-system.svc.cluster.local:8080")
 if not GATEWAY_URL.startswith("http"):
-    GATEWAY_URL = f"http://{GATEWAY_URL}"
+    GATEWAY_URL = f"https://{GATEWAY_URL}"
 # Ensure we don't have double /v1/chat/completions if the env var already includes it
 if "/v1/chat/completions" in GATEWAY_URL:
     GATEWAY_BASE_URL = GATEWAY_URL.split("/v1/chat/completions")[0]
@@ -46,7 +47,7 @@ def test_sad_path_gateway():
     # 3. Test 400 Bad Request (Missing required fields - empty body)
     print("  - Testing 400 Bad Request (Empty JSON object)...")
     try:
-        resp = requests.post(f"{GATEWAY_URL}/v1/chat/completions", json={})
+        resp = requests.post(f"{GATEWAY_BASE_URL}/v1/chat/completions", json={})
         # Note: Depending on how the Go struct is unmarshaled, this might not fail immediately 
         # unless we have validation. But it should trigger some error if 'model' or 'messages' are missing.
         # Based on current code, it doesn't explicitly fail for missing fields, 
@@ -57,11 +58,21 @@ def test_sad_path_gateway():
         print(f"    [ERROR] Connection failed: {e}")
 
 def test_sad_path_worker_invalid_payload():
+    # Configure Pulsar logger to ERROR only
+    pulsar_logger = logging.getLogger('pulsar')
+    pulsar_logger.setLevel(logging.ERROR)
+    
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Sad Path: Worker Invalid Payload")
     INGRESS_TOPIC = "persistent://rag-pipeline/stage/ingress"
     
     try:
-        client = Client(PULSAR_URL)
+        # Support TLS for Pulsar if pulsar+ssl is used
+        client_args = {"logger": pulsar_logger}
+        ca_bundle = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
+        if PULSAR_URL.startswith("pulsar+ssl"):
+            client_args["tls_trust_certs_file_path"] = ca_bundle
+        
+        client = Client(PULSAR_URL, **client_args)
         producer = client.create_producer(INGRESS_TOPIC)
         
         # Send a completely invalid payload to ingress

@@ -18,8 +18,20 @@
 
 set -Eeuo pipefail
 
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 SERVICES=${SERVICES:-"rag-test-runner rag-worker rag-ingestion rag-web-ui llm-gateway db-adapter qdrant-adapter object-store-mgr"}
-VERSION=${VERSION:-"1.0.0"}
+
+# Source of truth for versioning
+if [[ -z "${VERSION:-}" ]]; then
+    if [[ -f "$BASE_DIR/CURRENT_VERSION" ]]; then
+        VERSION=$(cat "$BASE_DIR/CURRENT_VERSION" | tr -d '[:space:]')
+    else
+        VERSION="2.4.9"
+    fi
+fi
+export VERSION
+
 REGISTRY_CANON=${REGISTRY_CANON:-"registry.hierocracy.home:5000"}
 REGISTRY_DNS=${REGISTRY_DNS:-"registry.hierocracy.home:5000"}
 REGISTRY_IP=${REGISTRY_IP:-"registry.hierocracy.home:5000"}

@@ -80,6 +80,15 @@ if ! is_step_done "timescaledb-namespace"; then
   mark_step_done "timescaledb-namespace"
 fi
 
+if ! is_step_done "timescaledb-tls"; then
+  echo "--- 2.5. Creating TimescaleDB TLS Certificates ---"
+  $KUBECTL apply -f $TIMESCALEDB_INSTALL/timescaledb-tls.yaml
+  # Wait for the certificate to be ready
+  echo "Waiting for TimescaleDB server certificate to be ready..."
+  $KUBECTL wait --for=condition=Ready certificate/timescaledb-server-cert -n $NAMESPACE --timeout=60s
+  mark_step_done "timescaledb-tls"
+fi
+
 if ! is_step_done "timescaledb-cluster-apply"; then
   echo "--- 3. Deploying TimescaleDB Cluster ---"
   $KUBECTL apply -f $TIMESCALEDB_INSTALL/cluster.yaml --server-side --force-conflicts

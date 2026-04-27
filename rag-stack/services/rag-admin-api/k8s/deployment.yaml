@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-admin-api
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-admin-api
+  template:
+    metadata:
+      labels:
+        app: rag-admin-api
+    spec:
+      nodeSelector:
+        role: storage-node
+      containers:
+      - name: admin-api
+        image: registry.hierocracy.home:5000/rag-admin-api:__VERSION__
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 256Mi
+        env:
+        - name: DB_ADAPTER_URL
+          value: "https://db-adapter.rag-system.svc.cluster.local"
+        - name: S3_MANAGER_URL
+          value: "https://object-store-mgr.rag-system.svc.cluster.local"
+        - name: QDRANT_ADAPTER_URL
+          value: "https://qdrant-adapter.rag-system.svc.cluster.local"
+        - name: LLM_GATEWAY_URL
+          value: "https://llm-gateway.rag-system.svc.cluster.local"
+        - name: MEMORY_CONTROLLER_URL
+          value: "https://memory-controller.rag-system.svc.cluster.local"
+        - name: INGESTION_URL
+          value: "https://rag-ingestion-service.rag-system.svc.cluster.local"
+        - name: OTEL_USE_TLS
+          value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "otel-collector.monitoring.svc.cluster.local:4317"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: rag-admin-api-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-admin-api
+  namespace: rag-system
+  annotations:
+    purelb.io/service-group: default
+spec:
+  selector:
+    app: rag-admin-api
+  ports:
+  - port: 443
+    targetPort: 8080
+    name: https
+  type: LoadBalancer

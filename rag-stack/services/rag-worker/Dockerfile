@@ -7,11 +7,12 @@ WORKDIR /app
 RUN apk add --no-cache gcc musl-dev git
 
 # Leverage layer cache for deps
-COPY common/ /common/
+COPY common/go.mod common/go.sum /common/
 COPY rag-worker/go.mod rag-worker/go.sum ./
 RUN CGO_ENABLED=0 go mod download
 
 # Copy the rest of the source
+COPY common/ /common/
 COPY rag-worker/ .
 
 # Build

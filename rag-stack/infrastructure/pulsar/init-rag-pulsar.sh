@@ -76,7 +76,7 @@ else
 fi
 
 echo "--- 3. Ensuring namespaces exist ---"
-namespaces=("stage" "data" "operations")
+namespaces=("stage" "data" "operations" "dlq" "sessions")
 for ns in "${namespaces[@]}"; do
     full_ns="rag-pipeline/$ns"
     if ! pulsar_admin namespaces list rag-pipeline | grep -q "^$full_ns$"; then
@@ -86,6 +86,18 @@ for ns in "${namespaces[@]}"; do
         pulsar_admin namespaces set-is-allow-auto-update-schema "$full_ns" --enable
     else
         echo "Namespace '$full_ns' already exists"
+    fi
+
+    # Specialized policies for sessions namespace
+    if [[ "$ns" == "sessions" ]]; then
+        echo "Applying specialized policies for $full_ns"
+        # Set message TTL to 30 minutes (1800 seconds)
+        pulsar_admin namespaces set-message-ttl "$full_ns" --messageTTL 1800 || true
+        # Set inactive topic policy to delete after 5 minutes of inactivity (300 seconds)
+        pulsar_admin namespaces set-inactive-topic-policies "$full_ns" \
+            --enable-delete-while-inactive \
+            --timeout 300s \
+            --delete-mode delete_when_no_subscriptions || true
     fi
 done
 

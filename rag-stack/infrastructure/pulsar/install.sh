@@ -13,26 +13,21 @@ export PULSAR_INSTALL="$REPO_DIR/infrastructure/pulsar"
 PULSAR_REMOVE="${PULSAR_REMOVE:-${FRESH_INSTALL:-false}}"
 
 # Journaling (resumable install)
-JOURNAL_DIR="${INSTALL_JOURNAL_DIR:-$HOME/.complete-build/journal/pulsar}"
-mkdir -p "$JOURNAL_DIR"
-chmod 700 "$JOURNAL_DIR" 2>/dev/null || true
-STEP_PREFIX="pulsar"
+source "${REPO_DIR}/../scripts/journal-helper.sh"
+init_journal
 
 log()  { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
 warn() { log "WARN: $*"; }
 fail() { log "ERROR: $*"; exit 1; }
 
-mark_done() {
-  local step="$1"; touch "$JOURNAL_DIR/${STEP_PREFIX}.$step.done";
-}
-is_done() {
-  local step="$1"; [[ -f "$JOURNAL_DIR/${STEP_PREFIX}.$step.done" ]];
-}
+# Bridge custom journaling to standard journal-helper
+mark_done() { mark_step_done "$1"; }
+is_done() { is_step_done "$1"; }
 
 # If we are forcibly removing/resetting, clear journal so we don't skip steps incorrectly
-if [ "$PULSAR_REMOVE" = "true" ] && [ -d "$JOURNAL_DIR" ]; then
-  log "PULSAR_REMOVE=true detected. Clearing install journal at $JOURNAL_DIR"
-  rm -f "$JOURNAL_DIR/${STEP_PREFIX}."*.done 2>/dev/null || true
+if [[ "${PULSAR_REMOVE:-false}" == "true" ]]; then
+  log "PULSAR_REMOVE=true detected. Clearing install journal."
+  clear_journal
 fi
 
 echo "--- 1. Preparing Namespace and Optional Cleanup ---"
@@ -57,6 +52,48 @@ if ! is_done 10.ns; then
     pod-security.kubernetes.io/audit=privileged \
     pod-security.kubernetes.io/warn=privileged \
     pod-security.kubernetes.io/enforce=privileged
+  
+  # Inject the registry & Pulsar Root CA ConfigMap
+  log "Ensuring registry-ca-cm (combined Registry & Pulsar) in $NAMESPACE..."
+  
+  # Ensure SAFE_TMP_DIR exists
+  mkdir -p "$SAFE_TMP_DIR"
+  
+  COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+  rm -f "$COMBINED_CA"
+  touch "$COMBINED_CA"
+
+  # 1. Extract Registry CA
+  if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+      log "Extracting Registry CA from container-registry/in-cluster-registry-tls..."
+      $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+  else
+      # Fallback: Extract from talos patch if source secret is missing
+      log "Fallback: Extracting Registry CA from Talos registry patch..."
+      CA_B64=$(grep "ca: " "/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml" | head -n 1 | awk '{print $2}')
+      if [ -n "$CA_B64" ]; then
+          echo "$CA_B64" | base64 -d >> "$COMBINED_CA"
+      fi
+  fi
+
+  # 2. Extract Pulsar CA (if available - might not be yet on first install)
+  if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+      log "Extracting Pulsar CA from apache-pulsar/pulsar-ca-tls..."
+      echo "" >> "$COMBINED_CA" # Ensure newline
+      $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+  fi
+
+  if [ -s "$COMBINED_CA" ]; then
+      $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+      # Also create 'registry-ca' for legacy compatibility
+      $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+  else
+      warn "Could not find any CA to inject into $NAMESPACE."
+  fi
+
+  # Clean up the temporary cert file
+  rm -f "$COMBINED_CA"
+
   mark_done 10.ns
 else
   log "Step 1 already completed (journal 10.ns)"
@@ -141,6 +178,25 @@ else
   log "Helm install/upgrade already completed (journal 30.helmInstall)"
 fi
 
+# Update CA ConfigMap now that Pulsar CA might be newly created/rotated
+log "Updating registry-ca-cm with latest combined CAs..."
+mkdir -p "$SAFE_TMP_DIR"
+COMBINED_CA="$SAFE_TMP_DIR/combined-ca.crt"
+rm -f "$COMBINED_CA"
+touch "$COMBINED_CA"
+if $KUBECTL get secret in-cluster-registry-tls -n container-registry >/dev/null 2>&1; then
+    $KUBECTL get secret in-cluster-registry-tls -n container-registry -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+if $KUBECTL get secret pulsar-ca-tls -n apache-pulsar >/dev/null 2>&1; then
+    echo "" >> "$COMBINED_CA"
+    $KUBECTL get secret pulsar-ca-tls -n apache-pulsar -o jsonpath='{.data.ca\.crt}' | base64 --decode >> "$COMBINED_CA"
+fi
+if [ -s "$COMBINED_CA" ]; then
+    $KUBECTL create configmap registry-ca-cm -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+    $KUBECTL create configmap registry-ca -n $NAMESPACE --from-file=ca.crt="$COMBINED_CA" --dry-run=client -o yaml | $KUBECTL apply -f -
+fi
+rm -f "$COMBINED_CA"
+
 echo "--- 4. Exposing Pulsar Manager admin ---"
 if ! is_done 40.exposePM; then
   if ! $KUBECTL -n $NAMESPACE get svc pulsar-manager-lb >/dev/null 2>&1; then
@@ -176,7 +232,7 @@ fi
 
 if ! is_done 60.bkMeta; then
   # Pick a pod owned by the 'pulsar-bookie' StatefulSet (robust to label changes)
-  BK_POD=$($KUBECTL -n $NAMESPACE get pods -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].kind=="StatefulSet" && @.metadata.ownerReferences[0].name=="pulsar-bookie")]}{.metadata.name}{"\n"}{end}' | head -n1 2>/dev/null || true)
+  BK_POD=$($KUBECTL -n $NAMESPACE get pods -l app=pulsar,component=bookie --no-headers -o custom-columns=:metadata.name | head -n1 2>/dev/null || true)
   if [ -n "$BK_POD" ]; then
     echo "Using bookkeeper pod: $BK_POD to verify metadata"
     $KUBECTL -n $NAMESPACE exec -i "$BK_POD" -- bash -lc '
@@ -200,7 +256,7 @@ if ! is_done 60.bkMeta; then
     # Optional: clean local bookie data if FORCE_REINIT=true
     if [ "${FORCE_REINIT:-false}" = "true" ]; then
       echo "FORCE_REINIT=true detected. Cleaning local bookie data across pods..."
-      for POD in $($KUBECTL -n $NAMESPACE get pods -o jsonpath='{range .items[?(@.metadata.ownerReferences[0].kind=="StatefulSet" && @.metadata.ownerReferences[0].name=="pulsar-bookie")]}{.metadata.name}{"\n"}{end}'); do
+      for POD in $($KUBECTL -n $NAMESPACE get pods -l app=pulsar,component=bookie --no-headers -o custom-columns=:metadata.name); do
         echo "Cleaning bookie on pod: $POD"
         $KUBECTL -n $NAMESPACE exec -i "$POD" -- bash -lc '
         set -e
@@ -213,7 +269,7 @@ if ! is_done 60.bkMeta; then
       done
       echo "Waiting for bookkeeper statefulset to become Ready after cleanup..."
       set +e
-      $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-bookkeeper --timeout=10m || true
+      $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-bookie --timeout=10m || true
       set -e
     fi
   else
@@ -224,4 +280,42 @@ else
   log "BookKeeper metadata step already completed (journal 60.bkMeta)"
 fi
 
-echo "Pulsar Installation Complete. BookKeeper cluster metadata validated."
+echo "--- 6. Post-Install Verification ---"
+# Verify that critical Pulsar components are actually running before declaring success.
+# This catches cases where Helm --wait succeeded but pods subsequently crashed.
+VERIFY_TIMEOUT=120
+VERIFY_POLL=10
+VERIFY_ELAPSED=0
+VERIFY_OK=false
+
+while [[ "$VERIFY_ELAPSED" -lt "$VERIFY_TIMEOUT" ]]; do
+    ZK_READY=$($KUBECTL get pods -n $NAMESPACE -l component=zookeeper --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+    BK_READY=$($KUBECTL get pods -n $NAMESPACE -l component=bookie --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+    BR_READY=$($KUBECTL get pods -n $NAMESPACE -l component=broker --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+    PX_READY=$($KUBECTL get pods -n $NAMESPACE -l component=proxy --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+
+    if [[ "$ZK_READY" -ge 1 && "$BK_READY" -ge 1 && "$BR_READY" -ge 1 && "$PX_READY" -ge 1 ]]; then
+        VERIFY_OK=true
+        break
+    fi
+    log "Waiting for Pulsar components (ZK=$ZK_READY BK=$BK_READY BR=$BR_READY PX=$PX_READY)..."
+    sleep "$VERIFY_POLL"
+    VERIFY_ELAPSED=$((VERIFY_ELAPSED + VERIFY_POLL))
+done
+
+if [[ "$VERIFY_OK" == "true" ]]; then
+    log "Pulsar verification PASSED: ZK=$ZK_READY BK=$BK_READY BR=$BR_READY PX=$PX_READY"
+else
+    log "ERROR: Pulsar verification FAILED after ${VERIFY_TIMEOUT}s."
+    log "Pod status:"
+    $KUBECTL get pods -n $NAMESPACE -o wide 2>&1 || true
+    log "Recent events:"
+    $KUBECTL get events -n $NAMESPACE --sort-by=.lastTimestamp 2>&1 | tail -30 || true
+    fail "Pulsar components are not running. Aborting."
+fi
+
+echo "Pulsar Installation Complete. All components verified running."
+# Do NOT clear journal here — let the parent script (setup-complete.sh) manage
+# journal lifecycle via clear_all_journals on FRESH_INSTALL.
+# This prevents re-running all Pulsar steps when setup-all.sh or other scripts
+# call install.sh again in the same session.

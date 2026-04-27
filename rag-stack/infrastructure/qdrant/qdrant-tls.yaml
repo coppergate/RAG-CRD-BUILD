@@ -1,0 +1,31 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: qdrant-cert
+  namespace: rag-system
+spec:
+  secretName: qdrant-tls
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+  subject:
+    organizations:
+      - Hierocracy
+  commonName: qdrant.rag-system.svc.cluster.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+    - qdrant
+    - qdrant.rag-system
+    - qdrant.rag-system.svc
+    - qdrant.rag-system.svc.cluster.local
+    - qdrant.hierocracy.home
+  issuerRef:
+    name: hierocracy-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io

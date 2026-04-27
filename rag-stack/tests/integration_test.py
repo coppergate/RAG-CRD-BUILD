@@ -28,15 +28,18 @@ if OTEL_ENABLED:
         OTEL_ENABLED = False
 
 # Constants from environment or defaults
-endpoint_env = os.getenv("S3_ENDPOINT", "http://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
+endpoint_env = os.getenv("S3_ENDPOINT", "rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
+bucket_port = os.getenv("BUCKET_PORT", "443")
 if endpoint_env and not endpoint_env.startswith("http"):
-    S3_ENDPOINT = "http://" + endpoint_env
+    scheme = "https" if bucket_port == "443" else "http"
+    S3_ENDPOINT = f"{scheme}://{endpoint_env}"
 else:
     S3_ENDPOINT = endpoint_env
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
-GATEWAY_URL = os.getenv("GATEWAY_URL", "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase-bucket")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 
 def test_s3_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing S3 Operations...")
@@ -64,15 +67,18 @@ def test_s3_ops():
 def test_qdrant_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing Qdrant Operations...")
     print(f"  - QDRANT_HOST={QDRANT_HOST}")
-    client = QdrantClient(host=QDRANT_HOST, port=6333, timeout=60)
-    collection_name = "test_collection"
+    qdrant_use_tls = os.getenv("QDRANT_USE_TLS", "false") == "true"
+    client = QdrantClient(host=QDRANT_HOST, port=6333, https=qdrant_use_tls, prefer_grpc=False, timeout=60)
     
-    # Recreate collection
+    vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
+    collection_name = f"test_collection_{vector_size}"
+    
+    # Recreate collection (handles existing collections gracefully)
     client.recreate_collection(
         collection_name=collection_name,
-        vectors_config=models.VectorParams(size=384, distance=models.Distance.COSINE),
+        vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
     )
-    print(f"  - Created collection {collection_name}")
+    print(f"  - Created collection {collection_name} (size: {vector_size})")
     
     # Upsert dummy data
     client.upsert(
@@ -80,7 +86,7 @@ def test_qdrant_ops():
         points=[
             models.PointStruct(
                 id=1,
-                vector=[0.1] * 384,
+                vector=[0.1] * vector_size,
                 payload={"text": "Test vector search"}
             )
         ]
@@ -88,11 +94,11 @@ def test_qdrant_ops():
     print("  - Upserted test point")
     
     # Search
-    results = client.query_points(
+    results = client.search(
         collection_name=collection_name,
-        query=[0.1] * 384,
+        query_vector=[0.1] * vector_size,
         limit=1
-    ).points
+    )
     assert len(results) > 0
     assert results[0].payload["text"] == "Test vector search"
     print("  - Verified search result")
@@ -100,11 +106,10 @@ def test_qdrant_ops():
 def test_rag_retrieval():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing RAG Retrieval via Gateway...")
     print(f"  - GATEWAY_URL={GATEWAY_URL}")
-    # This assumes the gateway is connected to a worker that can search Qdrant
-    # For a basic connectivity test, we just check if the gateway responds
+    test_file_base = "e2e-test-file-"
     payload = {
-        "model": "llama3.1",
-        "messages": [{"role": "user", "content": "Tell me about the project"}]
+        "model": OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": f"Retrieve the secret code from the {test_file_base} documents."}]
     }
     try:
         headers = {}
@@ -131,7 +136,7 @@ def test_rag_retrieval():
 
 if __name__ == "__main__":
     # Note: These tests are intended to run INSIDE the cluster or where endpoints are reachable
-    print("[ENV] Test configuration:")
+    print(f"[{datetime.utcnow().isoformat()}] [ENV] Test configuration:")
     print(json.dumps({
         "S3_ENDPOINT": S3_ENDPOINT,
         "BUCKET_NAME": BUCKET_NAME,
@@ -143,9 +148,9 @@ if __name__ == "__main__":
         test_s3_ops()
         test_qdrant_ops()
         test_rag_retrieval()
-        print("\n[SUCCESS] All core component tests passed!")
+        print(f"\n[{datetime.utcnow().isoformat()}] [SUCCESS] All core component tests passed!")
     except Exception as e:
-        print(f"\n[FAILURE] Test failed: {e}")
+        print(f"\n[{datetime.utcnow().isoformat()}] [FAILURE] Test failed: {e}")
         # Try to provide more diagnostics on failure
         print("[DIAG] Python version:", sys.version)
         print("[DIAG] Installed packages:")

@@ -18,28 +18,31 @@ spec:
       enableServiceLinks: false
       containers:
       - name: adapter
-        image: registry.hierocracy.home:5000/db-adapter:__VERSION__
+        image: registry.container-registry.svc.cluster.local:5000/db-adapter:__VERSION__
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
         startupProbe:
           httpGet:
-            path: /health
+            path: /healthz
             port: 8080
+            scheme: HTTPS
           periodSeconds: 5
           failureThreshold: 30
         readinessProbe:
           httpGet:
-            path: /health
+            path: /readyz
             port: 8080
+            scheme: HTTPS
           initialDelaySeconds: 10
           periodSeconds: 10
           timeoutSeconds: 2
           failureThreshold: 6
         livenessProbe:
           httpGet:
-            path: /health
+            path: /healthz
             port: 8080
+            scheme: HTTPS
           initialDelaySeconds: 30
           periodSeconds: 20
           timeoutSeconds: 2
@@ -58,11 +61,38 @@ spec:
               name: timescaledb-secret
               key: url
         - name: PULSAR_URL
-          value: "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: PULSAR_PROMPT_TOPIC
           value: "persistent://rag-pipeline/data/chat-prompts"
         - name: PULSAR_RESPONSE_TOPIC
           value: "persistent://rag-pipeline/stage/results"
         - name: PULSAR_DB_OPS_TOPIC
           value: "persistent://rag-pipeline/operations/db-ops"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OTEL_USE_TLS
+          value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "otel-collector.monitoring.svc.cluster.local:4317"
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: db-adapter-tls
         # Removed dev-only source ConfigMap mount. Images are the deployment artifact.

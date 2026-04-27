@@ -9,28 +9,33 @@ datasources:
       - name: Loki
         type: loki
         access: proxy
-        url: http://loki-gateway.monitoring.svc.cluster.local
+        url: https://loki-gateway.monitoring.svc.cluster.local
       - name: Tempo
         type: tempo
         access: proxy
-        url: http://tempo-gateway.monitoring.svc.cluster.local
+        url: https://tempo.monitoring.svc.cluster.local
       - name: Mimir
         type: mimir
         access: proxy
-        url: http://mimir-gateway.monitoring.svc.cluster.local
+        url: https://mimir-gateway.monitoring.svc.cluster.local
       - name: Prometheus
         type: prometheus
         access: proxy
-        url: http://mimir-gateway.monitoring.svc.cluster.local/prometheus
+        url: https://mimir-gateway.monitoring.svc.cluster.local/prometheus
 service:
   type: ClusterIP
 ingress:
   enabled: true
   ingressClassName: traefik
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
   hosts:
-    - grafana.rag.local
+    - grafana.hierocracy.home
+  tls:
+    - secretName: grafana-tls
+      hosts:
+        - grafana.hierocracy.home
   path: /
 persistence:
   enabled: true

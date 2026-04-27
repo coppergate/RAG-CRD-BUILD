@@ -18,33 +18,36 @@ spec:
       enableServiceLinks: false
       containers:
         - name: qdrant-adapter
-          image: registry.hierocracy.home:5000/qdrant-adapter:__VERSION__
+          image: registry.container-registry.svc.cluster.local:5000/qdrant-adapter:__VERSION__
           imagePullPolicy: Always
           startupProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: 8080
+              scheme: HTTPS
             periodSeconds: 5
             failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: 8080
+              scheme: HTTPS
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 6
           livenessProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: 8080
+              scheme: HTTPS
             initialDelaySeconds: 30
             periodSeconds: 20
             timeoutSeconds: 2
             failureThreshold: 3
           env:
             - name: PULSAR_URL
-              value: pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650
+              value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
             - name: PULSAR_QDRANT_OPS_TOPIC
               value: persistent://rag-pipeline/operations/qdrant-ops
             - name: PULSAR_QDRANT_RESULTS_TOPIC
@@ -53,6 +56,28 @@ spec:
               value: qdrant.rag-system.svc.cluster.local
             - name: QDRANT_PORT
               value: "6333"
+            - name: QDRANT_USE_TLS
+              value: "true"
+            - name: SSL_CERT_FILE
+              value: "/etc/ssl/certs/ca-certificates.crt"
+            - name: OTEL_USE_TLS
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "otel-collector.monitoring.svc.cluster.local:4317"
+            - name: TLS_CERT
+              value: "/etc/ssl/certs/tls.crt"
+            - name: TLS_KEY
+              value: "/etc/ssl/certs/tls.key"
+          volumeMounts:
+            - name: registry-ca
+              mountPath: /etc/ssl/certs/ca-certificates.crt
+              subPath: ca.crt
+            - name: service-tls
+              mountPath: /etc/ssl/certs/tls.crt
+              subPath: tls.crt
+            - name: service-tls
+              mountPath: /etc/ssl/certs/tls.key
+              subPath: tls.key
           resources:
             requests:
               cpu: "200m"
@@ -62,3 +87,10 @@ spec:
               memory: "1Gi"
           ports:
             - containerPort: 8080
+      volumes:
+        - name: registry-ca
+          configMap:
+            name: registry-ca-cm
+        - name: service-tls
+          secret:
+            secretName: qdrant-adapter-tls

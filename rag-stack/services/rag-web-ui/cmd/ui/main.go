@@ -10,9 +10,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"app-builds/common/health"
 	"app-builds/common/telemetry"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -43,16 +47,16 @@ func initEnv() {
 
 	endpoint := os.Getenv("S3_ENDPOINT")
 	if endpoint != "" && !strings.HasPrefix(endpoint, "http") {
-		endpoint = "http://" + endpoint
+		endpoint = "https://" + endpoint
 	}
 	bucketName = os.Getenv("BUCKET_NAME")
 	llmURL = os.Getenv("LLM_URL")
 	if llmURL == "" {
-		llmURL = "http://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
+		llmURL = "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
 	}
 	llmModel = os.Getenv("LLM_MODEL")
 	if llmModel == "" {
-		llmModel = "llama3.1"
+		llmModel = "llama3.1:latest"
 	}
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
@@ -240,11 +244,25 @@ func askHandler(w http.ResponseWriter, r *http.Request) {
 
 	sID := req.SessionID
 	if sID == "" {
-		sID = uuid.New().String()
-		if db != nil {
-			_, err := db.Exec("INSERT INTO sessions (session_id, name, description) VALUES ($1, $2, $3) ON CONFLICT (session_id) DO NOTHING", sID, req.SessionName, req.SessionDesc)
-			if err != nil {
-				log.Printf("Error creating session %s: %v", sID, err)
+		if db != nil && req.SessionName != "" {
+			// Try to find existing session by name if sID is not provided
+			err := db.QueryRow("SELECT session_id FROM sessions WHERE name = $1", req.SessionName).Scan(&sID)
+			if err != nil && err != sql.ErrNoRows {
+				log.Printf("Error checking for existing session by name %s: %v", req.SessionName, err)
+			}
+		}
+
+		if sID == "" {
+			sID = uuid.New().String()
+			if db != nil {
+				_, err := db.Exec("INSERT INTO sessions (session_id, name, description) VALUES ($1, $2, $3) ON CONFLICT (session_id) DO NOTHING", sID, req.SessionName, req.SessionDesc)
+				if err != nil {
+					log.Printf("Error creating session %s: %v", sID, err)
+					// If insert failed (likely name conflict), we should still try to proceed if we can get the ID
+					if req.SessionName != "" {
+						_ = db.QueryRow("SELECT session_id FROM sessions WHERE name = $1", req.SessionName).Scan(&sID)
+					}
+				}
 			}
 		}
 	}
@@ -260,7 +278,7 @@ func askHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payload := map[string]interface{}{"model": llmModel, "session_id": sID, "messages": []map[string]string{{"role": "user", "content": req.Query}}}
+	payload := map[string]interface{}{"model": llmModel, "session_id": sID, "tags": req.Tags, "messages": []map[string]string{{"role": "user", "content": req.Query}}}
 	body, _ := json.Marshal(payload)
 	resp, err := http.Post(llmURL, "application/json", bytes.NewBuffer(body))
 	if err != nil {
@@ -307,6 +325,9 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	tags := r.Form["tags"]
+	fileNames := r.Form["file_names"]
+	vsStr := r.FormValue("vector_size")
+	sessionID := r.FormValue("session_id")
 	if db != nil {
 		var ingestionID string
 		err := db.QueryRow("INSERT INTO code_ingestion (s3_bucket_id) VALUES ($1) RETURNING ingestion_id", bucketName).Scan(&ingestionID)
@@ -330,8 +351,22 @@ func triggerIngestHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				tNames = append(tNames, n)
 			}
-			p, _ := json.Marshal(map[string]interface{}{"ingestion_id": ingestionID, "tag_names": tNames, "tag_ids": tags})
-			resp, err := http.Post("http://rag-ingestion-service.rag-system.svc.cluster.local/ingest", "application/json", bytes.NewBuffer(p))
+			payload := map[string]interface{}{
+				"ingestion_id": ingestionID,
+				"tag_names":    tNames,
+				"tag_ids":      tags,
+				"session_id":   sessionID,
+			}
+			if len(fileNames) > 0 {
+				payload["file_names"] = fileNames
+			}
+			if vsStr != "" {
+				if vs, err := strconv.Atoi(vsStr); err == nil {
+					payload["vector_size"] = vs
+				}
+			}
+			p, _ := json.Marshal(payload)
+			resp, err := http.Post("https://rag-ingestion-service.rag-system.svc.cluster.local/ingest", "application/json", bytes.NewBuffer(p))
 			if err != nil {
 				log.Printf("Error triggering ingestion service: %v", err)
 			} else {
@@ -362,8 +397,6 @@ func deleteDataHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
-
-func healthHandler(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }
 
 func renderTemplate(w http.ResponseWriter, data interface{}) {
 	tmpl := `
@@ -493,11 +526,26 @@ func renderTemplate(w http.ResponseWriter, data interface{}) {
 func main() {
 	initEnv()
 
+	healthSrv := health.NewServer()
+
 	shutdown, err := telemetry.InitTracer("rag-web-ui")
 	if err != nil {
 		log.Printf("Warning: failed to initialize tracer: %v", err)
 	} else {
 		defer shutdown(context.Background())
+	}
+
+	// Register readiness checks
+	if db != nil {
+		healthSrv.RegisterCheck("database", func() error {
+			return db.Ping()
+		})
+	}
+	if s3Client != nil {
+		healthSrv.RegisterCheck("s3", func() error {
+			_, err := s3Client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
+			return err
+		})
 	}
 
 	mux := http.NewServeMux()
@@ -510,10 +558,34 @@ func main() {
 	mux.HandleFunc("/trigger-ingest", triggerIngestHandler)
 	mux.HandleFunc("/create-tag", createTagHandler)
 	mux.HandleFunc("/delete-data", deleteDataHandler)
-	mux.HandleFunc("/health", healthHandler)
+	
+	healthSrv.RegisterRoutes(mux)
 
 	otelHandler := otelhttp.NewHandler(mux, "rag-web-ui")
 
-	fmt.Println("RAG Interactive UI v4 listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", otelHandler))
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: otelHandler,
+	}
+
+	go func() {
+		certFile := os.Getenv("TLS_CERT")
+		keyFile := os.Getenv("TLS_KEY")
+		if certFile != "" && keyFile != "" {
+			fmt.Printf("RAG Interactive UI v4 listening with TLS on :8080\n")
+			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
+		} else {
+			fmt.Printf("RAG Interactive UI v4 listening on :8080\n")
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Listen error: %v", err)
+			}
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+	log.Println("Shutting down RAG Web UI...")
 }

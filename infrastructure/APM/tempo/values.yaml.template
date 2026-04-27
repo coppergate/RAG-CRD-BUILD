@@ -1,70 +1,105 @@
-storage:
-  trace:
-    backend: s3
-    s3:
-      bucket: ${BUCKET_NAME}
-      endpoint: ${S3_ENDPOINT}
-      access_key: ${AWS_ACCESS_KEY_ID}
-      secret_key: ${AWS_SECRET_ACCESS_KEY}
-      insecure: true
+# values.yaml.template - For unified grafana/tempo chart (Single Binary mode)
+# Compatible with grafana/tempo chart 1.24.4
 
-# Replicas set to 1 for small/demo environment
-ingester:
-  replicas: 1
-  persistence:
+tempo:
+  extraVolumeMounts:
+    - name: registry-ca
+      mountPath: /etc/ssl/certs/ca.crt
+      subPath: ca.crt
+    - name: service-tls
+      mountPath: /etc/ssl/certs/tls.crt
+      subPath: tls.crt
+    - name: service-tls
+      mountPath: /etc/ssl/certs/tls.key
+      subPath: tls.key
+
+  # Config sections directly mapped to tempo config
+  server:
+    http_listen_port: 3200
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: ${BUCKET_NAME}
+        endpoint: ${S3_ENDPOINT}
+        access_key: ${AWS_ACCESS_KEY_ID}
+        secret_key: ${AWS_SECRET_ACCESS_KEY}
+        insecure: false
+        forcepathstyle: true
+  
+  # Enable OTLP receivers
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+          tls:
+            cert_file: /etc/ssl/certs/tls.crt
+            key_file: /etc/ssl/certs/tls.key
+        http:
+          endpoint: 0.0.0.0:4318
+          tls:
+            cert_file: /etc/ssl/certs/tls.crt
+            key_file: /etc/ssl/certs/tls.key
+
+  metrics_generator:
     enabled: true
-    storageClass: rook-ceph-block
-    size: 10Gi
-  nodeSelector:
-    role: storage-node
+    config:
+      storage:
+        path: /var/tempo/generator/wal
+        remote_write:
+          - url: https://mimir-gateway.monitoring.svc.cluster.local/api/v1/push
+            tls_config:
+              ca_file: /etc/ssl/certs/ca.crt
+              insecure_skip_verify: true
 
-querier:
-  replicas: 1
-  nodeSelector:
-    role: storage-node
+  retention: 24h
+  # Additional overrides if needed
+  overrides: {}
 
-queryFrontend:
-  replicas: 1
-  nodeSelector:
-    role: storage-node
+# Root level items
+extraEnv:
+  - name: SSL_CERT_FILE
+    value: /etc/ssl/certs/ca.crt
 
-distributor:
-  replicas: 1
-  config:
-    log_received_spans:
-      enabled: true
-  nodeSelector:
-    role: storage-node
+extraVolumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+  - name: service-tls
+    secret:
+      secretName: tempo-tls
 
-compactor:
-  replicas: 1
-  persistence:
-    enabled: true
-    storageClass: rook-ceph-block
-    size: 10Gi
-  nodeSelector:
-    role: storage-node
+# Scaling for small environment
+replicas: 1
 
-# Enable OTLP receivers in the distributor
-traces:
-  otlp:
-    grpc:
-      enabled: true
-    http:
-      enabled: true
-
-# Optional: gateway can provide a single entry point
-gateway:
+persistence:
   enabled: true
-  nodeSelector:
-    role: storage-node
+  storageClassName: rook-ceph-block
+  size: 10Gi
 
-memcached:
-  enabled: true
-  nodeSelector:
-    role: storage-node
+nodeSelector:
+  role: storage-node
 
+# Enable Tempo Query (Jaeger UI compatible search)
 tempoQuery:
   enabled: true
   nodeSelector:
     role: storage-node
+
+# Expose OTLP ports on the service
+service:
+  type: ClusterIP
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+    - name: https
+      port: 443
+      targetPort: 4318
+    - name: jaeger-thrift-http
+      port: 14268
+      targetPort: 14268

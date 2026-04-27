@@ -36,12 +36,18 @@ is_local_ref() {
   [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_BOOTSTRAP"* ]] || [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_CLUSTER"* ]]
 }
 
+is_local_exception_ref() {
+  local ref="$1"
+  # Bootstrap exception: the in-cluster registry deployment image itself.
+  [[ "$ref" == "registry:2" ]]
+}
+
 is_active_path() {
   local p="$1"
   [[ "$p" != "$ROOT_DIR/.git/"* ]] &&
-  [[ "$p" != "$ROOT_DIR/ai-changes/original/"* ]] &&
-  [[ "$p" != "$ROOT_DIR/image-source-cache/"* ]] &&
-  [[ "$p" != "$ROOT_DIR/registry-cache/"* ]] &&
+  [[ "$p" != "/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/original/"* ]] &&
+  [[ "$p" != "/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/image-source-cache/"* ]] &&
+  [[ "$p" != "/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/registry-cache/"* ]] &&
   [[ "$p" != "$ROOT_DIR/research/"* ]]
 }
 
@@ -59,13 +65,18 @@ while IFS= read -r -d '' f; do
   sed -nE \
     -e 's/^[[:space:]]*image:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p' \
     -e 's/^[[:space:]]*imageName:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p' \
-    -e 's/.*--prometheus-config-reloader=([^"[:space:]]+).*/\1/p' "$f" >> "$TMP_CONSUMED_RAW" || true
+    -e 's/.*--prometheus-config-reloader=([^"[:space:]]+).*/\1/p' \
+    -e 's/.*-configmapServerImage=([^"[:space:]]+).*/\1/p' \
+    -e 's/.*--acme-http01-solver-image=([^"[:space:]]+).*/\1/p' \
+    -e '/OPERATOR_IMAGE_NAME/{n;s/^[[:space:]]*value:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p;}' \
+    -e 's/^[[:space:]]*-[[:space:]]+((registry\.hierocracy\.home:5000|registry\.container-registry\.svc\.cluster\.local:5000|docker\.io|quay\.io|ghcr\.io|gcr\.io|registry\.k8s\.io|kubernetesui|apachepulsar|streamnative)\/[^"[:space:]]+).*/\1/p' \
+    "$f" >> "$TMP_CONSUMED_RAW" || true
 done < <(find "$ROOT_DIR" -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 2>/dev/null)
 
 # 3) Shell kubectl run --image= refs
 while IFS= read -r -d '' f; do
   is_active_path "$f" || continue
-  sed -nE 's/.*kubectl[^[:space:]]*[[:space:]]+run[[:space:]].*--image=([^"[:space:]]+).*/\1/p' "$f" >> "$TMP_CONSUMED_RAW" || true
+  sed -nE 's/.*(kubectl|\$KUBECTL)[^[:space:]]*[[:space:]]+run[[:space:]].*--image=([^"[:space:]]+).*/\2/p' "$f" >> "$TMP_CONSUMED_RAW" || true
 done < <(find "$ROOT_DIR" -type f -name '*.sh' ! -name 'audit-image-sources.sh' -print0 2>/dev/null)
 
 # 4) Go Image: refs
@@ -106,6 +117,9 @@ trap 'rm -f "$TMP_CONSUMED_RAW" "$TMP_CONSUMED_UPSTREAM" "$TMP_PLAN" "$DIRECT_NO
 sort -u "$TMP_CONSUMED_RAW" | while read -r img; do
   [[ -z "$img" ]] && continue
   if ! is_local_ref "$img"; then
+    if is_local_exception_ref "$img"; then
+      continue
+    fi
     echo "$img"
   fi
 done | sort -u > "$DIRECT_NONLOCAL"
