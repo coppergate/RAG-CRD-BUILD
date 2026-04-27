@@ -7,12 +7,14 @@ import (
 // Config provides the specific configuration for Llama 3
 var Config = models.ModelConfig{
 	PlanningPromptTemplate: `You are a RAG Planner. Decompose the following user query into 1-3 specific search queries.
-Output ONLY a JSON array of strings. Do not include any other text or markdown formatting.
+Output ONLY a JSON array of strings. 
+CRITICAL: Do not include ANY introductory text, explanation, or conversational filler. 
+Your output MUST start with "[" and end with "]".
 Example Output: ["query 1", "query 2"]
 Query: %s`,
-	ExecutionHeader: "Context:\n",
-	ExecutionFooter: "\nQuery: ",
-	ExecutionSuffix: "\nAnswer: ",
+	ExecutionHeader: "Use the following retrieved context to answer the user query. If the context does not contain the answer, state that you don't know based on the provided information.\n\nContext:\n",
+	ExecutionFooter: "\n\nUser Query: ",
+	ExecutionSuffix: "\n\nAssistant Answer: ",
 	InsufficientContextPhrases: []string{
 		"\"insufficient_context\": true",
 		"insufficient context",

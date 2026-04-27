@@ -5,7 +5,6 @@ import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
 import '../../core/models/tag.dart';
 import '../../core/models/session.dart';
-import '../../app_config_provider.dart';
 
 class S3Page extends StatefulWidget {
   const S3Page({super.key});
@@ -145,7 +144,7 @@ class _S3PageState extends State<S3Page> {
               builder: (context, snapshot) {
                 return DropdownButtonFormField<Tag>(
                   decoration: const InputDecoration(labelText: 'Filter by Tag', border: OutlineInputBorder(), isDense: true),
-                  value: _selectedTag,
+                  initialValue: _selectedTag,
                   items: [
                     const DropdownMenuItem(value: null, child: Text('All Tags')),
                     ...?snapshot.data?.map((t) => DropdownMenuItem(value: t, child: Text(t.name))),
@@ -167,7 +166,7 @@ class _S3PageState extends State<S3Page> {
               builder: (context, snapshot) {
                 return DropdownButtonFormField<Session>(
                   decoration: const InputDecoration(labelText: 'Filter by Session', border: OutlineInputBorder(), isDense: true),
-                  value: _selectedSession,
+                  initialValue: _selectedSession,
                   items: [
                     const DropdownMenuItem(value: null, child: Text('All Sessions')),
                     ...?snapshot.data?.map((s) => DropdownMenuItem(value: s, child: Text(s.id.substring(0, 8)))),

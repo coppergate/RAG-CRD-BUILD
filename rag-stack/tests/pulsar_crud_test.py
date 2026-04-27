@@ -174,11 +174,9 @@ def test_pulsar_db_crud():
     task_payload = {
         "id": correlation_id,
         "session_id": session_id,
-        "type": "chat_completion",
-        "payload": {
-            "model": "llama3.1:latest",
-            "messages": [{"role": "user", "content": prompt_content}]
-        },
+        "prompt": prompt_content,
+        "planner_model": "llama3.1:latest",
+        "executor_model": "llama3.1:latest",
         "timestamp": datetime.now().isoformat()
     }
     
