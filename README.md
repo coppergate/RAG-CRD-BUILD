@@ -52,6 +52,7 @@ For detailed instructions, refer to:
 The project follows a structured iteration-based development cycle:
 
 - [**Iteration 7 (Current)**](./iteration-7.md): Local Prompt Memory + Recall (Miras/Titans-Inspired), Memory Controller service, and contextual salience scoring.
+- [**Iteration 8 (Planned)**](./iteration-8.md): Advanced Reasoning, Verification (Critic phase), and autonomous Self-Correction loop.
 - [**Iteration 6 & 6b**](./iteration-6.md) ([6b](./iteration-6b.md)): Knowledge tags, multi-file upload, and session-specific Pulsar topics.
 - [**Iteration 5**](./iteration-5.md): Multi-model selection mechanism, Pulsar-based model routing, and UI for model discovery.
 
