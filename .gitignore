@@ -25,3 +25,7 @@
 __pycache__/
 *.pyc
 rag-stack/services/db-adapter/adapter
+rag-stack/services/qdrant-adapter/adapter
+rag-stack/services/build-orchestrator/build-orchestrator
+rag-stack/services/build-orchestrator/orchestrator
+rag-stack/services/prompt-aggregator/aggregator
