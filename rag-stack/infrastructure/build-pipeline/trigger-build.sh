@@ -85,6 +85,9 @@ if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
     $KUBECTL run "$UPLOADER_POD" -n "$NAMESPACE" --image="${TOOLING_REGISTRY}/amazon/aws-cli:2.34.4" --overrides='
 {
   "spec": {
+    "nodeSelector": {
+      "role": "storage-node"
+    },
     "containers": [{
       "name": "uploader",
         "image": "'"$TOOLING_REGISTRY"'/amazon/aws-cli:2.34.4",

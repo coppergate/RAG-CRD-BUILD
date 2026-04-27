@@ -18,6 +18,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protojson"
+
+	"app-builds/common/contracts"
 )
 
 type MaintenanceService struct {
@@ -165,13 +168,13 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if s.qdrantProducer != nil {
-			delPayload := map[string]interface{}{
-				"id":         uuid.New().String(),
-				"action":     "delete",
-				"collection": "vectors",
-				"paths":      group.Paths,
+			delOp := &contracts.QdrantOp{
+				Id:         uuid.New().String(),
+				Action:     "delete",
+				Collection: "vectors",
+				Paths:      group.Paths,
 			}
-			p, _ := json.Marshal(delPayload)
+			p, _ := protojson.Marshal(delOp)
 			s.qdrantProducer.Send(ctx, &pulsar.ProducerMessage{Payload: p})
 		}
 

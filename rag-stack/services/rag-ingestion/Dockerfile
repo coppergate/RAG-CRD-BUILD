@@ -16,7 +16,7 @@ RUN python -m pip install --upgrade pip==26.0.1 \
     && pip install --no-cache-dir -r requirements.txt
 
 # Copy source
-COPY rag-ingestion/service.py ./service.py
+COPY rag-ingestion/*.py ./
 
 # Create entrypoint for TLS support
 RUN echo '#!/bin/bash\n\

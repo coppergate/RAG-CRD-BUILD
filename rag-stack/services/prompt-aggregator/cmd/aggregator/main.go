@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,6 +21,8 @@ import (
 	"app-builds/common/tlsutil"
 	"app-builds/prompt-aggregator/internal/config"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func SessionTopic(id string) string {
@@ -110,44 +111,44 @@ func main() {
 			}
 
 			var comp contracts.ResponseCompletion
-			if err := json.Unmarshal(msg.Payload(), &comp); err != nil {
+			if err := protojson.Unmarshal(msg.Payload(), &comp); err != nil {
 				log.Printf("Error unmarshaling completion payload: %v", err)
 				consumer.Ack(msg)
 				continue
 			}
 
 			if comp.Status == "FAILED" {
-				log.Printf("[%s] Completion event status is FAILED, skipping aggregation", comp.ID)
+				log.Printf("[%s] Completion event status is FAILED, skipping aggregation", comp.Id)
 				consumer.Ack(msg)
 				continue
 			}
 
-	log.Printf("[%s] Received completion (Status: %s), aggregating chunks from session topic", comp.ID, comp.Status)
+	log.Printf("[%s] Received completion (Status: %s), aggregating chunks from session topic", comp.Id, comp.Status)
 
 	// Aggregate chunks from session topic
-	sessionTopic := SessionTopic(comp.ID)
+	sessionTopic := SessionTopic(comp.Id)
 	fullResult, metadata, err := aggregateChunks(ctx, client, sessionTopic, comp)
 	if err != nil {
-		log.Printf("[%s] Aggregation error on %s: %v (Partial result: %d chars)", comp.ID, sessionTopic, err, len(fullResult))
+		log.Printf("[%s] Aggregation error on %s: %v (Partial result: %d chars)", comp.Id, sessionTopic, err, len(fullResult))
 		// We could send partial result or nack
 		consumer.Nack(msg)
 		continue
 	}
 
 	if fullResult == "" {
-		log.Printf("[%s] Warning: Result was empty after aggregation, ignoring", comp.ID)
+		log.Printf("[%s] Warning: Result was empty after aggregation, ignoring", comp.Id)
 		consumer.Ack(msg)
 		continue
 	}
 
 	// Send final result to db-adapter topic
 	if err := sendFinalResult(ctx, producer, comp, fullResult, metadata); err != nil {
-		log.Printf("[%s] Failed to send final result: %v", comp.ID, err)
+		log.Printf("[%s] Failed to send final result: %v", comp.Id, err)
 		consumer.Nack(msg)
 		continue
 	}
 
-			log.Printf("[%s] Successfully aggregated and sent result (%d chars)", comp.ID, len(fullResult))
+	log.Printf("[%s] Successfully aggregated and sent result (%d chars)", comp.Id, len(fullResult))
 			consumer.Ack(msg)
 		}
 	}()
@@ -156,7 +157,7 @@ func main() {
 	log.Printf("Shutting down...")
 }
 
-func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, comp contracts.ResponseCompletion) (string, map[string]interface{}, error) {
+func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, comp contracts.ResponseCompletion) (string, *structpb.Struct, error) {
 	reader, err := client.CreateReader(pulsar.ReaderOptions{
 		Topic:          topic,
 		StartMessageID: pulsar.EarliestMessageID(),
@@ -166,8 +167,8 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 	}
 	defer reader.Close()
 
-	var chunks = make(map[int]contracts.StreamChunk)
-	var lastMetadata map[string]interface{}
+	var chunks = make(map[int32]contracts.StreamChunk)
+	var lastMetadata *structpb.Struct
 	timeout := time.After(30 * time.Second) // Safety timeout for the scan
 
 	for {
@@ -196,11 +197,11 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 			}
 
 			var chunk contracts.StreamChunk
-			if err := json.Unmarshal(msg.Payload(), &chunk); err != nil {
+			if err := protojson.Unmarshal(msg.Payload(), &chunk); err != nil {
 				continue
 			}
 
-			if chunk.ID != comp.ID {
+			if chunk.Id != comp.Id {
 				// Not our prompt, but maybe if we see chunks with much later timestamps we can stop?
 				// For now, just continue.
 				continue
@@ -210,7 +211,7 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 				lastMetadata = chunk.Metadata
 			}
 
-			if chunk.Chunk != "" {
+			if chunk.Result != "" {
 				// Deduplicate by sequence number
 				chunks[chunk.SequenceNumber] = chunk
 			}
@@ -222,31 +223,32 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 	}
 }
 
-func assemble(chunkMap map[int]contracts.StreamChunk) string {
+func assemble(chunkMap map[int32]contracts.StreamChunk) string {
 	// Sort by sequence number
-	var keys []int
+	var keys []int32
 	for k := range chunkMap {
 		keys = append(keys, k)
 	}
-	sort.Ints(keys)
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
 	var sb strings.Builder
 	for _, k := range keys {
-		sb.WriteString(chunkMap[k].Chunk)
+		sb.WriteString(chunkMap[k].Result)
 	}
 	return sb.String()
 }
 
-func sendFinalResult(ctx context.Context, producer pulsar.Producer, comp contracts.ResponseCompletion, result string, metadata map[string]interface{}) error {
-	payload, err := json.Marshal(map[string]interface{}{
-		"id":              comp.ID,
-		"session_id":      comp.SessionID,
-		"result":          result,
-		"model":           comp.Model,
-		"sequence_number": 0, // Final aggregated result is always seq 0
-		"timestamp":       time.Now().UTC().Format(time.RFC3339),
-		"metadata":        metadata,
-	})
+func sendFinalResult(ctx context.Context, producer pulsar.Producer, comp contracts.ResponseCompletion, result string, metadata *structpb.Struct) error {
+	msg := &contracts.StreamChunk{
+		Id:             comp.Id,
+		SessionId:      comp.SessionId,
+		Result:         result,
+		Model:          comp.Model,
+		SequenceNumber: 0,
+		IsLast:         true,
+		Metadata:       metadata,
+	}
+	payload, err := protojson.Marshal(msg)
 	if err != nil {
 		return err
 	}

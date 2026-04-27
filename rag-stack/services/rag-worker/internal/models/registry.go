@@ -6,7 +6,7 @@ import (
 )
 
 type ModelSpec struct {
-	ID         string // model-id used in requests
+	Id         string // model-id used in requests
 	Name       string // actual name on server
 	Endpoint   string // URL to server
 	Backend    string // "ollama", "openai", etc.
@@ -39,7 +39,7 @@ func NewModelRegistry() *ModelRegistry {
 func (r *ModelRegistry) RegisterModel(spec ModelSpec) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.specs[spec.ID] = spec
+	r.specs[spec.Id] = spec
 }
 
 func (r *ModelRegistry) RegisterPromptType(name string, pf func(ChatClient) Planner, ef func(ChatClient) Executor) {

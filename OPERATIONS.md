@@ -241,7 +241,21 @@ To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
 2.  **Preferred Paths**: Use `/tmp` (for transient state) or `/home/junie` (for persistent user state).
 3.  **Implementation**: Pass environment variables like `JOURNAL_DIR` or use `sh -c` to set context before running the target script.
 
-## 3. Build & Deployment System
+### 2.5 Messaging & Data Contracts (Protobuf)
+As of Iteration 11, the project uses **Protobuf** as the single source of truth for all network-crossing DTOs (Data Transfer Objects) across Pulsar and REST APIs.
+
+#### Contract Management
+1.  **Schema Definition**: All shared contracts MUST be defined in `rag-stack/contracts/rag_stack.proto`.
+2.  **Code Generation**:
+    - **Go**: Generated into `rag-stack/services/common/contracts/rag_stack.pb.go`.
+    - **Python**: Generated into `rag-stack/services/rag-ingestion/rag_stack_pb2.py`.
+    - Use the provided helper scripts or `protoc` commands to regenerate after any changes.
+3.  **Standardization**: Standardize on the `result` field for all final LLM outputs and intermediate chunks.
+4.  **Flexible Metadata**: Use `google.protobuf.Struct` for `metadata` fields to maintain JSON-like flexibility while benefiting from typed wrappers.
+5.  **Strict Typing**: DO NOT use `map[string]interface{}` for shared contracts in Go. Import and use the generated Protobuf structs instead.
+6.  **Pulsar Encoding**: Use JSON-encoded Protobufs for Pulsar messages. This maintains human-readability in logs/tools while ensuring contract compliance in code.
+    - Go: `json.Marshal(proto_msg)` and `json.Unmarshal(data, &proto_msg)`.
+    - Python: `json_format.MessageToJson(proto_msg)` and `json_format.Parse(data, proto_msg)`.
 
 ### 3.1 Cluster-Native Build Pipeline (Kaniko)
 All RAG service image builds MUST go through the in-cluster Kaniko build pipeline. Do NOT use `podman build` or `docker build` on the host to build service images except for bootstrapping.
@@ -444,6 +458,19 @@ flutter run -d chrome # Web browser
 3. **Verification**: `https://rag-explorer.rag.hierocracy.home`
 
 ## 7. Testing & Verification
+
+### 7.0 Pre-Test Verification (CRITICAL)
+Before executing any integration or E2E tests, you MUST verify that the cluster state is stable at the pod level. Simply checking that a Deployment is "Ready" or has "Available" replicas is insufficient, as it may be in the middle of a rolling update or have stale replicas from a previous version.
+
+**Verification Steps**:
+1.  **Version Check**: Ensure all pods in the `rag-system` namespace are using the target image version (e.g., `2.10.1`).
+2.  **Pod Health**: Verify that NO pods are in `Pending`, `ImagePullBackOff`, `CrashLoopBackOff`, or `Error` states.
+3.  **Replica Set Cleanliness**: Ensure there are no stale pods from previous ReplicaSets hanging around.
+4.  **Command**:
+    ```bash
+    kubectl get pods -n rag-system -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.phase}{"\t"}{.spec.containers[0].image}{"\n"}{end}'
+    ```
+5.  **Stop Condition**: If any pod is not `Running` (or `Succeeded` for jobs) or is using an incorrect version, STOP and wait for the rollout to complete or fix the underlying issue before proceeding to tests.
 
 ### 7.1 Integration Tests (Python)
 The integration test suite verifies the functionality of individual components and their interactions.

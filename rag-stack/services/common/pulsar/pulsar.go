@@ -10,6 +10,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"app-builds/common/tlsutil"
 )
 
@@ -71,6 +74,29 @@ func SendJSON(ctx context.Context, producer pulsar.Producer, payload interface{}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	msg := &pulsar.ProducerMessage{
+		Payload:    data,
+		Properties: make(map[string]string),
+	}
+
+	// Inject tracing context
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(msg.Properties))
+
+	id, err := producer.Send(ctx, msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send pulsar message: %w", err)
+	}
+
+	return id, nil
+}
+
+// SendProto marshals the Protobuf payload using protojson and sends it with tracing context.
+func SendProto(ctx context.Context, producer pulsar.Producer, payload proto.Message) (pulsar.MessageID, error) {
+	data, err := protojson.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal proto payload: %w", err)
 	}
 
 	msg := &pulsar.ProducerMessage{

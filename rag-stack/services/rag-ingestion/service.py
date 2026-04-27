@@ -10,6 +10,9 @@ import logging
 import time
 import requests
 import pulsar
+import rag_stack_pb2
+from google.protobuf.struct_pb2 import Struct
+from google.protobuf import json_format
 from botocore.client import Config
 from pydantic import BaseModel
 from typing import List, Optional
@@ -219,13 +222,13 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
 
         s3_client = get_s3_client()
 
-        logger.info(f"Ensuring collection {COLLECTION_NAME} via Pulsar (vector_size: {current_vs})")
-        q_prod.send(json.dumps({
-            "id": f"create-{ingestion_id}",
-            "action": "create_collection",
-            "collection": COLLECTION_NAME,
-            "vector_size": current_vs
-        }).encode('utf-8'))
+        logger.info(f"Ensuring collection {COLLECTION_NAME} via Protobuf Pulsar (vector_size: {current_vs})")
+        op = rag_stack_pb2.QdrantOp()
+        op.id = f"create-{ingestion_id}"
+        op.action = "create_collection"
+        op.collection = COLLECTION_NAME
+        op.vector_size = current_vs
+        q_prod.send(json_format.MessageToJson(op).encode('utf-8'))
 
         # List files
         files = []
@@ -271,22 +274,28 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                         failed_chunks.append({"file": s3_key, "chunk": i, "error": str(e)})
                         continue
 
-                    payload = {
+                    # Ensure ingestion_id is in the tags list for searchability
+                    effective_tags = list(tag_ids)
+                    if ingestion_id not in effective_tags:
+                        effective_tags.append(ingestion_id)
+
+                    payload_struct = Struct()
+                    payload_dict = {
                         "path": s3_key,
                         "chunk": i,
                         "text": chunk,
-                        "tags": tag_ids,
+                        "tags": effective_tags,
                         "ingestion_id": ingestion_id
                     }
                     if session_id:
-                        payload["session_id"] = session_id
+                        payload_dict["session_id"] = session_id
+                    payload_struct.update(payload_dict)
 
-                    point_id = str(uuid.uuid4())
-                    points.append({
-                        "id": point_id,
-                        "vector": vector,
-                        "payload": payload
-                    })
+                    p = rag_stack_pb2.QdrantPoint()
+                    p.id = str(uuid.uuid4())
+                    p.vector.extend(vector)
+                    p.payload.CopyFrom(payload_struct)
+                    points.append(p)
 
                     # TimescaleDB Backup
                     with conn.cursor() as cur:
@@ -300,13 +309,13 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
 
                     idx += 1
                     if len(points) >= INGEST_BATCH_SIZE:
-                        q_prod.send(json.dumps({
-                            "id": f"upsert-{uuid.uuid4()}",
-                            "action": "upsert",
-                            "collection": COLLECTION_NAME,
-                            "vector_size": current_vs,
-                            "points": points
-                        }).encode('utf-8'))
+                        op = rag_stack_pb2.QdrantOp()
+                        op.id = f"upsert-{uuid.uuid4()}"
+                        op.action = "upsert"
+                        op.collection = COLLECTION_NAME
+                        op.vector_size = current_vs
+                        op.points.extend(points)
+                        q_prod.send(json_format.MessageToJson(op).encode('utf-8'))
                         points = []
                         conn.commit()
                         logger.info(f"Ingested {idx} chunks...")
@@ -315,13 +324,13 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
                 logger.error(f"Error processing {s3_key}: {e}")
 
         if points:
-            q_prod.send(json.dumps({
-                "id": f"upsert-{uuid.uuid4()}",
-                "action": "upsert",
-                "collection": COLLECTION_NAME,
-                "vector_size": current_vs,
-                "points": points
-            }).encode('utf-8'))
+            op = rag_stack_pb2.QdrantOp()
+            op.id = f"upsert-{uuid.uuid4()}"
+            op.action = "upsert"
+            op.collection = COLLECTION_NAME
+            op.vector_size = current_vs
+            op.points.extend(points)
+            q_prod.send(json_format.MessageToJson(op).encode('utf-8'))
             conn.commit()
 
         if failed_chunks:

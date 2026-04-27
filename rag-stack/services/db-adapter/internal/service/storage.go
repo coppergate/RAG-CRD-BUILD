@@ -60,6 +60,9 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 	fileMap := make(map[string]*FileInfo)
 
 	for _, ce := range embeddings {
+		if ce.Metadata == nil {
+			continue
+		}
 		path, _ := ce.Metadata["path"].(string)
 		if path == "" {
 			continue

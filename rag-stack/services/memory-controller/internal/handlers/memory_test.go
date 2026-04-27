@@ -28,11 +28,11 @@ func TestMemoryHandler(t *testing.T) {
 	t.Run("WriteItems", func(t *testing.T) {
 		sessionID := uuid.New().String()
 		reqBody := contracts.MemoryWriteRequest{
-			RequestID: "req-1",
-			Scope: contracts.MemoryScope{
-				SessionID: sessionID,
+			RequestId: "req-1",
+			Scope: &contracts.MemoryScope{
+				SessionId: sessionID,
 			},
-			Writes: []contracts.MemoryWriteItem{
+			Writes: []*contracts.MemoryWriteItem{
 				{
 					MemoryType: "observation",
 					Content:    "The user likes coffee.",
@@ -83,10 +83,10 @@ func TestMemoryHandler(t *testing.T) {
 	// 4. Test POST /sessions
 	t.Run("CreateSession", func(t *testing.T) {
 		reqBody := struct {
-			ID   string `json:"id"`
+			Id   string `json:"id"`
 			Name string `json:"name"`
 		}{
-			ID:   uuid.New().String(),
+			Id:   uuid.New().String(),
 			Name: "test session",
 		}
 
@@ -104,10 +104,10 @@ func TestMemoryHandler(t *testing.T) {
 	// 5. Test POST /sessions conflict (Duplicate name, different ID)
 	t.Run("CreateSessionDuplicateName", func(t *testing.T) {
 		reqBody := struct {
-			ID   string `json:"id"`
+			Id   string `json:"id"`
 			Name string `json:"name"`
 		}{
-			ID:   uuid.New().String(),
+			Id:   uuid.New().String(),
 			Name: "test session", // Same name as before
 		}
 
@@ -132,10 +132,10 @@ func TestMemoryHandler(t *testing.T) {
 		existingID := sessions[0].ID.String()
 
 		reqBody := struct {
-			ID   string `json:"id"`
+			Id   string `json:"id"`
 			Name string `json:"name"`
 		}{
-			ID:   existingID,
+			Id:   existingID,
 			Name: "updated session name",
 		}
 

@@ -61,7 +61,7 @@ type OpenAIHandler struct {
 
 type ChatCompletionRequest struct {
 	Model       string   `json:"model"`
-	SessionID   string   `json:"session_id,omitempty"`   // Added for session tracking
+	SessionId   string   `json:"session_id,omitempty"`   // Added for session tracking
 	SessionName string   `json:"session_name,omitempty"` // Added for friendly name
 	Tags        []string `json:"tags,omitempty"`         // Added for RAG isolation
 	Messages    []struct {
@@ -71,7 +71,7 @@ type ChatCompletionRequest struct {
 }
 
 type GenericChatRequest struct {
-	SessionID   string   `json:"session_id"`
+	SessionId   string   `json:"session_id"`
 	SessionName string   `json:"session_name,omitempty"`
 	Prompt      string   `json:"prompt"`
 	Planner     string   `json:"planner"`
@@ -142,7 +142,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	// 1. Session tracking
-	sessionID, err := h.ensureSession(ctx, req.SessionID, req.SessionName)
+	sessionID, err := h.ensureSession(ctx, req.SessionId, req.SessionName)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
@@ -172,18 +172,18 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		prompt = req.Messages[len(req.Messages)-1].Content
 	}
 
-	internalReq := contracts.InternalRequest{
-		ID:            correlationID,
-		SessionID:     sessionID,
+	internalReq := &contracts.InternalRequest{
+		Id:            correlationID,
+		SessionId:     sessionID,
 		SessionName:   req.SessionName,
 		Prompt:        prompt,
 		PlannerModel:  req.Model,
 		ExecutorModel: req.Model,
 		Tags:          req.Tags,
 		Timestamp:     time.Now().Format(time.RFC3339),
-		Metadata: map[string]interface{}{
+		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source": "openai-api",
-		},
+		}),
 	}
 
 	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)
@@ -234,7 +234,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	sessionID, err := h.ensureSession(ctx, req.SessionID, req.SessionName)
+	sessionID, err := h.ensureSession(ctx, req.SessionId, req.SessionName)
 	if err != nil {
 		log.Printf("Failed to ensure session: %v", err)
 		return
@@ -250,9 +250,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		log.Printf("[%s] Failed to send prompt event for session %s: %v", correlationID, sessionID, err)
 	}
 
-	internalReq := contracts.InternalRequest{
-		ID:            correlationID,
-		SessionID:     sessionID,
+	internalReq := &contracts.InternalRequest{
+		Id:            correlationID,
+		SessionId:     sessionID,
 		SessionName:   req.SessionName,
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
@@ -260,9 +260,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		Tags:          req.Tags,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Stream:        true,
-		Metadata: map[string]interface{}{
+		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source": "websocket-api",
-		},
+		}),
 	}
 
 	// Channel to receive chunks from Pulsar
@@ -331,7 +331,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 
 	// 1. Session tracking
-	sessionID, err := h.ensureSession(ctx, req.SessionID, req.SessionName)
+	sessionID, err := h.ensureSession(ctx, req.SessionId, req.SessionName)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
@@ -350,18 +350,18 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 
 	// Direct mapping to InternalRequest
-	internalReq := contracts.InternalRequest{
-		ID:            correlationID,
-		SessionID:     sessionID,
+	internalReq := &contracts.InternalRequest{
+		Id:            correlationID,
+		SessionId:     sessionID,
 		SessionName:   req.SessionName,
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
 		Tags:          req.Tags,
 		Timestamp:     time.Now().Format(time.RFC3339),
-		Metadata: map[string]interface{}{
+		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source": "generic-api",
-		},
+		}),
 	}
 
 	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)

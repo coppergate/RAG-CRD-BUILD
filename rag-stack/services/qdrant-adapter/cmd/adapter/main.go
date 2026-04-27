@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
+	"google.golang.org/protobuf/encoding/protojson"
 
+	"app-builds/common/contracts"
 	"app-builds/common/dlq"
 	"app-builds/common/health"
 	pulsarCommon "app-builds/common/pulsar"
@@ -108,6 +110,16 @@ func main() {
 
 	mux := http.NewServeMux()
 	healthSrv.RegisterRoutes(mux)
+
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+		res, err := adapter.qdrant.ListCollections()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(res)
+	})
 
 	mux.HandleFunc("/collections", func(w http.ResponseWriter, r *http.Request) {
 		res, err := adapter.qdrant.ListCollections()
@@ -229,18 +241,15 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 	ctx, span := tracer.Start(ctx, "HandleOp")
 	defer span.End()
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
+	var data contracts.QdrantOp
+	if err := protojson.Unmarshal(msg.Payload(), &data); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("bad payload: %w", err)
 	}
 
-	opID, _ := data["id"].(string)
-	action, _ := data["action"].(string)
-	collection, _ := data["collection"].(string)
-	vs := 0
-	if s, ok := data["vector_size"].(float64); ok {
-		vs = int(s)
-	}
+	opID := data.Id
+	action := data.Action
+	collection := data.Collection
+	vs := int(data.VectorSize)
 
 	attrs := []attribute.KeyValue{
 		attribute.String("action", action),
@@ -260,27 +269,18 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 
 	switch action {
 	case "search":
-		vector := toFloat32Slice(data["vector"])
-		limit := 5
-		if l, ok := data["limit"].(float64); ok {
-			limit = int(l)
-		}
-		tags := toStringSlice(data["tags"])
-		sessionID, _ := data["session_id"].(string)
-		result, opErr = a.qdrant.Search(collection, vs, vector, limit, tags, sessionID)
+		result, opErr = a.qdrant.Search(collection, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId)
 	case "delete":
-		tags := toStringSlice(data["tags"])
-		paths := toStringSlice(data["paths"])
-		log.Printf("[%s] Deleting points from collection %s with tags %v, paths %v", opID, collection, tags, paths)
-		opErr = a.qdrant.DeleteByFilter(collection, vs, tags, paths)
+		log.Printf("[%s] Deleting points from collection %s with tags %v, paths %v", opID, collection, data.Tags, data.Paths)
+		opErr = a.qdrant.DeleteByFilter(collection, vs, data.Tags, data.Paths)
 		if opErr == nil {
 			result = map[string]any{"ok": true}
 		}
 	case "upsert":
-		points, _ := data["points"].([]interface{})
-		opErr = a.qdrant.Upsert(collection, vs, points)
+		log.Printf("[%s] Upserting %d points into collection %s", opID, len(data.Points), collection)
+		opErr = a.qdrant.UpsertProto(collection, vs, data.Points)
 		if opErr == nil {
-			result = map[string]any{"ok": true, "count": len(points)}
+			result = map[string]any{"ok": true, "count": len(data.Points)}
 		}
 	case "create_collection":
 		opErr = a.qdrant.CreateCollection(collection, vs)
@@ -288,9 +288,7 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 			result = map[string]any{"ok": true}
 		}
 	case "merge_tags":
-		sourceTag, _ := data["source_tag"].(string)
-		targetTag, _ := data["target_tag"].(string)
-		opErr = a.qdrant.MergeTags(collection, vs, sourceTag, targetTag)
+		opErr = a.qdrant.MergeTags(collection, vs, data.SourceTag, data.TargetTag)
 		if opErr == nil {
 			result = map[string]any{"ok": true}
 		}
@@ -299,20 +297,20 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 	}
 
 	// Always publish the result (success or error) to the results topic
-	resp := map[string]any{
-		"id":         opID,
-		"action":     action,
-		"collection": collection,
-		"timestamp":  time.Now().Format(time.RFC3339),
+	resp := &contracts.QdrantResponse{
+		Id:         opID,
+		Action:     action,
+		Collection: collection,
+		Timestamp:  time.Now().Format(time.RFC3339),
 	}
 	if opErr != nil {
-		resp["error"] = opErr.Error()
+		resp.Error = opErr.Error()
 		log.Printf("[%s] Qdrant action '%s' failed on collection '%s': %v", opID, action, collection, opErr)
 	} else {
-		resp["result"] = result
+		resp.Result = contracts.ToValue(result)
 	}
 
-	payload, err := json.Marshal(resp)
+	payload, err := protojson.Marshal(resp)
 	if err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("marshal Qdrant result: %w", err)
 	}

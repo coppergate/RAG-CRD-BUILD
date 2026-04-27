@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
 	"app-builds/common/ent"
@@ -60,30 +62,30 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 
 	var payload struct {
 		Op string `json:"op"`
-		ID string `json:"id"`
+		Id string `json:"id"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal DB op payload: %w", err)
 	}
 
 	if payload.Op == "delete_session" {
-		sessID, parseErr := uuid.Parse(payload.ID)
+		sessID, parseErr := uuid.Parse(payload.Id)
 		if parseErr != nil {
 			if p.errorCounter != nil {
-				p.errorCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
+				p.errorCounter.Add(msgCtx, 1, metric.WithAttributes(attribute.String("op", "delete_session_error")))
 			}
-			return dlq.PermanentFailure, fmt.Errorf("invalid UUID in delete_session: %q: %w", payload.ID, parseErr)
+			return dlq.PermanentFailure, fmt.Errorf("invalid UUID in delete_session: %q: %w", payload.Id, parseErr)
 		}
 		_, err := p.client.Session.Delete().
 			Where(session.ID(sessID)).
 			Exec(ctx)
 		if err != nil {
 			if p.errorCounter != nil {
-				p.errorCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
+				p.errorCounter.Add(msgCtx, 1, metric.WithAttributes(attribute.String("op", "delete_session_error")))
 			}
-			return dlq.TransientFailure, fmt.Errorf("delete session %s: %w", payload.ID, err)
+			return dlq.TransientFailure, fmt.Errorf("delete session %s: %w", payload.Id, err)
 		}
-		log.Printf("Deleted session %s via Pulsar op", payload.ID)
+		log.Printf("Deleted session %s via Pulsar op", payload.Id)
 	}
 
 	return dlq.Success, nil
@@ -114,21 +116,21 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 	defer span.End()
 
 	var payload struct {
-		ID        string `json:"id"`
-		SessionID string `json:"session_id"`
+		Id        string `json:"id"`
+		SessionId string `json:"session_id"`
 		Content   string `json:"content"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal prompt payload: %w", err)
 	}
 
-	promptID, parseErr := uuid.Parse(payload.ID)
+	promptID, parseErr := uuid.Parse(payload.Id)
 	if parseErr != nil {
-		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID: %q: %w", payload.ID, parseErr)
+		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID: %q: %w", payload.Id, parseErr)
 	}
-	sessID, parseErr := uuid.Parse(payload.SessionID)
+	sessID, parseErr := uuid.Parse(payload.SessionId)
 	if parseErr != nil {
-		return dlq.PermanentFailure, fmt.Errorf("invalid session UUID: %q: %w", payload.SessionID, parseErr)
+		return dlq.PermanentFailure, fmt.Errorf("invalid session UUID: %q: %w", payload.SessionId, parseErr)
 	}
 
 	content := p.sanitizeString(payload.Content)
@@ -152,10 +154,10 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 			if err != nil {
 				return dlq.TransientFailure, fmt.Errorf("update ghost prompt: %w", err)
 			}
-			log.Printf("Updated ghost prompt %s with content", payload.ID)
+			log.Printf("Updated ghost prompt %s with content", payload.Id)
 			return dlq.Success, nil
 		}
-		log.Printf("Prompt %s already exists with content, skipping", payload.ID)
+		log.Printf("Prompt %s already exists with content, skipping", payload.Id)
 		return dlq.Success, nil
 	}
 
@@ -165,11 +167,11 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 		SetContent(content).
 		Save(msgCtx)
 	if err != nil {
-		log.Printf("Failed to insert prompt %s for session %s: %v", payload.ID, payload.SessionID, err)
+		log.Printf("Failed to insert prompt %s for session %s: %v", payload.Id, payload.SessionId, err)
 		return dlq.TransientFailure, fmt.Errorf("insert prompt: %w", err)
 	}
 
-	log.Printf("Inserted prompt %s for session %s", payload.ID, payload.SessionID)
+	log.Printf("Inserted prompt %s for session %s", payload.Id, payload.SessionId)
 	return dlq.Success, nil
 }
 
@@ -179,36 +181,25 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 	msgCtx, span := tracer.Start(msgCtx, "HandleResponse")
 	defer span.End()
 
-	var payload struct {
-		contracts.StreamChunk
-		Result   string                 `json:"result"`
-		Metadata map[string]interface{} `json:"metadata"`
-	}
-	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+	var payload contracts.StreamChunk
+	if err := protojson.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
 	}
 
-	if payload.StreamChunk.Metadata == nil && payload.Metadata != nil {
-		payload.StreamChunk.Metadata = payload.Metadata
-	}
-
 	if payload.Result == "" {
-		if payload.Chunk != "" {
-			return dlq.Success, nil
-		}
 		return dlq.Success, nil
 	}
 
-	log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.ID, payload.SessionID, payload.Model)
+	log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.Id, payload.SessionId, payload.Model)
 
-	promptUUID, parseErr := uuid.Parse(payload.ID)
+	promptUUID, parseErr := uuid.Parse(payload.Id)
 	if parseErr != nil {
-		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID in response: %q: %w", payload.ID, parseErr)
+		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID in response: %q: %w", payload.Id, parseErr)
 	}
 
 	var sessID uuid.UUID
-	if payload.SessionID != "" {
-		sessID, _ = uuid.Parse(payload.SessionID)
+	if payload.SessionId != "" {
+		sessID, _ = uuid.Parse(payload.SessionId)
 	}
 
 	pr, err := p.client.Prompt.Query().
@@ -223,7 +214,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		}
 
 		if isNotFound {
-			log.Printf("Prompt %s not found for response, creating ghost prompt", payload.ID)
+			log.Printf("Prompt %s not found for response, creating ghost prompt", payload.Id)
 
 			if err := p.ensureSessionExists(msgCtx, sessID); err != nil {
 				return dlq.TransientFailure, fmt.Errorf("ensure session exists for ghost prompt: %w", err)
@@ -241,7 +232,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 			}
 			pr = ghost
 		} else {
-			return dlq.TransientFailure, fmt.Errorf("find prompt for response (ID %s): %w", payload.ID, err)
+			return dlq.TransientFailure, fmt.Errorf("find prompt for response (ID %s): %w", payload.Id, err)
 		}
 	}
 
@@ -260,15 +251,15 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		SetPromptID(pr.ID).
 		SetSessionID(sessID).
 		SetContent(result).
-		SetSequenceNumber(payload.SequenceNumber).
+		SetSequenceNumber(int(payload.SequenceNumber)).
 		SetNillableModelName(modelName).
-		SetMetadata(payload.StreamChunk.Metadata).
+		SetMetadata(contracts.FromStruct(payload.Metadata)).
 		Save(msgCtx)
 	if err != nil {
-		return dlq.TransientFailure, fmt.Errorf("insert response for prompt %s: %w", payload.ID, err)
+		return dlq.TransientFailure, fmt.Errorf("insert response for prompt %s: %w", payload.Id, err)
 	}
 
-	log.Printf("Inserted response for prompt %s (seq %d)", payload.ID, payload.SequenceNumber)
+	log.Printf("Inserted response for prompt %s (seq %d)", payload.Id, payload.SequenceNumber)
 	return dlq.Success, nil
 }
 
@@ -278,8 +269,10 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 	_, span := tracer.Start(msgCtx, "HandleCompletion")
 	defer span.End()
 
+	log.Printf("Received completion event for processing")
+
 	var payload contracts.ResponseCompletion
-	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+	if err := protojson.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal completion payload: %w", err)
 	}
 
@@ -288,8 +281,8 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 	}
 
 	m := payload.Metrics
-	sessID, _ := uuid.Parse(payload.SessionID)
-	respID, _ := uuid.Parse(payload.ID)
+	sessID, _ := uuid.Parse(payload.SessionId)
+	respID, _ := uuid.Parse(payload.Id)
 
 	modelID, err := p.client.ModelDefinition.Create().
 		SetModelName(payload.Model).
@@ -323,9 +316,8 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 		SetNillableSessionID(&sessID).
 		SetNillableNodeID(&nodeID).
 		SetNillableModelID(&modelID).
-		SetPromptTokens(m.PromptTokens).
-		SetCompletionTokens(m.CompletionTokens).
-		SetTotalTokens(m.PromptTokens + m.CompletionTokens).
+		SetPromptTokens(int(m.PromptTokens)).
+		SetCompletionTokens(int(m.CompletionTokens)).
 		SetTotalDurationUsec(m.TotalDurationUsec).
 		SetLoadDurationUsec(m.LoadDurationUsec).
 		SetPromptEvalDurationUsec(m.PromptEvalDurationUsec).
@@ -338,6 +330,6 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 		return dlq.TransientFailure, err
 	}
 
-	log.Printf("Stored execution metrics for response %s", payload.ID)
+	log.Printf("Stored execution metrics for response %s", payload.Id)
 	return dlq.Success, nil
 }

@@ -75,9 +75,9 @@ def run_aggregator_test(test_name, chunks):
         found_result = False
         start_wait = time.time()
         
-        while time.time() - start_wait < 30:
+        while time.time() - start_wait < 10:
             try:
-                msg = consumer.receive(timeout_millis=5000)
+                msg = consumer.receive(timeout_millis=2500)
                 res_data = json.loads(msg.data())
                 
                 if res_data.get("id") == request_id:

@@ -2,14 +2,15 @@ package search
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
+	"google.golang.org/protobuf/encoding/protojson"
 
+	"app-builds/common/contracts"
 	"app-builds/rag-worker/internal/config"
 )
 
@@ -41,17 +42,23 @@ func (s *QdrantSearcher) StartResultConsumer(consumer pulsar.Consumer) {
 			}
 			consumer.Ack(msg)
 
-			var resp struct {
-				ID     string   `json:"id"`
-				Result []string `json:"result"`
-				Error  string   `json:"error"`
-			}
-			if err := json.Unmarshal(msg.Payload(), &resp); err == nil {
+			var resp contracts.QdrantResponse
+			if err := protojson.Unmarshal(msg.Payload(), &resp); err == nil {
 				if resp.Error != "" {
-					log.Printf("[%s] Qdrant search returned error: %s", resp.ID, resp.Error)
+					log.Printf("[%s] Qdrant search returned error: %s", resp.Id, resp.Error)
 				}
-				if ch, ok := s.pending.Load(resp.ID); ok {
-					ch.(chan []string) <- resp.Result
+				if ch, ok := s.pending.Load(resp.Id); ok {
+					if res, ok := contracts.FromValue(resp.Result).([]interface{}); ok {
+						var stringRes []string
+						for _, it := range res {
+							if s, ok := it.(string); ok {
+								stringRes = append(stringRes, s)
+							}
+						}
+						ch.(chan []string) <- stringRes
+					} else {
+						ch.(chan []string) <- nil
+					}
 				}
 			}
 		}
@@ -69,17 +76,17 @@ func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []st
 	s.pending.Store(id, resChan)
 	defer s.pending.Delete(id)
 
-	op := map[string]interface{}{
-		"id":          id,
-		"action":      "search",
-		"collection":  s.cfg.QdrantCollection,
-		"vector_size": len(vector),
-		"vector":      vector,
-		"limit":       s.cfg.QdrantSearchLimit,
-		"tags":        tags,
-		"session_id":  sessionID,
+	op := contracts.QdrantOp{
+		Id:         id,
+		Action:     "search",
+		Collection: s.cfg.QdrantCollection,
+		VectorSize: int32(len(vector)),
+		Vector:     vector,
+		Limit:      int32(s.cfg.QdrantSearchLimit),
+		Tags:       tags,
+		SessionId:  sessionID,
 	}
-	payload, err := json.Marshal(op)
+	payload, err := protojson.Marshal(&op)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal search request: %w", err)
 	}

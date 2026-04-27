@@ -2,7 +2,6 @@ package pulsar
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -11,6 +10,8 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	"go.opentelemetry.io/otel"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"app-builds/common/contracts"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/llm-gateway/internal/config"
@@ -26,16 +27,7 @@ type pulsarClient struct {
 	requestTimeout time.Duration
 }
 
-type response struct {
-	ID             string                 `json:"id"`
-	Result         string                 `json:"result"`
-	Error          string                 `json:"error"`
-	Chunk          string                 `json:"chunk"`
-	SequenceNumber int                    `json:"sequence_number"`
-	IsLast         bool                   `json:"is_last"`
-	InConversation bool                   `json:"in_conversation"`
-	Metadata       map[string]interface{} `json:"metadata"`
-}
+type response = contracts.StreamChunk
 
 func NewPulsarClient(cfg *config.Config) (Client, error) {
 	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
@@ -86,8 +78,8 @@ func (pc *pulsarClient) consumeResults() {
 		}
 
 		var resp response
-		if err := json.Unmarshal(msg.Payload(), &resp); err == nil {
-			if ch, ok := pc.pending.Load(resp.ID); ok {
+		if err := protojson.Unmarshal(msg.Payload(), &resp); err == nil {
+			if ch, ok := pc.pending.Load(resp.Id); ok {
 				ch.(chan response) <- resp
 			}
 		}
@@ -95,7 +87,7 @@ func (pc *pulsarClient) consumeResults() {
 	}
 }
 
-func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload interface{}) (string, error) {
+func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload proto.Message) (string, error) {
 	tracer := otel.Tracer("pulsar-client")
 	ctx, span := tracer.Start(ctx, "SendRequest")
 	defer span.End()
@@ -104,7 +96,7 @@ func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload inte
 	pc.pending.Store(id, resChan)
 	defer pc.pending.Delete(id)
 
-	_, err := pulsarCommon.SendJSON(ctx, pc.producer, payload)
+	_, err := pulsarCommon.SendProto(ctx, pc.producer, payload)
 	if err != nil {
 		return "", err
 	}
@@ -165,7 +157,7 @@ func (pc *pulsarClient) SubscribeStream(id string, ch chan contracts.StreamChunk
 			}
 
 			var chunk contracts.StreamChunk
-			if err := json.Unmarshal(msg.Payload(), &chunk); err == nil {
+			if err := protojson.Unmarshal(msg.Payload(), &chunk); err == nil {
 				ch <- chunk
 				if chunk.IsLast {
 					consumer.Ack(msg)
@@ -183,8 +175,8 @@ func (pc *pulsarClient) UnsubscribeStream(id string) {
 	}
 }
 
-func (pc *pulsarClient) SendRawRequest(ctx context.Context, payload interface{}) error {
-	_, err := pulsarCommon.SendJSON(ctx, pc.producer, payload)
+func (pc *pulsarClient) SendRawRequest(ctx context.Context, payload proto.Message) error {
+	_, err := pulsarCommon.SendProto(ctx, pc.promptProducer, payload)
 	return err
 }
 

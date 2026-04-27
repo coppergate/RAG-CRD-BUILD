@@ -718,6 +718,9 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 						{Name: "registry-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "registry-ca-cm"}}}},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
+					NodeSelector: map[string]string{
+						"role": "storage-node",
+					},
 				},
 			},
 			BackoffLimit: ptr(int32(1)),

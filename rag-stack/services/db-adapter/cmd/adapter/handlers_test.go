@@ -59,8 +59,8 @@ func TestHandleCompletion(t *testing.T) {
 	responseID := uuid.New()
 
 	payload := contracts.ResponseCompletion{
-		ID:        responseID.String(),
-		SessionID: sessionID.String(),
+		Id:        responseID.String(),
+		SessionId: sessionID.String(),
 		Model:     "test-model",
 		Metrics: &contracts.ExecutionMetrics{
 			PromptTokens:      10,
@@ -98,8 +98,8 @@ func TestHandleResponseGhostPrompt(t *testing.T) {
 		Result string `json:"result"`
 	}{
 		StreamChunk: contracts.StreamChunk{
-			ID:             promptID.String(),
-			SessionID:      sessionID.String(),
+			Id:             promptID.String(),
+			SessionId:      sessionID.String(),
 			SequenceNumber: 0,
 			Model:          "test-model",
 		},

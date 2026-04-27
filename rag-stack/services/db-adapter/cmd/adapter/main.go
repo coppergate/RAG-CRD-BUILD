@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"app-builds/common/dlq"
+	"app-builds/common/contracts"
 	"app-builds/common/ent"
 	"app-builds/common/ent/tag"
 	"app-builds/common/health"
@@ -21,6 +22,7 @@ import (
 	"app-builds/db-adapter/internal/service"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protojson"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
 	_ "github.com/lib/pq"
@@ -108,6 +110,14 @@ func main() {
 	mux := http.NewServeMux()
 	healthSrv.RegisterRoutes(mux)
 
+	// Logging Middleware
+	loggingMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		log.Printf("Incoming request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		mux.ServeHTTP(w, r)
+		log.Printf("Completed request: %s %s in %v", r.Method, r.URL.Path, time.Since(start))
+	})
+
 	mux.HandleFunc("/sessions/", func(w http.ResponseWriter, r *http.Request) {
 		idStr := strings.TrimPrefix(r.URL.Path, "/sessions/")
 		if strings.HasSuffix(idStr, "/messages") {
@@ -127,10 +137,22 @@ func main() {
 
 	mux.HandleFunc("/sessions", sessSvc.ListSessions)
 
+	mux.HandleFunc("/metrics/sessions/health", func(w http.ResponseWriter, r *http.Request) {
+		sessionIDStr := r.URL.Query().Get("session_id")
+		metricsSvc.GetHealth(w, r, sessionIDStr)
+	})
+
+	mux.HandleFunc("/audit/retrieval", func(w http.ResponseWriter, r *http.Request) {
+		sessionIDStr := r.URL.Query().Get("session_id")
+		metricsSvc.GetAudit(w, r, sessionIDStr)
+	})
+
 	mux.HandleFunc("/audit/sessions/", func(w http.ResponseWriter, r *http.Request) {
 		sessionIDStr := strings.TrimPrefix(r.URL.Path, "/audit/sessions/")
 		metricsSvc.GetAudit(w, r, sessionIDStr)
 	})
+
+	mux.HandleFunc("/metrics/models", metricsSvc.GetMetricsSummary)
 
 	mux.HandleFunc("/tags", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -171,13 +193,13 @@ func main() {
 				return
 			}
 			if qdrantProducer != nil {
-				delPayload := map[string]interface{}{
-					"id":         uuid.New().String(),
-					"action":     "delete",
-					"collection": "vectors",
-					"tags":       []string{idStr},
+				op := &contracts.QdrantOp{
+					Id:         uuid.New().String(),
+					Action:     "delete",
+					Collection: "vectors",
+					Tags:       []string{idStr},
 				}
-				p, _ := json.Marshal(delPayload)
+				p, _ := protojson.Marshal(op)
 				qdrantProducer.Send(r.Context(), &pulsar.ProducerMessage{Payload: p})
 			}
 			err = entClient.Tag.DeleteOneID(tagID).Exec(r.Context())
@@ -196,7 +218,7 @@ func main() {
 	mux.HandleFunc("/metrics/summary", metricsSvc.GetMetricsSummary)
 	mux.HandleFunc("/storage/files", storageSvc.GetFiles)
 
-	otelHandler := otelhttp.NewHandler(mux, "db-adapter")
+	otelHandler := otelhttp.NewHandler(loggingMux, "db-adapter")
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: otelHandler,

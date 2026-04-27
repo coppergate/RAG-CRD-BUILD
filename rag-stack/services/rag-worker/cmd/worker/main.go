@@ -124,14 +124,14 @@ func initModelRegistry(cfg *config.Config) *models.ModelRegistry {
 	registry.RegisterPromptType("granite31", granite31.NewPlanner, granite31.NewExecutor)
 
 	registry.RegisterModel(models.ModelSpec{
-		ID:         cfg.PlannerModel,
+		Id:         cfg.PlannerModel,
 		Name:       cfg.PlannerModel,
 		Endpoint:   cfg.PlannerURL,
 		Backend:    "ollama",
 		PromptType: cfg.PlannerPromptType,
 	})
 	registry.RegisterModel(models.ModelSpec{
-		ID:         cfg.ExecutorModel,
+		Id:         cfg.ExecutorModel,
 		Name:       cfg.ExecutorModel,
 		Endpoint:   cfg.ExecutorURL,
 		Backend:    "ollama",

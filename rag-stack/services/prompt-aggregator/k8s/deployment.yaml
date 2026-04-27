@@ -55,7 +55,7 @@ spec:
         - name: PULSAR_RESULTS_TOPIC
           value: "persistent://rag-pipeline/stage/results"
         - name: PULSAR_COMPLETION_TOPIC
-          value: "persistent://rag-pipeline/stage/completion"
+          value: "persistent://rag-pipeline/stage/completions"
         - name: PULSAR_SUBSCRIPTION
           value: "prompt-aggregator-sub"
         - name: AGGREGATION_TIMEOUT

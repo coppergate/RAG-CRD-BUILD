@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -159,13 +160,14 @@ func (r *ChatResponse) GetMetrics() *contracts.ExecutionMetrics {
 	}
 
 	return &contracts.ExecutionMetrics{
-		PromptTokens:          r.PromptEvalCount,
-		CompletionTokens:      r.EvalCount,
+		PromptTokens:          int32(r.PromptEvalCount),
+		CompletionTokens:      int32(r.EvalCount),
 		TotalDurationUsec:     r.TotalDuration / 1000,
 		LoadDurationUsec:      r.LoadDuration / 1000,
 		PromptEvalDurationUsec: r.PromptEvalDuration / 1000,
 		EvalDurationUsec:       r.EvalDuration / 1000,
 		TokensPerSecond:       tps,
+		Hostname:              os.Getenv("HOSTNAME"),
 	}
 }
 

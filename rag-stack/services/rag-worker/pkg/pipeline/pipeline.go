@@ -2,9 +2,9 @@ package pipeline
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
 	"app-builds/common/telemetry"
@@ -92,7 +93,7 @@ func (h *Handler) HandleStageMessage(ctx context.Context, stage string, msg puls
 	}
 
 	var req contracts.InternalRequest
-	if err := json.Unmarshal(msg.Payload(), &req); err != nil {
+	if err := protojson.Unmarshal(msg.Payload(), &req); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal payload for stage %s: %w", stage, err)
 	}
 
@@ -111,17 +112,17 @@ func (h *Handler) HandleStageMessage(ctx context.Context, stage string, msg puls
 }
 
 func (h *Handler) handleIngress(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
-	h.msg.SendStatus(ctx, req.ID, req.SessionID, "INGRESS_RECEIVED", "Initial request received")
+	h.msg.SendStatus(ctx, req.Id, req.SessionId, "INGRESS_RECEIVED", "Initial request received")
 
 	payload, err := json.Marshal(req)
 	if err != nil {
-		log.Printf("[%s] Failed to marshal ingress data: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
+		log.Printf("[%s] Failed to marshal ingress data: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)
 		return dlq.PermanentFailure, fmt.Errorf("marshal ingress data: %w", err)
 	}
 	if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
-		log.Printf("[%s] Failed to send to plan topic: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal messaging error", false)
+		log.Printf("[%s] Failed to send to plan topic: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, "Internal messaging error", false)
 		return dlq.TransientFailure, fmt.Errorf("send to plan topic: %w", err)
 	}
 
@@ -129,7 +130,7 @@ func (h *Handler) handleIngress(ctx context.Context, req *contracts.InternalRequ
 }
 
 func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
-	h.msg.SendStatus(ctx, req.ID, req.SessionID, "PLANNING_TASK", "Decomposing prompt into sub-tasks")
+	h.msg.SendStatus(ctx, req.Id, req.SessionId, "PLANNING_TASK", "Decomposing prompt into sub-tasks")
 
 	modelID := req.PlannerModel
 	if modelID == "" {
@@ -138,15 +139,15 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 
 	planner, err := h.registry.GetPlanner(modelID)
 	if err != nil {
-		log.Printf("[%s] Planner resolution error: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model: %s", modelID), false)
+		log.Printf("[%s] Planner resolution error: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Unsupported planner model: %s", modelID), false)
 		return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
 	}
 
 	subQueries, metrics, err := planner.Plan(ctx, req.Prompt)
 	if err != nil {
-		log.Printf("[%s] Planning failed: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Planning failed: %v", err), false)
+		log.Printf("[%s] Planning failed: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Planning failed: %v", err), false)
 		return dlq.TransientFailure, fmt.Errorf("planning: %w", err)
 	}
 
@@ -157,20 +158,22 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 		subQueries = []string{req.Prompt}
 	}
 
-	if req.Metadata == nil {
-		req.Metadata = make(map[string]interface{})
+	metadata := contracts.FromStruct(req.Metadata)
+	if metadata == nil {
+		metadata = make(map[string]interface{})
 	}
-	req.Metadata["sub_queries"] = subQueries
+	metadata["sub_queries"] = subQueries
+	req.Metadata = contracts.ToStruct(metadata)
 
 	payload, err := json.Marshal(req)
 	if err != nil {
-		log.Printf("[%s] Failed to marshal plan data: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
+		log.Printf("[%s] Failed to marshal plan data: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)
 		return dlq.PermanentFailure, fmt.Errorf("marshal plan data: %w", err)
 	}
 	if _, err := h.msg.Producers.Search.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
-		log.Printf("[%s] Failed to send to search topic: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal messaging error", false)
+		log.Printf("[%s] Failed to send to search topic: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, "Internal messaging error", false)
 		return dlq.TransientFailure, fmt.Errorf("send to search topic: %w", err)
 	}
 
@@ -179,10 +182,13 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 
 func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
 	var subQueries []string
-	if sq, ok := req.Metadata["sub_queries"].([]interface{}); ok {
-		for _, q := range sq {
-			if s, ok := q.(string); ok {
-				subQueries = append(subQueries, s)
+	metadata := contracts.FromStruct(req.Metadata)
+	if metadata != nil {
+		if sq, ok := metadata["sub_queries"].([]interface{}); ok {
+			for _, q := range sq {
+				if s, ok := q.(string); ok {
+					subQueries = append(subQueries, s)
+				}
 			}
 		}
 	}
@@ -190,7 +196,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		subQueries = []string{req.Prompt}
 	}
 
-	h.msg.SendStatus(ctx, req.ID, req.SessionID, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
+	h.msg.SendStatus(ctx, req.Id, req.SessionId, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
 
 	modelID := req.PlannerModel
 	if modelID == "" {
@@ -199,8 +205,8 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 
 	planner, err := h.registry.GetPlanner(modelID)
 	if err != nil {
-		log.Printf("[%s] Planner resolution error in search: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported planner model for embeddings: %s", modelID), false)
+		log.Printf("[%s] Planner resolution error in search: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Unsupported planner model for embeddings: %s", modelID), false)
 		return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
 	}
 
@@ -209,37 +215,42 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	for _, sq := range subQueries {
 		vector, err := planner.GetEmbeddings(ctx, sq)
 		if err != nil {
-			log.Printf("[%s] Failed to get embeddings for sub-query '%s': %v", req.ID, sq, err)
+			log.Printf("[%s] Failed to get embeddings for sub-query '%s': %v", req.Id, sq, err)
 			continue
 		}
 		vs := len(vector)
-		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, session=%s, query='%s'", req.ID, h.cfg.QdrantCollection, vs, tags, req.SessionID, sq)
-		contexts, err := h.searcher.Search(ctx, vector, tags, req.SessionID)
+		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, session=%s, query='%s'", req.Id, h.cfg.QdrantCollection, vs, tags, req.SessionId, sq)
+		contexts, err := h.searcher.Search(ctx, vector, tags, req.SessionId)
 		if err != nil {
-			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.ID, sq, vs, err)
+			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.Id, sq, vs, err)
 			continue
 		}
-		log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", req.ID, len(contexts), sq)
+		log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", req.Id, len(contexts), sq)
 		allContexts = append(allContexts, contexts...)
 	}
 
 	if req.Metadata == nil {
-		req.Metadata = make(map[string]interface{})
+		req.Metadata = contracts.ToStruct(make(map[string]interface{}))
 	}
-	req.Metadata["contexts"] = allContexts
-	if req.Metadata["recursion_budget"] == nil {
-		req.Metadata["recursion_budget"] = h.cfg.RecursionBudget
+	metadataMap := contracts.FromStruct(req.Metadata)
+	if metadataMap == nil {
+		metadataMap = make(map[string]interface{})
 	}
+	metadataMap["contexts"] = allContexts
+	if metadataMap["recursion_budget"] == nil {
+		metadataMap["recursion_budget"] = h.cfg.RecursionBudget
+	}
+	req.Metadata = contracts.ToStruct(metadataMap)
 
 	payload, err := json.Marshal(req)
 	if err != nil {
-		log.Printf("[%s] Failed to marshal search result data: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal serialization error", false)
+		log.Printf("[%s] Failed to marshal search result data: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)
 		return dlq.PermanentFailure, fmt.Errorf("marshal search result data: %w", err)
 	}
 	if _, err := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
-		log.Printf("[%s] Failed to send to exec topic: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, "Internal messaging error", false)
+		log.Printf("[%s] Failed to send to exec topic: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, "Internal messaging error", false)
 		return dlq.TransientFailure, fmt.Errorf("send to exec topic: %w", err)
 	}
 
@@ -247,10 +258,11 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 }
 
 func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
-	h.msg.SendStatus(ctx, req.ID, req.SessionID, "EXECUTING_TASK", "Generating response with specialized model")
+	h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", "Generating response with specialized model")
 
 	var contexts []interface{}
-	if c, ok := req.Metadata["contexts"].([]interface{}); ok {
+	metadata := contracts.FromStruct(req.Metadata)
+	if c, ok := metadata["contexts"].([]interface{}); ok {
 		contexts = c
 	}
 
@@ -261,8 +273,8 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 
 	executor, err := h.registry.GetExecutor(modelID)
 	if err != nil {
-		log.Printf("[%s] Executor resolution error: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Unsupported executor model: %s", modelID), false)
+		log.Printf("[%s] Executor resolution error: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Unsupported executor model: %s", modelID), false)
 		return dlq.PermanentFailure, fmt.Errorf("executor resolution: %w", err)
 	}
 
@@ -286,29 +298,25 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 				}
 				fullResult += chunk
 				inConversation = true
-				h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, chunk, seq, false, modelID, inConversation, req.Metadata)
+				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunk, seq, false, modelID, inConversation, contracts.FromStruct(req.Metadata))
 				seq++
 			case rawMeta, ok := <-metaCh:
 				if !ok {
 					metaCh = nil
 					continue
 				}
-				finalMetrics = h.mapMetrics(rawMeta)
+				finalMetrics = h.mapMetrics(rawMeta, modelID)
 			case err := <-errCh:
 				if err != nil {
-					log.Printf("[%s] Execution stream failed: %v", req.ID, err)
-					h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution stream failed: %v", err), inConversation)
-					h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED", nil)
+					log.Printf("[%s] Execution stream failed: %v", req.Id, err)
+					h.msg.SendError(ctx, req.Id, fmt.Sprintf("Execution stream failed: %v", err), inConversation)
+					h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
 					return dlq.TransientFailure, fmt.Errorf("execution stream: %w", err)
 				}
 				errCh = nil
 			case <-ctx.Done():
-				h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED", nil)
+				h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
 				return dlq.TransientFailure, ctx.Err()
-			}
-
-			if stream == nil && metaCh == nil && errCh == nil {
-				break
 			}
 		}
 
@@ -316,48 +324,49 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 		// Record response size
 		responseSizeHist.Record(ctx, int64(len(fullResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
 
-		// For now, just send completed status
-		h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
-		h.msg.SendStreamChunk(ctx, req.ID, req.SessionID, "", seq, true, modelID, inConversation, req.Metadata)
-		h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED", finalMetrics)
+		h.msg.SendStatus(ctx, req.Id, req.SessionId, "COMPLETED", "Response generated")
+		h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", seq, true, modelID, inConversation, contracts.FromStruct(req.Metadata))
+		h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "COMPLETED", finalMetrics)
 		return dlq.Success, nil
 	}
 
 	startTime := time.Now().UTC().Format(time.RFC3339)
 	result, rawMetrics, err := executor.Execute(ctx, req.Prompt, contexts)
 	if err != nil {
-		log.Printf("[%s] Execution failed: %v", req.ID, err)
-		h.msg.SendError(ctx, req.ID, fmt.Sprintf("Execution failed: %v", err), false)
-		h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "FAILED", nil)
+		log.Printf("[%s] Execution failed: %v", req.Id, err)
+		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Execution failed: %v", err), false)
+		h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
 		return dlq.TransientFailure, fmt.Errorf("execution: %w", err)
 	}
 
-	metrics := h.mapMetrics(rawMetrics)
+	metrics := h.mapMetrics(rawMetrics, modelID)
 
 	// Grounding Guard / Recursion Check
 	if executor.IsInsufficientContext(result) {
-		budget, _ := req.Metadata["recursion_budget"].(float64)
+		currentMeta := contracts.FromStruct(req.Metadata)
+		budget, _ := currentMeta["recursion_budget"].(float64)
 		if budget > 0 {
-			h.msg.SendStatus(ctx, req.ID, req.SessionID, "REFINING_PLAN", "Context insufficient, triggering recursion")
-			req.Metadata["recursion_budget"] = budget - 1
+			h.msg.SendStatus(ctx, req.Id, req.SessionId, "REFINING_PLAN", "Context insufficient, triggering recursion")
+			currentMeta["recursion_budget"] = budget - 1
+			req.Metadata = contracts.ToStruct(currentMeta)
 			payload, err := json.Marshal(req)
 			if err != nil {
-				log.Printf("[%s] Failed to marshal recursion data: %v", req.ID, err)
-				h.msg.SendError(ctx, req.ID, "Internal serialization error during recursion", false)
+				log.Printf("[%s] Failed to marshal recursion data: %v", req.Id, err)
+				h.msg.SendError(ctx, req.Id, "Internal serialization error during recursion", false)
 				return dlq.PermanentFailure, fmt.Errorf("marshal recursion data: %w", err)
 			}
 			if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
-				log.Printf("[%s] Failed to send recursion to plan topic: %v", req.ID, err)
-				h.msg.SendError(ctx, req.ID, "Internal messaging error during recursion", false)
+				log.Printf("[%s] Failed to send recursion to plan topic: %v", req.Id, err)
+				h.msg.SendError(ctx, req.Id, "Internal messaging error during recursion", false)
 				return dlq.TransientFailure, fmt.Errorf("send recursion to plan: %w", err)
 			}
 			return dlq.Success, nil
 		}
 	}
 
-	h.msg.SendStatus(ctx, req.ID, req.SessionID, "COMPLETED", "Response generated")
-	h.msg.SendResult(ctx, req.ID, req.SessionID, result, modelID, req.Metadata)
-	h.msg.SendCompletion(ctx, req.ID, req.SessionID, startTime, modelID, "COMPLETED", metrics)
+	h.msg.SendStatus(ctx, req.Id, req.SessionId, "COMPLETED", "Response generated")
+	h.msg.SendResult(ctx, req.Id, req.SessionId, result, modelID, contracts.FromStruct(req.Metadata))
+	h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "COMPLETED", metrics)
 
 	// Record response size
 	responseSizeHist.Record(ctx, int64(len(result)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
@@ -365,15 +374,23 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	return dlq.Success, nil
 }
 
-func (h *Handler) mapMetrics(raw interface{}) *contracts.ExecutionMetrics {
+func (h *Handler) mapMetrics(raw interface{}, modelID string) *contracts.ExecutionMetrics {
 	if raw == nil {
 		return nil
 	}
 
-	// We use a type assertion to extract metrics if possible.
+	var m *contracts.ExecutionMetrics
 	if or, ok := raw.(interface{ GetMetrics() *contracts.ExecutionMetrics }); ok {
-		return or.GetMetrics()
+		m = or.GetMetrics()
 	}
 
-	return nil
+	if m != nil && m.ModelFamily == "" {
+		if strings.Contains(strings.ToLower(modelID), "llama") {
+			m.ModelFamily = "llama"
+		} else if strings.Contains(strings.ToLower(modelID), "granite") {
+			m.ModelFamily = "granite"
+		}
+	}
+
+	return m
 }

@@ -134,14 +134,13 @@ func (c *Client) Close() {
 
 // SendStatus sends a status message to the status topic.
 func (c *Client) SendStatus(ctx context.Context, id, sessionID, state, details string) {
-	payload := map[string]interface{}{
-		"id":         id,
-		"session_id": sessionID,
-		"state":      state,
-		"details":    details,
-		"timestamp":  "",
+	payload := &contracts.StatusMessage{
+		Id:        id,
+		SessionId: sessionID,
+		State:     state,
+		Details:   details,
 	}
-	if _, err := pulsarCommon.SendJSON(ctx, c.Producers.Status, payload); err != nil {
+	if _, err := pulsarCommon.SendProto(ctx, c.Producers.Status, payload); err != nil {
 		log.Printf("[%s] Failed to send status message: %v", id, err)
 	}
 }
@@ -152,7 +151,7 @@ func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model st
 	c.SendStreamChunk(ctx, id, sessionID, result, 0, true, model, true, metadata)
 }
 
-func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk string, sequence int, isLast bool, model string, inConversation bool, metadata map[string]interface{}) {
+func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, result string, sequence int, isLast bool, model string, inConversation bool, metadata map[string]interface{}) {
 	topic := c.SessionTopic(id)
 	producer, err := c.client.NewProducer(topic)
 	if err != nil {
@@ -161,18 +160,18 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, chunk strin
 	}
 	defer producer.Close()
 
-	msgPayload := contracts.StreamChunk{
-		ID:             id,
-		SessionID:      sessionID,
-		Chunk:          chunk,
-		SequenceNumber: sequence,
+	msgPayload := &contracts.StreamChunk{
+		Id:             id,
+		SessionId:      sessionID,
+		Result:         result,
+		SequenceNumber: int32(sequence),
 		IsLast:         isLast,
 		Model:          model,
 		InConversation: inConversation,
-		Metadata:       metadata,
+		Metadata:       contracts.ToStruct(metadata),
 	}
 
-	if _, err := pulsarCommon.SendJSON(ctx, producer, msgPayload); err != nil {
+	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
 		log.Printf("[%s] Failed to send stream chunk to topic %s: %v", id, topic, err)
 	}
 }
@@ -186,13 +185,13 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 	}
 	defer producer.Close()
 
-	msgPayload := contracts.StreamChunk{
-		ID:             id,
+	msgPayload := &contracts.StreamChunk{
+		Id:             id,
 		Error:          errMsg,
 		InConversation: inConversation,
 	}
 
-	if _, err := pulsarCommon.SendJSON(ctx, producer, msgPayload); err != nil {
+	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
 		log.Printf("[%s] Failed to send error to topic %s: %v", id, topic, err)
 	}
 }
@@ -200,15 +199,15 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 // SendCompletion sends a completion event to the completion topic.
 func (c *Client) SendCompletion(ctx context.Context, id, sessionID, startTS, model, status string, metrics *contracts.ExecutionMetrics) {
 	log.Printf("[%s] Sending completion event (status: %s)", id, status)
-	payload := contracts.ResponseCompletion{
-		ID:             id,
-		SessionID:      sessionID,
+	payload := &contracts.ResponseCompletion{
+		Id:             id,
+		SessionId:      sessionID,
 		StartTimestamp: startTS,
 		Model:          model,
 		Status:         status,
 		Metrics:        metrics,
 	}
-	if _, err := pulsarCommon.SendJSON(ctx, c.Producers.Completion, payload); err != nil {
+	if _, err := pulsarCommon.SendProto(ctx, c.Producers.Completion, payload); err != nil {
 		log.Printf("[%s] Failed to send completion message: %v", id, err)
 	}
 }

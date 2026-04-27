@@ -79,10 +79,10 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 			SetSalience(item.SalienceHint).
 			SetRetentionScore(item.RetentionHint).
 			SetPinning(item.Pinned).
-			SetMetadata(item.Metadata)
+			SetMetadata(contracts.FromStruct(item.Metadata))
 		
-		if req.Scope.SessionID != "" {
-			sid, _ := uuid.Parse(req.Scope.SessionID)
+		if req.Scope.SessionId != "" {
+			sid, _ := uuid.Parse(req.Scope.SessionId)
 			builder = builder.SetSessionID(sid)
 		}
 		
@@ -101,7 +101,7 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 				// Store extra data in Metadata if needed
 				SetMetadata(map[string]interface{}{
 					"source_kind":   ref.SourceKind,
-					"source_id":     ref.SourceID,
+					"source_id":     ref.SourceId,
 					"relation_type": ref.RelationType,
 				}).
 				SaveX(ctx)
@@ -112,8 +112,8 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 			SetMemoryItemID(mi.ID).
 			SetEventType("write").
 			SetEventData(map[string]interface{}{
-				"request_id": req.RequestID,
-				"correlation_id": req.CorrelationID,
+				"request_id":     req.RequestId,
+				"correlation_id": req.CorrelationId,
 			}).
 			SaveX(ctx)
 	}
@@ -157,7 +157,7 @@ func (h *MemoryHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
-		ID   string `json:"id"`
+		Id   string `json:"id"`
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -172,7 +172,7 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 			First(ctx)
 		if err == nil && existing != nil {
 			// If name exists and ID is either not provided or different from existing
-			if req.ID == "" || existing.ID.String() != req.ID {
+			if req.Id == "" || existing.ID.String() != req.Id {
 				http.Error(w, "Session name already exists", http.StatusConflict)
 				return
 			}
@@ -183,8 +183,8 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 		SetName(req.Name).
 		SetLastActiveAt(time.Now())
 
-	if req.ID != "" {
-		if sid, err := uuid.Parse(req.ID); err == nil {
+	if req.Id != "" {
+		if sid, err := uuid.Parse(req.Id); err == nil {
 			builder.SetID(sid)
 		}
 	}

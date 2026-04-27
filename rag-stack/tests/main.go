@@ -77,12 +77,12 @@ func main() {
 	}
 
 	// 5 & 6. Wait for Ingestion and Verify via Ask
-	fmt.Println("[STEP 5&6] Waiting for ingestion and verifying via RAG Query (up to 5m)...")
+	fmt.Println("[STEP 5&6] Waiting for ingestion and verifying via RAG Query (up to 1m)...")
 	
 	start := time.Now()
 	success := false
 	var lastAnswer string
-	for time.Since(start) < 5*time.Minute {
+	for time.Since(start) < time.Minute {
 		// Use a very specific query to ensure we are testing the isolation and the file we just uploaded.
 		query := fmt.Sprintf("What is the secret code and its generation timestamp mentioned in the file %s? Provide the exact code and timestamp.", fileName)
 		answer, askErr := askRAG(query, []string{tagID})
@@ -220,7 +220,7 @@ func getTags() (map[string]string, error) {
 	defer resp.Body.Close()
 
 	var tagsList []struct {
-		ID   string `json:"id"`
+		Id   string `json:"id"`
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tagsList); err != nil {
@@ -229,7 +229,7 @@ func getTags() (map[string]string, error) {
 
 	tags := make(map[string]string)
 	for _, t := range tagsList {
-		tags[t.Name] = t.ID
+			tags[t.Name] = t.Id
 	}
 	return tags, nil
 }
@@ -300,7 +300,7 @@ func askRAG(query string, tags []string) (string, error) {
 	defer resp.Body.Close()
 
 	var result struct {
-		Answer string `json:"answer"`
+		Result string `json:"result"`
 		Error  string `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -309,7 +309,7 @@ func askRAG(query string, tags []string) (string, error) {
 	if result.Error != "" {
 		return "", fmt.Errorf(result.Error)
 	}
-	return result.Answer, nil
+	return result.Result, nil
 }
 
 func deleteData(tagID string) error {

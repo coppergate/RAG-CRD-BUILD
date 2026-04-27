@@ -25,7 +25,7 @@ func LoadConfig() *Config {
 	return &Config{
 		PulsarURL:             envutil.GetEnv("PULSAR_URL", pulsarDefault),
 		PulsarResultsTopic:    envutil.GetEnv("PULSAR_RESULTS_TOPIC", "persistent://rag-pipeline/stage/results"),
-		PulsarCompletionTopic: envutil.GetEnv("PULSAR_COMPLETION_TOPIC", "persistent://rag-pipeline/stage/completion"),
+		PulsarCompletionTopic: envutil.GetEnv("PULSAR_COMPLETION_TOPIC", "persistent://rag-pipeline/stage/completions"),
 		PulsarSubscription:    envutil.GetEnv("PULSAR_SUBSCRIPTION", "prompt-aggregator-sub"),
 		AggregationTimeout:    envutil.GetEnvDuration("AGGREGATION_TIMEOUT", 60*time.Second),
 	}

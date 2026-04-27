@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
 
+	"app-builds/common/contracts"
 	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
 )
@@ -135,6 +137,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		}
 	}
 
+	fmt.Printf("DEBUG: Qdrant Search returned %d results (max: %d)\n", len(contexts), limit)
 	return contexts, nil
 }
 
@@ -281,6 +284,18 @@ func (q *QdrantClient) GetCollection(name string) (interface{}, error) {
 	return result, nil
 }
 
+func (q *QdrantClient) UpsertProto(collection string, vectorSize int, points []*contracts.QdrantPoint) error {
+	qdrantPoints := make([]interface{}, len(points))
+	for i, p := range points {
+		qdrantPoints[i] = map[string]interface{}{
+			"id":      p.Id,
+			"vector":  p.Vector,
+			"payload": contracts.FromStruct(p.Payload),
+		}
+	}
+	return q.Upsert(collection, vectorSize, qdrantPoints)
+}
+
 func (q *QdrantClient) Upsert(collection string, vectorSize int, points []interface{}) error {
 	return q.upsertWithRetry(collection, vectorSize, points, true)
 }
@@ -314,6 +329,7 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 
 	resp, err := q.httpClient.Do(req)
 	if err != nil {
+		fmt.Printf("ERROR: Qdrant PUT request failed: %v\n", err)
 		return err
 	}
 	defer resp.Body.Close()
@@ -327,9 +343,12 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Printf("ERROR: Qdrant (coll: %s) returned %d: %s\n", effectiveColl, resp.StatusCode, string(bodyBytes))
 		return fmt.Errorf("qdrant (coll: %s) returned status %d", effectiveColl, resp.StatusCode)
 	}
 
+	fmt.Printf("DEBUG: Successfully upserted %d points into %s\n", len(points), effectiveColl)
 	return nil
 }
 

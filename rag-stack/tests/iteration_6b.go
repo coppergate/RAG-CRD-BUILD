@@ -106,7 +106,7 @@ func verifySessionHealth(sessionID string) error {
 	}
 
 	var health struct {
-		SessionID     string  `json:"session_id"`
+		SessionId     string  `json:"session_id"`
 		TotalRequests int     `json:"total_requests"`
 		SuccessRate   float64 `json:"success_rate"`
 		Status        string  `json:"status"`

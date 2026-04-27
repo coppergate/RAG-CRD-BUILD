@@ -55,8 +55,13 @@ SERVICES=(
     "rag-test-runner"
     "rag-admin-api"
     "memory-controller"
-    "build-orchestrator"
     "prompt-aggregator"
+)
+
+# Infrastructure services are only built if explicitly requested or if they have changed.
+# They are excluded from the default "build all" to avoid unnecessary overhead.
+INFRA_SERVICES=(
+    "build-orchestrator"
 )
 
 log() { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
@@ -125,8 +130,15 @@ hash_context() {
     local svc="$1"
     local context_path="$REPO_DIR/services/$svc"
     [[ "$svc" == "rag-test-runner" ]] && context_path="$REPO_DIR/tests"
-    # Hash service dir and common dir (excluding VCS/ignored)
-    (cd "$REPO_DIR/services" && find common "$svc" -type f \( -name '.git' -prune -o -print \) 2>/dev/null | sort | xargs sha256sum | sha256sum | awk '{print $1}')
+    
+    if [[ "$svc" == "build-orchestrator" ]]; then
+        # Exclude RAG-specific contracts from orchestrator hash to prevent unnecessary rebuilds
+        # when only application data contracts change.
+        (cd "$REPO_DIR/services" && find common "$svc" -type f \( -name '.git' -prune -o -path 'common/contracts' -prune -o -print \) 2>/dev/null | sort | xargs sha256sum | sha256sum | awk '{print $1}')
+    else
+        # Hash service dir and common dir
+        (cd "$REPO_DIR/services" && find common "$svc" -type f \( -name '.git' -prune -o -print \) 2>/dev/null | sort | xargs sha256sum | sha256sum | awk '{print $1}')
+    fi
 }
 
 is_unchanged() {
@@ -153,7 +165,11 @@ deploy_update() {
 
     if [[ -n "$manifest" && -f "$manifest" ]]; then
         # Replace __VERSION__ and apply
-        sed -e "s#__VERSION__#${ver}#g" -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" "$manifest" | "$KUBECTL" apply -f -
+        # We handle both the external and internal registry names for substitution
+        sed -e "s#__VERSION__#${ver}#g" \
+            -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" \
+            -e "s#registry.container-registry.svc.cluster.local:5000#${REGISTRY}#g" \
+            "$manifest" | "$KUBECTL" apply -f -
     elif [[ -n "$manifest" ]]; then
         log "WARN: Manifest not found for $svc at $manifest"
     fi
@@ -346,7 +362,7 @@ main() {
         # Wait for all jobs with the app=kaniko-build label
         "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l app=kaniko-build --timeout=900s || true
         # After wait, we update timestamps for all services that were built
-        for svc in "${SERVICES[@]}"; do
+        for svc in "${SERVICES[@]}" "${INFRA_SERVICES[@]}"; do
              local ver=$(get_svc_version "$svc")
              local last=$(get_svc_last_build "$svc")
              if [[ "$last" == "null" || "$last" == *"(triggered)"* ]]; then
