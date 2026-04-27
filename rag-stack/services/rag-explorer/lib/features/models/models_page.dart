@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../config/service_endpoints.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
-import '../../app_config_provider.dart';
 
 class ModelsPage extends StatefulWidget {
   const ModelsPage({super.key});

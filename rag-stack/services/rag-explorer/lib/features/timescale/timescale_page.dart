@@ -4,7 +4,6 @@ import '../../config/service_endpoints.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
 import '../../core/models/session.dart';
-import '../../app_config_provider.dart';
 
 class TimescalePage extends StatefulWidget {
   const TimescalePage({super.key});

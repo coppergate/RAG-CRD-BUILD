@@ -49,11 +49,9 @@ def test_recursive_rag_flow():
     payload = {
         "id": correlation_id,
         "session_id": session_id,
-        "type": "chat_completion",
-        "payload": {
-            "model": "granite3.1-dense:8b", # Executor model
-            "messages": [{"role": "user", "content": user_query}]
-        },
+        "prompt": user_query,
+        "planner_model": "llama3.1:latest",
+        "executor_model": "llama3.1:latest",
         "timestamp": datetime.now().isoformat()
     }
     

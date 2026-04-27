@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 import '../../config/service_endpoints.dart';
 import '../../core/models/metrics.dart';
 import '../../core/api_client.dart';
-import '../../app_config_provider.dart';
 import 'package:provider/provider.dart';
 
 class QdrantPage extends StatefulWidget {

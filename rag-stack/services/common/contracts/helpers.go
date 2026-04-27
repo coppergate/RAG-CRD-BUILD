@@ -1,6 +1,8 @@
 package contracts
 
 import (
+	"reflect"
+
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -30,6 +32,24 @@ func ToValue(v interface{}) *structpb.Value {
 	if v == nil {
 		return structpb.NewNullValue()
 	}
+
+	// Use reflection to handle any slice type (like []string)
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Slice {
+		ii := make([]interface{}, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			item := rv.Index(i).Interface()
+			// Recursively handle nested slices if any
+			if reflect.TypeOf(item) != nil && reflect.TypeOf(item).Kind() == reflect.Slice {
+				val := ToValue(item)
+				ii[i] = val.AsInterface()
+			} else {
+				ii[i] = item
+			}
+		}
+		v = ii
+	}
+
 	val, err := structpb.NewValue(v)
 	if err != nil {
 		return structpb.NewNullValue()

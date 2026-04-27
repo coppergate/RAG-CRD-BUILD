@@ -48,18 +48,25 @@ func (s *QdrantSearcher) StartResultConsumer(consumer pulsar.Consumer) {
 					log.Printf("[%s] Qdrant search returned error: %s", resp.Id, resp.Error)
 				}
 				if ch, ok := s.pending.Load(resp.Id); ok {
-					if res, ok := contracts.FromValue(resp.Result).([]interface{}); ok {
+					val := contracts.FromValue(resp.Result)
+					if res, ok := val.([]interface{}); ok {
 						var stringRes []string
 						for _, it := range res {
 							if s, ok := it.(string); ok {
 								stringRes = append(stringRes, s)
 							}
 						}
+						log.Printf("[%s] Qdrant search returned %d contexts", resp.Id, len(stringRes))
 						ch.(chan []string) <- stringRes
 					} else {
+						log.Printf("[%s] Qdrant search result was not a list: %T", resp.Id, val)
 						ch.(chan []string) <- nil
 					}
+				} else {
+					log.Printf("[%s] Received Qdrant result but no pending request found", resp.Id)
 				}
+			} else {
+				log.Printf("Failed to unmarshal Qdrant response: %v", err)
 			}
 		}
 	}()

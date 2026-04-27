@@ -1,51 +1,51 @@
 {
   "rag-worker": {
-    "version": "2.10.10",
-    "last_build": "2026-04-26T23:14:18Z (triggered)"
+    "version": "2.10.11",
+    "last_build": null
   },
   "rag-ingestion": {
-    "version": "2.10.4",
-    "last_build": "2026-04-26T23:14:19Z (triggered)"
+    "version": "2.10.5",
+    "last_build": "2026-04-27T12:47:27Z"
   },
   "rag-web-ui": {
     "version": "2.10.3",
     "last_build": "2026-04-26T13:12:14Z"
   },
   "llm-gateway": {
-    "version": "2.10.10",
-    "last_build": "2026-04-26T23:14:19Z (triggered)"
+    "version": "2.10.11",
+    "last_build": null
   },
   "db-adapter": {
-    "version": "2.10.10",
-    "last_build": "2026-04-26T23:14:19Z (triggered)"
+    "version": "2.10.11",
+    "last_build": null
   },
   "qdrant-adapter": {
-    "version": "2.10.10",
-    "last_build": "2026-04-26T23:15:12Z (triggered)"
+    "version": "2.10.11",
+    "last_build": null
   },
   "object-store-mgr": {
-    "version": "2.10.3",
-    "last_build": "2026-04-26T23:15:14Z (triggered)"
+    "version": "2.10.4",
+    "last_build": "2026-04-27T12:47:29Z"
   },
   "rag-test-runner": {
-    "version": "2.10.3",
-    "last_build": "2026-04-26T23:15:14Z (triggered)"
+    "version": "2.10.4",
+    "last_build": "2026-04-27T12:47:30Z"
   },
   "rag-admin-api": {
-    "version": "2.10.3",
-    "last_build": "2026-04-26T23:15:14Z (triggered)"
+    "version": "2.10.4",
+    "last_build": "2026-04-27T12:47:30Z"
   },
   "memory-controller": {
-    "version": "2.10.3",
-    "last_build": "2026-04-26T23:15:56Z (triggered)"
+    "version": "2.10.4",
+    "last_build": "2026-04-27T12:47:31Z"
   },
   "build-orchestrator": {
     "version": "2.9.2",
     "last_build": "2026-04-25T12:50:00Z"
   },
   "prompt-aggregator": {
-    "version": "2.10.10",
-    "last_build": "2026-04-26T23:16:00Z (triggered)"
+    "version": "2.10.11",
+    "last_build": null
   },
   "rag-explorer": {
     "version": "2.10.3",
