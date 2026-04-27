@@ -1,6 +1,6 @@
 # RAG Stack Service Interfaces
 
-This document details the HTTP endpoints and Pulsar topics for all services in the RAG stack (v2.6.5).
+This document details the HTTP endpoints and Pulsar topics for all services in the RAG stack (v2.10.x).
 
 ## 1. LLM Gateway (`llm-gateway`)
 The entry point for all LLM and RAG requests. It provides an OpenAI-compatible API and handles session management.
@@ -13,6 +13,7 @@ The entry point for all LLM and RAG requests. It provides an OpenAI-compatible A
     - `messages`: (Array) List of role/content messages.
     - `session_id`: (String, Optional) ID for session tracking.
     - `tags`: (Array, Optional) Tags for RAG context isolation.
+    - `memory_mode`: (String, Optional) `off`, `session`, or `full`.
 - **POST `/v1/rag/chat`**
   - **Description**: Generic RAG chat endpoint.
   - **Parameters**:
@@ -21,6 +22,7 @@ The entry point for all LLM and RAG requests. It provides an OpenAI-compatible A
     - `planner`: (String) Planner model.
     - `executor`: (String) Executor model.
     - `tags`: (Array) List of tags to filter context.
+    - `memory_mode`: (String) `off`, `session`, or `full`.
 - **GET `/v1/rag/chat/stream`** (Websocket)
   - **Description**: Streaming chat over Websocket.
 - **GET `/healthz`, `/readyz`, `/health`**
@@ -54,6 +56,7 @@ Asynchronous persistence layer for database operations (TimescaleDB).
 - **Subscribe**: `persistent://rag-pipeline/operations/db-ops` (Generic DB operations)
 - **Subscribe**: `persistent://rag-pipeline/data/chat-prompts` (Audit prompts)
 - **Subscribe**: `persistent://rag-pipeline/stage/results` (Audit responses)
+- **Subscribe**: `persistent://rag-pipeline/rag/memory/write` (Persist memory items)
 
 ---
 
@@ -83,12 +86,15 @@ Core orchestration engine for the multi-stage RAG pipeline.
 - **Subscribe**: `persistent://rag-pipeline/stage/search`
 - **Subscribe**: `persistent://rag-pipeline/stage/exec`
 - **Subscribe**: `persistent://rag-pipeline/operations/qdrant-ops-results`
+- **Subscribe**: `persistent://rag-pipeline/sessions/{uuid}` (Receive MemoryPack)
 - **Publish**: `persistent://rag-pipeline/stage/plan`
 - **Publish**: `persistent://rag-pipeline/stage/search`
 - **Publish**: `persistent://rag-pipeline/stage/exec`
 - **Publish**: `persistent://rag-pipeline/operations/qdrant-ops`
 - **Publish**: `persistent://rag-pipeline/stage/completion`
 - **Publish**: `persistent://rag-pipeline/sessions/{uuid}` (Streaming chunks)
+- **Publish**: `persistent://rag-pipeline/rag/memory/refresh` (Request memory recall)
+- **Publish**: `persistent://rag-pipeline/rag/memory/write` (Submit new memory items)
 
 ---
 
@@ -122,7 +128,7 @@ Proxy and management interface for Rook-Ceph S3 storage.
 ---
 
 ## 7. Memory Controller (`memory-controller`)
-Management of structured memory items and session links.
+Management of structured memory items and session links for Titans/Miras-inspired memory.
 
 ### HTTP Endpoints
 - **GET/POST `/items`**
@@ -130,6 +136,14 @@ Management of structured memory items and session links.
 - **GET `/sessions`**
   - **Description**: List sessions with associated memory items.
 - **GET `/healthz`, `/readyz`**
+  - **Description**: Standard health and readiness probes.
+
+### Pulsar Topics
+- **Subscribe**: `persistent://rag-pipeline/rag/memory/write` (MemoryWriteRequest)
+- **Subscribe**: `persistent://rag-pipeline/rag/memory/refresh` (MemoryRetrieveRequest)
+- **Subscribe**: `persistent://rag-pipeline/rag/memory/prune` (Maintenance commands)
+- **Publish**: `persistent://rag-pipeline/rag/memory/audit` (Audit trail)
+- **Publish**: `persistent://rag-pipeline/sessions/{uuid}` (MemoryPack delivery)
 
 ---
 

@@ -11,6 +11,7 @@ graph TD
         Gateway[llm-gateway]
         Worker[rag-worker]
         DBAdapter[db-adapter]
+        Memory[memory-controller]
         Aggregator[prompt-aggregator]
         Ingestor[rag-ingestion-service]
         QAdapter[qdrant-adapter]
@@ -51,6 +52,8 @@ graph TD
         QOps[operations/qdrant-ops]
         QRes[operations/qdrant-ops-results]
         BuildTopic[operations/builds]
+        MemWrite[rag/memory/write]
+        MemRefresh[rag/memory/refresh]
     end
 
     subgraph "Storage & Infrastructure: TLS-SSL"
@@ -101,12 +104,20 @@ graph TD
     Worker -.->|17- Stream Chunks| Sessions
     Worker -.->|18- Completion Signal| Completion
 
-    Sessions -.->|19- Read Stream| Gateway
-    Completion -.->|20- Trigger| Aggregator
-    Aggregator -.->|21- Read Session Data| Sessions
-    Aggregator -.->|22- Publish| Results
-    Results -.->|23- Consume| DBAdapter
-    Gateway -->|24- Final Response| Explorer
+    %% Memory Flow
+    Worker -.->|19- Request Memory| MemRefresh
+    Worker -.->|20- Submit Memory| MemWrite
+    MemRefresh -.->|21- Consume| Memory
+    MemWrite -.->|22- Consume| Memory
+    MemWrite -.->|23- Consume| DBAdapter
+    Memory -.->|24- Deliver MemoryPack| Sessions
+
+    Sessions -.->|25- Read Stream| Gateway
+    Completion -.->|26- Trigger| Aggregator
+    Aggregator -.->|27- Read Session Data| Sessions
+    Aggregator -.->|28- Publish| Results
+    Results -.->|29- Consume| DBAdapter
+    Gateway -->|30- Final Response| Explorer
 
     %% Persistent Flow: DB Adapter
     Prompts -.->|Consume| DBAdapter

@@ -1,4 +1,4 @@
-Based on the current implementation of the RAG stack (Iteration 6 planning + Iteration 5 runtime), here is a refreshed architecture representation of components, build flow, and asynchronous interconnections.
+Based on the current implementation of the RAG stack (Iteration 7), here is a refreshed architecture representation of components, build flow, and asynchronous interconnections.
 
 #### 1. Architecture & Message Interconnections - Mermaid Diagram -
 
@@ -60,6 +60,8 @@ graph TD
         QOps[operations/qdrant-ops]
         QRes[operations/qdrant-ops-results]
         BuildTopic[operations/builds]
+        MemWrite[rag/memory/write]
+        MemRefresh[rag/memory/refresh]
     end
 
     subgraph "Storage & Infrastructure: TLS-SSL"
@@ -117,12 +119,20 @@ graph TD
     Worker -.->|17- Stream Chunks| Sessions
     Worker -.->|18- Completion Signal| Completion
 
-    Sessions -.->|19- Read Stream| Gateway
-    Completion -.->|20- Trigger| Aggregator
-    Aggregator -.->|21- Read Session Data| Sessions
-    Aggregator -.->|22- Publish| Results
-    Results -.->|23- Consume| DBAdapter
-    Gateway -->|24- Final Response| Explorer
+    %% Memory Flow
+    Worker -.->|19- Request Memory| MemRefresh
+    Worker -.->|20- Submit Memory| MemWrite
+    MemRefresh -.->|21- Consume| Memory
+    MemWrite -.->|22- Consume| Memory
+    MemWrite -.->|23- Consume| DBAdapter
+    Memory -.->|24- Deliver MemoryPack| Sessions
+
+    Sessions -.->|25- Read Stream| Gateway
+    Completion -.->|26- Trigger| Aggregator
+    Aggregator -.->|27- Read Session Data| Sessions
+    Aggregator -.->|28- Publish| Results
+    Results -.->|29- Consume| DBAdapter
+    Gateway -->|30- Final Response| Explorer
 
     %% Persistent Flow: DB Adapter
     Prompts -.->|Consume| DBAdapter
@@ -154,7 +164,7 @@ graph TD
 - `rag-worker`: Core orchestration engine with modular LLM support (Llama/Granite); integrates multi-stage RAG logic (ingress/plan/search/exec).
 - `qdrant-adapter`: Centralized vector DB adapter ensuring consistent tag-filtered search and upsert logic.
 - `db-adapter`: Async persistence layer for audit logs, session state, and chat history.
-- `memory-controller`: Manages structured memory items and session-based graph links for Titans/Miras-inspired memory.
+- `memory-controller`: Manages structured memory items and session-based graph links for Titans/Miras-inspired memory. Handles salience scoring, retention/decay, and MemoryPack assembly.
 - `prompt-aggregator`: High-performance aggregation service that assembles streaming chunks from session-specific Pulsar topics into final results.
 - `rag-ingestion-service`: Persistent Python service for multi-source data ingestion and embedding generation.
 - `common/telemetry`: Shared OTLP package for distributed tracing and Prometheus metrics; services export to local `Alloy` instances.

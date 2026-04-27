@@ -221,13 +221,13 @@ Every new session for the **Junie** agent MUST establish the operational context
 3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
-### 2.2 Current Focus (Iteration 9)
-As of version 2.7.1, the project is focusing on **Iteration 11 (Refinement & Backend Standardisation)**.
-1.  **Ingestion Pipeline**: Prefix-based browsing, knowledge tags, targeted ingestion, and multi-file upload.
-2.  **Prompt Aggregation**: Session-specific Pulsar topics to eliminate linear scanning.
-3.  **Observability**: Custom metrics and Grafana dashboards for tracking health and GPU utilization.
-4.  **Build System Optimization**: Shared context and parallel Kaniko builds.
-5.  **Stability**: Resolved `k8tz` admission controller deadlocks and Rook-Ceph IO hangs.
+### 2.2 Current Focus (Iteration 7)
+As of version 2.10.x, the project is focusing on **Iteration 7: Local Prompt Memory + Recall (Miras/Titans-Inspired)**.
+1.  **Memory Data Model**: Implementing structured memory types (`short_term`, `long_term`, `persistent`) in TimescaleDB.
+2.  **Memory Controller**: A dedicated service for salience scoring, retention/decay logic, and MemoryPack assembly.
+3.  **Pulsar Integration**: Asynchronous memory operations via `rag.memory.*` topics.
+4.  **Retrieval Composition**: Context-aware recall in `rag-worker` using strict token budgeting and salience ranking.
+5.  **Memory Tracing**: Real-time observability of the memory recall process in the RAG Explorer UI.
 
 ### 2.3 Change Logs
 - **Location**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json`

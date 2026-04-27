@@ -4,10 +4,11 @@ This project implements a high-performance, scalable **Retrieval-Augmented Gener
 
 ## 🚀 Project Synopsis
 
-The RAG Stack has evolved from a simple document retriever into a **Structured Knowledge Management System**. It leverages the high concurrency of **Go** for its core infrastructure, the reliability of **Apache Pulsar** for its messaging backbone, and the specialized analytical capabilities of **TimescaleDB** and **Qdrant**.
+The RAG Stack has evolved into a **Knowledge-First Intelligent Agent Platform**. It leverages the high concurrency of **Go** for its core infrastructure, the reliability of **Apache Pulsar** for its messaging backbone, and a sophisticated **Local Prompt Memory** system for long-session consistency.
 
 Key capabilities include:
 - **Asynchronous Processing**: Decoupled client requests from heavy LLM inference using Pulsar topics.
+- **Titans/Miras-Inspired Memory**: A sophisticated local-first memory pipeline with salience scoring and multi-tier recall (short-term, long-term, persistent).
 - **Granular Knowledge Isolation**: A multi-tenant tagging system allowing overlapping knowledge bases to coexist and be selectively queried.
 - **Vector Alignment**: Using **Ollama** for both ingestion (embeddings) and chat (inference) ensuring 100% vector consistency.
 - **Local Sovereignty**: Entirely self-hosted on Kubernetes, utilizing **Rook-Ceph S3** for object storage and a local container registry.
@@ -17,8 +18,9 @@ Key capabilities include:
 
 The system is built as a set of modular microservices:
 
-- **LLM Gateway (Go)**: OpenAI-compatible entry point that manages session state and dispatches tasks.
-- **RAG Worker (Go)**: The retrieval engine that orchestrates semantic searches in Qdrant and augmented prompt completion.
+- **LLM Gateway (Go)**: OpenAI-compatible entry point that manages session state, dispatches tasks, and configures memory modes.
+- **RAG Worker (Go)**: The retrieval engine that orchestrates semantic searches, memory recall, and augmented prompt completion.
+- **Memory Controller (Go)**: Manages structured memory items, salience scoring, and session-based graph links.
 - **Ingestion Service (FastAPI)**: Handles multi-source data ingestion and embedding generation.
 - **Qdrant Adapter & DB Adapter**: Specialized services for centralized access to the vector store and relational database.
 - **Object Store Manager (Go)**: Centralized management of S3 storage and file metadata.
@@ -49,9 +51,9 @@ For detailed instructions, refer to:
 
 The project follows a structured iteration-based development cycle:
 
-- [**Iteration 5 (Current)**](./iteration-5.md): Multi-model selection mechanism, Pulsar-based model routing, and UI for model discovery.
-- [**Iteration 4 & 4a**](./iteration-4.md) ([4a](./iteration-4a.md)): APM integration (Grafana LGTM stack) and improved S3 storage handling.
-- [**Iteration 3**](./iteration-3.md) & [**Iteration 2**](./iteration-2.md): Evolution from basic ingestion to stable asynchronous processing.
+- [**Iteration 7 (Current)**](./iteration-7.md): Local Prompt Memory + Recall (Miras/Titans-Inspired), Memory Controller service, and contextual salience scoring.
+- [**Iteration 6 & 6b**](./iteration-6.md) ([6b](./iteration-6b.md)): Knowledge tags, multi-file upload, and session-specific Pulsar topics.
+- [**Iteration 5**](./iteration-5.md): Multi-model selection mechanism, Pulsar-based model routing, and UI for model discovery.
 
 ## 📂 Documentation Index
 
@@ -63,10 +65,10 @@ Below is a comprehensive list of project documentation:
 - [**rag-stack/README.md**](./rag-stack/README.md): Practical guide for deploying and using the RAG microservices.
 
 ### Iteration Logs
-- [**iteration-5.md**](./iteration-5.md): Current development goals (Multi-model support).
+- [**iteration-7.md**](./iteration-7.md): Current development goals (Local Prompt Memory).
+- [**iteration-6.md**](./iteration-6.md) / [**iteration-6b.md**](./iteration-6b.md): Knowledge tags and session topics.
+- [**iteration-5.md**](./iteration-5.md): Multi-model selection mechanism.
 - [**iteration-4.md**](./iteration-4.md) / [**iteration-4a.md**](./iteration-4a.md): APM, Monitoring, and infrastructure refinement.
-- [**iteration-3.md**](./iteration-3.md): Stability and Pulsar integration.
-- [**iteration-2.md**](./iteration-2.md): Initial microservice separation.
 
 ### Infrastructure & VMs
 - [**doms.md**](./doms.md): Core domain/VM definitions for the cluster.

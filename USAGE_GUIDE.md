@@ -46,7 +46,8 @@ The UI is available in two forms:
    - `off`: Standard RAG retrieval only.
    - `session`: Enables short-term context within the current chat.
    - `full`: Enables long-term recall from previous interactions (Iteration 7).
-4. **Submit Prompt**: Enter your query and receive a streaming response with the retrieved context and memory trace visible in the metadata panel.
+4. **Submit Prompt**: Enter your query and receive a streaming response.
+5. **Inspect Recall**: Use the **Memory Trace** panel in the metadata section to see which memory items were recalled, their salience scores, and the "why selected" reasoning for the current context.
 
 ## 4. System Monitoring and Management
 The RAG stack includes a full APM suite for monitoring health and performance.
