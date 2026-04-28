@@ -16,7 +16,7 @@
     "last_build": null
   },
   "db-adapter": {
-    "version": "2.10.11",
+    "version": "2.10.12",
     "last_build": null
   },
   "qdrant-adapter": {
