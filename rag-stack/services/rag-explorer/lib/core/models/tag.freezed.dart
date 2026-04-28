@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Tag {
 
- String get id; String get name; DateTime? get createdAt;
+ String get id; String get name;@JsonKey(name: 'created_at') DateTime? get createdAt;
 /// Create a copy of Tag
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $TagCopyWith<$Res>  {
   factory $TagCopyWith(Tag value, $Res Function(Tag) _then) = _$TagCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, DateTime? createdAt
+ String id, String name,@JsonKey(name: 'created_at') DateTime? createdAt
 });
 
 
@@ -155,7 +155,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  DateTime? createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name, @JsonKey(name: 'created_at')  DateTime? createdAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Tag() when $default != null:
 return $default(_that.id,_that.name,_that.createdAt);case _:
@@ -176,7 +176,7 @@ return $default(_that.id,_that.name,_that.createdAt);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  DateTime? createdAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name, @JsonKey(name: 'created_at')  DateTime? createdAt)  $default,) {final _that = this;
 switch (_that) {
 case _Tag():
 return $default(_that.id,_that.name,_that.createdAt);case _:
@@ -196,7 +196,7 @@ return $default(_that.id,_that.name,_that.createdAt);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  DateTime? createdAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name, @JsonKey(name: 'created_at')  DateTime? createdAt)?  $default,) {final _that = this;
 switch (_that) {
 case _Tag() when $default != null:
 return $default(_that.id,_that.name,_that.createdAt);case _:
@@ -211,12 +211,12 @@ return $default(_that.id,_that.name,_that.createdAt);case _:
 @JsonSerializable()
 
 class _Tag implements Tag {
-  const _Tag({required this.id, required this.name, this.createdAt});
+  const _Tag({required this.id, required this.name, @JsonKey(name: 'created_at') this.createdAt});
   factory _Tag.fromJson(Map<String, dynamic> json) => _$TagFromJson(json);
 
 @override final  String id;
 @override final  String name;
-@override final  DateTime? createdAt;
+@override@JsonKey(name: 'created_at') final  DateTime? createdAt;
 
 /// Create a copy of Tag
 /// with the given fields replaced by the non-null parameter values.
@@ -251,7 +251,7 @@ abstract mixin class _$TagCopyWith<$Res> implements $TagCopyWith<$Res> {
   factory _$TagCopyWith(_Tag value, $Res Function(_Tag) _then) = __$TagCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, DateTime? createdAt
+ String id, String name,@JsonKey(name: 'created_at') DateTime? createdAt
 });
 
 

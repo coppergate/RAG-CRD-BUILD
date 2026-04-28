@@ -283,6 +283,30 @@ func TestHandleGetFiles(t *testing.T) {
 	assert.Contains(t, files[0]["tags"], "test-tag")
 }
 
+func TestHandleGetFilesEmptyMetadata(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_empty?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	// Create embedding with NO path in metadata
+	_, err := client.CodeEmbedding.Create().
+		SetMetadata(map[string]interface{}{"foo": "bar"}).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/storage/files", nil)
+	w := httptest.NewRecorder()
+
+	svc := service.NewStorageService(client)
+	svc.GetFiles(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var files []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &files)
+	assert.NoError(t, err)
+	assert.Len(t, files, 0) // Should skip files without path
+}
+
 type mockProducer struct {
 	pulsar.Producer
 	sentMessages []*pulsar.ProducerMessage

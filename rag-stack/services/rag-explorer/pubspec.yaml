@@ -1,6 +1,6 @@
 name: rag_explorer
 description: RAG Pipeline Explorer UI
-version: 2.4.5
+version: 2.10.5
 publish_to: 'none'
 
 environment:
@@ -23,6 +23,7 @@ dependencies:
   web_socket_channel: ^3.0.3
   uuid: ^4.1.0
   file_picker: ^11.0.2
+  url_launcher: ^6.2.1
 
 dev_dependencies:
   flutter_test:

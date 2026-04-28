@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/service_endpoints.dart';
 import '../../core/models/metrics.dart';
 import '../../core/api_client.dart';
-import 'package:provider/provider.dart';
+import '../../app_config_provider.dart';
 
-class QdrantPage extends StatefulWidget {
+class QdrantPage extends ConsumerStatefulWidget {
   const QdrantPage({super.key});
 
   @override
-  State<QdrantPage> createState() => _QdrantPageState();
+  ConsumerState<QdrantPage> createState() => _QdrantPageState();
 }
 
-class _QdrantPageState extends State<QdrantPage> {
+class _QdrantPageState extends ConsumerState<QdrantPage> {
   late Future<List<Map<String, dynamic>>> _collectionsFuture;
 
   @override
@@ -21,7 +22,7 @@ class _QdrantPageState extends State<QdrantPage> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchCollections() async {
-    final config = context.read<AppConfigProvider>().config;
+    final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
     
     final response = await client.get('${ServiceEndpoints.qdrantAdapter}/collections');
