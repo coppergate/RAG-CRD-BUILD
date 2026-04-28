@@ -38,16 +38,23 @@ else:
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
-BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase-bucket")
+BUCKET_NAME = os.getenv("BUCKET_NAME", "e2eTestBucket")
+S3_INDEX = "/e2eTestBucket"
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 
 def test_s3_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing S3 Operations...")
-    print(f"  - S3_ENDPOINT={S3_ENDPOINT} BUCKET_NAME={BUCKET_NAME}")
+    print(f"  - S3_ENDPOINT={S3_ENDPOINT} BUCKET_NAME={BUCKET_NAME} S3_INDEX={S3_INDEX}")
     s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT)
-    test_file = "test_file.txt"
+    test_file = f"{S3_INDEX.strip('/')}/test_file.txt"
     test_content = "This is a test content for RAG testing."
     
+    # Ensure bucket exists (optional, depends on environment)
+    try:
+        s3.create_bucket(Bucket=BUCKET_NAME)
+    except:
+        pass
+
     # Upload
     s3.put_object(Bucket=BUCKET_NAME, Key=test_file, Body=test_content)
     print(f"  - Uploaded {test_file}")
@@ -59,10 +66,10 @@ def test_s3_ops():
     print("  - Verified content")
     
     # List
-    objects = s3.list_objects_v2(Bucket=BUCKET_NAME)
+    objects = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=S3_INDEX.strip('/'))
     keys = [obj['Key'] for obj in objects.get('Contents', [])]
     assert test_file in keys
-    print("  - Verified file in listing")
+    print("  - Verified file in listing with prefix")
 
 def test_qdrant_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing Qdrant Operations...")

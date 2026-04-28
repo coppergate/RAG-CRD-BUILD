@@ -18,6 +18,7 @@ var (
 	baseURL    = "https://rag-admin-api.rag.hierocracy.home"
 	sessionID  = ""
 	bucketName = ""
+	s3Index    = "e2eTestBucket"
 	client     = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -62,7 +63,8 @@ func main() {
 
 	// 3. Upload Test File
 	fmt.Println("[STEP 3] Uploading test file...")
-	fileName := fmt.Sprintf("e2e-test-file-%d.txt", time.Now().Unix())
+	baseFileName := fmt.Sprintf("e2e-test-file-%d.txt", time.Now().Unix())
+	fileName := fmt.Sprintf("%s/%s", s3Index, baseFileName)
 	timestamp := time.Now().Unix()
 	secretCode := fmt.Sprintf("BLUE-ORCHID-%s", tagID[:8])
 	fileContent := fmt.Sprintf("This is a secret code: %s. Generation timestamp: %d. This file is for RAG testing.", secretCode, timestamp)
@@ -153,46 +155,26 @@ func main() {
 }
 
 func getBucket() error {
-	resp, err := client.Get(baseURL + "/api/s3/buckets")
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	var buckets []struct {
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&buckets); err != nil {
-		return err
-	}
-
-	for _, b := range buckets {
-		if strings.HasPrefix(b.Name, "rag-codebase-") {
-			bucketName = b.Name
-			return nil
-		}
-	}
-	return fmt.Errorf("no rag-codebase bucket found")
+	bucketName = "e2eTestBucket"
+	return nil
 }
 
 func getFiles() ([]string, error) {
-	resp, err := client.Get(baseURL + "/api/s3/buckets/" + bucketName + "/objects")
+	resp, err := client.Get(baseURL + "/api/s3/buckets/" + bucketName + "?prefix=" + s3Index)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Objects []struct {
-			Key string `json:"key"`
-		} `json:"objects"`
+	var objects []struct {
+		Key string `json:"Key"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&objects); err != nil {
 		return nil, err
 	}
 
 	var files []string
-	for _, o := range result.Objects {
+	for _, o := range objects {
 		files = append(files, o.Key)
 	}
 	return files, nil
@@ -273,6 +255,8 @@ func triggerIngest(tagID string, vectorSize int, fileName string, sessionID stri
 		"vector_size":  vectorSize,
 		"file_names":   []string{fileName},
 		"session_id":   sessionID,
+		"bucket_name":  bucketName,
+		"index":        s3Index,
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := client.Post(baseURL+"/api/ingest/ingest", "application/json", bytes.NewBuffer(body))
