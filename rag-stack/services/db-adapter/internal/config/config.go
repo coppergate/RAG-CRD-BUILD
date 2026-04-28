@@ -39,7 +39,7 @@ func Load() *Config {
 		Subscription:    envutil.GetEnv("PULSAR_SUBSCRIPTION", "db-adapter-sub"),
 		DBOpsTopic:      envutil.GetEnv("PULSAR_DB_OPS_TOPIC", "persistent://rag-pipeline/operations/db-ops"),
 		QdrantOpsTopic:  envutil.GetEnv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops"),
-		CompletionTopic: envutil.GetEnv("PULSAR_COMPLETION_TOPIC", "persistent://rag-pipeline/stage/completions"),
+		CompletionTopic: envutil.GetEnv("PULSAR_COMPLETION_TOPIC", "persistent://rag-pipeline/stage/completion"),
 		IngestionURL:    envutil.GetEnv("RAG_INGESTION_URL", ingestionDefault),
 		TLSCert:         envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:        envutil.GetEnv("TLS_KEY", ""),

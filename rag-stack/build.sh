@@ -12,7 +12,18 @@ BASE_DIR=$(cd "$REPO_DIR/.." && pwd)
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 
+# Build settings
+MODE="${MODE:-cluster}"
+VERSION_FILE="${VERSION_FILE:-$BASE_DIR/CURRENT_VERSION}"
+JOURNAL_DIR="${JOURNAL_DIR:-/tmp/.build_journal_junie}"
+REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
+FORCE_BUILD="${FORCE_BUILD:-false}"
+WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
+OVERRIDE_VERSION="${OVERRIDE_VERSION:-}"
+PARALLELISM="${PARALLELISM:-4}"
+
 LOCKDIR="/tmp/rag-stack-build.lock"
+mkdir -p "$JOURNAL_DIR"
 
 acquire_lock() {
     local max_retries=5
