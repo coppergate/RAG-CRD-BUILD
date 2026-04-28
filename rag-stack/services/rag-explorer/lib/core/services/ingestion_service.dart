@@ -122,6 +122,21 @@ class IngestionService extends _$IngestionService {
     }
   }
 
+  Future<List<String>> getAllowedExtensions() async {
+    _logger.debug('Fetching allowed extensions from ingestion service');
+    try {
+      final response = await _dio.get('${_config.ragAdminApiUrl}/api/ingest/extensions');
+      if (response.statusCode == 200) {
+        final List<dynamic> extensions = response.data['extensions'];
+        return extensions.cast<String>();
+      }
+      return [];
+    } catch (e) {
+      _logger.error('Error fetching extensions: $e');
+      return [];
+    }
+  }
+
   Future<bool> uploadFile(String bucket, String key, Uint8List bytes) async {
     _logger.info('Uploading file to S3: $bucket/$key');
     try {

@@ -4,7 +4,7 @@
     "last_build": null
   },
   "rag-ingestion": {
-    "version": "2.10.5",
+    "version": "2.10.6",
     "last_build": "2026-04-27T12:47:27Z"
   },
   "rag-web-ui": {
@@ -32,7 +32,7 @@
     "last_build": "2026-04-27T12:47:30Z"
   },
   "rag-admin-api": {
-    "version": "2.10.4",
+    "version": "2.10.5",
     "last_build": "2026-04-27T12:47:30Z"
   },
   "memory-controller": {
@@ -48,7 +48,7 @@
     "last_build": null
   },
   "rag-explorer": {
-    "version": "2.10.5",
+    "version": "2.10.6",
     "last_build": "2026-04-27T15:35:00Z"
   }
 }

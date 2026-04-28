@@ -346,6 +346,10 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
         if pulsar_client:
             pulsar_client.close()
 
+@app.get("/extensions")
+async def get_extensions():
+    return {"extensions": ALLOWED_EXTENSIONS}
+
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
     logger.info(f"Received ingestion request for ID: {req.ingestion_id} (requested vector_size: {req.vector_size}, files: {req.file_names}, session: {req.session_id})")
