@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../config/service_endpoints.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
 import '../../core/models/tag.dart';
 import '../../core/models/session.dart';
+import '../../app_config_provider.dart';
 
-class S3Page extends StatefulWidget {
+class S3Page extends ConsumerStatefulWidget {
   const S3Page({super.key});
 
   @override
-  State<S3Page> createState() => _S3PageState();
+  ConsumerState<S3Page> createState() => _S3PageState();
 }
 
-class _S3PageState extends State<S3Page> {
+class _S3PageState extends ConsumerState<S3Page> {
   late Future<List<VirtualFile>> _filesFuture;
   Tag? _selectedTag;
   Session? _selectedSession;
@@ -29,27 +29,27 @@ class _S3PageState extends State<S3Page> {
   }
 
   Future<List<VirtualFile>> _fetchFiles() async {
-    final config = context.read<AppConfigProvider>().config;
+    final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
     Map<String, dynamic> queryParams = {};
     if (_selectedTag != null) queryParams['tag_id'] = _selectedTag!.id;
     if (_selectedSession != null) queryParams['session_id'] = _selectedSession!.id;
     
-    final response = await client.get('${ServiceEndpoints.dbAdapter}/storage/files', queryParameters: queryParams);
+    final response = await client.get('${config.ragAdminApiUrl}/api/db/storage/files', queryParameters: queryParams);
     return (response.data as List).map((e) => VirtualFile.fromJson(e)).toList();
   }
 
   Future<List<Tag>> _fetchTags() async {
-    final config = context.read<AppConfigProvider>().config;
+    final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
-    final response = await client.get('${ServiceEndpoints.dbAdapter}/tags');
+    final response = await client.get('${config.ragAdminApiUrl}/api/db/tags');
     return (response.data as List).map((e) => Tag.fromJson(e)).toList();
   }
 
   Future<List<Session>> _fetchSessions() async {
-    final config = context.read<AppConfigProvider>().config;
+    final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
-    final response = await client.get('${ServiceEndpoints.dbAdapter}/sessions');
+    final response = await client.get('${config.ragAdminApiUrl}/api/db/sessions');
     return (response.data as List).map((e) => Session.fromJson(e)).toList();
   }
 

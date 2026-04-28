@@ -174,4 +174,29 @@ class IngestionService extends _$IngestionService {
       return {'error': e.toString()};
     }
   }
+
+  Future<bool> deleteObject(String bucket, String key) async {
+    _logger.warn('Deleting object from S3: $bucket/$key');
+    try {
+      final response = await _dio.delete('${_config.ragAdminApiUrl}/api/s3/buckets/$bucket/$key');
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (e) {
+      _logger.error('Error deleting object: $e');
+      return false;
+    }
+  }
+
+  Future<String?> getObjectContent(String bucket, String key) async {
+    _logger.debug('Fetching object content: $bucket/$key');
+    try {
+      final response = await _dio.get('${_config.ragAdminApiUrl}/api/s3/buckets/$bucket/$key');
+      if (response.statusCode == 200) {
+        return response.data.toString();
+      }
+      return null;
+    } catch (e) {
+      _logger.error('Error fetching object content: $e');
+      return null;
+    }
+  }
 }

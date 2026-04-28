@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -130,21 +131,158 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   Future<void> _pickAndUploadFolder() async {
     if (_selectedBucket == null) return;
     
-    // getDirectoryPath is not supported on Web, but this is desktop/mobile
     final String? directoryPath = await FilePicker.getDirectoryPath();
 
     if (directoryPath != null) {
-      // In a real desktop app, we'd recursively read the directory.
-      // But file_picker's getDirectoryPath only returns the path string.
-      // For cross-platform/web-safety, we usually use pickFiles with web: true
-      // or similar, but since we are desktop-focused, we might need 'dart:io'.
-      // However, the prompt says we should replicate rag-web-ui functionality.
-      // rag-web-ui uses HTML <input webkitdirectory>.
-      
+      final dir = Directory(directoryPath);
+      if (!dir.existsSync()) return;
+
       setState(() {
-        _isError = true;
-        _statusMessage = 'Folder upload is currently only supported via individual file selection in this version.';
+        _isLoading = true;
+        _statusMessage = 'Scanning folder...';
+        _isError = false;
       });
+
+      try {
+        final List<FileSystemEntity> entities = dir.listSync(recursive: true);
+        final List<File> files = entities.whereType<File>().toList();
+        
+        if (files.isEmpty) {
+          setState(() {
+            _isLoading = false;
+            _statusMessage = 'No files found in selected folder.';
+          });
+          return;
+        }
+
+        setState(() {
+          _statusMessage = 'Uploading ${files.length} files...';
+        });
+
+        final service = ref.read(ingestionServiceProvider.notifier);
+        int successCount = 0;
+        
+        // We want to preserve the folder structure starting from the selected folder
+        final parentPath = dir.parent.path;
+
+        for (final file in files) {
+          String relativePath = file.path.substring(parentPath.length);
+          if (relativePath.startsWith(Platform.pathSeparator)) {
+            relativePath = relativePath.substring(1);
+          }
+          
+          // Ensure forward slashes for S3
+          String key = relativePath.replaceAll(Platform.pathSeparator, '/');
+          
+          if (_prefix.isNotEmpty) {
+             key = _prefix.endsWith('/') ? '$_prefix$key' : '$_prefix/$key';
+          }
+
+          final bytes = await file.readAsBytes();
+          final success = await service.uploadFile(_selectedBucket!, key, bytes);
+          if (success) successCount++;
+        }
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _statusMessage = 'Successfully uploaded $successCount of ${files.length} files.';
+          });
+          _loadObjects();
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isError = true;
+            _statusMessage = 'Error scanning folder: $e';
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _displayObject(Map<String, dynamic> obj) async {
+    final key = obj['Key'] as String;
+    if (_selectedBucket == null) return;
+
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Fetching content...';
+    });
+
+    final service = ref.read(ingestionServiceProvider.notifier);
+    final content = await service.getObjectContent(_selectedBucket!, key);
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      
+      if (content == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to fetch object content.'))
+        );
+        return;
+      }
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(key.split('/').last),
+          content: SizedBox(
+            width: 800,
+            height: 600,
+            child: SingleChildScrollView(
+              child: SelectableText(content, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteObject(Map<String, dynamic> obj) async {
+    final key = obj['Key'] as String;
+    if (_selectedBucket == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Object?'),
+        content: Text('Are you sure you want to delete "$key" from S3?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() {
+        _isLoading = true;
+        _statusMessage = 'Deleting $key...';
+      });
+
+      final service = ref.read(ingestionServiceProvider.notifier);
+      final success = await service.deleteObject(_selectedBucket!, key);
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          if (success) {
+            _statusMessage = 'Object deleted successfully.';
+          } else {
+            _isError = true;
+            _statusMessage = 'Failed to delete object.';
+          }
+        });
+        _loadObjects();
+      }
     }
   }
 
@@ -393,7 +531,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
                         }
                       });
                     },
-                    selectedColor: Colors.blue.withOpacity(0.2),
+                    selectedColor: Colors.blue.withValues(alpha: 0.2),
                     checkmarkColor: Colors.blue,
                   );
                 }).toList(),
@@ -491,8 +629,8 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _isError 
-            ? (darkMode ? Colors.red[900]!.withOpacity(0.3) : Colors.red[50]) 
-            : (darkMode ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50]),
+            ? (darkMode ? Colors.red[900]!.withValues(alpha: 0.3) : Colors.red[50]) 
+            : (darkMode ? Colors.green[900]!.withValues(alpha: 0.3) : Colors.green[50]),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: _isError ? Colors.red : Colors.green),
       ),
@@ -543,7 +681,17 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
                       leading: const Icon(Icons.insert_drive_file_outlined, size: 20),
                       title: Text(obj['Key'] ?? 'Unknown', style: const TextStyle(fontSize: 13)),
                       subtitle: Text('${(obj['Size'] ?? 0) / 1024} KB • Last Modified: ${obj['LastModified']}', style: const TextStyle(fontSize: 11)),
-                      trailing: const Icon(Icons.chevron_right, size: 16),
+                      trailing: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, size: 18),
+                        onSelected: (val) {
+                          if (val == 'display') _displayObject(obj);
+                          if (val == 'delete') _deleteObject(obj);
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'display', child: Text('Display Content')),
+                          const PopupMenuItem(value: 'delete', child: Text('Delete Object', style: TextStyle(color: Colors.red))),
+                        ],
+                      ),
                       dense: true,
                     );
                   },

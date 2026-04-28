@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/service_endpoints.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
 import '../../core/models/session.dart';
+import '../../app_config_provider.dart';
 
-class TimescalePage extends StatefulWidget {
+class TimescalePage extends ConsumerStatefulWidget {
   const TimescalePage({super.key});
 
   @override
-  State<TimescalePage> createState() => _TimescalePageState();
+  ConsumerState<TimescalePage> createState() => _TimescalePageState();
 }
 
-class _TimescalePageState extends State<TimescalePage> {
+class _TimescalePageState extends ConsumerState<TimescalePage> {
   late Future<List<Session>> _sessionsFuture;
   Session? _selectedSession;
   SessionHealth? _currentHealth;
@@ -26,7 +27,7 @@ class _TimescalePageState extends State<TimescalePage> {
   }
 
   Future<List<Session>> _fetchSessions() async {
-    final config = context.read<AppConfigProvider>().config;
+    final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
     final response = await client.get('${ServiceEndpoints.dbAdapter}/sessions');
     return (response.data as List).map((e) => Session.fromJson(e)).toList();
@@ -39,7 +40,7 @@ class _TimescalePageState extends State<TimescalePage> {
     });
 
     try {
-      final config = context.read<AppConfigProvider>().config;
+      final config = ref.read(appConfigProvider);
       final client = ApiClient(config);
       
       final healthResp = await client.get('${ServiceEndpoints.dbAdapter}/sessions/${session.id}/health');
@@ -154,7 +155,7 @@ class _TimescalePageState extends State<TimescalePage> {
                 const Text('Session Health', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Chip(
                   label: Text(h.status),
-                  backgroundColor: _getStatusColor(h.status).withOpacity(0.1),
+                  backgroundColor: _getStatusColor(h.status).withValues(alpha: 0.1),
                   labelStyle: TextStyle(color: _getStatusColor(h.status), fontWeight: FontWeight.bold),
                 ),
               ],

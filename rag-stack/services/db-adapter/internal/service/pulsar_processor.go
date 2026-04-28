@@ -318,6 +318,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 		SetNillableModelID(&modelID).
 		SetPromptTokens(int(m.PromptTokens)).
 		SetCompletionTokens(int(m.CompletionTokens)).
+		SetTotalTokens(int(m.PromptTokens + m.CompletionTokens)).
 		SetTotalDurationUsec(m.TotalDurationUsec).
 		SetLoadDurationUsec(m.LoadDurationUsec).
 		SetPromptEvalDurationUsec(m.PromptEvalDurationUsec).

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:rag_explorer/app_config_provider.dart';
@@ -20,6 +21,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   List<ResponseMessage> _messages = [];
   List<Session> _sessions = [];
+  final Set<String> _selectedSessionIds = {};
   String? _currentSessionId;
   String? _currentSessionName;
   String _selectedPlanner = 'llama3.1:latest';
@@ -70,7 +72,36 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           _messages.clear();
         });
       }
+      setState(() {
+        _selectedSessionIds.remove(sessionId);
+      });
       _loadSessions();
+    }
+  }
+
+  Future<void> _deleteSelectedSessions() async {
+    if (_selectedSessionIds.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Sessions'),
+        content: Text('Are you sure you want to delete ${_selectedSessionIds.length} sessions?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final idsToDelete = _selectedSessionIds.toList();
+      for (final id in idsToDelete) {
+        await _deleteSession(id);
+      }
     }
   }
 
@@ -215,22 +246,43 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 itemCount: _sessions.length,
                 itemBuilder: (context, index) {
                   final session = _sessions[index];
-                  final isSelected = session.id == _currentSessionId;
+                  final isCurrent = session.id == _currentSessionId;
+                  final isSelected = _selectedSessionIds.contains(session.id);
+                  
                   return ListTile(
-                    leading: const Icon(Icons.chat_bubble_outline),
+                    leading: Icon(isSelected ? Icons.check_box : Icons.chat_bubble_outline, 
+                      color: isSelected ? Colors.blue : null),
                     title: Text(session.name ?? 'Session ${session.id.substring(0, 8)}'),
                     subtitle: Text('Last active: ${_formatTime(session.lastActiveAt)}'),
-                    selected: isSelected,
+                    selected: isCurrent || isSelected,
                     onTap: () async {
-                      _chatSubscription?.cancel();
-                      final chatService = ref.read(chatServiceProvider);
-                      final msgs = await chatService.getMessages(session.id);
-                      setState(() {
-                        _currentSessionId = session.id;
-                        _currentSessionName = session.name;
-                        _messages = msgs;
-                        _isStreaming = false;
-                      });
+                      final isControlPressed = HardwareKeyboard.instance.isControlPressed || 
+                                               HardwareKeyboard.instance.isMetaPressed;
+                      
+                      if (isControlPressed) {
+                        setState(() {
+                          if (_selectedSessionIds.contains(session.id)) {
+                            _selectedSessionIds.remove(session.id);
+                          } else {
+                            _selectedSessionIds.add(session.id);
+                          }
+                        });
+                      } else {
+                        setState(() {
+                          _selectedSessionIds.clear();
+                          _selectedSessionIds.add(session.id);
+                          _currentSessionId = session.id;
+                          _currentSessionName = session.name;
+                          _isStreaming = false;
+                        });
+                        
+                        _chatSubscription?.cancel();
+                        final chatService = ref.read(chatServiceProvider);
+                        final msgs = await chatService.getMessages(session.id);
+                        setState(() {
+                          _messages = msgs;
+                        });
+                      }
                     },
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline, size: 20),
@@ -241,6 +293,20 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
             ),
           ),
+          if (_selectedSessionIds.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton.icon(
+                onPressed: _deleteSelectedSessions,
+                icon: const Icon(Icons.delete_sweep),
+                label: Text('Delete (${_selectedSessionIds.length})'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red[50],
+                  foregroundColor: Colors.red,
+                  minimumSize: const Size.fromHeight(40),
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -1,10 +1,10 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-part 'qdrant_stats.freezed.dart';
-part 'qdrant_stats.g.dart';
+part 'metrics.freezed.dart';
+part 'metrics.g.dart';
 
 @freezed
-class QdrantStats with _$QdrantStats {
+abstract class QdrantStats with _$QdrantStats {
   const factory QdrantStats({
     required String status,
     @JsonKey(name: 'points_count') required int pointsCount,
@@ -13,11 +13,11 @@ class QdrantStats with _$QdrantStats {
     @JsonKey(name: 'payload_schema') Map<String, dynamic>? payloadSchema,
   }) = _QdrantStats;
 
-  factory QdrantStats.fromJson(Map<String, dynamic> json) => _$QdrantStats.fromJson(json);
+  factory QdrantStats.fromJson(Map<String, dynamic> json) => _$QdrantStatsFromJson(json);
 }
 
 @freezed
-class ModelPerformance with _$ModelPerformance {
+abstract class ModelPerformance with _$ModelPerformance {
   const factory ModelPerformance({
     @JsonKey(name: 'model_name') required String modelName,
     required String node,
@@ -26,11 +26,11 @@ class ModelPerformance with _$ModelPerformance {
     @JsonKey(name: 'total_executions') required int totalExecutions,
   }) = _ModelPerformance;
 
-  factory ModelPerformance.fromJson(Map<String, dynamic> json) => _$ModelPerformance.fromJson(json);
+  factory ModelPerformance.fromJson(Map<String, dynamic> json) => _$ModelPerformanceFromJson(json);
 }
 
 @freezed
-class SessionHealth with _$SessionHealth {
+abstract class SessionHealth with _$SessionHealth {
   const factory SessionHealth({
     @JsonKey(name: 'session_id') required String sessionId,
     @JsonKey(name: 'total_requests') required int totalRequests,
@@ -41,11 +41,11 @@ class SessionHealth with _$SessionHealth {
     required String status, // HEALTHY, DEGRADED, UNHEALTHY
   }) = _SessionHealth;
 
-  factory SessionHealth.fromJson(Map<String, dynamic> json) => _$SessionHealth.fromJson(json);
+  factory SessionHealth.fromJson(Map<String, dynamic> json) => _$SessionHealthFromJson(json);
 }
 
 @freezed
-class VirtualFile with _$VirtualFile {
+abstract class VirtualFile with _$VirtualFile {
   const factory VirtualFile({
     required String path,
     required String bucket,
@@ -54,16 +54,16 @@ class VirtualFile with _$VirtualFile {
     required String status, // SYNCED
   }) = _VirtualFile;
 
-  factory VirtualFile.fromJson(Map<String, dynamic> json) => _$VirtualFile.fromJson(json);
+  factory VirtualFile.fromJson(Map<String, dynamic> json) => _$VirtualFileFromJson(json);
 }
 
 @freezed
-class AuditEntry with _$AuditEntry {
+abstract class AuditEntry with _$AuditEntry {
   const factory AuditEntry({
     required String type, // RETRIEVAL, MEMORY
     required String detail,
     @JsonKey(name: 'created_at') required DateTime createdAt,
   }) = _AuditEntry;
 
-  factory AuditEntry.fromJson(Map<String, dynamic> json) => _$AuditEntry.fromJson(json);
+  factory AuditEntry.fromJson(Map<String, dynamic> json) => _$AuditEntryFromJson(json);
 }

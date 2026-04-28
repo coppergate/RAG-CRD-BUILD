@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../config/service_endpoints.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../app_config_provider.dart';
 
-class ObservabilityPage extends StatelessWidget {
+class ObservabilityPage extends ConsumerWidget {
   const ObservabilityPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final config = ref.watch(appConfigProvider);
+    final grafanaBaseUrl = '${config.ragAdminApiUrl}/api/grafana';
+
     return Scaffold(
       appBar: AppBar(title: const Text('Cluster Observability')),
       body: SingleChildScrollView(
@@ -13,24 +18,55 @@ class ObservabilityPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Inference Node Monitoring', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Inference Node Monitoring', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                ElevatedButton.icon(
+                  onPressed: () => launchUrl(Uri.parse('$grafanaBaseUrl/d/rag-inference/inference-nodes?orgId=1&refresh=5s')),
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Open Full Dashboard'),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
             const Text('Real-time GPU/CPU load from inference nodes.', style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 24),
             
             _buildGrafanaPanel(
               title: 'GPU Utilization',
-              url: '${ServiceEndpoints.grafana}/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2',
+              url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2',
             ),
             const SizedBox(height: 16),
             _buildGrafanaPanel(
               title: 'GPU Memory Usage',
-              url: '${ServiceEndpoints.grafana}/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4',
+              url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4',
             ),
             const SizedBox(height: 16),
             _buildGrafanaPanel(
               title: 'CPU & System Load',
-              url: '${ServiceEndpoints.grafana}/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6',
+              url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6',
+            ),
+            
+            const SizedBox(height: 40),
+            const Text('Loki Log Streams', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Log Integration Plan:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    SizedBox(height: 8),
+                    Text('1. Implement /api/logs/session/{trace_id} in rag-admin-api.'),
+                    Text('2. Query Loki via traceID label correlation across all services.'),
+                    Text('3. Present unified stream in a LogViewer widget.'),
+                    SizedBox(height: 8),
+                    Text('Status: Planned (Awaiting discussion)', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.blue)),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -45,24 +81,34 @@ class ObservabilityPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                TextButton.icon(
+                  onPressed: () => launchUrl(Uri.parse(url)),
+                  icon: const Icon(Icons.open_in_new, size: 14),
+                  label: const Text('View', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
           ),
           Container(
-            height: 300,
+            height: 200,
             width: double.infinity,
             color: Colors.grey.shade100,
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.dashboard, size: 48, color: Colors.blue),
+                  const Icon(Icons.dashboard, size: 40, color: Colors.blue),
                   const SizedBox(height: 8),
-                  Text('Grafana Panel Proxy', style: TextStyle(color: Colors.grey.shade600)),
+                  Text('Grafana Panel Preview', style: TextStyle(color: Colors.grey.shade600)),
                   const SizedBox(height: 4),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(url, style: const TextStyle(fontSize: 10, color: Colors.blue), textAlign: TextAlign.center),
+                    child: Text(url, style: const TextStyle(fontSize: 9, color: Colors.blue), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
                 ],
               ),

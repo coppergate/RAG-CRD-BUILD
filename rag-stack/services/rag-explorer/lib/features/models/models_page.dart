@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/service_endpoints.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
+import '../../app_config_provider.dart';
 
-class ModelsPage extends StatefulWidget {
+class ModelsPage extends ConsumerStatefulWidget {
   const ModelsPage({super.key});
 
   @override
-  State<ModelsPage> createState() => _ModelsPageState();
+  ConsumerState<ModelsPage> createState() => _ModelsPageState();
 }
 
-class _ModelsPageState extends State<ModelsPage> {
+class _ModelsPageState extends ConsumerState<ModelsPage> {
   late Future<List<ModelPerformance>> _metricsFuture;
 
   @override
@@ -21,7 +22,7 @@ class _ModelsPageState extends State<ModelsPage> {
   }
 
   Future<List<ModelPerformance>> _fetchMetrics() async {
-    final config = context.read<AppConfigProvider>().config;
+    final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
     final response = await client.get('${ServiceEndpoints.dbAdapter}/metrics/summary');
     return (response.data as List).map((e) => ModelPerformance.fromJson(e)).toList();
