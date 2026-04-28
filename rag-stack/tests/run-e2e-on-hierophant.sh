@@ -105,13 +105,14 @@ echo "[STEP] Stream job logs" | tee -a "${OUT_DIR}/job.log"
 # 4) Run Go E2E driver via Podman (optional)
 echo "[STEP] Run Go E2E driver via Podman" | tee -a "${OUT_DIR}/go-e2e-driver.log"
 if command -v podman >/dev/null 2>&1; then
+  BUCKET_NAME=$("$KUBECTL" -n "$NAMESPACE" get configmap rag-codebase-bucket -o jsonpath='{.data.BUCKET_NAME}' 2>/dev/null || echo "e2eTestBucket")
+  echo "[INFO] Using bucket: ${BUCKET_NAME}" | tee -a "${OUT_DIR}/go-e2e-driver.log"
   # Mount internal CA to podman container and set SSL_CERT_FILE
-  # We assume combined-ca-inspect.crt in root is available as it was mentioned earlier.
-  # Better: mount the same one we use elsewhere if available.
   podman run --rm \
     -v /mnt/hegemon-share/share/code/complete-build/rag-stack/tests:/app:Z \
     -v /mnt/hegemon-share/share/code/complete-build/combined-ca-inspect.crt:/etc/ssl/certs/internal-ca.crt:Z \
     -e SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    -e BUCKET_NAME="$BUCKET_NAME" \
     -w /app \
     golang:1.25-alpine \
     sh -c 'cat /etc/ssl/certs/internal-ca.crt >> /etc/ssl/certs/ca-certificates.crt && go run .' | tee -a "${OUT_DIR}/go-e2e-driver.log"

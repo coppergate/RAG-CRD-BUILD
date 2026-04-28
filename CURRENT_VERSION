@@ -1,10 +1,10 @@
 {
   "rag-worker": {
-    "version": "2.10.11",
+    "version": "2.10.15",
     "last_build": null
   },
   "rag-ingestion": {
-    "version": "2.10.9",
+    "version": "2.10.10",
     "last_build": null
   },
   "rag-web-ui": {
@@ -16,11 +16,11 @@
     "last_build": null
   },
   "db-adapter": {
-    "version": "2.10.14",
+    "version": "2.10.17",
     "last_build": null
   },
   "qdrant-adapter": {
-    "version": "2.10.11",
+    "version": "2.10.14",
     "last_build": null
   },
   "object-store-mgr": {
@@ -28,7 +28,7 @@
     "last_build": "2026-04-27T12:47:29Z"
   },
   "rag-test-runner": {
-    "version": "2.10.5",
+    "version": "2.10.9",
     "last_build": null
   },
   "rag-admin-api": {

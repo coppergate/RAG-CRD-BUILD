@@ -128,9 +128,12 @@ func main() {
 	}
 
 	// 7. Cleanup (Delete Data)
-	fmt.Println("[STEP 7] Cleaning up data by tag...")
+	fmt.Println("[STEP 7] Cleaning up data by tag and S3...")
 	if err := deleteData(tagID); err != nil {
-		logFatal("Failed to delete data: %v", err)
+		fmt.Printf("Warning: Failed to delete tag data: %v\n", err)
+	}
+	if err := removeFileFromS3(fileName); err != nil {
+		fmt.Printf("Warning: Failed to delete file from S3: %v\n", err)
 	}
 
 	// 8. Final Verification
@@ -155,7 +158,11 @@ func main() {
 }
 
 func getBucket() error {
-	bucketName = "e2eTestBucket"
+	bucketName = os.Getenv("BUCKET_NAME")
+	if bucketName == "" {
+		bucketName = "e2eTestBucket"
+	}
+	fmt.Printf("Using bucket: %s\n", bucketName)
 	return nil
 }
 
@@ -242,6 +249,23 @@ func uploadFile(name, content string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func removeFileFromS3(name string) error {
+	url := fmt.Sprintf("%s/api/s3/buckets/%s/%s", baseURL, bucketName, name)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
 	return nil

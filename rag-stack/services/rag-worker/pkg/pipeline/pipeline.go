@@ -115,7 +115,7 @@ func (h *Handler) HandleStageMessage(ctx context.Context, stage string, msg puls
 func (h *Handler) handleIngress(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "INGRESS_RECEIVED", "Initial request received")
 
-	payload, err := json.Marshal(req)
+	payload, err := protojson.Marshal(req)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal ingress data: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)
@@ -166,7 +166,7 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	metadata["sub_queries"] = subQueries
 	req.Metadata = contracts.ToStruct(metadata)
 
-	payload, err := json.Marshal(req)
+	payload, err := protojson.Marshal(req)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal plan data: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)
@@ -243,7 +243,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	}
 	req.Metadata = contracts.ToStruct(metadataMap)
 
-	payload, err := json.Marshal(req)
+	payload, err := protojson.Marshal(req)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal search result data: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)

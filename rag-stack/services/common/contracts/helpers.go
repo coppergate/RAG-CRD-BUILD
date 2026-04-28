@@ -6,17 +6,51 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// ToStruct converts a map[string]interface{} to a google.protobuf.Struct
+// ToStruct converts a map[string]interface{} to a google.protobuf.Struct.
+// It recursively handles slice types that structpb.NewStruct might not support (like []string).
 func ToStruct(m map[string]interface{}) *structpb.Struct {
 	if m == nil {
 		return nil
 	}
-	s, err := structpb.NewStruct(m)
+
+	// Pre-process the map to ensure all slices are []interface{}
+	cleanMap := make(map[string]interface{})
+	for k, v := range m {
+		cleanMap[k] = prepareForStruct(v)
+	}
+
+	s, err := structpb.NewStruct(cleanMap)
 	if err != nil {
-		// Fallback for types that might not be directly compatible
 		return nil
 	}
 	return s
+}
+
+func prepareForStruct(v interface{}) interface{} {
+	if v == nil {
+		return nil
+	}
+
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Slice {
+		ii := make([]interface{}, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			ii[i] = prepareForStruct(rv.Index(i).Interface())
+		}
+		return ii
+	}
+
+	if rv.Kind() == reflect.Map {
+		mi := make(map[string]interface{})
+		for _, key := range rv.MapKeys() {
+			if k, ok := key.Interface().(string); ok {
+				mi[k] = prepareForStruct(rv.MapIndex(key).Interface())
+			}
+		}
+		return mi
+	}
+
+	return v
 }
 
 // FromStruct converts a google.protobuf.Struct to a map[string]interface{}
