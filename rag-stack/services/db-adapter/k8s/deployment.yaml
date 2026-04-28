@@ -54,20 +54,15 @@ spec:
           limits:
             cpu: "1000m"
             memory: "1Gi"
+        envFrom:
+        - configMapRef:
+            name: pulsar-topic-config
         env:
         - name: DB_CONN_STRING
           valueFrom:
             secretKeyRef:
               name: timescaledb-secret
               key: url
-        - name: PULSAR_URL
-          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
-        - name: PULSAR_PROMPT_TOPIC
-          value: "persistent://rag-pipeline/data/chat-prompts"
-        - name: PULSAR_RESPONSE_TOPIC
-          value: "persistent://rag-pipeline/stage/results"
-        - name: PULSAR_DB_OPS_TOPIC
-          value: "persistent://rag-pipeline/operations/db-ops"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OTEL_USE_TLS
