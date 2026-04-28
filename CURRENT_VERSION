@@ -4,8 +4,8 @@
     "last_build": null
   },
   "rag-ingestion": {
-    "version": "2.10.6",
-    "last_build": "2026-04-27T12:47:27Z"
+    "version": "2.10.8",
+    "last_build": null
   },
   "rag-web-ui": {
     "version": "2.10.3",
@@ -16,7 +16,7 @@
     "last_build": null
   },
   "db-adapter": {
-    "version": "2.10.12",
+    "version": "2.10.14",
     "last_build": null
   },
   "qdrant-adapter": {
@@ -32,8 +32,8 @@
     "last_build": "2026-04-27T12:47:30Z"
   },
   "rag-admin-api": {
-    "version": "2.10.5",
-    "last_build": "2026-04-27T12:47:30Z"
+    "version": "2.10.7",
+    "last_build": null
   },
   "memory-controller": {
     "version": "2.10.4",
@@ -48,7 +48,7 @@
     "last_build": null
   },
   "rag-explorer": {
-    "version": "2.10.6",
-    "last_build": "2026-04-27T15:35:00Z"
+    "version": "2.10.7",
+    "last_build": null
   }
 }
