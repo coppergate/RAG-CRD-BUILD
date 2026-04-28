@@ -84,7 +84,7 @@ spec:
         - name: BUILD_STATUS_TOPIC
           value: "persistent://public/default/build-status"
         - name: MAX_CONCURRENT_BUILDS
-          value: "3"
+          value: "4"
         - name: MAX_TASK_RETRIES
           value: "2"
         - name: HTTP_ADDR

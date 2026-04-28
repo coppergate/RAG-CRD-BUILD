@@ -4,6 +4,7 @@
 # To be executed on host: hierophant
 
 set -Eeuo pipefail
+set -m # Enable job control for reliable parallel build tracking
 
 # --- Configuration & Defaults ---
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -11,37 +12,43 @@ BASE_DIR=$(cd "$REPO_DIR/.." && pwd)
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 
-LOCKFILE="/tmp/rag-stack-build-${USER:-shared}.lock"
+LOCKDIR="/tmp/rag-stack-build.lock"
 
-VERSION_FILE="$BASE_DIR/CURRENT_VERSION"
-MODE="${MODE:-cluster}" # cluster | local
-REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-# If VERSION is provided on command line, it overrides the version for ALL services (or selected service) and forces a rebuild.
-OVERRIDE_VERSION="${VERSION:-}"
-FORCE_BUILD="${FORCE_BUILD:-false}"
-SKIP_UNCHANGED="${SKIP_UNCHANGED:-true}"
-PARALLELISM="${PARALLELISM:-4}"
-WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
-JOURNAL_DIR="${JOURNAL_DIR:-$HOME/.complete-build/journal/build-hashing}"
-
-mkdir -p "$JOURNAL_DIR"
-
-	acquire_lock() {
-		if [[ -f "$LOCKFILE" ]]; then
-			local pid=$(cat "$LOCKFILE" 2>/dev/null || echo "")
-			if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-				log "ERROR: Another build process (PID $pid) is already running."
-				exit 1
-			fi
-		fi
-		echo $$ > "$LOCKFILE" || {
-			log "ERROR: Failed to write to lockfile $LOCKFILE"
-			exit 1
-		}
-	}
+acquire_lock() {
+    local max_retries=5
+    local retry_count=0
+    while [[ $retry_count -lt $max_retries ]]; do
+        if mkdir "$LOCKDIR" 2>/dev/null; then
+            echo $$ > "$LOCKDIR/pid"
+            return 0
+        fi
+        
+        # Check if the process holding the lock is still alive
+        if [[ -f "$LOCKDIR/pid" ]]; then
+            local pid=$(cat "$LOCKDIR/pid" 2>/dev/null || echo "")
+            if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+                log "Found stale lock from PID $pid. Cleaning up..."
+                rm -rf "$LOCKDIR"
+                continue
+            fi
+        fi
+        
+        log "Waiting for build lock (held by $(cat $LOCKDIR/pid 2>/dev/null || echo 'unknown'))..."
+        sleep 2
+        retry_count=$((retry_count + 1))
+    done
+    
+    log "ERROR: Could not acquire build lock after $max_retries attempts."
+    exit 1
+}
 
 release_lock() {
-    rm -f "$LOCKFILE"
+    if [[ -f "$LOCKDIR/pid" ]]; then
+        local pid=$(cat "$LOCKDIR/pid" 2>/dev/null || echo "")
+        if [[ "$pid" == "$$" ]]; then
+            rm -rf "$LOCKDIR"
+        fi
+    fi
 }
 trap release_lock EXIT
 
@@ -283,15 +290,15 @@ main() {
         shift
     done
 
-	cleanup_old_jobs
 	acquire_lock
+	cleanup_old_jobs
 
 	if [[ -n "$SELECTED_SERVICE" ]]; then
 		build_service "$SELECTED_SERVICE"
 	else
-		# Pre-calculate what needs building
 		log "Pre-build check and versioning..."
 		SERVICES_TO_BUILD=()
+		SERVICES_TO_DEPLOY=()
 		ORCHESTRATOR_NEEDS_BUILD=false
 
 		for svc in "${SERVICES[@]}"; do
@@ -316,8 +323,8 @@ main() {
 				fi
 
 				if [[ "$FORCE_BUILD" != "true" ]] && image_exists "$svc" "$target_ver"; then
-					# Update version/deploy without build
-					build_service "$svc"
+					# Already built, but needs deployment update
+					SERVICES_TO_DEPLOY+=("$svc")
 				else
 					if [[ "$svc" == "build-orchestrator" ]]; then
 						ORCHESTRATOR_NEEDS_BUILD=true
@@ -328,7 +335,7 @@ main() {
 			fi
 		done
 
-		# Build orchestrator first if needed
+		# 1. Sequential build-orchestrator (Critical)
 		if [[ "$ORCHESTRATOR_NEEDS_BUILD" == "true" ]]; then
 			log "CRITICAL: build-orchestrator needs update. Building it first to avoid conflicts."
 			build_service "build-orchestrator"
@@ -339,6 +346,17 @@ main() {
 			fi
 		fi
 
+		# 2. Parallel Skip-and-Deploy (Fast)
+		if [[ ${#SERVICES_TO_DEPLOY[@]} -gt 0 ]]; then
+			log "Starting parallel deployment update for existing images: ${SERVICES_TO_DEPLOY[*]} (Parallelism: $PARALLELISM)"
+			for svc in "${SERVICES_TO_DEPLOY[@]}"; do
+				build_service "$svc" &
+				while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
+			done
+			wait
+		fi
+
+		# 3. Parallel Build (Slow)
 		if [[ ${#SERVICES_TO_BUILD[@]} -gt 0 ]]; then
 			if [[ "$MODE" == "cluster" ]]; then
 				log "Preparing shared source context for ${#SERVICES_TO_BUILD[@]} services..."

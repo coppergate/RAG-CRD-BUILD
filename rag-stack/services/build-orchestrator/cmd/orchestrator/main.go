@@ -399,6 +399,30 @@ func main() {
 			inProgress[key] = true
 			muInProgress.Unlock()
 
+			// Check for existing job even before queuing to avoid redundant status events
+			// Use deterministic name to allow AlreadyExists check
+			if existing, err := k8sClientset.BatchV1().Jobs("build-pipeline").Get(ctx, jobName, metav1.GetOptions{}); err == nil {
+				if existing.Status.Succeeded > 0 {
+					log.Printf("Build already succeeded for %s, skipping", key)
+					consumer.Ack(msg)
+					muInProgress.Lock()
+					delete(inProgress, key)
+					muInProgress.Unlock()
+					continue
+				}
+				if existing.Status.Active > 0 {
+					log.Printf("Build already active in cluster for %s, skipping", key)
+					consumer.Ack(msg)
+					// We keep it inProgress until the active one finishes?
+					// Actually, the worker will pick up the first one and wait for it.
+					// So skipping here is correct.
+					muInProgress.Lock()
+					delete(inProgress, key)
+					muInProgress.Unlock()
+					continue
+				}
+			}
+
 			publisher.Publish(BuildStatusEvent{
 				ServiceName: task.ServiceName,
 				Version:     task.Version,
@@ -743,22 +767,9 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 }
 
 func buildJobName(task BuildTask, requestID string) string {
-	base := fmt.Sprintf("kaniko-build-%s-%s", sanitizeNamePart(task.ServiceName), sanitizeNamePart(task.Version))
-	suffix := sanitizeNamePart(requestID)
-	if suffix == "" {
-		suffix = "req"
-	}
-	maxBase := 63 - 1 - len(suffix)
-	if maxBase < 1 {
-		maxBase = 1
-	}
-	if len(base) > maxBase {
-		base = strings.Trim(base[:maxBase], "-")
-		if base == "" {
-			base = "kaniko"
-		}
-	}
-	return base + "-" + suffix
+	// Use deterministic job name based on service and version to prevent double launching
+	// from multiple Pulsar messages (e.g. from different build.sh runs).
+	return fmt.Sprintf("kaniko-build-%s-%s", sanitizeNamePart(task.ServiceName), sanitizeNamePart(task.Version))
 }
 
 func statusKey(service, version string) string {
