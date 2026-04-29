@@ -49,13 +49,10 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
+        envFrom:
+        - configMapRef:
+            name: pulsar-topic-config
         env:
-        - name: PULSAR_URL
-          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
-        - name: PULSAR_RESULTS_TOPIC
-          value: "persistent://rag-pipeline/stage/results"
-        - name: PULSAR_COMPLETION_TOPIC
-          value: "persistent://rag-pipeline/stage/completions"
         - name: PULSAR_SUBSCRIPTION
           value: "prompt-aggregator-sub"
         - name: AGGREGATION_TIMEOUT

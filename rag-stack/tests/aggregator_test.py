@@ -51,13 +51,13 @@ def test_aggregator_flow():
         for i, text in enumerate(chunks):
             chunk_payload = {
                 "id": request_id,
-                "session_id": session_id,
-                "chunk": text,
-                "sequence_number": i,
-                "is_last": (i == len(chunks) - 1),
+                "sessionId": session_id,
+                "result": text,
+                "sequenceNumber": i,
+                "isLast": (i == len(chunks) - 1),
                 "model": "test-aggregator-model",
                 "metadata": {"test_source": "aggregator_test.py"},
-                "in_conversation": True
+                "inConversation": True
             }
             session_producer.send(json.dumps(chunk_payload).encode('utf-8'))
         
@@ -66,8 +66,8 @@ def test_aggregator_flow():
         # 4. Trigger Aggregation with Completion Event
         completion_payload = {
             "id": request_id,
-            "session_id": session_id,
-            "start_timestamp": datetime.utcnow().isoformat() + "Z",
+            "sessionId": session_id,
+            "startTimestamp": datetime.utcnow().isoformat() + "Z",
             "model": "test-aggregator-model",
             "status": "COMPLETED"
         }
@@ -91,7 +91,7 @@ def test_aggregator_flow():
                     
                     expected_text = "".join(chunks)
                     assert result_text == expected_text, f"Result mismatch! Expected '{expected_text}', got '{result_text}'"
-                    assert res_data.get("session_id") == session_id
+                    assert res_data.get("sessionId") == session_id
                     assert res_data.get("metadata", {}).get("test_source") == "aggregator_test.py"
                     
                     print(f"    [SUCCESS] Aggregation verified correctly!")

@@ -1,6 +1,6 @@
 name: rag_explorer
 description: RAG Pipeline Explorer UI
-version: 2.10.5
+version: 2.10.6
 publish_to: 'none'
 
 environment:

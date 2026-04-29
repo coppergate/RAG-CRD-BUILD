@@ -143,6 +143,9 @@ class IngestRequest(BaseModel):
     session_id: Optional[str] = None
     vector_size: Optional[int] = None
     file_names: Optional[List[str]] = None
+    bucket_name: Optional[str] = None
+    prefix: Optional[str] = None
+    index: Optional[str] = None
 
 def get_s3_client():
     verify = SSL_CERT_FILE if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE) else True
@@ -204,7 +207,10 @@ def _create_pulsar_client():
             logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
     return pulsar.Client(PULSAR_URL, **kwargs)
 
-def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], vector_size: Optional[int] = None, file_names: Optional[List[str]] = None, session_id: Optional[str] = None):
+def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], 
+                  vector_size: Optional[int] = None, file_names: Optional[List[str]] = None, 
+                  session_id: Optional[str] = None, bucket_name: Optional[str] = None, 
+                  prefix: Optional[str] = None, index: Optional[str] = None):
     pool = get_db_pool()
     conn = None
     pulsar_client = None
@@ -215,7 +221,14 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
         if not current_vs:
             current_vs = get_model_dimensions(QDRANT_MODEL)
 
-        logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {QDRANT_MODEL} (dims: {current_vs})")
+        effective_bucket = bucket_name or BUCKET_NAME
+        effective_prefix = index or prefix or ""
+        
+        # S3 Prefix (index) should not have leading slash for boto3
+        if effective_prefix.startswith("/"):
+            effective_prefix = effective_prefix.lstrip("/")
+
+        logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {QDRANT_MODEL} (dims: {current_vs}) on bucket {effective_bucket} (prefix: {effective_prefix})")
 
         pulsar_client = _create_pulsar_client()
         q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
@@ -237,7 +250,11 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
             files = file_names
         else:
             paginator = s3_client.get_paginator('list_objects_v2')
-            for page in paginator.paginate(Bucket=BUCKET_NAME):
+            paginate_kwargs = {'Bucket': effective_bucket}
+            if effective_prefix:
+                paginate_kwargs['Prefix'] = effective_prefix
+            
+            for page in paginator.paginate(**paginate_kwargs):
                 if 'Contents' in page:
                     for obj in page['Contents']:
                         if any(obj['Key'].endswith(ext) for ext in ALLOWED_EXTENSIONS):
@@ -251,7 +268,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO code_ingestion (ingestion_id, s3_bucket_id) VALUES (%s, %s) ON CONFLICT (ingestion_id) DO NOTHING",
-                (ingestion_id, BUCKET_NAME)
+                (ingestion_id, effective_bucket)
             )
             conn.commit()
 
@@ -260,7 +277,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
 
         for s3_key in files:
             try:
-                response = s3_client.get_object(Bucket=BUCKET_NAME, Key=s3_key)
+                response = s3_client.get_object(Bucket=effective_bucket, Key=s3_key)
                 content = response['Body'].read().decode('utf-8')
 
                 # Use langchain text splitter for sentence/paragraph-aware chunking
@@ -346,10 +363,25 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], v
         if pulsar_client:
             pulsar_client.close()
 
+@app.get("/extensions")
+async def get_extensions():
+    return {"extensions": ALLOWED_EXTENSIONS}
+
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
-    logger.info(f"Received ingestion request for ID: {req.ingestion_id} (requested vector_size: {req.vector_size}, files: {req.file_names}, session: {req.session_id})")
-    background_tasks.add_task(run_ingestion, req.ingestion_id, req.tag_names, req.tag_ids, req.vector_size, req.file_names, req.session_id)
+    logger.info(f"Received ingestion request for ID: {req.ingestion_id} (bucket: {req.bucket_name}, index/prefix: {req.index or req.prefix}, files: {req.file_names})")
+    background_tasks.add_task(
+        run_ingestion, 
+        req.ingestion_id, 
+        req.tag_names, 
+        req.tag_ids, 
+        req.vector_size, 
+        req.file_names, 
+        req.session_id,
+        req.bucket_name,
+        req.prefix,
+        req.index
+    )
     return {"status": "accepted", "ingestion_id": req.ingestion_id}
 
 @app.get("/healthz")

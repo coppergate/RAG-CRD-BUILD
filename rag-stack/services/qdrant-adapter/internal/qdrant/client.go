@@ -137,7 +137,6 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		}
 	}
 
-	fmt.Printf("DEBUG: Qdrant Search returned %d results (max: %d)\n", len(contexts), limit)
 	return contexts, nil
 }
 

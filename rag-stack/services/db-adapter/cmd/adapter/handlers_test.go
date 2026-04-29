@@ -307,6 +307,67 @@ func TestHandleGetFilesEmptyMetadata(t *testing.T) {
 	assert.Len(t, files, 0) // Should skip files without path
 }
 
+func TestHandleGetFilesBySession(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_session?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	sessionID := uuid.New()
+	s1, err := client.Session.Create().SetID(sessionID).SetName("test-session").Save(context.Background())
+	assert.NoError(t, err)
+
+	tagID := uuid.New()
+	t1, err := client.Tag.Create().SetID(tagID).SetName("test-tag").AddSessions(s1).Save(context.Background())
+	assert.NoError(t, err)
+
+	_, err = client.CodeEmbedding.Create().
+		SetMetadata(map[string]interface{}{"path": "test/path/session_file.go"}).
+		AddTags(t1).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/storage/files?session_id="+sessionID.String(), nil)
+	w := httptest.NewRecorder()
+
+	svc := service.NewStorageService(client)
+	svc.GetFiles(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var files []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &files)
+	assert.NoError(t, err)
+	assert.Len(t, files, 1)
+	assert.Equal(t, "test/path/session_file.go", files[0]["path"])
+}
+
+func TestHandleGetFilesNoFilters(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_no_filters?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	_, err := client.CodeEmbedding.Create().
+		SetMetadata(map[string]interface{}{"path": "file1.go"}).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	_, err = client.CodeEmbedding.Create().
+		SetMetadata(map[string]interface{}{"path": "file2.go"}).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/storage/files", nil)
+	w := httptest.NewRecorder()
+
+	svc := service.NewStorageService(client)
+	svc.GetFiles(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var files []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &files)
+	assert.NoError(t, err)
+	assert.Len(t, files, 2)
+}
+
 type mockProducer struct {
 	pulsar.Producer
 	sentMessages []*pulsar.ProducerMessage

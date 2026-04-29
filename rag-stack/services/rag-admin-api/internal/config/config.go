@@ -28,7 +28,7 @@ func Load() *Config {
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "https://memory-controller.rag-system.svc.cluster.local"),
 		IngestionURL:        envutil.GetEnv("INGESTION_URL", "https://rag-ingestion-service.rag-system.svc.cluster.local"),
 		QdrantDirectURL:     envutil.GetEnv("QDRANT_DIRECT_URL", "https://qdrant.rag-system.svc.cluster.local:6333"),
-		GrafanaURL:          envutil.GetEnv("GRAFANA_URL", "https://grafana.monitoring.svc.cluster.local:3000"),
+		GrafanaURL:          envutil.GetEnv("GRAFANA_URL", "https://grafana.rag.hierocracy.home"),
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:              envutil.GetEnv("TLS_KEY", ""),
 	}

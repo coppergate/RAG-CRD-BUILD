@@ -72,7 +72,6 @@ Below is a comprehensive list of project documentation:
 - [**iteration-4.md**](./iteration-4.md) / [**iteration-4a.md**](./iteration-4a.md): APM, Monitoring, and infrastructure refinement.
 
 ### Infrastructure & VMs
-- [**doms.md**](./doms.md): Core domain/VM definitions for the cluster.
 - [**vm-doms.md**](./vm-doms.md): Extended VM configuration and networking details.
 
 ---

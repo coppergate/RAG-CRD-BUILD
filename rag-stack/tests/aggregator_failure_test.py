@@ -48,13 +48,13 @@ def run_aggregator_test(test_name, chunks):
         for i, text in enumerate(chunks):
             chunk_payload = {
                 "id": request_id,
-                "session_id": session_id,
-                "chunk": text,
-                "sequence_number": i,
-                "is_last": (i == len(chunks) - 1),
+                "sessionId": session_id,
+                "result": text,
+                "sequenceNumber": i,
+                "isLast": (i == len(chunks) - 1),
                 "model": "test-aggregator-model",
                 "metadata": {"test_name": test_name},
-                "in_conversation": True
+                "inConversation": True
             }
             session_producer.send(json.dumps(chunk_payload).encode('utf-8'))
 
@@ -63,8 +63,8 @@ def run_aggregator_test(test_name, chunks):
         # 4. Trigger Aggregation
         completion_payload = {
             "id": request_id,
-            "session_id": session_id,
-            "start_timestamp": datetime.utcnow().isoformat() + "Z",
+            "sessionId": session_id,
+            "startTimestamp": datetime.utcnow().isoformat() + "Z",
             "model": "test-aggregator-model",
             "status": "COMPLETED"
         }

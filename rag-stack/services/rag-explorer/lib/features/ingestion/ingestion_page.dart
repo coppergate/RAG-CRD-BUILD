@@ -23,6 +23,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   bool _isLoading = false;
   String? _statusMessage;
   bool _isError = false;
+  List<String> _allowedExtensions = [];
 
   @override
   void initState() {
@@ -34,19 +35,22 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
     setState(() => _isLoading = true);
     final service = ref.read(ingestionServiceProvider.notifier);
     
-    // Fetch tags and buckets in parallel
+    // Fetch tags, buckets, and extensions in parallel
     final results = await Future.wait([
       service.getTags(),
       service.getBuckets(),
+      service.getAllowedExtensions(),
     ]);
     
     final tags = results[0] as List<Tag>;
     final buckets = results[1] as List<String>;
+    final extensions = results[2] as List<String>;
     final config = ref.read(appConfigProvider);
     
     if (mounted) {
       setState(() {
         _tags = tags;
+        _allowedExtensions = extensions;
         if (tags.isNotEmpty && _selectedTags.isEmpty) {
           _selectedTags.add(tags.first);
         }
@@ -92,6 +96,10 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
     final result = await FilePicker.pickFiles(
       allowMultiple: true,
       withData: true,
+      type: _allowedExtensions.isNotEmpty ? FileType.custom : FileType.any,
+      allowedExtensions: _allowedExtensions.isNotEmpty 
+        ? _allowedExtensions.map((e) => e.replaceAll('.', '')).toList() 
+        : null,
     );
 
     if (result != null && result.files.isNotEmpty) {
@@ -145,7 +153,11 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
 
       try {
         final List<FileSystemEntity> entities = dir.listSync(recursive: true);
-        final List<File> files = entities.whereType<File>().toList();
+        final List<File> files = entities.whereType<File>().where((file) {
+          if (_allowedExtensions.isEmpty) return true;
+          final fileName = file.path.toLowerCase();
+          return _allowedExtensions.any((ext) => fileName.endsWith(ext.toLowerCase()));
+        }).toList();
         
         if (files.isEmpty) {
           setState(() {

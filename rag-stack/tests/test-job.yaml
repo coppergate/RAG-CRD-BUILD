@@ -65,6 +65,12 @@ spec:
             python /tests/context_verification.py --query-only
             echo "--- Running Sad Path Tests ---"
             python /tests/sad_path_test.py
+        envFrom:
+        - configMapRef:
+            name: apm-config
+            optional: true
+        - configMapRef:
+            name: pulsar-topic-config
         env:
         - name: DB_CONN_STRING
           valueFrom:
@@ -101,30 +107,6 @@ spec:
           value: "true"
         - name: GATEWAY_URL
           value: "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions"
-        - name: PULSAR_URL
-          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
-        - name: PULSAR_PROMPT_TOPIC
-          value: "persistent://rag-pipeline/data/chat-prompts"
-        - name: PULSAR_RESPONSE_TOPIC
-          value: "persistent://rag-pipeline/stage/results"
-        - name: PULSAR_COMPLETION_TOPIC
-          value: "persistent://rag-pipeline/stage/completion"
-        - name: PULSAR_INGRESS_TOPIC
-          value: "persistent://rag-pipeline/stage/ingress"
-        - name: PULSAR_RESULTS_TOPIC
-          value: "persistent://rag-pipeline/stage/results"
-        - name: PULSAR_STATUS_TOPIC
-          value: "persistent://rag-pipeline/stage/status"
-        - name: PULSAR_DB_OPS_TOPIC
-          value: "persistent://rag-pipeline/operations/db-ops"
-        - name: PULSAR_QDRANT_OPS_TOPIC
-          value: "persistent://rag-pipeline/operations/qdrant-ops"
-        - name: PULSAR_QDRANT_RESULTS_TOPIC
-          value: "persistent://rag-pipeline/operations/qdrant-ops-results"
-        envFrom:
-        - configMapRef:
-            name: apm-config
-            optional: true
         volumeMounts:
         - name: tests
           mountPath: /tests

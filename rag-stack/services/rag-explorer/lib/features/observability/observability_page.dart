@@ -36,16 +36,19 @@ class ObservabilityPage extends ConsumerWidget {
             _buildGrafanaPanel(
               title: 'GPU Utilization',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2&width=1000&height=500',
             ),
             const SizedBox(height: 16),
             _buildGrafanaPanel(
               title: 'GPU Memory Usage',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4&width=1000&height=500',
             ),
             const SizedBox(height: 16),
             _buildGrafanaPanel(
               title: 'CPU & System Load',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6&width=1000&height=500',
             ),
             
             const SizedBox(height: 40),
@@ -74,7 +77,7 @@ class ObservabilityPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildGrafanaPanel({required String title, required String url}) {
+  Widget _buildGrafanaPanel({required String title, required String url, required String renderUrl}) {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -98,20 +101,28 @@ class ObservabilityPage extends ConsumerWidget {
             height: 200,
             width: double.infinity,
             color: Colors.grey.shade100,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.dashboard, size: 40, color: Colors.blue),
-                  const SizedBox(height: 8),
-                  Text('Grafana Panel Preview', style: TextStyle(color: Colors.grey.shade600)),
-                  const SizedBox(height: 4),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(url, style: const TextStyle(fontSize: 9, color: Colors.blue), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ),
-                ],
+            child: Image.network(
+              renderUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.dashboard, size: 40, color: Colors.blue),
+                    const SizedBox(height: 8),
+                    Text('Grafana Panel Preview', style: TextStyle(color: Colors.grey.shade600)),
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(url, style: const TextStyle(fontSize: 9, color: Colors.blue), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
               ),
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return const Center(child: CircularProgressIndicator());
+              },
             ),
           ),
         ],

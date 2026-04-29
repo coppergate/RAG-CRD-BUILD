@@ -316,15 +316,30 @@ Use this only for bootstrapping or when the cluster-native pipeline is unavailab
     ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z FORCE_BUILD=true ./build-and-push.sh"
     ```
 
-### 3.4 Pre-deployment Go Dependency Check
-To ensure all Go services compile correctly before launching a cluster-native build:
+### 3.5 Concurrency and Locking in Build System
+As of version `2.10.x`, the build system supports hardened parallel execution to improve speed and prevent race conditions.
+
+#### Build Orchestrator Hardening (Double-Launching Fix)
+1.  **Deterministic Job Naming**: The `build-orchestrator` now uses a deterministic naming scheme for Kaniko jobs: `kaniko-build-<service>-<version>`. 
+2.  **Duplicate Prevention**: 
+    -   **Pulsar Level**: Even if multiple Pulsar messages are sent for the same service/version (e.g., from overlapping `build.sh` runs), Kubernetes will reject the second job creation with an `AlreadyExists` error.
+    -   **Pre-check**: The orchestrator checks if a job already exists and is succeeded/active *before* queuing a task, avoiding redundant status events and duplicate work.
+3.  **Concurrency**: `MAX_CONCURRENT_BUILDS` is set to **4** (configured in `orchestrator-deployment.yaml`).
+
+#### Build Script Locking (build.sh)
+1.  **Global Atomic Lock**: `build.sh` uses a global lock directory `/tmp/rag-stack-build.lock`. This lock is shared across ALL users on **hierophant**, preventing concurrent script executions from interfering with each other's versioning and hashing.
+2.  **Version File Lock**: `update_svc_info` uses `flock` on `/tmp/rag-stack-version-shared.lock` to ensure atomic updates to `CURRENT_VERSION`.
+3.  **Parallel Loops**:
+    -   **Skip-and-Deploy**: Services that are already built but need a deployment update are processed in parallel (default 4).
+    -   **Service Builds**: New builds are processed in parallel (default 4) using background subshells and `set -m` for job control.
+
+#### Manual Overrides
+To force a build or change parallelism:
 ```bash
-for svc in rag-stack/services/*; do
-  if [ -d "$svc" ] && [ -f "$svc/go.mod" ]; then
-    echo "--- Checking $svc ---"
-    (cd "$svc" && go mod tidy && go build ./...)
-  fi
-done
+# Force rebuild of a specific service
+FORCE_BUILD=true bash ./rag-stack/build.sh --service db-adapter
+# Change parallelism for this run
+PARALLELISM=8 bash ./rag-stack/build.sh
 ```
 
 ## 4. Data & Model Management

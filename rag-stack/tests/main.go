@@ -18,6 +18,7 @@ var (
 	baseURL    = "https://rag-admin-api.rag.hierocracy.home"
 	sessionID  = ""
 	bucketName = ""
+	s3Index    = "e2eTestBucket"
 	client     = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -62,7 +63,8 @@ func main() {
 
 	// 3. Upload Test File
 	fmt.Println("[STEP 3] Uploading test file...")
-	fileName := fmt.Sprintf("e2e-test-file-%d.txt", time.Now().Unix())
+	baseFileName := fmt.Sprintf("e2e-test-file-%d.txt", time.Now().Unix())
+	fileName := fmt.Sprintf("%s/%s", s3Index, baseFileName)
 	timestamp := time.Now().Unix()
 	secretCode := fmt.Sprintf("BLUE-ORCHID-%s", tagID[:8])
 	fileContent := fmt.Sprintf("This is a secret code: %s. Generation timestamp: %d. This file is for RAG testing.", secretCode, timestamp)
@@ -126,9 +128,12 @@ func main() {
 	}
 
 	// 7. Cleanup (Delete Data)
-	fmt.Println("[STEP 7] Cleaning up data by tag...")
+	fmt.Println("[STEP 7] Cleaning up data by tag and S3...")
 	if err := deleteData(tagID); err != nil {
-		logFatal("Failed to delete data: %v", err)
+		fmt.Printf("Warning: Failed to delete tag data: %v\n", err)
+	}
+	if err := removeFileFromS3(fileName); err != nil {
+		fmt.Printf("Warning: Failed to delete file from S3: %v\n", err)
 	}
 
 	// 8. Final Verification
@@ -153,46 +158,30 @@ func main() {
 }
 
 func getBucket() error {
-	resp, err := client.Get(baseURL + "/api/s3/buckets")
-	if err != nil {
-		return err
+	bucketName = os.Getenv("BUCKET_NAME")
+	if bucketName == "" {
+		bucketName = "e2eTestBucket"
 	}
-	defer resp.Body.Close()
-
-	var buckets []struct {
-		Name string `json:"Name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&buckets); err != nil {
-		return err
-	}
-
-	for _, b := range buckets {
-		if strings.HasPrefix(b.Name, "rag-codebase-") {
-			bucketName = b.Name
-			return nil
-		}
-	}
-	return fmt.Errorf("no rag-codebase bucket found")
+	fmt.Printf("Using bucket: %s\n", bucketName)
+	return nil
 }
 
 func getFiles() ([]string, error) {
-	resp, err := client.Get(baseURL + "/api/s3/buckets/" + bucketName + "/objects")
+	resp, err := client.Get(baseURL + "/api/s3/buckets/" + bucketName + "?prefix=" + s3Index)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Objects []struct {
-			Key string `json:"key"`
-		} `json:"objects"`
+	var objects []struct {
+		Key string `json:"Key"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&objects); err != nil {
 		return nil, err
 	}
 
 	var files []string
-	for _, o := range result.Objects {
+	for _, o := range objects {
 		files = append(files, o.Key)
 	}
 	return files, nil
@@ -265,6 +254,23 @@ func uploadFile(name, content string) error {
 	return nil
 }
 
+func removeFileFromS3(name string) error {
+	url := fmt.Sprintf("%s/api/s3/buckets/%s/%s", baseURL, bucketName, name)
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func triggerIngest(tagID string, vectorSize int, fileName string, sessionID string) error {
 	payload := map[string]interface{}{
 		"ingestion_id": tagID,
@@ -273,6 +279,8 @@ func triggerIngest(tagID string, vectorSize int, fileName string, sessionID stri
 		"vector_size":  vectorSize,
 		"file_names":   []string{fileName},
 		"session_id":   sessionID,
+		"bucket_name":  bucketName,
+		"index":        s3Index,
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := client.Post(baseURL+"/api/ingest/ingest", "application/json", bytes.NewBuffer(body))

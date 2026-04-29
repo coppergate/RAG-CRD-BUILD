@@ -71,6 +71,11 @@ func main() {
 	}
 	defer entClient.Close()
 
+	// Run migrations
+	if err := entClient.Schema.Create(ctx); err != nil {
+		log.Printf("Warning: failed to create schema: %v", err)
+	}
+
 	pulsarClient, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
 		log.Fatalf("Could not instantiate Pulsar client: %v", err)
