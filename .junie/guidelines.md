@@ -63,6 +63,9 @@
     - Rebase with autosquash: Run `git rebase -i --autosquash main` before pushing. This ensures commits are squashed before pushing.
     - Push safely: Use `git push --force-with-lease origin <branch>` if the branch was already pushed.
 - **Daily Push**: Every day, make a new push to GIT with the current committed code.
+- **Pull Requests**: Create a pull request for each day's branch.
+  - **PR Description**: Provide a brief summary of the changes made in the branch, including any new features, bug fixes, or improvements.
+  - **PR Title**: Use a concise title that reflects the main purpose of the pull request, such as "Add feature X" or "Fix issue #123".
 
 ## Document Processing (PDF)
 - **PDF Generation**: Use `paps` for converting text files to PDF.
