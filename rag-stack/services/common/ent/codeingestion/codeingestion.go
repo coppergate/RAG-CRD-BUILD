@@ -28,12 +28,12 @@ const (
 	// TagFieldID holds the string denoting the ID field of the Tag.
 	TagFieldID = "tag_id"
 	// Table holds the table name of the codeingestion in the database.
-	Table = "code_ingestions"
+	Table = "code_ingestion"
 	// EmbeddingsTable is the table that holds the embeddings relation/edge.
-	EmbeddingsTable = "code_embeddings"
+	EmbeddingsTable = "code_embedding"
 	// EmbeddingsInverseTable is the table name for the CodeEmbedding entity.
 	// It exists in this package in order to avoid circular dependency with the "codeembedding" package.
-	EmbeddingsInverseTable = "code_embeddings"
+	EmbeddingsInverseTable = "code_embedding"
 	// EmbeddingsColumn is the table column denoting the embeddings relation/edge.
 	EmbeddingsColumn = "ingestion_id"
 	// TagsTable is the table that holds the tags relation/edge. The primary key declared below.

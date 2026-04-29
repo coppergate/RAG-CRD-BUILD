@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS code_ingestion_tag (
 CREATE TABLE IF NOT EXISTS code_embedding (
     embedding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ingestion_id UUID REFERENCES code_ingestion(ingestion_id) ON DELETE CASCADE,
-    embedding_vector REAL[], -- Using REAL[] for compatibility, can be changed to VECTOR(384) if pgvector is available
+    embedding_vector JSONB, -- Changed from REAL[] for Ent compatibility
     metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT now()
 );

@@ -318,7 +318,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str],
                     with conn.cursor() as cur:
                         cur.execute(
                             "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata) VALUES (%s, %s, %s) RETURNING embedding_id",
-                            (ingestion_id, vector, json.dumps({"path": s3_key, "chunk": i}))
+                            (ingestion_id, json.dumps(vector), json.dumps({"path": s3_key, "chunk": i}))
                         )
                         emb_id = cur.fetchone()[0]
                         for t_id in tag_ids:

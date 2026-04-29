@@ -2,6 +2,8 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
@@ -11,6 +13,13 @@ import (
 // CodeEmbedding holds the schema definition for the CodeEmbedding entity.
 type CodeEmbedding struct {
 	ent.Schema
+}
+
+// Annotations of the CodeEmbedding.
+func (CodeEmbedding) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entsql.Annotation{Table: "code_embedding"},
+	}
 }
 
 // Fields of the CodeEmbedding.

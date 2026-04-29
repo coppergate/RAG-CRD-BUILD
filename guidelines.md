@@ -50,19 +50,23 @@
 - **Search Optimization**: Handle local searches better. Use `--exclude-dir={registry-cache,image-source-cache,ai-changes}` or target specific directories (e.g., `grep -r "pattern" scripts/`) to keep searches fast.
 
 ## Git Policies
-- **Branching Policy**:
-  - Create a local git branch every day named `work-YYYY-MM-DD` (e.g., `work-2026-03-02`).
-  - Check the date on each change set, determine if a branch exists for today.
-  - If there is no branch for today, ensure the latest local branch has been pushed to origin and create a new branch for the day.
+- **Branching Policy (Session Initialization)**:
+  - At the start of every session:
+    - If the current branch is `main`:
+      - Pull `main` from origin.
+    - Otherwise (if on a work branch):
+      - Commit any pending changes with a meaningful message.
+      - Rename the current branch with a short, descriptive name reflecting the changes committed (use commit messages for inspiration, keep it simple).
+      - Push the renamed branch to origin.
+      - Generate a merge request/pull request for the current branch into `main`.
+      - Generate a merge comment from the commit messages.
+      - Merge the branch into `main`.
+      - Switch to `main` and pull the latest repository files.
+    - Create a new session branch named `Work-YYYYMMDD` (e.g., `Work-20260429`).
 - **Commit Policy**:
-  - Commit all changes to the local branch in git any time changes are made.
-  - **Commit message**: A simple timestamp (e.g., `2026-03-02 08:30`).
+  - During the session, commit files to the `Work-YYYYMMDD` branch with short, meaningful commit messages.
   - **File Size Limit**: Do not commit any files larger than 1MB without asking first.
-  - **Clean History (Rebase & Squash)**:
-    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
-    - Rebase with autosquash: Run `git rebase -i --autosquash main` before pushing. This ensures commits are squashed before pushing.
-    - Push safely: Use `git push --force-with-lease origin <branch>` if the branch was already pushed.
-- **Daily Push**: Every day, make a new push to GIT with the current committed code.
+  - **Clean History**: Maintain a clean history by merging completed work into `main` at the start of the next session.
 
 ## Document Processing (PDF)
 - **PDF Generation**: Use `paps` for converting text files to PDF.

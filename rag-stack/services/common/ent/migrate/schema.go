@@ -9,39 +9,39 @@ import (
 )
 
 var (
-	// CodeEmbeddingsColumns holds the columns for the "code_embeddings" table.
-	CodeEmbeddingsColumns = []*schema.Column{
+	// CodeEmbeddingColumns holds the columns for the "code_embedding" table.
+	CodeEmbeddingColumns = []*schema.Column{
 		{Name: "embedding_id", Type: field.TypeUUID},
 		{Name: "embedding_vector", Type: field.TypeJSON, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "ingestion_id", Type: field.TypeUUID, Nullable: true},
 	}
-	// CodeEmbeddingsTable holds the schema information for the "code_embeddings" table.
-	CodeEmbeddingsTable = &schema.Table{
-		Name:       "code_embeddings",
-		Columns:    CodeEmbeddingsColumns,
-		PrimaryKey: []*schema.Column{CodeEmbeddingsColumns[0]},
+	// CodeEmbeddingTable holds the schema information for the "code_embedding" table.
+	CodeEmbeddingTable = &schema.Table{
+		Name:       "code_embedding",
+		Columns:    CodeEmbeddingColumns,
+		PrimaryKey: []*schema.Column{CodeEmbeddingColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "code_embeddings_code_ingestions_embeddings",
-				Columns:    []*schema.Column{CodeEmbeddingsColumns[4]},
-				RefColumns: []*schema.Column{CodeIngestionsColumns[0]},
+				Symbol:     "code_embedding_code_ingestion_embeddings",
+				Columns:    []*schema.Column{CodeEmbeddingColumns[4]},
+				RefColumns: []*schema.Column{CodeIngestionColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
 	}
-	// CodeIngestionsColumns holds the columns for the "code_ingestions" table.
-	CodeIngestionsColumns = []*schema.Column{
+	// CodeIngestionColumns holds the columns for the "code_ingestion" table.
+	CodeIngestionColumns = []*schema.Column{
 		{Name: "ingestion_id", Type: field.TypeUUID},
 		{Name: "s3_bucket_id", Type: field.TypeString},
 		{Name: "created_at", Type: field.TypeTime},
 	}
-	// CodeIngestionsTable holds the schema information for the "code_ingestions" table.
-	CodeIngestionsTable = &schema.Table{
-		Name:       "code_ingestions",
-		Columns:    CodeIngestionsColumns,
-		PrimaryKey: []*schema.Column{CodeIngestionsColumns[0]},
+	// CodeIngestionTable holds the schema information for the "code_ingestion" table.
+	CodeIngestionTable = &schema.Table{
+		Name:       "code_ingestion",
+		Columns:    CodeIngestionColumns,
+		PrimaryKey: []*schema.Column{CodeIngestionColumns[0]},
 	}
 	// InferenceNodesColumns holds the columns for the "inference_nodes" table.
 	InferenceNodesColumns = []*schema.Column{
@@ -330,7 +330,7 @@ var (
 			{
 				Symbol:     "code_embedding_tag_embedding_id",
 				Columns:    []*schema.Column{CodeEmbeddingTagColumns[0]},
-				RefColumns: []*schema.Column{CodeEmbeddingsColumns[0]},
+				RefColumns: []*schema.Column{CodeEmbeddingColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
 			{
@@ -355,7 +355,7 @@ var (
 			{
 				Symbol:     "code_ingestion_tag_ingestion_id",
 				Columns:    []*schema.Column{CodeIngestionTagColumns[0]},
-				RefColumns: []*schema.Column{CodeIngestionsColumns[0]},
+				RefColumns: []*schema.Column{CodeIngestionColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
 			{
@@ -393,8 +393,8 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
-		CodeEmbeddingsTable,
-		CodeIngestionsTable,
+		CodeEmbeddingTable,
+		CodeIngestionTable,
 		InferenceNodesTable,
 		MemoryEventsTable,
 		MemoryItemsTable,
@@ -413,7 +413,13 @@ var (
 )
 
 func init() {
-	CodeEmbeddingsTable.ForeignKeys[0].RefTable = CodeIngestionsTable
+	CodeEmbeddingTable.ForeignKeys[0].RefTable = CodeIngestionTable
+	CodeEmbeddingTable.Annotation = &entsql.Annotation{
+		Table: "code_embedding",
+	}
+	CodeIngestionTable.Annotation = &entsql.Annotation{
+		Table: "code_ingestion",
+	}
 	MemoryEventsTable.ForeignKeys[0].RefTable = SessionsTable
 	ModelExecutionMetricsTable.ForeignKeys[0].RefTable = InferenceNodesTable
 	ModelExecutionMetricsTable.ForeignKeys[1].RefTable = ModelDefinitionsTable
@@ -422,9 +428,9 @@ func init() {
 	TagTable.Annotation = &entsql.Annotation{
 		Table: "tag",
 	}
-	CodeEmbeddingTagTable.ForeignKeys[0].RefTable = CodeEmbeddingsTable
+	CodeEmbeddingTagTable.ForeignKeys[0].RefTable = CodeEmbeddingTable
 	CodeEmbeddingTagTable.ForeignKeys[1].RefTable = TagTable
-	CodeIngestionTagTable.ForeignKeys[0].RefTable = CodeIngestionsTable
+	CodeIngestionTagTable.ForeignKeys[0].RefTable = CodeIngestionTable
 	CodeIngestionTagTable.ForeignKeys[1].RefTable = TagTable
 	SessionTagTable.ForeignKeys[0].RefTable = SessionsTable
 	SessionTagTable.ForeignKeys[1].RefTable = TagTable
