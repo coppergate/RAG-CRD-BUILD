@@ -10,10 +10,12 @@ spec:
     log:
       mode: console
     auth.anonymous:
-      enabled: "false"
+      enabled: "true"
+      org_role: Admin
     security:
       admin_user: admin
       admin_password: admin
+      allow_embedding: "true"
   service:
     spec:
       type: ClusterIP
@@ -53,16 +55,6 @@ spec:
         spec:
           nodeSelector:
             role: storage-node
-          containers:
-            - name: grafana
-              volumeMounts:
-                - name: registry-ca
-                  mountPath: /etc/ssl/certs/ca.crt
-                  subPath: ca.crt
-          volumes:
-            - name: registry-ca
-              configMap:
-                name: registry-ca-cm
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
@@ -213,7 +205,7 @@ spec:
       },
       "timepicker": {},
       "timezone": "",
-      "title": "RAG Stack Performance Overview",
+      "title": "performance-overview",
       "uid": "rag-performance",
       "version": 1,
       "weekStart": ""
@@ -414,10 +406,81 @@ spec:
       },
       "timepicker": {},
       "timezone": "",
-      "title": "RAG Stack Operational Overview",
+      "title": "operations-overview",
       "uid": "rag-operations",
       "version": 1,
       "weekStart": ""
+    }
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: rag-inference
+  namespace: monitoring
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "true"
+  json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": { "type": "grafana", "uid": "-- Graphics --" },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "id": 2,
+          "title": "GPU Utilization",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+          "targets": [
+            { "expr": "avg(DCGM_FI_DEV_GPU_UTIL)", "legendFormat": "Avg GPU Util" },
+            { "expr": "max(DCGM_FI_DEV_GPU_UTIL)", "legendFormat": "Max GPU Util" }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "GPU Memory Usage",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+          "targets": [
+            { "expr": "avg(DCGM_FI_DEV_FB_USED)", "legendFormat": "Avg FB Used" },
+            { "expr": "sum(DCGM_FI_DEV_FB_USED)", "legendFormat": "Total FB Used" }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "CPU & System Load",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+          "targets": [
+            { "expr": "sum(node_load1) by (instance)", "legendFormat": "Load 1m {{instance}}" }
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 38,
+      "style": "dark",
+      "tags": ["rag-stack", "inference"],
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "inference-nodes",
+      "uid": "rag-inference",
+      "version": 1
     }
 ---
 apiVersion: grafana.integreatly.org/v1beta1

@@ -133,15 +133,17 @@ If services fail with `no partitioned metadata for topic` or `Namespace not foun
 
 #### Grafana Dashboards
 The RAG stack uses the following Grafana dashboards for monitoring:
-- **RAG Stack Operational Overview** (`uid: rag-operations`): Main dashboard for high-level monitoring.
-  - **Prompts & Responses (Rate)**: Monitors incoming user requests and worker completions.
-  - **Avg Prompt/Response Size**: Tracks data volume in characters/bytes for prompts and responses.
-  - **Pipeline Latency (P95)**: Tracks End-to-End (Gateway) and per-stage (Worker) P95 latency.
-  - **Pulsar Bus Health**: Monitors message throughput across the pipeline.
-  - **GPU Utilization (%)**: Displays cluster-wide GPU and memory utilization.
-  - **System Errors**: Aggregates error rates from Gateway, Worker, DB, and Qdrant.
-- **RAG Stack Performance Overview** (`uid: rag-performance`): Detailed performance and error metrics per service.
-- **RAG Stack Logs & Errors** (`uid: rag-logs`): Loki-based dashboard for real-time log analysis and error tracking.
+- **inference-nodes** (`uid: rag-inference`): Real-time monitoring for inference nodes (GPU/CPU).
+- **operations-overview** (`uid: rag-operations`): Main dashboard for high-level monitoring.
+- **performance-overview** (`uid: rag-performance`): Detailed performance and error metrics per service.
+- **rag-logs** (`uid: rag-logs`): Loki-based dashboard for log analysis.
+
+#### Embedded Grafana Configuration
+To allow `rag-explorer` to display embedded panels and links:
+1. **Anonymous Access**: Must be enabled in `central-grafana` (`Grafana` CR) with `org_role: Admin` (or `Viewer`) and `enabled: true`.
+2. **Security**: `allow_embedding` must be set to `true` in the Grafana configuration.
+3. **Ingress TLS**: The `central-grafana-ingress` must use a certificate (`grafana-tls`) that includes `grafana.rag.hierocracy.home` in the SAN.
+4. **UID/Slug Alignment**: Dashboards must have UIDs and titles (slugs) that match the hardcoded paths in `rag-explorer` (e.g., `/d/rag-inference/inference-nodes`).
 
 #### Custom Metrics
 New metrics introduced in Iteration 9 for operational tracking:
