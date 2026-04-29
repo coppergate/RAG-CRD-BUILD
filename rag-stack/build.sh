@@ -98,13 +98,24 @@ get_svc_last_build() {
 update_svc_info() {
     local svc="$1"; local ver="$2"; local build_time="$3"
     local tmp=$(mktemp)
-    local lockfile="/tmp/rag-stack-version-${USER:-shared}.lock"
+    local lockfile="/tmp/rag-stack-version-shared.lock"
     
-    (
-        flock -x 200
-        if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
-        jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" && cat "$tmp" > "$VERSION_FILE"
-    ) 200>"$lockfile" || { log "ERROR: Failed to acquire lock on $lockfile"; rm -f "$tmp"; exit 1; }
+    # Ensure lock file is accessible to the group
+    (umask 000; touch "$lockfile" 2>/dev/null || true)
+    chmod 666 "$lockfile" 2>/dev/null || true
+
+    exec 200>"$lockfile"
+    if ! flock -x -w 10 200; then
+        log "ERROR: Failed to acquire lock on $lockfile after 10s"
+        rm -f "$tmp"
+        exit 1
+    fi
+
+    if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
+    jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp"
+    cat "$tmp" > "$VERSION_FILE"
+    
+    flock -u 200
     rm -f "$tmp"
 }
 
@@ -288,13 +299,13 @@ build_service() {
 
 # --- Main Execution ---
 main() {
-    SELECTED_SERVICE=""
+    SELECTED_SERVICES=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --mode) MODE="$2"; shift ;;
             --force) FORCE_BUILD="true" ;;
             --version) OVERRIDE_VERSION="$2"; shift; FORCE_BUILD="true" ;;
-            --service) SELECTED_SERVICE="$2"; shift ;;
+            --service) SELECTED_SERVICES+=("$2"); shift ;;
             --wait) WAIT_FOR_COMPLETION="true" ;;
             *) usage ;;
         esac
@@ -304,8 +315,13 @@ main() {
 	acquire_lock
 	cleanup_old_jobs
 
-	if [[ -n "$SELECTED_SERVICE" ]]; then
-		build_service "$SELECTED_SERVICE"
+	if [[ ${#SELECTED_SERVICES[@]} -gt 0 ]]; then
+		log "Building selected services: ${SELECTED_SERVICES[*]} (Parallelism: $PARALLELISM)"
+		for svc in "${SELECTED_SERVICES[@]}"; do
+			build_service "$svc" &
+			while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
+		done
+		wait
 	else
 		log "Pre-build check and versioning..."
 		SERVICES_TO_BUILD=()

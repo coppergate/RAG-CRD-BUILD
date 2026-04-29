@@ -338,7 +338,11 @@ As of version `2.10.x`, the build system supports hardened parallel execution to
 #### Build Script Locking (build.sh)
 1.  **Global Atomic Lock**: `build.sh` uses a global lock directory `/tmp/rag-stack-build.lock`. This lock is shared across ALL users on **hierophant**, preventing concurrent script executions from interfering with each other's versioning and hashing.
 2.  **Version File Lock**: `update_svc_info` uses `flock` on `/tmp/rag-stack-version-shared.lock` to ensure atomic updates to `CURRENT_VERSION`.
-3.  **Parallel Loops**:
+3.  **Permissions and Multi-User Support**:
+    - Lock files in `/tmp` are created with `666` permissions where possible to allow both `wjones` and `junie` to manage them.
+    - If a lock is held by a dead process (checked via PID), it is automatically cleared.
+    - The `CURRENT_VERSION` file must have group-write permissions (`chmod 664`) for the `super-user` group.
+4.  **Parallel Loops**:
     -   **Skip-and-Deploy**: Services that are already built but need a deployment update are processed in parallel (default 4).
     -   **Service Builds**: New builds are processed in parallel (default 4) using background subshells and `set -m` for job control.
 

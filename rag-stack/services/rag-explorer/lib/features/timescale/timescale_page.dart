@@ -47,8 +47,11 @@ class _TimescalePageState extends ConsumerState<TimescalePage> {
       final auditResp = await client.get('${ServiceEndpoints.dbAdapter}/audit/sessions/${session.id}');
       
       setState(() {
-        _currentHealth = SessionHealth.fromJson(healthResp.data);
-        _auditLogs = (auditResp.data as List).map((e) => AuditEntry.fromJson(e)).toList();
+        if (healthResp.data != null) {
+          _currentHealth = SessionHealth.fromJson(healthResp.data);
+        }
+        final List<dynamic> auditData = auditResp.data ?? [];
+        _auditLogs = auditData.map((e) => AuditEntry.fromJson(e)).toList();
         _loadingDetails = false;
       });
     } catch (e) {

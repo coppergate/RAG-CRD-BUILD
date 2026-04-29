@@ -137,8 +137,8 @@ text_splitter = RecursiveCharacterTextSplitter(
 )
 
 class IngestRequest(BaseModel):
-    ingestion_id: str
-    tag_names: List[str]
+    ingestion_id: Optional[str] = None
+    tag_names: Optional[List[str]] = None
     tag_ids: List[str]
     session_id: Optional[str] = None
     vector_size: Optional[int] = None
@@ -146,6 +146,7 @@ class IngestRequest(BaseModel):
     bucket_name: Optional[str] = None
     prefix: Optional[str] = None
     index: Optional[str] = None
+    force_reingest: Optional[bool] = False
 
 def get_s3_client():
     verify = SSL_CERT_FILE if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE) else True
@@ -369,11 +370,15 @@ async def get_extensions():
 
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
-    logger.info(f"Received ingestion request for ID: {req.ingestion_id} (bucket: {req.bucket_name}, index/prefix: {req.index or req.prefix}, files: {req.file_names})")
+    # Generate ingestion_id if missing
+    ingestion_id = req.ingestion_id or str(uuid.uuid4())
+    tag_names = req.tag_names or []
+    
+    logger.info(f"Received ingestion request for ID: {ingestion_id} (bucket: {req.bucket_name}, index/prefix: {req.index or req.prefix}, files: {req.file_names})")
     background_tasks.add_task(
         run_ingestion, 
-        req.ingestion_id, 
-        req.tag_names, 
+        ingestion_id, 
+        tag_names, 
         req.tag_ids, 
         req.vector_size, 
         req.file_names, 
@@ -382,7 +387,7 @@ async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
         req.prefix,
         req.index
     )
-    return {"status": "accepted", "ingestion_id": req.ingestion_id}
+    return {"status": "accepted", "ingestion_id": ingestion_id}
 
 @app.get("/healthz")
 async def healthz():

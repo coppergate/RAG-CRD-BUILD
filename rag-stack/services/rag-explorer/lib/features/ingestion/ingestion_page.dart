@@ -24,6 +24,8 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   String? _statusMessage;
   bool _isError = false;
   List<String> _allowedExtensions = [];
+  final List<String> _uploadingFiles = [];
+  final Set<String> _selectedObjects = {};
 
   @override
   void initState() {
@@ -115,6 +117,11 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
       for (final file in result.files) {
         if (file.bytes == null) continue;
         
+        setState(() {
+          _uploadingFiles.add(file.name);
+          _statusMessage = 'Uploading ${file.name}...';
+        });
+        
         // Use prefix if specified, ensuring it ends with /
         String key = file.name;
         if (_prefix.isNotEmpty) {
@@ -124,11 +131,16 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
         
         final success = await service.uploadFile(_selectedBucket!, key, file.bytes!);
         if (success) successCount++;
+
+        setState(() {
+          _uploadingFiles.remove(file.name);
+        });
       }
 
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _uploadingFiles.clear();
           _statusMessage = 'Successfully uploaded $successCount of ${result.files.length} files.';
         });
         _loadObjects();
@@ -178,6 +190,12 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
         final parentPath = dir.parent.path;
 
         for (final file in files) {
+          final fileName = file.path.split(Platform.pathSeparator).last;
+          setState(() {
+            _uploadingFiles.add(fileName);
+            _statusMessage = 'Uploading $fileName...';
+          });
+
           String relativePath = file.path.substring(parentPath.length);
           if (relativePath.startsWith(Platform.pathSeparator)) {
             relativePath = relativePath.substring(1);
@@ -193,11 +211,16 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
           final bytes = await file.readAsBytes();
           final success = await service.uploadFile(_selectedBucket!, key, bytes);
           if (success) successCount++;
+
+          setState(() {
+            _uploadingFiles.remove(fileName);
+          });
         }
 
         if (mounted) {
           setState(() {
             _isLoading = false;
+            _uploadingFiles.clear();
             _statusMessage = 'Successfully uploaded $successCount of ${files.length} files.';
           });
           _loadObjects();
@@ -292,6 +315,49 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
             _isError = true;
             _statusMessage = 'Failed to delete object.';
           }
+        });
+        _loadObjects();
+      }
+    }
+  }
+
+  Future<void> _deleteSelectedObjects() async {
+    if (_selectedBucket == null || _selectedObjects.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Selected Objects?'),
+        content: Text('Are you sure you want to delete ${_selectedObjects.length} objects from S3?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete All', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final toDelete = List<String>.from(_selectedObjects);
+      setState(() {
+        _isLoading = true;
+        _statusMessage = 'Deleting ${toDelete.length} objects...';
+        _selectedObjects.clear();
+      });
+
+      final service = ref.read(ingestionServiceProvider.notifier);
+      int successCount = 0;
+      for (final key in toDelete) {
+        final success = await service.deleteObject(_selectedBucket!, key);
+        if (success) successCount++;
+      }
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _statusMessage = 'Successfully deleted $successCount of ${toDelete.length} objects.';
         });
         _loadObjects();
       }
@@ -619,19 +685,76 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   Widget _buildActionArea(bool darkMode) {
     final canIngest = _selectedBucket != null && _selectedTags.isNotEmpty && !_isLoading;
     return Center(
-      child: SizedBox(
-        width: 300,
-        height: 50,
-        child: ElevatedButton.icon(
-          onPressed: canIngest ? _triggerIngestion : null,
-          icon: _isLoading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.rocket_launch),
-          label: Text(_isLoading ? 'Processing...' : 'Start Ingestion'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue[700],
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 300,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: canIngest ? _triggerIngestion : null,
+              icon: _isLoading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.rocket_launch),
+              label: Text(_isLoading ? 'Processing...' : 'Start Ingestion'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[700],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
           ),
-        ),
+          if (_isLoading && _uploadingFiles.isNotEmpty) ...[
+             const SizedBox(height: 16),
+             _buildUploadingFilesWindow(darkMode),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUploadingFilesWindow(bool darkMode) {
+    return Container(
+      height: 120,
+      width: 400,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: darkMode ? Colors.grey[900] : Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: darkMode ? Colors.grey[800]! : Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Uploading Files...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              Text('${_uploadingFiles.length} remaining', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            ],
+          ),
+          const Divider(),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _uploadingFiles.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _uploadingFiles[index],
+                          style: const TextStyle(fontSize: 11),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -664,15 +787,43 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
 
   Widget _buildObjectList(bool darkMode) {
     if (_selectedBucket == null) return const SizedBox();
-    
+    final allSelected = _objects.isNotEmpty && _selectedObjects.length == _objects.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Objects in $_selectedBucket', style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text('${_objects.length} files found', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Row(
+              children: [
+                Checkbox(
+                  value: allSelected,
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        _selectedObjects.addAll(_objects.map((o) => o['Key'] as String));
+                      } else {
+                        _selectedObjects.clear();
+                      }
+                    });
+                  },
+                ),
+                Text('Objects in $_selectedBucket', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            Row(
+              children: [
+                if (_selectedObjects.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: _deleteSelectedObjects,
+                    icon: const Icon(Icons.delete_sweep, color: Colors.red, size: 18),
+                    label: Text('Delete Selected (${_selectedObjects.length})', style: const TextStyle(color: Colors.red, fontSize: 12)),
+                  ),
+                const SizedBox(width: 8),
+                Text('${_objects.length} files found', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -689,8 +840,20 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
                   separatorBuilder: (context, index) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final obj = _objects[index];
+                    final isSelected = _selectedObjects.contains(obj['Key']);
                     return ListTile(
-                      leading: const Icon(Icons.insert_drive_file_outlined, size: 20),
+                      leading: Checkbox(
+                        value: isSelected,
+                        onChanged: (val) {
+                          setState(() {
+                            if (val == true) {
+                              _selectedObjects.add(obj['Key'] as String);
+                            } else {
+                              _selectedObjects.remove(obj['Key'] as String);
+                            }
+                          });
+                        },
+                      ),
                       title: Text(obj['Key'] ?? 'Unknown', style: const TextStyle(fontSize: 13)),
                       subtitle: Text('${(obj['Size'] ?? 0) / 1024} KB • Last Modified: ${obj['LastModified']}', style: const TextStyle(fontSize: 11)),
                       trailing: PopupMenuButton<String>(

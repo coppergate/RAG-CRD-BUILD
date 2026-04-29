@@ -101,7 +101,7 @@ func (s *MetricsService) GetAudit(w http.ResponseWriter, r *http.Request, sessio
 		return
 	}
 
-	var logs []map[string]interface{}
+	logs := []map[string]interface{}{}
 	for _, rl := range retrievals {
 		logs = append(logs, map[string]interface{}{
 			"type":       "RETRIEVAL",
