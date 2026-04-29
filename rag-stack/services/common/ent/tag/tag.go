@@ -42,12 +42,12 @@ const (
 	IngestionsTable = "code_ingestion_tag"
 	// IngestionsInverseTable is the table name for the CodeIngestion entity.
 	// It exists in this package in order to avoid circular dependency with the "codeingestion" package.
-	IngestionsInverseTable = "code_ingestions"
+	IngestionsInverseTable = "code_ingestion"
 	// EmbeddingsTable is the table that holds the embeddings relation/edge. The primary key declared below.
 	EmbeddingsTable = "code_embedding_tag"
 	// EmbeddingsInverseTable is the table name for the CodeEmbedding entity.
 	// It exists in this package in order to avoid circular dependency with the "codeembedding" package.
-	EmbeddingsInverseTable = "code_embeddings"
+	EmbeddingsInverseTable = "code_embedding"
 )
 
 // Columns holds all SQL columns for tag fields.

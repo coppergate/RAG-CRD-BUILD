@@ -2,6 +2,8 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
@@ -11,6 +13,13 @@ import (
 // CodeIngestion holds the schema definition for the CodeIngestion entity.
 type CodeIngestion struct {
 	ent.Schema
+}
+
+// Annotations of the CodeIngestion.
+func (CodeIngestion) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entsql.Annotation{Table: "code_ingestion"},
+	}
 }
 
 // Fields of the CodeIngestion.

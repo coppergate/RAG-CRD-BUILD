@@ -48,6 +48,12 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	embeddings, err := query.
+		Select(
+			codeembedding.FieldID,
+			codeembedding.FieldMetadata,
+			codeembedding.FieldCreatedAt,
+			codeembedding.FieldIngestionID,
+		).
 		WithIngestion().
 		WithTags().
 		All(ctx)
