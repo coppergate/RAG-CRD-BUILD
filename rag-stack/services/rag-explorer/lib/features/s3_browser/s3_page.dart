@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
@@ -20,6 +21,7 @@ class _S3PageState extends ConsumerState<S3Page> {
   late Future<List<Tag>> _tagsFuture;
   late Future<List<Session>> _sessionsFuture;
   final Set<String> _selectedFiles = {};
+  int? _lastSelectedIndex;
   bool _isDeleting = false;
 
   @override
@@ -156,12 +158,6 @@ class _S3PageState extends ConsumerState<S3Page> {
       appBar: AppBar(
         title: const Text('Virtual S3 Browser'),
         actions: [
-          if (_selectedFiles.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: _isDeleting ? null : _deleteSelectedFiles,
-              tooltip: 'Delete Selected',
-            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _refresh,
@@ -198,13 +194,31 @@ class _S3PageState extends ConsumerState<S3Page> {
                     return InkWell(
                       onDoubleTap: () => _viewFileContent(file),
                       child: ListTile(
-                        onTap: () => _viewFileContent(file),
-                        onLongPress: () {
+                        selected: isSelected,
+                        onTap: () {
+                          final keys = HardwareKeyboard.instance.logicalKeysPressed;
+                          final isShift = keys.contains(LogicalKeyboardKey.shiftLeft) || keys.contains(LogicalKeyboardKey.shiftRight);
+                          final isControl = keys.contains(LogicalKeyboardKey.controlLeft) || keys.contains(LogicalKeyboardKey.controlRight) ||
+                                            keys.contains(LogicalKeyboardKey.metaLeft) || keys.contains(LogicalKeyboardKey.metaRight);
+
                           setState(() {
-                            if (isSelected) {
-                              _selectedFiles.remove(file.path);
+                            if (isShift && _lastSelectedIndex != null) {
+                              final start = _lastSelectedIndex! < index ? _lastSelectedIndex! : index;
+                              final end = _lastSelectedIndex! < index ? index : _lastSelectedIndex!;
+                              for (int i = start; i <= end; i++) {
+                                _selectedFiles.add(files[i].path);
+                              }
+                            } else if (isControl) {
+                              if (_selectedFiles.contains(file.path)) {
+                                _selectedFiles.remove(file.path);
+                              } else {
+                                _selectedFiles.add(file.path);
+                              }
+                              _lastSelectedIndex = index;
                             } else {
+                              _selectedFiles.clear();
                               _selectedFiles.add(file.path);
+                              _lastSelectedIndex = index;
                             }
                           });
                         },
@@ -220,6 +234,7 @@ class _S3PageState extends ConsumerState<S3Page> {
                                   } else {
                                     _selectedFiles.remove(file.path);
                                   }
+                                  _lastSelectedIndex = index;
                                 });
                               },
                             ),
@@ -344,6 +359,12 @@ class _S3PageState extends ConsumerState<S3Page> {
                 TextButton(
                   onPressed: () => setState(() => _selectedFiles.clear()),
                   child: const Text('Clear Selection'),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: _isDeleting ? null : _deleteSelectedFiles,
+                  icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                  label: const Text('Delete Selected', style: TextStyle(color: Colors.red)),
                 ),
               ],
             ),
