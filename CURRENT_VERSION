@@ -16,8 +16,8 @@
     "last_build": "2026-04-29T12:09:11Z"
   },
   "db-adapter": {
-    "version": "2.10.24",
-    "last_build": "2026-04-29T20:35:55Z"
+    "version": "2.10.25",
+    "last_build": null
   },
   "qdrant-adapter": {
     "version": "2.10.15",

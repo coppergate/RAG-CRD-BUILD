@@ -171,6 +171,15 @@ class _TimescalePageState extends ConsumerState<TimescalePage> {
                 _buildHealthStat('Total Tokens', '${h.totalTokens ?? 0}'),
               ],
             ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _buildHealthStat('Prompts', '${h.promptCount ?? 0}'),
+                _buildHealthStat('Responses', '${h.responseCount ?? 0}'),
+                _buildHealthStat('Memory Items', '${h.memoryCount ?? 0}'),
+                _buildHealthStat('Tags', '${h.tagCount ?? 0}'),
+              ],
+            ),
           ],
         ),
       ),

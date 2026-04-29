@@ -573,7 +573,7 @@ as int,
 /// @nodoc
 mixin _$SessionHealth {
 
-@JsonKey(name: 'session_id') String get sessionId;@JsonKey(name: 'total_requests') int get totalRequests;@JsonKey(name: 'successful_requests') int get successfulRequests;@JsonKey(name: 'success_rate') double get successRate;@JsonKey(name: 'avg_latency_ms') double? get avgLatencyMs;@JsonKey(name: 'total_tokens') int? get totalTokens; String get status;
+@JsonKey(name: 'session_id') String get sessionId;@JsonKey(name: 'total_requests') int get totalRequests;@JsonKey(name: 'successful_requests') int get successfulRequests;@JsonKey(name: 'success_rate') double get successRate;@JsonKey(name: 'avg_latency_ms') double? get avgLatencyMs;@JsonKey(name: 'total_tokens') int? get totalTokens;@JsonKey(name: 'prompt_count') int? get promptCount;@JsonKey(name: 'response_count') int? get responseCount;@JsonKey(name: 'memory_count') int? get memoryCount;@JsonKey(name: 'tag_count') int? get tagCount; String get status;
 /// Create a copy of SessionHealth
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -586,16 +586,16 @@ $SessionHealthCopyWith<SessionHealth> get copyWith => _$SessionHealthCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SessionHealth&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.totalRequests, totalRequests) || other.totalRequests == totalRequests)&&(identical(other.successfulRequests, successfulRequests) || other.successfulRequests == successfulRequests)&&(identical(other.successRate, successRate) || other.successRate == successRate)&&(identical(other.avgLatencyMs, avgLatencyMs) || other.avgLatencyMs == avgLatencyMs)&&(identical(other.totalTokens, totalTokens) || other.totalTokens == totalTokens)&&(identical(other.status, status) || other.status == status));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SessionHealth&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.totalRequests, totalRequests) || other.totalRequests == totalRequests)&&(identical(other.successfulRequests, successfulRequests) || other.successfulRequests == successfulRequests)&&(identical(other.successRate, successRate) || other.successRate == successRate)&&(identical(other.avgLatencyMs, avgLatencyMs) || other.avgLatencyMs == avgLatencyMs)&&(identical(other.totalTokens, totalTokens) || other.totalTokens == totalTokens)&&(identical(other.promptCount, promptCount) || other.promptCount == promptCount)&&(identical(other.responseCount, responseCount) || other.responseCount == responseCount)&&(identical(other.memoryCount, memoryCount) || other.memoryCount == memoryCount)&&(identical(other.tagCount, tagCount) || other.tagCount == tagCount)&&(identical(other.status, status) || other.status == status));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,sessionId,totalRequests,successfulRequests,successRate,avgLatencyMs,totalTokens,status);
+int get hashCode => Object.hash(runtimeType,sessionId,totalRequests,successfulRequests,successRate,avgLatencyMs,totalTokens,promptCount,responseCount,memoryCount,tagCount,status);
 
 @override
 String toString() {
-  return 'SessionHealth(sessionId: $sessionId, totalRequests: $totalRequests, successfulRequests: $successfulRequests, successRate: $successRate, avgLatencyMs: $avgLatencyMs, totalTokens: $totalTokens, status: $status)';
+  return 'SessionHealth(sessionId: $sessionId, totalRequests: $totalRequests, successfulRequests: $successfulRequests, successRate: $successRate, avgLatencyMs: $avgLatencyMs, totalTokens: $totalTokens, promptCount: $promptCount, responseCount: $responseCount, memoryCount: $memoryCount, tagCount: $tagCount, status: $status)';
 }
 
 
@@ -606,7 +606,7 @@ abstract mixin class $SessionHealthCopyWith<$Res>  {
   factory $SessionHealthCopyWith(SessionHealth value, $Res Function(SessionHealth) _then) = _$SessionHealthCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'session_id') String sessionId,@JsonKey(name: 'total_requests') int totalRequests,@JsonKey(name: 'successful_requests') int successfulRequests,@JsonKey(name: 'success_rate') double successRate,@JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,@JsonKey(name: 'total_tokens') int? totalTokens, String status
+@JsonKey(name: 'session_id') String sessionId,@JsonKey(name: 'total_requests') int totalRequests,@JsonKey(name: 'successful_requests') int successfulRequests,@JsonKey(name: 'success_rate') double successRate,@JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,@JsonKey(name: 'total_tokens') int? totalTokens,@JsonKey(name: 'prompt_count') int? promptCount,@JsonKey(name: 'response_count') int? responseCount,@JsonKey(name: 'memory_count') int? memoryCount,@JsonKey(name: 'tag_count') int? tagCount, String status
 });
 
 
@@ -623,7 +623,7 @@ class _$SessionHealthCopyWithImpl<$Res>
 
 /// Create a copy of SessionHealth
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? sessionId = null,Object? totalRequests = null,Object? successfulRequests = null,Object? successRate = null,Object? avgLatencyMs = freezed,Object? totalTokens = freezed,Object? status = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? sessionId = null,Object? totalRequests = null,Object? successfulRequests = null,Object? successRate = null,Object? avgLatencyMs = freezed,Object? totalTokens = freezed,Object? promptCount = freezed,Object? responseCount = freezed,Object? memoryCount = freezed,Object? tagCount = freezed,Object? status = null,}) {
   return _then(_self.copyWith(
 sessionId: null == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
 as String,totalRequests: null == totalRequests ? _self.totalRequests : totalRequests // ignore: cast_nullable_to_non_nullable
@@ -631,6 +631,10 @@ as int,successfulRequests: null == successfulRequests ? _self.successfulRequests
 as int,successRate: null == successRate ? _self.successRate : successRate // ignore: cast_nullable_to_non_nullable
 as double,avgLatencyMs: freezed == avgLatencyMs ? _self.avgLatencyMs : avgLatencyMs // ignore: cast_nullable_to_non_nullable
 as double?,totalTokens: freezed == totalTokens ? _self.totalTokens : totalTokens // ignore: cast_nullable_to_non_nullable
+as int?,promptCount: freezed == promptCount ? _self.promptCount : promptCount // ignore: cast_nullable_to_non_nullable
+as int?,responseCount: freezed == responseCount ? _self.responseCount : responseCount // ignore: cast_nullable_to_non_nullable
+as int?,memoryCount: freezed == memoryCount ? _self.memoryCount : memoryCount // ignore: cast_nullable_to_non_nullable
+as int?,tagCount: freezed == tagCount ? _self.tagCount : tagCount // ignore: cast_nullable_to_non_nullable
 as int?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as String,
   ));
@@ -717,10 +721,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens,  String status)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SessionHealth() when $default != null:
-return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.status);case _:
+return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.promptCount,_that.responseCount,_that.memoryCount,_that.tagCount,_that.status);case _:
   return orElse();
 
 }
@@ -738,10 +742,10 @@ return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens,  String status)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)  $default,) {final _that = this;
 switch (_that) {
 case _SessionHealth():
-return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.status);case _:
+return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.promptCount,_that.responseCount,_that.memoryCount,_that.tagCount,_that.status);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -758,10 +762,10 @@ return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens,  String status)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)?  $default,) {final _that = this;
 switch (_that) {
 case _SessionHealth() when $default != null:
-return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.status);case _:
+return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.promptCount,_that.responseCount,_that.memoryCount,_that.tagCount,_that.status);case _:
   return null;
 
 }
@@ -773,7 +777,7 @@ return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_th
 @JsonSerializable()
 
 class _SessionHealth implements SessionHealth {
-  const _SessionHealth({@JsonKey(name: 'session_id') required this.sessionId, @JsonKey(name: 'total_requests') required this.totalRequests, @JsonKey(name: 'successful_requests') required this.successfulRequests, @JsonKey(name: 'success_rate') required this.successRate, @JsonKey(name: 'avg_latency_ms') this.avgLatencyMs, @JsonKey(name: 'total_tokens') this.totalTokens, required this.status});
+  const _SessionHealth({@JsonKey(name: 'session_id') required this.sessionId, @JsonKey(name: 'total_requests') required this.totalRequests, @JsonKey(name: 'successful_requests') required this.successfulRequests, @JsonKey(name: 'success_rate') required this.successRate, @JsonKey(name: 'avg_latency_ms') this.avgLatencyMs, @JsonKey(name: 'total_tokens') this.totalTokens, @JsonKey(name: 'prompt_count') this.promptCount, @JsonKey(name: 'response_count') this.responseCount, @JsonKey(name: 'memory_count') this.memoryCount, @JsonKey(name: 'tag_count') this.tagCount, required this.status});
   factory _SessionHealth.fromJson(Map<String, dynamic> json) => _$SessionHealthFromJson(json);
 
 @override@JsonKey(name: 'session_id') final  String sessionId;
@@ -782,6 +786,10 @@ class _SessionHealth implements SessionHealth {
 @override@JsonKey(name: 'success_rate') final  double successRate;
 @override@JsonKey(name: 'avg_latency_ms') final  double? avgLatencyMs;
 @override@JsonKey(name: 'total_tokens') final  int? totalTokens;
+@override@JsonKey(name: 'prompt_count') final  int? promptCount;
+@override@JsonKey(name: 'response_count') final  int? responseCount;
+@override@JsonKey(name: 'memory_count') final  int? memoryCount;
+@override@JsonKey(name: 'tag_count') final  int? tagCount;
 @override final  String status;
 
 /// Create a copy of SessionHealth
@@ -797,16 +805,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SessionHealth&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.totalRequests, totalRequests) || other.totalRequests == totalRequests)&&(identical(other.successfulRequests, successfulRequests) || other.successfulRequests == successfulRequests)&&(identical(other.successRate, successRate) || other.successRate == successRate)&&(identical(other.avgLatencyMs, avgLatencyMs) || other.avgLatencyMs == avgLatencyMs)&&(identical(other.totalTokens, totalTokens) || other.totalTokens == totalTokens)&&(identical(other.status, status) || other.status == status));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SessionHealth&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.totalRequests, totalRequests) || other.totalRequests == totalRequests)&&(identical(other.successfulRequests, successfulRequests) || other.successfulRequests == successfulRequests)&&(identical(other.successRate, successRate) || other.successRate == successRate)&&(identical(other.avgLatencyMs, avgLatencyMs) || other.avgLatencyMs == avgLatencyMs)&&(identical(other.totalTokens, totalTokens) || other.totalTokens == totalTokens)&&(identical(other.promptCount, promptCount) || other.promptCount == promptCount)&&(identical(other.responseCount, responseCount) || other.responseCount == responseCount)&&(identical(other.memoryCount, memoryCount) || other.memoryCount == memoryCount)&&(identical(other.tagCount, tagCount) || other.tagCount == tagCount)&&(identical(other.status, status) || other.status == status));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,sessionId,totalRequests,successfulRequests,successRate,avgLatencyMs,totalTokens,status);
+int get hashCode => Object.hash(runtimeType,sessionId,totalRequests,successfulRequests,successRate,avgLatencyMs,totalTokens,promptCount,responseCount,memoryCount,tagCount,status);
 
 @override
 String toString() {
-  return 'SessionHealth(sessionId: $sessionId, totalRequests: $totalRequests, successfulRequests: $successfulRequests, successRate: $successRate, avgLatencyMs: $avgLatencyMs, totalTokens: $totalTokens, status: $status)';
+  return 'SessionHealth(sessionId: $sessionId, totalRequests: $totalRequests, successfulRequests: $successfulRequests, successRate: $successRate, avgLatencyMs: $avgLatencyMs, totalTokens: $totalTokens, promptCount: $promptCount, responseCount: $responseCount, memoryCount: $memoryCount, tagCount: $tagCount, status: $status)';
 }
 
 
@@ -817,7 +825,7 @@ abstract mixin class _$SessionHealthCopyWith<$Res> implements $SessionHealthCopy
   factory _$SessionHealthCopyWith(_SessionHealth value, $Res Function(_SessionHealth) _then) = __$SessionHealthCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'session_id') String sessionId,@JsonKey(name: 'total_requests') int totalRequests,@JsonKey(name: 'successful_requests') int successfulRequests,@JsonKey(name: 'success_rate') double successRate,@JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,@JsonKey(name: 'total_tokens') int? totalTokens, String status
+@JsonKey(name: 'session_id') String sessionId,@JsonKey(name: 'total_requests') int totalRequests,@JsonKey(name: 'successful_requests') int successfulRequests,@JsonKey(name: 'success_rate') double successRate,@JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,@JsonKey(name: 'total_tokens') int? totalTokens,@JsonKey(name: 'prompt_count') int? promptCount,@JsonKey(name: 'response_count') int? responseCount,@JsonKey(name: 'memory_count') int? memoryCount,@JsonKey(name: 'tag_count') int? tagCount, String status
 });
 
 
@@ -834,7 +842,7 @@ class __$SessionHealthCopyWithImpl<$Res>
 
 /// Create a copy of SessionHealth
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? sessionId = null,Object? totalRequests = null,Object? successfulRequests = null,Object? successRate = null,Object? avgLatencyMs = freezed,Object? totalTokens = freezed,Object? status = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? sessionId = null,Object? totalRequests = null,Object? successfulRequests = null,Object? successRate = null,Object? avgLatencyMs = freezed,Object? totalTokens = freezed,Object? promptCount = freezed,Object? responseCount = freezed,Object? memoryCount = freezed,Object? tagCount = freezed,Object? status = null,}) {
   return _then(_SessionHealth(
 sessionId: null == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
 as String,totalRequests: null == totalRequests ? _self.totalRequests : totalRequests // ignore: cast_nullable_to_non_nullable
@@ -842,6 +850,10 @@ as int,successfulRequests: null == successfulRequests ? _self.successfulRequests
 as int,successRate: null == successRate ? _self.successRate : successRate // ignore: cast_nullable_to_non_nullable
 as double,avgLatencyMs: freezed == avgLatencyMs ? _self.avgLatencyMs : avgLatencyMs // ignore: cast_nullable_to_non_nullable
 as double?,totalTokens: freezed == totalTokens ? _self.totalTokens : totalTokens // ignore: cast_nullable_to_non_nullable
+as int?,promptCount: freezed == promptCount ? _self.promptCount : promptCount // ignore: cast_nullable_to_non_nullable
+as int?,responseCount: freezed == responseCount ? _self.responseCount : responseCount // ignore: cast_nullable_to_non_nullable
+as int?,memoryCount: freezed == memoryCount ? _self.memoryCount : memoryCount // ignore: cast_nullable_to_non_nullable
+as int?,tagCount: freezed == tagCount ? _self.tagCount : tagCount // ignore: cast_nullable_to_non_nullable
 as int?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as String,
   ));

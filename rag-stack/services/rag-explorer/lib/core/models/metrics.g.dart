@@ -49,6 +49,10 @@ _SessionHealth _$SessionHealthFromJson(Map<String, dynamic> json) =>
       successRate: (json['success_rate'] as num).toDouble(),
       avgLatencyMs: (json['avg_latency_ms'] as num?)?.toDouble(),
       totalTokens: (json['total_tokens'] as num?)?.toInt(),
+      promptCount: (json['prompt_count'] as num?)?.toInt(),
+      responseCount: (json['response_count'] as num?)?.toInt(),
+      memoryCount: (json['memory_count'] as num?)?.toInt(),
+      tagCount: (json['tag_count'] as num?)?.toInt(),
       status: json['status'] as String,
     );
 
@@ -60,6 +64,10 @@ Map<String, dynamic> _$SessionHealthToJson(_SessionHealth instance) =>
       'success_rate': instance.successRate,
       'avg_latency_ms': instance.avgLatencyMs,
       'total_tokens': instance.totalTokens,
+      'prompt_count': instance.promptCount,
+      'response_count': instance.responseCount,
+      'memory_count': instance.memoryCount,
+      'tag_count': instance.tagCount,
       'status': instance.status,
     };
 

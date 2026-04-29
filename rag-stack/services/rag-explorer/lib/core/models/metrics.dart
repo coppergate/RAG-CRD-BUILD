@@ -38,6 +38,10 @@ abstract class SessionHealth with _$SessionHealth {
     @JsonKey(name: 'success_rate') required double successRate,
     @JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,
     @JsonKey(name: 'total_tokens') int? totalTokens,
+    @JsonKey(name: 'prompt_count') int? promptCount,
+    @JsonKey(name: 'response_count') int? responseCount,
+    @JsonKey(name: 'memory_count') int? memoryCount,
+    @JsonKey(name: 'tag_count') int? tagCount,
     required String status, // HEALTHY, DEGRADED, UNHEALTHY
   }) = _SessionHealth;
 

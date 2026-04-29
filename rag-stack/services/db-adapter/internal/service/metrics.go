@@ -10,7 +10,10 @@ import (
 	"app-builds/common/ent"
 	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/modelexecutionmetric"
+	"app-builds/common/ent/prompt"
+	"app-builds/common/ent/response"
 	"app-builds/common/ent/retrievallog"
+	"app-builds/common/ent/session"
 	"github.com/google/uuid"
 )
 
@@ -54,6 +57,11 @@ func (s *MetricsService) GetHealth(w http.ResponseWriter, r *http.Request, sessi
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	promptCount, _ := s.client.Prompt.Query().Where(prompt.SessionID(sessionID)).Count(r.Context())
+	responseCount, _ := s.client.Response.Query().Where(response.SessionID(sessionID)).Count(r.Context())
+	memoryCount, _ := s.client.MemoryEvent.Query().Where(memoryevent.SessionID(sessionID)).Count(r.Context())
+	tagCount, _ := s.client.Session.Query().Where(session.ID(sessionID)).QueryTags().Count(r.Context())
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"session_id":          sessionID,
 		"total_requests":      total,
@@ -61,6 +69,10 @@ func (s *MetricsService) GetHealth(w http.ResponseWriter, r *http.Request, sessi
 		"success_rate":        successRate,
 		"avg_latency_ms":      avgLatency,
 		"total_tokens":        sumTokens,
+		"prompt_count":        promptCount,
+		"response_count":      responseCount,
+		"memory_count":        memoryCount,
+		"tag_count":           tagCount,
 		"status":              s.calculateStatus(successRate),
 	})
 }
