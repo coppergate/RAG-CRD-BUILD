@@ -19,13 +19,109 @@ class _S3PageState extends ConsumerState<S3Page> {
   Session? _selectedSession;
   late Future<List<Tag>> _tagsFuture;
   late Future<List<Session>> _sessionsFuture;
+  final Set<String> _selectedFiles = {};
+  bool _isDeleting = false;
 
   @override
   void initState() {
     super.initState();
-    _filesFuture = _fetchFiles();
-    _tagsFuture = _fetchTags();
-    _sessionsFuture = _fetchSessions();
+    _refresh();
+  }
+
+  void _refresh() {
+    setState(() {
+      _filesFuture = _fetchFiles();
+      _tagsFuture = _fetchTags();
+      _sessionsFuture = _fetchSessions();
+      _selectedFiles.clear();
+    });
+  }
+
+  Future<void> _deleteSelectedFiles() async {
+    if (_selectedFiles.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: Text('Are you sure you want to delete ${_selectedFiles.length} objects from S3?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isDeleting = true);
+
+    try {
+      final config = ref.read(appConfigProvider);
+      final client = ApiClient(config);
+      
+      final files = await _filesFuture;
+      for (final path in _selectedFiles) {
+        final file = files.firstWhere((f) => f.path == path);
+        await client.delete('${config.ragAdminApiUrl}/api/s3/buckets/${file.bucket}/${file.path}');
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Successfully deleted ${_selectedFiles.length} objects')),
+      );
+      _refresh();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting objects: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() => _isDeleting = false);
+    }
+  }
+
+  Future<void> _viewFileContent(VirtualFile file) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(file.path, style: const TextStyle(fontSize: 14)),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: FutureBuilder<String>(
+            future: _fetchFileContent(file),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              return SingleChildScrollView(
+                child: SelectableText(
+                  snapshot.data ?? 'No content',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Future<String> _fetchFileContent(VirtualFile file) async {
+    final config = ref.read(appConfigProvider);
+    final client = ApiClient(config);
+    final response = await client.get('${config.ragAdminApiUrl}/api/s3/buckets/${file.bucket}/${file.path}');
+    if (response.data is String) return response.data;
+    return response.data.toString();
   }
 
   Future<List<VirtualFile>> _fetchFiles() async {
@@ -55,17 +151,20 @@ class _S3PageState extends ConsumerState<S3Page> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Virtual S3 Browser'),
         actions: [
+          if (_selectedFiles.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: _isDeleting ? null : _deleteSelectedFiles,
+              tooltip: 'Delete Selected',
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => setState(() {
-              _filesFuture = _fetchFiles();
-              _tagsFuture = _fetchTags();
-              _sessionsFuture = _fetchSessions();
-            }),
+            onPressed: _refresh,
           ),
         ],
       ),
@@ -94,29 +193,77 @@ class _S3PageState extends ConsumerState<S3Page> {
                   separatorBuilder: (context, index) => const Divider(),
                   itemBuilder: (context, index) {
                     final file = files[index];
-                    return ListTile(
-                      leading: const Icon(Icons.insert_drive_file, color: Colors.blue),
-                      title: Text(file.path, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Bucket: ${file.bucket}'),
-                          Text('Created: ${file.createdAt.toLocal().toString().split('.')[0]}'),
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 4,
-                            children: file.tags.map((t) => Chip(
-                              label: Text(t, style: const TextStyle(fontSize: 10)),
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                            )).toList(),
+                    final isSelected = _selectedFiles.contains(file.path);
+                    
+                    return InkWell(
+                      onDoubleTap: () => _viewFileContent(file),
+                      child: ListTile(
+                        onTap: () => _viewFileContent(file),
+                        onLongPress: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedFiles.remove(file.path);
+                            } else {
+                              _selectedFiles.add(file.path);
+                            }
+                          });
+                        },
+                        leading: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: isSelected,
+                              onChanged: (val) {
+                                setState(() {
+                                  if (val == true) {
+                                    _selectedFiles.add(file.path);
+                                  } else {
+                                    _selectedFiles.remove(file.path);
+                                  }
+                                });
+                              },
+                            ),
+                            const Icon(Icons.insert_drive_file, color: Colors.blue),
+                          ],
+                        ),
+                        title: Text(file.path, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Bucket: ${file.bucket}'),
+                            Text('Created: ${file.createdAt.toLocal().toString().split('.')[0]}'),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 4,
+                              children: file.tags.map((t) => Chip(
+                                label: Text(t, style: TextStyle(fontSize: 10, color: isDark ? Colors.blue.shade200 : Colors.blue.shade900)),
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                backgroundColor: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
+                                side: BorderSide.none,
+                              )).toList(),
+                            ),
+                          ],
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (val) {
+                            if (val == 'view') _viewFileContent(file);
+                            if (val == 'delete') {
+                              setState(() => _selectedFiles.add(file.path));
+                              _deleteSelectedFiles();
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(value: 'view', child: Text('View Content')),
+                            const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+                          ],
+                          child: Chip(
+                            label: Text(file.status),
+                            backgroundColor: isDark ? Colors.green.shade900.withOpacity(0.3) : Colors.green.shade50,
+                            labelStyle: TextStyle(color: isDark ? Colors.green.shade300 : Colors.green, fontSize: 10),
+                            side: BorderSide.none,
                           ),
-                        ],
-                      ),
-                      trailing: Chip(
-                        label: Text(file.status),
-                        backgroundColor: Colors.green.shade50,
-                        labelStyle: const TextStyle(color: Colors.green, fontSize: 10),
+                        ),
                       ),
                     );
                   },
@@ -130,57 +277,77 @@ class _S3PageState extends ConsumerState<S3Page> {
   }
 
   Widget _buildFilters() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+        color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
+        border: Border(bottom: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300)),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: FutureBuilder<List<Tag>>(
-              future: _tagsFuture,
-              builder: (context, snapshot) {
-                return DropdownButtonFormField<Tag>(
-                  decoration: const InputDecoration(labelText: 'Filter by Tag', border: OutlineInputBorder(), isDense: true),
-                  initialValue: _selectedTag,
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Tags')),
-                    ...?snapshot.data?.map((t) => DropdownMenuItem(value: t, child: Text(t.name))),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedTag = val;
-                      _filesFuture = _fetchFiles();
-                    });
+          Row(
+            children: [
+              Expanded(
+                child: FutureBuilder<List<Tag>>(
+                  future: _tagsFuture,
+                  builder: (context, snapshot) {
+                    return DropdownButtonFormField<Tag>(
+                      decoration: const InputDecoration(labelText: 'Filter by Tag', border: OutlineInputBorder(), isDense: true),
+                      value: _selectedTag,
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All Tags')),
+                        ...?snapshot.data?.map((t) => DropdownMenuItem(value: t, child: Text(t.name))),
+                      ],
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedTag = val;
+                          _filesFuture = _fetchFiles();
+                          _selectedFiles.clear();
+                        });
+                      },
+                    );
                   },
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: FutureBuilder<List<Session>>(
-              future: _sessionsFuture,
-              builder: (context, snapshot) {
-                return DropdownButtonFormField<Session>(
-                  decoration: const InputDecoration(labelText: 'Filter by Session', border: OutlineInputBorder(), isDense: true),
-                  initialValue: _selectedSession,
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('All Sessions')),
-                    ...?snapshot.data?.map((s) => DropdownMenuItem(value: s, child: Text(s.id.substring(0, 8)))),
-                  ],
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedSession = val;
-                      _filesFuture = _fetchFiles();
-                    });
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: FutureBuilder<List<Session>>(
+                  future: _sessionsFuture,
+                  builder: (context, snapshot) {
+                    return DropdownButtonFormField<Session>(
+                      decoration: const InputDecoration(labelText: 'Filter by Session', border: OutlineInputBorder(), isDense: true),
+                      value: _selectedSession,
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All Sessions')),
+                        ...?snapshot.data?.map((s) => DropdownMenuItem(value: s, child: Text(s.id.substring(0, 8)))),
+                      ],
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedSession = val;
+                          _filesFuture = _fetchFiles();
+                          _selectedFiles.clear();
+                        });
+                      },
+                    );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
+          if (_selectedFiles.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('${_selectedFiles.length} items selected', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => setState(() => _selectedFiles.clear()),
+                  child: const Text('Clear Selection'),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
