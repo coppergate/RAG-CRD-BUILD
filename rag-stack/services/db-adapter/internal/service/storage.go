@@ -31,7 +31,7 @@ type FileInfo struct {
 
 func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 	sessionIDStr := r.URL.Query().Get("session_id")
-	tagIDStr := r.URL.Query().Get("tag_id")
+	tagIDs := r.URL.Query()["tag_id"]
 
 	ctx := r.Context()
 	query := s.client.CodeEmbedding.Query()
@@ -41,9 +41,11 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 			query = query.Where(codeembedding.HasTagsWith(tag.HasSessionsWith(session.ID(sessID))))
 		}
 	}
-	if tagIDStr != "" {
-		if tID, err := uuid.Parse(tagIDStr); err == nil {
-			query = query.Where(codeembedding.HasTagsWith(tag.ID(tID)))
+	for _, tidStr := range tagIDs {
+		if tidStr != "" {
+			if tID, err := uuid.Parse(tidStr); err == nil {
+				query = query.Where(codeembedding.HasTagsWith(tag.ID(tID)))
+			}
 		}
 	}
 
@@ -102,7 +104,7 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var files []*FileInfo
+	files := []*FileInfo{}
 	for _, f := range fileMap {
 		files = append(files, f)
 	}

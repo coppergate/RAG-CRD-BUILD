@@ -11,6 +11,7 @@ class ApiClient {
   ApiClient(this._config) : _dio = Dio() {
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
+    _dio.options.listFormat = ListFormat.multi;
 
     if (_config.skipTlsVerification) {
       (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {

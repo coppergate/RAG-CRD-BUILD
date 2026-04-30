@@ -16,7 +16,7 @@ class S3Page extends ConsumerStatefulWidget {
 
 class _S3PageState extends ConsumerState<S3Page> {
   late Future<List<VirtualFile>> _filesFuture;
-  Tag? _selectedTag;
+  final List<Tag> _selectedTags = [];
   Session? _selectedSession;
   late Future<List<Tag>> _tagsFuture;
   late Future<List<Session>> _sessionsFuture;
@@ -130,11 +130,15 @@ class _S3PageState extends ConsumerState<S3Page> {
     final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
     Map<String, dynamic> queryParams = {};
-    if (_selectedTag != null) queryParams['tag_id'] = _selectedTag!.id;
+    if (_selectedTags.isNotEmpty) {
+      queryParams['tag_id'] = _selectedTags.map((t) => t.id).toList();
+    }
     if (_selectedSession != null) queryParams['session_id'] = _selectedSession!.id;
     
     final response = await client.get('${config.ragAdminApiUrl}/api/db/storage/files', queryParameters: queryParams);
-    return (response.data as List).map((e) => VirtualFile.fromJson(e)).toList();
+    final data = response.data;
+    if (data == null) return [];
+    return (data as List).map((e) => VirtualFile.fromJson(e)).toList();
   }
 
   Future<List<Tag>> _fetchTags() async {
@@ -300,32 +304,44 @@ class _S3PageState extends ConsumerState<S3Page> {
         border: Border(bottom: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text('Filter by Tag (AND)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          FutureBuilder<List<Tag>>(
+            future: _tagsFuture,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox.shrink();
+              final tags = snapshot.data!;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: tags.map((t) {
+                  final isSelected = _selectedTags.any((st) => st.id == t.id);
+                  return FilterChip(
+                    label: Text(t.name),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedTags.add(t);
+                        } else {
+                          _selectedTags.removeWhere((st) => st.id == t.id);
+                        }
+                        _filesFuture = _fetchFiles();
+                        _selectedFiles.clear();
+                      });
+                    },
+                    selectedColor: Colors.blue.withOpacity(0.2),
+                    checkmarkColor: Colors.blue,
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(
-                child: FutureBuilder<List<Tag>>(
-                  future: _tagsFuture,
-                  builder: (context, snapshot) {
-                    return DropdownButtonFormField<Tag>(
-                      decoration: const InputDecoration(labelText: 'Filter by Tag', border: OutlineInputBorder(), isDense: true),
-                      value: _selectedTag,
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('All Tags')),
-                        ...?snapshot.data?.map((t) => DropdownMenuItem(value: t, child: Text(t.name))),
-                      ],
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedTag = val;
-                          _filesFuture = _fetchFiles();
-                          _selectedFiles.clear();
-                        });
-                      },
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
               Expanded(
                 child: FutureBuilder<List<Session>>(
                   future: _sessionsFuture,
