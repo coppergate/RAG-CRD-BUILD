@@ -287,14 +287,13 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 		seq := 0
 		inConversation := false
 		for {
+			if stream == nil && metaCh == nil && errCh == nil {
+				goto endStream
+			}
 			select {
 			case chunk, ok := <-stream:
 				if !ok {
-					// Wait a bit for final metrics/error
 					stream = nil
-					if stream == nil && metaCh == nil && errCh == nil {
-						goto endStream
-					}
 					continue
 				}
 				fullResult += chunk
@@ -307,14 +306,17 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 					continue
 				}
 				finalMetrics = h.mapMetrics(rawMeta, modelID)
-			case err := <-errCh:
+			case err, ok := <-errCh:
+				if !ok {
+					errCh = nil
+					continue
+				}
 				if err != nil {
 					log.Printf("[%s] Execution stream failed: %v", req.Id, err)
 					h.msg.SendError(ctx, req.Id, fmt.Sprintf("Execution stream failed: %v", err), inConversation)
 					h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
 					return dlq.TransientFailure, fmt.Errorf("execution stream: %w", err)
 				}
-				errCh = nil
 			case <-ctx.Done():
 				h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
 				return dlq.TransientFailure, ctx.Err()

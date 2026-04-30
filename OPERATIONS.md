@@ -570,3 +570,18 @@ Tag merging is performed via the `/api/db/maintenance/tags/merge` endpoint. This
 3. Groups paths by their new combined tag set (current tags minus sources plus target).
 4. Triggers the `rag-ingestion` service for each group to re-process the files from S3 with updated tags.
 5. Updates session-tag mappings and deletes the source tag entities from the database.
+
+### 8.4 Session-Tag Association
+The Chat Panel in RAG Explorer supports associating multiple existing tags with a session to scope the RAG context.
+- **Fetch**: Existing tags are retrieved from `GET /api/db/tags` (proxied via `rag-admin-api`).
+- **Logic**: Multi-pick selection is handled via a modal dialog with search and "add new" capabilities.
+- **Usage**: Selected tags are sent as `tag_names` in the `streamChat` request to the pipeline.
+
+## 9. Cluster Build System
+
+### 9.1 Shared Build State (CURRENT_VERSION)
+The `CURRENT_VERSION` file tracks service versions across all environments.
+- **Location**: Project root (`/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`).
+- **Permissions**: Should be `664` or `666` to allow both `wjones` and `junie` to update it.
+- **Workaround**: If `Permission denied` occurs on `hierophant`, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
+- **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.

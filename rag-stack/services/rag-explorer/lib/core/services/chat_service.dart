@@ -99,6 +99,23 @@ class ChatService {
     }
   }
 
+  Future<List<String>> getTags() async {
+    _logger.debug('Fetching tags from ${_config.ragAdminApiUrl}/api/db/tags');
+    try {
+      final response = await _dio.get('${_config.ragAdminApiUrl}/api/db/tags');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data;
+        _logger.info('Successfully fetched ${data.length} tags');
+        return data.map((e) => e['name'] as String).toList();
+      }
+      _logger.warn('Failed to fetch tags, status: ${response.statusCode}');
+      return [];
+    } catch (e) {
+      _logger.error('Error fetching tags: $e');
+      return [];
+    }
+  }
+
   Stream<ResponseMessage> streamChat({
     required String prompt,
     required String sessionId,

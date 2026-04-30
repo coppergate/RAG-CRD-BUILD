@@ -31,6 +31,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _isStreaming = false;
   bool _inConversation = false;
   final List<String> _tags = ['general'];
+  List<String> _availableTags = [];
   StreamSubscription<ResponseMessage>? _chatSubscription;
   final ScrollController _chatScrollController = ScrollController();
   bool _isChatSelected = false;
@@ -41,6 +42,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void initState() {
     super.initState();
     _loadSessions();
+    _loadTags();
+  }
+
+  Future<void> _loadTags() async {
+    final chatService = ref.read(chatServiceProvider);
+    final tags = await chatService.getTags();
+    if (mounted) {
+      setState(() {
+        _availableTags = tags;
+      });
+    }
   }
 
   @override
@@ -505,7 +517,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 ),
               ),
               const SizedBox(height: 4),
-              if (msg.content.isEmpty && !isUser && _isStreaming)
+              if (msg.content.isEmpty && !isUser && _isStreaming && index == _messages.length - 1)
                 const SizedBox(
                   width: 20,
                   height: 20,
@@ -712,34 +724,89 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   void _showAddTagDialog() {
+    final List<String> tempSelected = List.from(_tags);
     final tagController = TextEditingController();
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Tag'),
-        content: TextField(
-          controller: tagController,
-          decoration: const InputDecoration(hintText: 'Enter tag name'),
-          autofocus: true,
-          onSubmitted: (val) {
-            if (val.trim().isNotEmpty) {
-              setState(() => _tags.add(val.trim()));
-              Navigator.pop(context);
-            }
-          },
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              if (tagController.text.trim().isNotEmpty) {
-                setState(() => _tags.add(tagController.text.trim()));
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final displayTags = _availableTags.where((t) => 
+            tagController.text.isEmpty || t.toLowerCase().contains(tagController.text.toLowerCase())
+          ).toList();
+
+          return AlertDialog(
+            title: const Text('Associate Tags'),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: tagController,
+                    decoration: const InputDecoration(
+                      hintText: 'Search or add new tag...',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 16),
+                  Flexible(
+                    child: Container(
+                      height: 250,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ListView(
+                        children: [
+                          if (tagController.text.isNotEmpty && !_availableTags.contains(tagController.text.trim()))
+                            ListTile(
+                              title: Text('Add new: "${tagController.text.trim()}"'),
+                              leading: const Icon(Icons.add),
+                              onTap: () {
+                                final newTag = tagController.text.trim();
+                                if (!tempSelected.contains(newTag)) {
+                                  setDialogState(() => tempSelected.add(newTag));
+                                }
+                                tagController.clear();
+                              },
+                            ),
+                          ...displayTags.map((tag) => CheckboxListTile(
+                            title: Text(tag),
+                            value: tempSelected.contains(tag),
+                            onChanged: (val) {
+                              setDialogState(() {
+                                if (val == true) {
+                                  tempSelected.add(tag);
+                                } else {
+                                  tempSelected.remove(tag);
+                                }
+                              });
+                            },
+                          )),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _tags.clear();
+                    _tags.addAll(tempSelected);
+                  });
+                  Navigator.pop(context);
+                },
+                child: const Text('Apply'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
