@@ -12,6 +12,9 @@ _Session _$SessionFromJson(Map<String, dynamic> json) => _Session(
   description: json['description'] as String?,
   createdAt: DateTime.parse(json['created_at'] as String),
   lastActiveAt: DateTime.parse(json['last_active_at'] as String),
+  tags: (json['tags'] as List<dynamic>?)
+      ?.map((e) => Tag.fromJson(e as Map<String, dynamic>))
+      .toList(),
   metadata: json['metadata'] as Map<String, dynamic>?,
 );
 
@@ -21,5 +24,6 @@ Map<String, dynamic> _$SessionToJson(_Session instance) => <String, dynamic>{
   'description': instance.description,
   'created_at': instance.createdAt.toIso8601String(),
   'last_active_at': instance.lastActiveAt.toIso8601String(),
+  'tags': instance.tags,
   'metadata': instance.metadata,
 };

@@ -16,7 +16,7 @@
     "last_build": "2026-04-29T12:09:11Z"
   },
   "db-adapter": {
-    "version": "2.10.27",
+    "version": "2.10.28",
     "last_build": null
   },
   "qdrant-adapter": {
@@ -32,7 +32,7 @@
     "last_build": null
   },
   "rag-admin-api": {
-    "version": "2.10.8",
+    "version": "2.10.10",
     "last_build": "2026-04-29T12:09:11Z"
   },
   "memory-controller": {
@@ -48,7 +48,7 @@
     "last_build": null
   },
   "rag-explorer": {
-    "version": "2.10.22",
+    "version": "2.10.24",
     "last_build": null
   }
 }

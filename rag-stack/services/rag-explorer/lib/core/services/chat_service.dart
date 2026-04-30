@@ -7,6 +7,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/response_message.dart';
 import '../models/session.dart';
+import '../models/tag.dart';
 import 'log_service.dart';
 
 final chatServiceProvider = Provider((ref) {
@@ -99,14 +100,14 @@ class ChatService {
     }
   }
 
-  Future<List<String>> getTags() async {
+  Future<List<Tag>> getTags() async {
     _logger.debug('Fetching tags from ${_config.ragAdminApiUrl}/api/db/tags');
     try {
       final response = await _dio.get('${_config.ragAdminApiUrl}/api/db/tags');
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
         _logger.info('Successfully fetched ${data.length} tags');
-        return data.map((e) => e['name'] as String).toList();
+        return data.map((e) => Tag.fromJson(e)).toList();
       }
       _logger.warn('Failed to fetch tags, status: ${response.statusCode}');
       return [];
@@ -163,7 +164,7 @@ class ChatService {
             _logger.debug('Received chunk: $event');
             final data = jsonDecode(event);
             return ResponseMessage(
-              content: data['chunk'] ?? (data['error'] ?? ''),
+              content: data['result'] ?? (data['error'] ?? ''),
               sessionId: data['session_id'],
               messageId: data['id'],
               role: 'assistant',
@@ -180,6 +181,20 @@ class ChatService {
     } catch (e) {
       _logger.error('Failed to connect or send to WebSocket: $e');
       rethrow;
+    }
+  }
+
+  Future<bool> updateSessionTags(String sessionId, List<String> tagIds) async {
+    _logger.info('Updating tags for session $sessionId: $tagIds');
+    try {
+      final response = await _dio.post(
+        '${_config.ragAdminApiUrl}/api/db/sessions/tags?session_id=$sessionId',
+        data: {'tag_ids': tagIds},
+      );
+      return response.statusCode == 204;
+    } catch (e) {
+      _logger.error('Error updating session tags: $e');
+      return false;
     }
   }
 }

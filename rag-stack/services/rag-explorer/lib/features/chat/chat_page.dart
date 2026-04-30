@@ -7,6 +7,7 @@ import 'package:rag_explorer/app_config_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
 import '../../core/models/session.dart';
+import '../../core/models/tag.dart';
 import '../../core/services/chat_service.dart';
 import '../../core/services/log_service.dart';
 
@@ -30,8 +31,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _showMetadata = true;
   bool _isStreaming = false;
   bool _inConversation = false;
-  final List<String> _tags = ['general'];
-  List<String> _availableTags = [];
+  final List<Tag> _tags = [];
+  List<Tag> _availableTags = [];
   StreamSubscription<ResponseMessage>? _chatSubscription;
   final ScrollController _chatScrollController = ScrollController();
   bool _isChatSelected = false;
@@ -51,6 +52,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (mounted) {
       setState(() {
         _availableTags = tags;
+        // If we don't have any tags selected yet and 'general' exists, select it
+        if (_tags.isEmpty) {
+          try {
+            final general = tags.firstWhere((t) => t.name.toLowerCase() == 'general');
+            _tags.add(general);
+          } catch (_) {
+            // No general tag found, that's fine
+          }
+        }
       });
     }
   }
@@ -293,6 +303,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         final msgs = await chatService.getMessages(session.id);
                         setState(() {
                           _messages = msgs;
+                          _tags.clear();
+                          if (session.tags != null) {
+                            _tags.addAll(session.tags!);
+                          }
                         });
                       }
                     },
@@ -700,8 +714,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   ..._tags.map((tag) => Padding(
                     padding: const EdgeInsets.only(right: 4),
                     child: Chip(
-                      label: Text(tag, style: const TextStyle(fontSize: 11)),
-                      onDeleted: () => setState(() => _tags.remove(tag)),
+                      label: Text(tag.name, style: const TextStyle(fontSize: 11)),
+                      onDeleted: () async {
+                        setState(() => _tags.remove(tag));
+                        if (_currentSessionId != null) {
+                          final chatService = ref.read(chatServiceProvider);
+                          await chatService.updateSessionTags(
+                            _currentSessionId!, 
+                            _tags.map((t) => t.id).toList()
+                          );
+                          _loadSessions();
+                        }
+                      },
                       deleteIcon: const Icon(Icons.close, size: 12),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -724,7 +748,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   void _showAddTagDialog() {
-    final List<String> tempSelected = List.from(_tags);
+    final List<Tag> tempSelected = List.from(_tags);
     final tagController = TextEditingController();
     
     showDialog(
@@ -732,7 +756,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           final displayTags = _availableTags.where((t) => 
-            tagController.text.isEmpty || t.toLowerCase().contains(tagController.text.toLowerCase())
+            tagController.text.isEmpty || t.name.toLowerCase().contains(tagController.text.toLowerCase())
           ).toList();
 
           return AlertDialog(
@@ -760,27 +784,29 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       ),
                       child: ListView(
                         children: [
-                          if (tagController.text.isNotEmpty && !_availableTags.contains(tagController.text.trim()))
+                          if (tagController.text.isNotEmpty && !_availableTags.any((t) => t.name.toLowerCase() == tagController.text.trim().toLowerCase()))
                             ListTile(
                               title: Text('Add new: "${tagController.text.trim()}"'),
                               leading: const Icon(Icons.add),
                               onTap: () {
-                                final newTag = tagController.text.trim();
-                                if (!tempSelected.contains(newTag)) {
+                                final newTagName = tagController.text.trim();
+                                if (!tempSelected.any((t) => t.name == newTagName)) {
+                                  // Create a temporary tag object for new tags
+                                  final newTag = Tag(id: newTagName, name: newTagName);
                                   setDialogState(() => tempSelected.add(newTag));
                                 }
                                 tagController.clear();
                               },
                             ),
                           ...displayTags.map((tag) => CheckboxListTile(
-                            title: Text(tag),
-                            value: tempSelected.contains(tag),
+                            title: Text(tag.name),
+                            value: tempSelected.any((t) => t.id == tag.id),
                             onChanged: (val) {
                               setDialogState(() {
                                 if (val == true) {
                                   tempSelected.add(tag);
                                 } else {
-                                  tempSelected.remove(tag);
+                                  tempSelected.removeWhere((t) => t.id == tag.id);
                                 }
                               });
                             },
@@ -795,12 +821,23 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   setState(() {
                     _tags.clear();
                     _tags.addAll(tempSelected);
                   });
                   Navigator.pop(context);
+                  
+                  // Persist to backend if we have an active session
+                  if (_currentSessionId != null) {
+                    final chatService = ref.read(chatServiceProvider);
+                    await chatService.updateSessionTags(
+                      _currentSessionId!, 
+                      _tags.map((t) => t.id).toList()
+                    );
+                    // Reload sessions to refresh the tags in the list model
+                    _loadSessions();
+                  }
                 },
                 child: const Text('Apply'),
               ),
@@ -847,7 +884,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       sessionName: _currentSessionName,
       planner: _selectedPlanner,
       executor: _selectedExecutor,
-      tags: _tags,
+      tags: _tags.map((t) => t.id).toList(),
     );
 
     _chatSubscription = stream.listen(

@@ -56,8 +56,8 @@ func main() {
 	// Qdrant Direct Proxy
 	mux.HandleFunc("/api/qdrant-direct/", h.ProxyTo(cfg.QdrantDirectURL, "/api/qdrant-direct"))
 	
-	// Grafana Proxy
-	mux.HandleFunc("/api/grafana/", h.ProxyTo(cfg.GrafanaURL, "/api/grafana"))
+	// Grafana Proxy - Do not strip prefix because Grafana is configured with serve_from_sub_path=true
+	mux.HandleFunc("/api/grafana/", h.ProxyTo(cfg.GrafanaURL, ""))
 	
 	// Health Aggregation
 	mux.HandleFunc("/api/health/all", h.HandleHealthAggregation)

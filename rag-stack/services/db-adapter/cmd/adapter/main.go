@@ -141,6 +141,7 @@ func main() {
 	})
 
 	mux.HandleFunc("/sessions", sessSvc.ListSessions)
+	mux.HandleFunc("/sessions/tags", sessSvc.UpdateSessionTags)
 
 	mux.HandleFunc("/metrics/sessions/health", func(w http.ResponseWriter, r *http.Request) {
 		sessionIDStr := r.URL.Query().Get("session_id")

@@ -87,6 +87,7 @@ func (s *SessionService) GetMessages(w http.ResponseWriter, r *http.Request, ses
 
 func (s *SessionService) ListSessions(w http.ResponseWriter, r *http.Request) {
 	sessions, err := s.client.Session.Query().
+		WithTags().
 		Order(ent.Desc(session.FieldLastActiveAt)).
 		All(r.Context())
 	if err != nil {
@@ -95,4 +96,42 @@ func (s *SessionService) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sessions)
+}
+
+func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Request) {
+	sessionIDStr := r.URL.Query().Get("session_id")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		TagIDs []string `json:"tag_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	var tagUUIDs []uuid.UUID
+	for _, idStr := range payload.TagIDs {
+		id, err := uuid.Parse(idStr)
+		if err == nil {
+			tagUUIDs = append(tagUUIDs, id)
+		}
+	}
+
+	// Update session tags (replace existing)
+	err = s.client.Session.UpdateOneID(sessionID).
+		ClearTags().
+		AddTagIDs(tagUUIDs...).
+		Exec(r.Context())
+
+	if err != nil {
+		http.Error(w, "Failed to update tags: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
