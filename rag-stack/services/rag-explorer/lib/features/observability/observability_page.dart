@@ -98,12 +98,12 @@ class ObservabilityPage extends ConsumerWidget {
             ),
           ),
           Container(
-            height: 200,
+            height: 250,
             width: double.infinity,
             color: Colors.grey.shade100,
             child: Image.network(
               renderUrl,
-              fit: BoxFit.contain,
+              fit: BoxFit.fill,
               errorBuilder: (context, error, stackTrace) => Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

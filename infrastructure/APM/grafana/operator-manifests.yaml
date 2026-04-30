@@ -9,6 +9,9 @@ spec:
   config:
     log:
       mode: console
+    server:
+      root_url: "https://rag-admin-api.rag.hierocracy.home/api/grafana/"
+      serve_from_sub_path: "true"
     auth.anonymous:
       enabled: "true"
       org_role: Admin
