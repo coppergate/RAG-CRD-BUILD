@@ -176,7 +176,7 @@ func (pc *pulsarClient) UnsubscribeStream(id string) {
 }
 
 func (pc *pulsarClient) SendRawRequest(ctx context.Context, payload proto.Message) error {
-	_, err := pulsarCommon.SendProto(ctx, pc.promptProducer, payload)
+	_, err := pulsarCommon.SendProto(ctx, pc.producer, payload)
 	return err
 }
 

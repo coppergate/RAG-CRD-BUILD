@@ -112,8 +112,11 @@ update_svc_info() {
     fi
 
     if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
-    jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp"
-    cat "$tmp" > "$VERSION_FILE"
+    if jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" 2>/dev/null; then
+        cat "$tmp" > "$VERSION_FILE" || log "WARN: Failed to update $VERSION_FILE (Permissions?)"
+    else
+        log "WARN: Failed to generate updated version JSON"
+    fi
     
     flock -u 200
     rm -f "$tmp"

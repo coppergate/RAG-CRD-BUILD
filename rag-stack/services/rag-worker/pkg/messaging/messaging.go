@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
 
@@ -25,8 +27,9 @@ type Producers struct {
 
 // Client wraps the Pulsar client and all producers/consumers for the worker.
 type Client struct {
-	client    *pulsarCommon.Client
-	Producers Producers
+	client           *pulsarCommon.Client
+	Producers        Producers
+	sessionProducers sync.Map // map[string]pulsar.Producer
 }
 
 func (c *Client) SessionTopic(id string) string {
@@ -151,14 +154,32 @@ func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model st
 	c.SendStreamChunk(ctx, id, sessionID, result, 0, true, model, true, metadata)
 }
 
-func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, result string, sequence int, isLast bool, model string, inConversation bool, metadata map[string]interface{}) {
-	topic := c.SessionTopic(id)
+func (c *Client) getSessionProducer(topic string) (pulsar.Producer, error) {
+	if p, ok := c.sessionProducers.Load(topic); ok {
+		return p.(pulsar.Producer), nil
+	}
+
 	producer, err := c.client.NewProducer(topic)
 	if err != nil {
-		log.Printf("[%s] Failed to create session producer for %s: %v", id, topic, err)
+		return nil, err
+	}
+
+	// Double check if another goroutine created it in the meantime
+	if actual, loaded := c.sessionProducers.LoadOrStore(topic, producer); loaded {
+		producer.Close() // Close the redundant one
+		return actual.(pulsar.Producer), nil
+	}
+
+	return producer, nil
+}
+
+func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, result string, sequence int, isLast bool, model string, inConversation bool, metadata map[string]interface{}) {
+	topic := c.SessionTopic(id)
+	producer, err := c.getSessionProducer(topic)
+	if err != nil {
+		log.Printf("[%s] Failed to get session producer for %s: %v", id, topic, err)
 		return
 	}
-	defer producer.Close()
 
 	msgPayload := &contracts.StreamChunk{
 		Id:             id,
@@ -174,26 +195,41 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, result stri
 	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
 		log.Printf("[%s] Failed to send stream chunk to topic %s: %v", id, topic, err)
 	}
+
+	if isLast {
+		c.sessionProducers.Delete(topic)
+		// Close asynchronously to avoid blocking and allow in-flight sends to finish
+		go func() {
+			time.Sleep(2 * time.Second)
+			producer.Close()
+		}()
+	}
 }
 
 func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversation bool) {
 	topic := c.SessionTopic(id)
-	producer, err := c.client.NewProducer(topic)
+	producer, err := c.getSessionProducer(topic)
 	if err != nil {
-		log.Printf("[%s] Failed to create session producer for error %s: %v", id, topic, err)
+		log.Printf("[%s] Failed to get session producer for error %s: %v", id, topic, err)
 		return
 	}
-	defer producer.Close()
 
 	msgPayload := &contracts.StreamChunk{
 		Id:             id,
 		Error:          errMsg,
 		InConversation: inConversation,
+		IsLast:         true,
 	}
 
 	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
 		log.Printf("[%s] Failed to send error to topic %s: %v", id, topic, err)
 	}
+
+	c.sessionProducers.Delete(topic)
+	go func() {
+		time.Sleep(2 * time.Second)
+		producer.Close()
+	}()
 }
 
 // SendCompletion sends a completion event to the completion topic.

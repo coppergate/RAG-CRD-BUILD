@@ -16,6 +16,9 @@ spec:
       admin_user: admin
       admin_password: admin
       allow_embedding: "true"
+    rendering:
+      server_url: http://localhost:8081/render
+      callback_url: http://central-grafana-service.monitoring.svc:3000/
   service:
     spec:
       type: ClusterIP
@@ -55,6 +58,11 @@ spec:
         spec:
           nodeSelector:
             role: storage-node
+          containers:
+            - name: image-renderer
+              image: grafana/grafana-image-renderer:latest
+              ports:
+                - containerPort: 8081
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
