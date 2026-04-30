@@ -124,19 +124,28 @@ func main() {
 	})
 
 	mux.HandleFunc("/sessions/", func(w http.ResponseWriter, r *http.Request) {
-		idStr := strings.TrimPrefix(r.URL.Path, "/sessions/")
-		if strings.HasSuffix(idStr, "/messages") {
-			sessSvc.GetMessages(w, r, strings.TrimSuffix(idStr, "/messages"))
-			return
-		}
-		if strings.HasSuffix(idStr, "/health") {
-			metricsSvc.GetHealth(w, r, strings.TrimSuffix(idStr, "/health"))
-			return
-		}
-		if idStr == "" {
+		path := strings.TrimPrefix(r.URL.Path, "/sessions/")
+		if path == "" || path == "/" {
 			sessSvc.ListSessions(w, r)
 			return
 		}
+
+		// Handle sub-resources
+		if strings.HasSuffix(path, "/messages") {
+			sessSvc.GetMessages(w, r, strings.TrimSuffix(path, "/messages"))
+			return
+		}
+		if strings.HasSuffix(path, "/health") {
+			metricsSvc.GetHealth(w, r, strings.TrimSuffix(path, "/health"))
+			return
+		}
+
+		// Handle specific session by ID
+		if r.Method == http.MethodDelete {
+			sessSvc.DeleteSession(w, r, path)
+			return
+		}
+		
 		http.Error(w, "Not found", http.StatusNotFound)
 	})
 

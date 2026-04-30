@@ -16,7 +16,7 @@
     "last_build": "2026-04-29T12:09:11Z"
   },
   "db-adapter": {
-    "version": "2.10.28",
+    "version": "2.10.33",
     "last_build": null
   },
   "qdrant-adapter": {
@@ -28,7 +28,7 @@
     "last_build": "2026-04-29T12:09:11Z"
   },
   "rag-test-runner": {
-    "version": "2.10.13",
+    "version": "2.10.14",
     "last_build": null
   },
   "rag-admin-api": {

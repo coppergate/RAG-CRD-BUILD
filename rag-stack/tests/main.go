@@ -15,11 +15,12 @@ import (
 )
 
 var (
-	baseURL    = "https://rag-admin-api.rag.hierocracy.home"
-	sessionID  = ""
-	bucketName = ""
-	s3Index    = "e2eTestBucket"
-	client     = &http.Client{
+	baseURL     = "https://rag-admin-api.rag.hierocracy.home"
+	sessionID   = ""
+	sessionName = ""
+	bucketName  = ""
+	s3Index     = "e2eTestBucket"
+	client      = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
@@ -30,8 +31,9 @@ var (
 func main() {
 	tagName := fmt.Sprintf("test-tag-%d", time.Now().Unix())
 	sessionID = generateUUID()
+	sessionName = fmt.Sprintf("e2e-session-%d", time.Now().Unix())
 	fmt.Printf("[%s] --- Starting E2E Test (Isolation) ---\n", time.Now().Format(time.RFC3339))
-	fmt.Printf("Tag Name: %s\nSession ID: %s\n", tagName, sessionID)
+	fmt.Printf("Tag Name: %s\nSession ID: %s\nSession Name: %s\n", tagName, sessionID, sessionName)
 
 	vectorSize := 4096 // Default for Llama 3.1
 	if vs := os.Getenv("VECTOR_SIZE"); vs != "" {
@@ -128,9 +130,12 @@ func main() {
 	}
 
 	// 7. Cleanup (Delete Data)
-	fmt.Println("[STEP 7] Cleaning up data by tag and S3...")
+	fmt.Println("[STEP 7] Cleaning up data by tag, session and S3...")
 	if err := deleteData(tagID); err != nil {
 		fmt.Printf("Warning: Failed to delete tag data: %v\n", err)
+	}
+	if err := deleteSession(sessionID); err != nil {
+		fmt.Printf("Warning: Failed to delete session: %v\n", err)
 	}
 	if err := removeFileFromS3(fileName); err != nil {
 		fmt.Printf("Warning: Failed to delete file from S3: %v\n", err)
@@ -279,6 +284,7 @@ func triggerIngest(tagID string, vectorSize int, fileName string, sessionID stri
 		"vector_size":  vectorSize,
 		"file_names":   []string{fileName},
 		"session_id":   sessionID,
+		"session_name": sessionName,
 		"bucket_name":  bucketName,
 		"index":        s3Index,
 	}
@@ -296,9 +302,10 @@ func triggerIngest(tagID string, vectorSize int, fileName string, sessionID stri
 
 func askRAG(query string, tags []string) (string, error) {
 	payload := map[string]interface{}{
-		"prompt":     query,
-		"tags":       tags,
-		"session_id": sessionID,
+		"prompt":       query,
+		"tags":         tags,
+		"session_id":   sessionID,
+		"session_name": sessionName,
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := client.Post(baseURL+"/api/chat/v1/rag/chat", "application/json", bytes.NewBuffer(body))
@@ -322,6 +329,22 @@ func askRAG(query string, tags []string) (string, error) {
 
 func deleteData(tagID string) error {
 	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/db/tags/"+tagID, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func deleteSession(id string) error {
+	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/db/sessions/"+id, nil)
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 	"time"
@@ -130,6 +131,31 @@ func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		http.Error(w, "Failed to update tags: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *SessionService) DeleteSession(w http.ResponseWriter, r *http.Request, sessionIDStr string) {
+	ctx := r.Context()
+	log.Printf("[SESSION] Deleting session ID: %s", sessionIDStr)
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	// Delete associated metrics first (if not handled by cascade)
+	// Based on schema.sql, sessions have ON DELETE CASCADE for prompts, responses, session_tag.
+	// We'll just delete the session and let the DB handle cascades.
+	err = s.client.Session.DeleteOneID(sessionID).Exec(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			w.WriteHeader(http.StatusNoContent) // Already gone
+			return
+		}
+		http.Error(w, "Failed to delete session: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

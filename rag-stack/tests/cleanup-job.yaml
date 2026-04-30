@@ -53,7 +53,7 @@ spec:
         - name: QDRANT_USE_TLS
           value: "true"
         - name: RETAIN_RUNS
-          value: "2"
+          value: "0"
         - name: TEST_TAG_PREFIXES
           value: "test-tag-,iso-test-"
         - name: DRY_RUN

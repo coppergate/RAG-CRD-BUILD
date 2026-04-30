@@ -114,8 +114,10 @@ def test_rag_retrieval():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing RAG Retrieval via Gateway...")
     print(f"  - GATEWAY_URL={GATEWAY_URL}")
     test_file_base = "e2e-test-file-"
+    session_name = f"test-session-{int(time.time())}"
     payload = {
         "model": OLLAMA_MODEL,
+        "session_name": session_name,
         "messages": [{"role": "user", "content": f"Retrieve the secret code from the {test_file_base} documents."}]
     }
     try:
@@ -140,6 +142,35 @@ def test_rag_retrieval():
     except Exception as e:
         print(f"  - Gateway connection failed: {e}")
         raise
+
+def cleanup_test_data():
+    print(f"[{datetime.utcnow().isoformat()}] [CLEANUP] Cleaning up test data...")
+    
+    # 1. S3 Cleanup
+    try:
+        s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT)
+        # Delete test file
+        test_file = f"{S3_INDEX.strip('/')}/test_file.txt"
+        print(f"  - Deleting S3 file: {test_file}")
+        s3.delete_object(Bucket=BUCKET_NAME, Key=test_file)
+        
+        # If bucket is empty, we could delete it, but let's just leave it for now if it's a shared test bucket
+        # Actually, let's try to delete it if it's specifically for this test
+        if BUCKET_NAME == "e2eTestBucket":
+             print(f"  - Note: Leaving bucket {BUCKET_NAME} in place for other tests.")
+    except Exception as e:
+        print(f"  - S3 Cleanup warning: {e}")
+
+    # 2. Qdrant Cleanup
+    try:
+        qdrant_use_tls = os.getenv("QDRANT_USE_TLS", "false") == "true"
+        client = QdrantClient(host=QDRANT_HOST, port=6333, https=qdrant_use_tls, prefer_grpc=False)
+        vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
+        collection_name = f"test_collection_{vector_size}"
+        print(f"  - Deleting Qdrant collection: {collection_name}")
+        client.delete_collection(collection_name=collection_name)
+    except Exception as e:
+        print(f"  - Qdrant Cleanup warning: {e}")
 
 if __name__ == "__main__":
     # Note: These tests are intended to run INSIDE the cluster or where endpoints are reachable
@@ -167,3 +198,5 @@ if __name__ == "__main__":
         except Exception:
             pass
         exit(1)
+    finally:
+        cleanup_test_data()

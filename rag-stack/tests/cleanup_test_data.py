@@ -24,7 +24,7 @@ def get_tags_to_cleanup(cur):
     to_delete = []
     for prefix in TEST_TAG_PREFIXES:
         if not prefix: continue
-        print(f"Checking prefix: {prefix}")
+        print(f"Checking tag prefix: {prefix}")
         # Get tags and their most recent ingestion timestamp
         cur.execute("""
             SELECT t.tag_id, t.tag_name, MAX(ci.created_at) as last_seen
@@ -48,9 +48,28 @@ def get_tags_to_cleanup(cur):
             
     return to_delete
 
+def get_sessions_to_cleanup(cur):
+    to_delete = []
+    # Sessions with test-like names or associated with test tags
+    prefixes = ["e2e-", "iso-", "test-"]
+    for prefix in prefixes:
+        print(f"Checking session prefix: {prefix}")
+        cur.execute("""
+            SELECT session_id, name, created_at
+            FROM sessions
+            WHERE name LIKE %s
+            ORDER BY created_at DESC
+        """, (prefix + "%",))
+        
+        sess = cur.fetchall()
+        print(f"  Found {len(sess)} sessions for prefix {prefix}")
+        # We can be aggressive here, but let's keep RETAIN_RUNS if we want some history
+        if len(sess) > RETAIN_RUNS:
+            to_delete.extend(sess[RETAIN_RUNS:])
+            
+    return to_delete
+
 def cleanup_qdrant(client, tag_id, tag_name):
-    # We need to check multiple collections (vectors-384, vectors-4096, etc.)
-    # In practice we can list all collections or just target vectors-*
     try:
         collections = client.get_collections().collections
         for coll in collections:
@@ -89,30 +108,28 @@ def main():
             )
         cur = conn.cursor()
         
-        to_delete = get_tags_to_cleanup(cur)
+        # 1. Cleanup Tags and Vectors
+        tags_to_delete = get_tags_to_cleanup(cur)
+        if tags_to_delete:
+            qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, https=QDRANT_USE_TLS, prefer_grpc=False)
+            for tag_id, tag_name, last_seen in tags_to_delete:
+                print(f"Processing cleanup for tag: {tag_name} (ID: {tag_id})")
+                cleanup_qdrant(qdrant_client, tag_id, tag_name)
+                if not DRY_RUN:
+                    cur.execute("DELETE FROM tag WHERE tag_id = %s", (tag_id,))
         
-        if not to_delete:
-            print("No test data found for cleanup.")
-            return
-
-        qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, https=QDRANT_USE_TLS, prefer_grpc=False)
-
-        for tag_id, tag_name, last_seen in to_delete:
-            print(f"Processing cleanup for tag: {tag_name} (ID: {tag_id}, Last Seen: {last_seen})")
-            
-            # 1. Cleanup Qdrant
-            cleanup_qdrant(qdrant_client, tag_id, tag_name)
-            
-            # 2. Cleanup DB (Tag table cascades)
+        # 2. Cleanup Sessions
+        sessions_to_delete = get_sessions_to_cleanup(cur)
+        for sess_id, sess_name, created_at in sessions_to_delete:
+            print(f"Processing cleanup for session: {sess_name} (ID: {sess_id}, Created: {created_at})")
             if DRY_RUN:
-                print(f"  [DRY-RUN] Would delete tag {tag_name} from database")
+                print(f"  [DRY-RUN] Would delete session {sess_id} from database")
             else:
-                print(f"  Deleting tag {tag_name} from database...")
-                cur.execute("DELETE FROM tag WHERE tag_id = %s", (tag_id,))
-                
+                cur.execute("DELETE FROM sessions WHERE session_id = %s", (sess_id,))
+
         if not DRY_RUN:
             conn.commit()
-            print("\nDatabase changes committed.")
+            print("\nCleanup committed successfully.")
         else:
             print("\nDry run completed. No changes made.")
             
