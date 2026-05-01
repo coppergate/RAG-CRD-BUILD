@@ -27,6 +27,8 @@ type Response struct {
 	SessionID uuid.UUID `json:"session_id,omitempty"`
 	// Content holds the value of the "content" field.
 	Content string `json:"content,omitempty"`
+	// PlanningResponse holds the value of the "planning_response" field.
+	PlanningResponse *string `json:"planning_response,omitempty"`
 	// SequenceNumber holds the value of the "sequence_number" field.
 	SequenceNumber int `json:"sequence_number,omitempty"`
 	// ModelName holds the value of the "model_name" field.
@@ -47,7 +49,7 @@ func (*Response) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case response.FieldID, response.FieldPromptID, response.FieldSequenceNumber:
 			values[i] = new(sql.NullInt64)
-		case response.FieldContent, response.FieldModelName:
+		case response.FieldContent, response.FieldPlanningResponse, response.FieldModelName:
 			values[i] = new(sql.NullString)
 		case response.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -97,6 +99,13 @@ func (_m *Response) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field content", values[i])
 			} else if value.Valid {
 				_m.Content = value.String
+			}
+		case response.FieldPlanningResponse:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field planning_response", values[i])
+			} else if value.Valid {
+				_m.PlanningResponse = new(string)
+				*_m.PlanningResponse = value.String
 			}
 		case response.FieldSequenceNumber:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -172,6 +181,11 @@ func (_m *Response) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("content=")
 	builder.WriteString(_m.Content)
+	builder.WriteString(", ")
+	if v := _m.PlanningResponse; v != nil {
+		builder.WriteString("planning_response=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("sequence_number=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SequenceNumber))

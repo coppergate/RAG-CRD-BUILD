@@ -253,6 +253,7 @@ var (
 		{Name: "prompt_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "content", Type: field.TypeString, Size: 2147483647},
+		{Name: "planning_response", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "sequence_number", Type: field.TypeInt},
 		{Name: "model_name", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},

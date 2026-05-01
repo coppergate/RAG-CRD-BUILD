@@ -23,11 +23,12 @@ func NewSessionService(client *ent.Client) *SessionService {
 }
 
 type ChatMessage struct {
-	Role      string                 `json:"role"`
-	Content   string                 `json:"content"`
-	Timestamp time.Time              `json:"timestamp"`
-	Model     string                 `json:"model,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Role             string                 `json:"role"`
+	Content          string                 `json:"content"`
+	PlanningResponse string                 `json:"planning_response,omitempty"`
+	Timestamp        time.Time              `json:"timestamp"`
+	Model            string                 `json:"model,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 }
 
 func (s *SessionService) GetMessages(w http.ResponseWriter, r *http.Request, sessionIDStr string) {
@@ -69,12 +70,17 @@ func (s *SessionService) GetMessages(w http.ResponseWriter, r *http.Request, ses
 		if res.ModelName != nil {
 			model = *res.ModelName
 		}
+		planningResponse := ""
+		if res.PlanningResponse != nil {
+			planningResponse = *res.PlanningResponse
+		}
 		messages = append(messages, ChatMessage{
-			Role:      "assistant",
-			Content:   res.Content,
-			Timestamp: res.CreatedAt,
-			Model:     model,
-			Metadata:  res.Metadata,
+			Role:             "assistant",
+			Content:          res.Content,
+			PlanningResponse: planningResponse,
+			Timestamp:        res.CreatedAt,
+			Model:            model,
+			Metadata:         res.Metadata,
 		})
 	}
 

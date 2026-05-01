@@ -86,6 +86,7 @@ class ChatService {
         return data.map((e) {
           return ResponseMessage(
             content: e['content'],
+            planningResponse: e['planning_response'],
             role: e['role'],
             timestamp: DateTime.parse(e['timestamp']),
             metadata: e['metadata'],
@@ -172,6 +173,7 @@ class ChatService {
               timestamp: DateTime.now(),
               isLast: data['is_last'] ?? false,
               inConversation: data['in_conversation'] ?? false,
+              planningResponse: data['planning_response'],
             );
           })
           .handleError((error) {

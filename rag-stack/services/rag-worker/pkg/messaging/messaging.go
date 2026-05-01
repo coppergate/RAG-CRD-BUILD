@@ -193,7 +193,12 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, result stri
 	}
 
 	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
-		log.Printf("[%s] Failed to send stream chunk to topic %s: %v", id, topic, err)
+		log.Printf("[%s] Failed to send stream chunk to session topic %s: %v", id, topic, err)
+	}
+
+	// Also send to the global results topic for database persistence
+	if _, err := pulsarCommon.SendProto(ctx, c.Producers.Results, msgPayload); err != nil {
+		log.Printf("[%s] Failed to send stream chunk to global results topic: %v", id, err)
 	}
 
 	if isLast {
@@ -203,6 +208,33 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, result stri
 			time.Sleep(2 * time.Second)
 			producer.Close()
 		}()
+	}
+}
+
+func (c *Client) SendPlanningResponse(ctx context.Context, id, sessionID, planningResponse string) {
+	topic := c.SessionTopic(id)
+	producer, err := c.getSessionProducer(topic)
+	if err != nil {
+		log.Printf("[%s] Failed to get session producer for planning %s: %v", id, topic, err)
+		return
+	}
+
+	msgPayload := &contracts.StreamChunk{
+		Id:               id,
+		SessionId:        sessionID,
+		PlanningResponse: planningResponse,
+		IsLast:           false,
+	}
+
+	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
+		log.Printf("[%s] Failed to send planning response to session topic %s: %v", id, topic, err)
+	} else {
+		log.Printf("[%s] Sent planning response to session topic %s", id, topic)
+	}
+
+	// Also send to the global results topic for database persistence
+	if _, err := pulsarCommon.SendProto(ctx, c.Producers.Results, msgPayload); err != nil {
+		log.Printf("[%s] Failed to send planning response to global results topic: %v", id, err)
 	}
 }
 

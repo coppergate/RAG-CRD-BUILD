@@ -22,6 +22,8 @@ const (
 	FieldSessionID = "session_id"
 	// FieldContent holds the string denoting the content field in the database.
 	FieldContent = "content"
+	// FieldPlanningResponse holds the string denoting the planning_response field in the database.
+	FieldPlanningResponse = "planning_response"
 	// FieldSequenceNumber holds the string denoting the sequence_number field in the database.
 	FieldSequenceNumber = "sequence_number"
 	// FieldModelName holds the string denoting the model_name field in the database.
@@ -41,6 +43,7 @@ var Columns = []string{
 	FieldPromptID,
 	FieldSessionID,
 	FieldContent,
+	FieldPlanningResponse,
 	FieldSequenceNumber,
 	FieldModelName,
 	FieldCreatedAt,
@@ -90,6 +93,11 @@ func BySessionID(opts ...sql.OrderTermOption) OrderOption {
 // ByContent orders the results by the content field.
 func ByContent(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldContent, opts...).ToFunc()
+}
+
+// ByPlanningResponse orders the results by the planning_response field.
+func ByPlanningResponse(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlanningResponse, opts...).ToFunc()
 }
 
 // BySequenceNumber orders the results by the sequence_number field.

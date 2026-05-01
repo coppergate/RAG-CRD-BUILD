@@ -147,18 +147,19 @@ func (x *InternalRequest) GetStream() bool {
 }
 
 type StreamChunk struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId      string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Result         string                 `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
-	SequenceNumber int32                  `protobuf:"varint,4,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
-	IsLast         bool                   `protobuf:"varint,5,opt,name=is_last,json=isLast,proto3" json:"is_last,omitempty"`
-	Model          string                 `protobuf:"bytes,6,opt,name=model,proto3" json:"model,omitempty"`
-	Metadata       *structpb.Struct       `protobuf:"bytes,7,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	Error          string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	InConversation bool                   `protobuf:"varint,9,opt,name=in_conversation,json=inConversation,proto3" json:"in_conversation,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SessionId        string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Result           string                 `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
+	SequenceNumber   int32                  `protobuf:"varint,4,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
+	IsLast           bool                   `protobuf:"varint,5,opt,name=is_last,json=isLast,proto3" json:"is_last,omitempty"`
+	Model            string                 `protobuf:"bytes,6,opt,name=model,proto3" json:"model,omitempty"`
+	Metadata         *structpb.Struct       `protobuf:"bytes,7,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Error            string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	InConversation   bool                   `protobuf:"varint,9,opt,name=in_conversation,json=inConversation,proto3" json:"in_conversation,omitempty"`
+	PlanningResponse string                 `protobuf:"bytes,10,opt,name=planning_response,json=planningResponse,proto3" json:"planning_response,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *StreamChunk) Reset() {
@@ -252,6 +253,13 @@ func (x *StreamChunk) GetInConversation() bool {
 		return x.InConversation
 	}
 	return false
+}
+
+func (x *StreamChunk) GetPlanningResponse() string {
+	if x != nil {
+		return x.PlanningResponse
+	}
+	return ""
 }
 
 type ResponseCompletion struct {
@@ -1357,7 +1365,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x04tags\x18\t \x03(\tR\x04tags\x12\x1c\n" +
 	"\ttimestamp\x18\n" +
 	" \x01(\tR\ttimestamp\x12\x16\n" +
-	"\x06stream\x18\v \x01(\bR\x06stream\"\xa0\x02\n" +
+	"\x06stream\x18\v \x01(\bR\x06stream\"\xcd\x02\n" +
 	"\vStreamChunk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1368,7 +1376,9 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x05model\x18\x06 \x01(\tR\x05model\x123\n" +
 	"\bmetadata\x18\a \x01(\v2\x17.google.protobuf.StructR\bmetadata\x12\x14\n" +
 	"\x05error\x18\b \x01(\tR\x05error\x12'\n" +
-	"\x0fin_conversation\x18\t \x01(\bR\x0einConversation\"\xd1\x01\n" +
+	"\x0fin_conversation\x18\t \x01(\bR\x0einConversation\x12+\n" +
+	"\x11planning_response\x18\n" +
+	" \x01(\tR\x10planningResponse\"\xd1\x01\n" +
 	"\x12ResponseCompletion\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +

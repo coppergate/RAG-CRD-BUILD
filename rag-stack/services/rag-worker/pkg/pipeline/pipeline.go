@@ -159,6 +159,13 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 		subQueries = []string{req.Prompt}
 	}
 
+	// Transmit planner responses to the UI
+	planningText := "Planning complete. Generated sub-queries:\n"
+	for _, sq := range subQueries {
+		planningText += fmt.Sprintf("- %s\n", sq)
+	}
+	h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, planningText)
+
 	metadata := contracts.FromStruct(req.Metadata)
 	if metadata == nil {
 		metadata = make(map[string]interface{})

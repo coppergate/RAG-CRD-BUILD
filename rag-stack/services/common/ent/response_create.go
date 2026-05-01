@@ -71,6 +71,20 @@ func (_c *ResponseCreate) SetContent(v string) *ResponseCreate {
 	return _c
 }
 
+// SetPlanningResponse sets the "planning_response" field.
+func (_c *ResponseCreate) SetPlanningResponse(v string) *ResponseCreate {
+	_c.mutation.SetPlanningResponse(v)
+	return _c
+}
+
+// SetNillablePlanningResponse sets the "planning_response" field if the given value is not nil.
+func (_c *ResponseCreate) SetNillablePlanningResponse(v *string) *ResponseCreate {
+	if v != nil {
+		_c.SetPlanningResponse(*v)
+	}
+	return _c
+}
+
 // SetSequenceNumber sets the "sequence_number" field.
 func (_c *ResponseCreate) SetSequenceNumber(v int) *ResponseCreate {
 	_c.mutation.SetSequenceNumber(v)
@@ -225,6 +239,10 @@ func (_c *ResponseCreate) createSpec() (*Response, *sqlgraph.CreateSpec) {
 		_spec.SetField(response.FieldContent, field.TypeString, value)
 		_node.Content = value
 	}
+	if value, ok := _c.mutation.PlanningResponse(); ok {
+		_spec.SetField(response.FieldPlanningResponse, field.TypeString, value)
+		_node.PlanningResponse = &value
+	}
 	if value, ok := _c.mutation.SequenceNumber(); ok {
 		_spec.SetField(response.FieldSequenceNumber, field.TypeInt, value)
 		_node.SequenceNumber = value
@@ -356,6 +374,24 @@ func (u *ResponseUpsert) SetContent(v string) *ResponseUpsert {
 // UpdateContent sets the "content" field to the value that was provided on create.
 func (u *ResponseUpsert) UpdateContent() *ResponseUpsert {
 	u.SetExcluded(response.FieldContent)
+	return u
+}
+
+// SetPlanningResponse sets the "planning_response" field.
+func (u *ResponseUpsert) SetPlanningResponse(v string) *ResponseUpsert {
+	u.Set(response.FieldPlanningResponse, v)
+	return u
+}
+
+// UpdatePlanningResponse sets the "planning_response" field to the value that was provided on create.
+func (u *ResponseUpsert) UpdatePlanningResponse() *ResponseUpsert {
+	u.SetExcluded(response.FieldPlanningResponse)
+	return u
+}
+
+// ClearPlanningResponse clears the value of the "planning_response" field.
+func (u *ResponseUpsert) ClearPlanningResponse() *ResponseUpsert {
+	u.SetNull(response.FieldPlanningResponse)
 	return u
 }
 
@@ -538,6 +574,27 @@ func (u *ResponseUpsertOne) SetContent(v string) *ResponseUpsertOne {
 func (u *ResponseUpsertOne) UpdateContent() *ResponseUpsertOne {
 	return u.Update(func(s *ResponseUpsert) {
 		s.UpdateContent()
+	})
+}
+
+// SetPlanningResponse sets the "planning_response" field.
+func (u *ResponseUpsertOne) SetPlanningResponse(v string) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetPlanningResponse(v)
+	})
+}
+
+// UpdatePlanningResponse sets the "planning_response" field to the value that was provided on create.
+func (u *ResponseUpsertOne) UpdatePlanningResponse() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdatePlanningResponse()
+	})
+}
+
+// ClearPlanningResponse clears the value of the "planning_response" field.
+func (u *ResponseUpsertOne) ClearPlanningResponse() *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearPlanningResponse()
 	})
 }
 
@@ -895,6 +952,27 @@ func (u *ResponseUpsertBulk) SetContent(v string) *ResponseUpsertBulk {
 func (u *ResponseUpsertBulk) UpdateContent() *ResponseUpsertBulk {
 	return u.Update(func(s *ResponseUpsert) {
 		s.UpdateContent()
+	})
+}
+
+// SetPlanningResponse sets the "planning_response" field.
+func (u *ResponseUpsertBulk) SetPlanningResponse(v string) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.SetPlanningResponse(v)
+	})
+}
+
+// UpdatePlanningResponse sets the "planning_response" field to the value that was provided on create.
+func (u *ResponseUpsertBulk) UpdatePlanningResponse() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.UpdatePlanningResponse()
+	})
+}
+
+// ClearPlanningResponse clears the value of the "planning_response" field.
+func (u *ResponseUpsertBulk) ClearPlanningResponse() *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.ClearPlanningResponse()
 	})
 }
 

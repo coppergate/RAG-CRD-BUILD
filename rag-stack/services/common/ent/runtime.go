@@ -141,7 +141,7 @@ func init() {
 	// response.DefaultResponseID holds the default value on creation for the response_id field.
 	response.DefaultResponseID = responseDescResponseID.Default.(func() uuid.UUID)
 	// responseDescCreatedAt is the schema descriptor for created_at field.
-	responseDescCreatedAt := responseFields[7].Descriptor()
+	responseDescCreatedAt := responseFields[8].Descriptor()
 	// response.DefaultCreatedAt holds the default value on creation for the created_at field.
 	response.DefaultCreatedAt = responseDescCreatedAt.Default.(func() time.Time)
 	retrievallogFields := schema.RetrievalLog{}.Fields()

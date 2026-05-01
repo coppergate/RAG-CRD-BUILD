@@ -30,6 +30,7 @@ message StreamChunk {
   google.protobuf.Struct metadata = 7;
   string error = 8;
   bool in_conversation = 9;
+  string planning_response = 10;
 }
 
 message ResponseCompletion {

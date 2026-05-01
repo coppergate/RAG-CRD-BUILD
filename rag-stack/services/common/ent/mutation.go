@@ -7734,6 +7734,7 @@ type ResponseMutation struct {
 	addprompt_id       *int64
 	session_id         *uuid.UUID
 	content            *string
+	planning_response  *string
 	sequence_number    *int
 	addsequence_number *int
 	model_name         *string
@@ -8040,6 +8041,55 @@ func (m *ResponseMutation) ResetContent() {
 	m.content = nil
 }
 
+// SetPlanningResponse sets the "planning_response" field.
+func (m *ResponseMutation) SetPlanningResponse(s string) {
+	m.planning_response = &s
+}
+
+// PlanningResponse returns the value of the "planning_response" field in the mutation.
+func (m *ResponseMutation) PlanningResponse() (r string, exists bool) {
+	v := m.planning_response
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlanningResponse returns the old "planning_response" field's value of the Response entity.
+// If the Response object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ResponseMutation) OldPlanningResponse(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlanningResponse is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlanningResponse requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlanningResponse: %w", err)
+	}
+	return oldValue.PlanningResponse, nil
+}
+
+// ClearPlanningResponse clears the value of the "planning_response" field.
+func (m *ResponseMutation) ClearPlanningResponse() {
+	m.planning_response = nil
+	m.clearedFields[response.FieldPlanningResponse] = struct{}{}
+}
+
+// PlanningResponseCleared returns if the "planning_response" field was cleared in this mutation.
+func (m *ResponseMutation) PlanningResponseCleared() bool {
+	_, ok := m.clearedFields[response.FieldPlanningResponse]
+	return ok
+}
+
+// ResetPlanningResponse resets all changes to the "planning_response" field.
+func (m *ResponseMutation) ResetPlanningResponse() {
+	m.planning_response = nil
+	delete(m.clearedFields, response.FieldPlanningResponse)
+}
+
 // SetSequenceNumber sets the "sequence_number" field.
 func (m *ResponseMutation) SetSequenceNumber(i int) {
 	m.sequence_number = &i
@@ -8264,7 +8314,7 @@ func (m *ResponseMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ResponseMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.response_id != nil {
 		fields = append(fields, response.FieldResponseID)
 	}
@@ -8276,6 +8326,9 @@ func (m *ResponseMutation) Fields() []string {
 	}
 	if m.content != nil {
 		fields = append(fields, response.FieldContent)
+	}
+	if m.planning_response != nil {
+		fields = append(fields, response.FieldPlanningResponse)
 	}
 	if m.sequence_number != nil {
 		fields = append(fields, response.FieldSequenceNumber)
@@ -8305,6 +8358,8 @@ func (m *ResponseMutation) Field(name string) (ent.Value, bool) {
 		return m.SessionID()
 	case response.FieldContent:
 		return m.Content()
+	case response.FieldPlanningResponse:
+		return m.PlanningResponse()
 	case response.FieldSequenceNumber:
 		return m.SequenceNumber()
 	case response.FieldModelName:
@@ -8330,6 +8385,8 @@ func (m *ResponseMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldSessionID(ctx)
 	case response.FieldContent:
 		return m.OldContent(ctx)
+	case response.FieldPlanningResponse:
+		return m.OldPlanningResponse(ctx)
 	case response.FieldSequenceNumber:
 		return m.OldSequenceNumber(ctx)
 	case response.FieldModelName:
@@ -8374,6 +8431,13 @@ func (m *ResponseMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetContent(v)
+		return nil
+	case response.FieldPlanningResponse:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlanningResponse(v)
 		return nil
 	case response.FieldSequenceNumber:
 		v, ok := value.(int)
@@ -8466,6 +8530,9 @@ func (m *ResponseMutation) ClearedFields() []string {
 	if m.FieldCleared(response.FieldSessionID) {
 		fields = append(fields, response.FieldSessionID)
 	}
+	if m.FieldCleared(response.FieldPlanningResponse) {
+		fields = append(fields, response.FieldPlanningResponse)
+	}
 	if m.FieldCleared(response.FieldModelName) {
 		fields = append(fields, response.FieldModelName)
 	}
@@ -8492,6 +8559,9 @@ func (m *ResponseMutation) ClearField(name string) error {
 	case response.FieldSessionID:
 		m.ClearSessionID()
 		return nil
+	case response.FieldPlanningResponse:
+		m.ClearPlanningResponse()
+		return nil
 	case response.FieldModelName:
 		m.ClearModelName()
 		return nil
@@ -8517,6 +8587,9 @@ func (m *ResponseMutation) ResetField(name string) error {
 		return nil
 	case response.FieldContent:
 		m.ResetContent()
+		return nil
+	case response.FieldPlanningResponse:
+		m.ResetPlanningResponse()
 		return nil
 	case response.FieldSequenceNumber:
 		m.ResetSequenceNumber()

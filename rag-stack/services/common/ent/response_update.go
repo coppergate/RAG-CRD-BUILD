@@ -103,6 +103,26 @@ func (_u *ResponseUpdate) SetNillableContent(v *string) *ResponseUpdate {
 	return _u
 }
 
+// SetPlanningResponse sets the "planning_response" field.
+func (_u *ResponseUpdate) SetPlanningResponse(v string) *ResponseUpdate {
+	_u.mutation.SetPlanningResponse(v)
+	return _u
+}
+
+// SetNillablePlanningResponse sets the "planning_response" field if the given value is not nil.
+func (_u *ResponseUpdate) SetNillablePlanningResponse(v *string) *ResponseUpdate {
+	if v != nil {
+		_u.SetPlanningResponse(*v)
+	}
+	return _u
+}
+
+// ClearPlanningResponse clears the value of the "planning_response" field.
+func (_u *ResponseUpdate) ClearPlanningResponse() *ResponseUpdate {
+	_u.mutation.ClearPlanningResponse()
+	return _u
+}
+
 // SetSequenceNumber sets the "sequence_number" field.
 func (_u *ResponseUpdate) SetSequenceNumber(v int) *ResponseUpdate {
 	_u.mutation.ResetSequenceNumber()
@@ -218,6 +238,12 @@ func (_u *ResponseUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Content(); ok {
 		_spec.SetField(response.FieldContent, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.PlanningResponse(); ok {
+		_spec.SetField(response.FieldPlanningResponse, field.TypeString, value)
+	}
+	if _u.mutation.PlanningResponseCleared() {
+		_spec.ClearField(response.FieldPlanningResponse, field.TypeString)
+	}
 	if value, ok := _u.mutation.SequenceNumber(); ok {
 		_spec.SetField(response.FieldSequenceNumber, field.TypeInt, value)
 	}
@@ -328,6 +354,26 @@ func (_u *ResponseUpdateOne) SetNillableContent(v *string) *ResponseUpdateOne {
 	if v != nil {
 		_u.SetContent(*v)
 	}
+	return _u
+}
+
+// SetPlanningResponse sets the "planning_response" field.
+func (_u *ResponseUpdateOne) SetPlanningResponse(v string) *ResponseUpdateOne {
+	_u.mutation.SetPlanningResponse(v)
+	return _u
+}
+
+// SetNillablePlanningResponse sets the "planning_response" field if the given value is not nil.
+func (_u *ResponseUpdateOne) SetNillablePlanningResponse(v *string) *ResponseUpdateOne {
+	if v != nil {
+		_u.SetPlanningResponse(*v)
+	}
+	return _u
+}
+
+// ClearPlanningResponse clears the value of the "planning_response" field.
+func (_u *ResponseUpdateOne) ClearPlanningResponse() *ResponseUpdateOne {
+	_u.mutation.ClearPlanningResponse()
 	return _u
 }
 
@@ -475,6 +521,12 @@ func (_u *ResponseUpdateOne) sqlSave(ctx context.Context) (_node *Response, err 
 	}
 	if value, ok := _u.mutation.Content(); ok {
 		_spec.SetField(response.FieldContent, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlanningResponse(); ok {
+		_spec.SetField(response.FieldPlanningResponse, field.TypeString, value)
+	}
+	if _u.mutation.PlanningResponseCleared() {
+		_spec.ClearField(response.FieldPlanningResponse, field.TypeString)
 	}
 	if value, ok := _u.mutation.SequenceNumber(); ok {
 		_spec.SetField(response.FieldSequenceNumber, field.TypeInt, value)

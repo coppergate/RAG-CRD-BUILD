@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ResponseMessage {
 
- String get content; String? get sessionId; String? get messageId; String? get role; Map<String, dynamic>? get metadata; DateTime? get timestamp; bool get isLast; bool get inConversation;
+ String get content; String? get sessionId; String? get messageId; String? get role; Map<String, dynamic>? get metadata; DateTime? get timestamp; bool get isLast; bool get inConversation; String? get planningResponse;
 /// Create a copy of ResponseMessage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $ResponseMessageCopyWith<ResponseMessage> get copyWith => _$ResponseMessageCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ResponseMessage&&(identical(other.content, content) || other.content == content)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.messageId, messageId) || other.messageId == messageId)&&(identical(other.role, role) || other.role == role)&&const DeepCollectionEquality().equals(other.metadata, metadata)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp)&&(identical(other.isLast, isLast) || other.isLast == isLast)&&(identical(other.inConversation, inConversation) || other.inConversation == inConversation));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ResponseMessage&&(identical(other.content, content) || other.content == content)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.messageId, messageId) || other.messageId == messageId)&&(identical(other.role, role) || other.role == role)&&const DeepCollectionEquality().equals(other.metadata, metadata)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp)&&(identical(other.isLast, isLast) || other.isLast == isLast)&&(identical(other.inConversation, inConversation) || other.inConversation == inConversation)&&(identical(other.planningResponse, planningResponse) || other.planningResponse == planningResponse));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,content,sessionId,messageId,role,const DeepCollectionEquality().hash(metadata),timestamp,isLast,inConversation);
+int get hashCode => Object.hash(runtimeType,content,sessionId,messageId,role,const DeepCollectionEquality().hash(metadata),timestamp,isLast,inConversation,planningResponse);
 
 @override
 String toString() {
-  return 'ResponseMessage(content: $content, sessionId: $sessionId, messageId: $messageId, role: $role, metadata: $metadata, timestamp: $timestamp, isLast: $isLast, inConversation: $inConversation)';
+  return 'ResponseMessage(content: $content, sessionId: $sessionId, messageId: $messageId, role: $role, metadata: $metadata, timestamp: $timestamp, isLast: $isLast, inConversation: $inConversation, planningResponse: $planningResponse)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $ResponseMessageCopyWith<$Res>  {
   factory $ResponseMessageCopyWith(ResponseMessage value, $Res Function(ResponseMessage) _then) = _$ResponseMessageCopyWithImpl;
 @useResult
 $Res call({
- String content, String? sessionId, String? messageId, String? role, Map<String, dynamic>? metadata, DateTime? timestamp, bool isLast, bool inConversation
+ String content, String? sessionId, String? messageId, String? role, Map<String, dynamic>? metadata, DateTime? timestamp, bool isLast, bool inConversation, String? planningResponse
 });
 
 
@@ -65,7 +65,7 @@ class _$ResponseMessageCopyWithImpl<$Res>
 
 /// Create a copy of ResponseMessage
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? content = null,Object? sessionId = freezed,Object? messageId = freezed,Object? role = freezed,Object? metadata = freezed,Object? timestamp = freezed,Object? isLast = null,Object? inConversation = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? content = null,Object? sessionId = freezed,Object? messageId = freezed,Object? role = freezed,Object? metadata = freezed,Object? timestamp = freezed,Object? isLast = null,Object? inConversation = null,Object? planningResponse = freezed,}) {
   return _then(_self.copyWith(
 content: null == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
 as String,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
@@ -75,7 +75,8 @@ as String?,metadata: freezed == metadata ? _self.metadata : metadata // ignore: 
 as Map<String, dynamic>?,timestamp: freezed == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable
 as DateTime?,isLast: null == isLast ? _self.isLast : isLast // ignore: cast_nullable_to_non_nullable
 as bool,inConversation: null == inConversation ? _self.inConversation : inConversation // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,planningResponse: freezed == planningResponse ? _self.planningResponse : planningResponse // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 
@@ -160,10 +161,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ResponseMessage() when $default != null:
-return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation);case _:
+return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation,_that.planningResponse);case _:
   return orElse();
 
 }
@@ -181,10 +182,10 @@ return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.m
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)  $default,) {final _that = this;
 switch (_that) {
 case _ResponseMessage():
-return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation);case _:
+return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation,_that.planningResponse);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -201,10 +202,10 @@ return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.m
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)?  $default,) {final _that = this;
 switch (_that) {
 case _ResponseMessage() when $default != null:
-return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation);case _:
+return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation,_that.planningResponse);case _:
   return null;
 
 }
@@ -216,7 +217,7 @@ return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.m
 @JsonSerializable()
 
 class _ResponseMessage implements ResponseMessage {
-  const _ResponseMessage({required this.content, this.sessionId, this.messageId, this.role, final  Map<String, dynamic>? metadata, this.timestamp, this.isLast = false, this.inConversation = false}): _metadata = metadata;
+  const _ResponseMessage({required this.content, this.sessionId, this.messageId, this.role, final  Map<String, dynamic>? metadata, this.timestamp, this.isLast = false, this.inConversation = false, this.planningResponse}): _metadata = metadata;
   factory _ResponseMessage.fromJson(Map<String, dynamic> json) => _$ResponseMessageFromJson(json);
 
 @override final  String content;
@@ -235,6 +236,7 @@ class _ResponseMessage implements ResponseMessage {
 @override final  DateTime? timestamp;
 @override@JsonKey() final  bool isLast;
 @override@JsonKey() final  bool inConversation;
+@override final  String? planningResponse;
 
 /// Create a copy of ResponseMessage
 /// with the given fields replaced by the non-null parameter values.
@@ -249,16 +251,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ResponseMessage&&(identical(other.content, content) || other.content == content)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.messageId, messageId) || other.messageId == messageId)&&(identical(other.role, role) || other.role == role)&&const DeepCollectionEquality().equals(other._metadata, _metadata)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp)&&(identical(other.isLast, isLast) || other.isLast == isLast)&&(identical(other.inConversation, inConversation) || other.inConversation == inConversation));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ResponseMessage&&(identical(other.content, content) || other.content == content)&&(identical(other.sessionId, sessionId) || other.sessionId == sessionId)&&(identical(other.messageId, messageId) || other.messageId == messageId)&&(identical(other.role, role) || other.role == role)&&const DeepCollectionEquality().equals(other._metadata, _metadata)&&(identical(other.timestamp, timestamp) || other.timestamp == timestamp)&&(identical(other.isLast, isLast) || other.isLast == isLast)&&(identical(other.inConversation, inConversation) || other.inConversation == inConversation)&&(identical(other.planningResponse, planningResponse) || other.planningResponse == planningResponse));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,content,sessionId,messageId,role,const DeepCollectionEquality().hash(_metadata),timestamp,isLast,inConversation);
+int get hashCode => Object.hash(runtimeType,content,sessionId,messageId,role,const DeepCollectionEquality().hash(_metadata),timestamp,isLast,inConversation,planningResponse);
 
 @override
 String toString() {
-  return 'ResponseMessage(content: $content, sessionId: $sessionId, messageId: $messageId, role: $role, metadata: $metadata, timestamp: $timestamp, isLast: $isLast, inConversation: $inConversation)';
+  return 'ResponseMessage(content: $content, sessionId: $sessionId, messageId: $messageId, role: $role, metadata: $metadata, timestamp: $timestamp, isLast: $isLast, inConversation: $inConversation, planningResponse: $planningResponse)';
 }
 
 
@@ -269,7 +271,7 @@ abstract mixin class _$ResponseMessageCopyWith<$Res> implements $ResponseMessage
   factory _$ResponseMessageCopyWith(_ResponseMessage value, $Res Function(_ResponseMessage) _then) = __$ResponseMessageCopyWithImpl;
 @override @useResult
 $Res call({
- String content, String? sessionId, String? messageId, String? role, Map<String, dynamic>? metadata, DateTime? timestamp, bool isLast, bool inConversation
+ String content, String? sessionId, String? messageId, String? role, Map<String, dynamic>? metadata, DateTime? timestamp, bool isLast, bool inConversation, String? planningResponse
 });
 
 
@@ -286,7 +288,7 @@ class __$ResponseMessageCopyWithImpl<$Res>
 
 /// Create a copy of ResponseMessage
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? content = null,Object? sessionId = freezed,Object? messageId = freezed,Object? role = freezed,Object? metadata = freezed,Object? timestamp = freezed,Object? isLast = null,Object? inConversation = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? content = null,Object? sessionId = freezed,Object? messageId = freezed,Object? role = freezed,Object? metadata = freezed,Object? timestamp = freezed,Object? isLast = null,Object? inConversation = null,Object? planningResponse = freezed,}) {
   return _then(_ResponseMessage(
 content: null == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
 as String,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
@@ -296,7 +298,8 @@ as String?,metadata: freezed == metadata ? _self._metadata : metadata // ignore:
 as Map<String, dynamic>?,timestamp: freezed == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable
 as DateTime?,isLast: null == isLast ? _self.isLast : isLast // ignore: cast_nullable_to_non_nullable
 as bool,inConversation: null == inConversation ? _self.inConversation : inConversation // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,planningResponse: freezed == planningResponse ? _self.planningResponse : planningResponse // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

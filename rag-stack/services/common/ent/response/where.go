@@ -75,6 +75,11 @@ func Content(v string) predicate.Response {
 	return predicate.Response(sql.FieldEQ(FieldContent, v))
 }
 
+// PlanningResponse applies equality check predicate on the "planning_response" field. It's identical to PlanningResponseEQ.
+func PlanningResponse(v string) predicate.Response {
+	return predicate.Response(sql.FieldEQ(FieldPlanningResponse, v))
+}
+
 // SequenceNumber applies equality check predicate on the "sequence_number" field. It's identical to SequenceNumberEQ.
 func SequenceNumber(v int) predicate.Response {
 	return predicate.Response(sql.FieldEQ(FieldSequenceNumber, v))
@@ -293,6 +298,81 @@ func ContentEqualFold(v string) predicate.Response {
 // ContentContainsFold applies the ContainsFold predicate on the "content" field.
 func ContentContainsFold(v string) predicate.Response {
 	return predicate.Response(sql.FieldContainsFold(FieldContent, v))
+}
+
+// PlanningResponseEQ applies the EQ predicate on the "planning_response" field.
+func PlanningResponseEQ(v string) predicate.Response {
+	return predicate.Response(sql.FieldEQ(FieldPlanningResponse, v))
+}
+
+// PlanningResponseNEQ applies the NEQ predicate on the "planning_response" field.
+func PlanningResponseNEQ(v string) predicate.Response {
+	return predicate.Response(sql.FieldNEQ(FieldPlanningResponse, v))
+}
+
+// PlanningResponseIn applies the In predicate on the "planning_response" field.
+func PlanningResponseIn(vs ...string) predicate.Response {
+	return predicate.Response(sql.FieldIn(FieldPlanningResponse, vs...))
+}
+
+// PlanningResponseNotIn applies the NotIn predicate on the "planning_response" field.
+func PlanningResponseNotIn(vs ...string) predicate.Response {
+	return predicate.Response(sql.FieldNotIn(FieldPlanningResponse, vs...))
+}
+
+// PlanningResponseGT applies the GT predicate on the "planning_response" field.
+func PlanningResponseGT(v string) predicate.Response {
+	return predicate.Response(sql.FieldGT(FieldPlanningResponse, v))
+}
+
+// PlanningResponseGTE applies the GTE predicate on the "planning_response" field.
+func PlanningResponseGTE(v string) predicate.Response {
+	return predicate.Response(sql.FieldGTE(FieldPlanningResponse, v))
+}
+
+// PlanningResponseLT applies the LT predicate on the "planning_response" field.
+func PlanningResponseLT(v string) predicate.Response {
+	return predicate.Response(sql.FieldLT(FieldPlanningResponse, v))
+}
+
+// PlanningResponseLTE applies the LTE predicate on the "planning_response" field.
+func PlanningResponseLTE(v string) predicate.Response {
+	return predicate.Response(sql.FieldLTE(FieldPlanningResponse, v))
+}
+
+// PlanningResponseContains applies the Contains predicate on the "planning_response" field.
+func PlanningResponseContains(v string) predicate.Response {
+	return predicate.Response(sql.FieldContains(FieldPlanningResponse, v))
+}
+
+// PlanningResponseHasPrefix applies the HasPrefix predicate on the "planning_response" field.
+func PlanningResponseHasPrefix(v string) predicate.Response {
+	return predicate.Response(sql.FieldHasPrefix(FieldPlanningResponse, v))
+}
+
+// PlanningResponseHasSuffix applies the HasSuffix predicate on the "planning_response" field.
+func PlanningResponseHasSuffix(v string) predicate.Response {
+	return predicate.Response(sql.FieldHasSuffix(FieldPlanningResponse, v))
+}
+
+// PlanningResponseIsNil applies the IsNil predicate on the "planning_response" field.
+func PlanningResponseIsNil() predicate.Response {
+	return predicate.Response(sql.FieldIsNull(FieldPlanningResponse))
+}
+
+// PlanningResponseNotNil applies the NotNil predicate on the "planning_response" field.
+func PlanningResponseNotNil() predicate.Response {
+	return predicate.Response(sql.FieldNotNull(FieldPlanningResponse))
+}
+
+// PlanningResponseEqualFold applies the EqualFold predicate on the "planning_response" field.
+func PlanningResponseEqualFold(v string) predicate.Response {
+	return predicate.Response(sql.FieldEqualFold(FieldPlanningResponse, v))
+}
+
+// PlanningResponseContainsFold applies the ContainsFold predicate on the "planning_response" field.
+func PlanningResponseContainsFold(v string) predicate.Response {
+	return predicate.Response(sql.FieldContainsFold(FieldPlanningResponse, v))
 }
 
 // SequenceNumberEQ applies the EQ predicate on the "sequence_number" field.

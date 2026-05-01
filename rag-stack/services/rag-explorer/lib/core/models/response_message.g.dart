@@ -18,6 +18,7 @@ _ResponseMessage _$ResponseMessageFromJson(Map<String, dynamic> json) =>
           : DateTime.parse(json['timestamp'] as String),
       isLast: json['isLast'] as bool? ?? false,
       inConversation: json['inConversation'] as bool? ?? false,
+      planningResponse: json['planningResponse'] as String?,
     );
 
 Map<String, dynamic> _$ResponseMessageToJson(_ResponseMessage instance) =>
@@ -30,4 +31,5 @@ Map<String, dynamic> _$ResponseMessageToJson(_ResponseMessage instance) =>
       'timestamp': instance.timestamp?.toIso8601String(),
       'isLast': instance.isLast,
       'inConversation': instance.inConversation,
+      'planningResponse': instance.planningResponse,
     };

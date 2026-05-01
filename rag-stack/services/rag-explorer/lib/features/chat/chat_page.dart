@@ -531,7 +531,43 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 ),
               ),
               const SizedBox(height: 4),
-              if (msg.content.isEmpty && !isUser && _isStreaming && index == _messages.length - 1)
+              if (!isUser && msg.planningResponse != null && msg.planningResponse!.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: darkMode ? Colors.blueGrey[900] : Colors.blueGrey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: darkMode ? Colors.blueGrey[700]! : Colors.blueGrey[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.psychology, size: 14, color: darkMode ? Colors.blueGrey[300] : Colors.blueGrey[600]),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Planner',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: darkMode ? Colors.blueGrey[300] : Colors.blueGrey[600]
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      MarkdownBody(
+                        data: msg.planningResponse!,
+                        styleSheet: _getMarkdownStyle(darkMode).copyWith(
+                          p: TextStyle(fontSize: 11, color: darkMode ? Colors.white60 : Colors.black54),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (msg.content.isEmpty && !isUser && _isStreaming && index == _messages.length - 1 && (msg.planningResponse == null || msg.planningResponse!.isEmpty))
                 const SizedBox(
                   width: 20,
                   height: 20,
@@ -900,9 +936,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         setState(() {
           _inConversation = chunk.inConversation;
           final lastIndex = _messages.length - 1;
+          
+          String? currentPlanning = _messages[lastIndex].planningResponse;
+          String? newPlanning = chunk.planningResponse;
+          String? updatedPlanning = currentPlanning;
+          
+          if (newPlanning != null) {
+            updatedPlanning = (currentPlanning ?? '') + newPlanning;
+          }
+
           _messages[lastIndex] = _messages[lastIndex].copyWith(
             content: _messages[lastIndex].content + chunk.content,
             metadata: chunk.metadata,
+            planningResponse: updatedPlanning,
           );
           if (chunk.isLast) {
             _isStreaming = false;

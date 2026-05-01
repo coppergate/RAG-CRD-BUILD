@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS responses (
     prompt_id BIGINT, -- references prompts(id) logically
     session_id UUID REFERENCES sessions(session_id) ON DELETE CASCADE,
     content TEXT NOT NULL,
+    planning_response TEXT,
     sequence_number INTEGER NOT NULL,
     model_name TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

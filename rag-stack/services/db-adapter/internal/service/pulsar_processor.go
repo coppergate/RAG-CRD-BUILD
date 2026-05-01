@@ -186,7 +186,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
 	}
 
-	if payload.Result == "" {
+	if payload.Result == "" && payload.PlanningResponse == "" {
 		return dlq.Success, nil
 	}
 
@@ -251,6 +251,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		SetPromptID(pr.ID).
 		SetSessionID(sessID).
 		SetContent(result).
+		SetPlanningResponse(payload.PlanningResponse).
 		SetSequenceNumber(int(payload.SequenceNumber)).
 		SetNillableModelName(modelName).
 		SetMetadata(contracts.FromStruct(payload.Metadata)).

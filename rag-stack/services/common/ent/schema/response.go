@@ -24,6 +24,9 @@ func (Response) Fields() []ent.Field {
 		field.UUID("session_id", uuid.UUID{}).
 			Optional(),
 		field.Text("content"),
+		field.Text("planning_response").
+			Optional().
+			Nillable(),
 		field.Int("sequence_number"),
 		field.String("model_name").
 			Optional().

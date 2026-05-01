@@ -14,6 +14,7 @@ abstract class ResponseMessage with _$ResponseMessage {
     DateTime? timestamp,
     @Default(false) bool isLast,
     @Default(false) bool inConversation,
+    String? planningResponse,
   }) = _ResponseMessage;
 
   factory ResponseMessage.fromJson(Map<String, dynamic> json) => _$ResponseMessageFromJson(json);
