@@ -205,9 +205,10 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		"choices": []map[string]interface{}{
 			{
 				"index": 0,
-				"message": map[string]string{
-					"role":    "assistant",
-					"content": result,
+				"message": map[string]interface{}{
+					"role":              "assistant",
+					"content":           result.Result,
+					"planning_response": result.PlanningResponse,
 				},
 				"finish_reason": "stop",
 			},
@@ -373,9 +374,10 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
-		"id":         correlationID,
-		"session_id": sessionID,
-		"result":     result,
+		"id":                correlationID,
+		"session_id":        sessionID,
+		"result":            result.Result,
+		"planning_response": result.PlanningResponse,
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("[%s] Failed to encode response: %v", correlationID, err)

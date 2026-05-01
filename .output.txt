@@ -1,0 +1,306 @@
+[INFO] Using rag-test-runner version: 2.10.14
+[INFO] Preflight: Checking connectivity to hierophant and cluster...
+[OK] Connectivity verified.
+[INFO] Logs will be saved to: /tmp/rag-logs/e2e-20260501-145615
+Client Version: v1.35.0
+Kustomize Version: v5.7.1
+[STEP] Refresh tests ConfigMap
+configmap "rag-integration-tests" deleted from rag-system namespace
+configmap/rag-integration-tests created
+[STEP] Apply cleanup job
+job.batch "rag-test-cleanup" deleted from rag-system namespace
+job.batch/rag-test-cleanup created
+[STEP] Wait for cleanup job to complete
+job.batch/rag-test-cleanup condition met
+[STEP] Apply test job
+job.batch "rag-integration-test" deleted from rag-system namespace
+job.batch/rag-integration-test created
+[STEP] Wait for test pod
+pod/rag-integration-test-vkhgj condition met
+[INFO] Test pod: rag-integration-test-vkhgj
+[STEP] Stream job logs
+Defaulted container "tester" out of: tester, k8tz (init)
+--- Preparing Certificates ---
+Appending internal CA to bundle...
+--- Running Integration Tests ---
+/usr/local/lib/python3.9/site-packages/boto3/compat.py:89: PythonDeprecationWarning: Boto3 will no longer support Python 3.9 starting April 29, 2026. To continue receiving service updates, bug fixes, and security updates please upgrade to Python 3.10 or later. More information can be found here: https://aws.amazon.com/blogs/developer/python-support-policy-updates-for-aws-sdks-and-tools/
+  warnings.warn(warning, PythonDeprecationWarning)
+[2026-05-01T20:56:27.445808] [ENV] Test configuration:
+{
+  "S3_ENDPOINT": "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc",
+  "BUCKET_NAME": "rag-codebase-cfc01905-853a-4b9c-9680-c65799c77947",
+  "QDRANT_HOST": "qdrant",
+  "GATEWAY_URL": "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions",
+  "OTEL_ENABLED": true
+}
+[2026-05-01T20:56:27.445883] [TEST] Testing S3 Operations...
+  - S3_ENDPOINT=https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc BUCKET_NAME=rag-codebase-cfc01905-853a-4b9c-9680-c65799c77947 S3_INDEX=/e2eTestBucket
+  - Uploaded e2eTestBucket/test_file.txt
+  - Verified content
+  - Verified file in listing with prefix
+[2026-05-01T20:56:27.921749] [TEST] Testing Qdrant Operations...
+  - QDRANT_HOST=qdrant
+  - Created collection test_collection_4096 (size: 4096)
+  - Upserted test point
+  - Verified search result
+[2026-05-01T20:56:30.017144] [TEST] Testing RAG Retrieval via Gateway...
+  - GATEWAY_URL=https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions
+  - Gateway status code: 200
+  - Gateway responded successfully
+  - Verified Planner data presence: Planning complete. Generated sub-queries:
+- secret code in e2e-test-file-*
+- contents of e2e-test-fi...
+[2026-05-01T20:56:47.115804] [SUCCESS] All core component tests passed!
+[2026-05-01T20:56:47.115835] [CLEANUP] Cleaning up test data...
+  - Deleting S3 file: e2eTestBucket/test_file.txt
+  - Deleting Qdrant collection: test_collection_4096
+--- Running API Health and Functionality Tests ---
+test_01_all_health_standardized (__main__.APIHealthTest)
+Verify all services have standardized health and readiness endpoints. ... ok
+test_02_admin_api_aggregation (__main__.APIHealthTest)
+Verify RAG Admin API can aggregate health from all other services. ... ok
+test_03_db_adapter_api (__main__.APIHealthTest)
+Verify DB Adapter REST API functionality. ... ok
+test_04_qdrant_adapter_api (__main__.APIHealthTest)
+Verify Qdrant Adapter REST API functionality. ... ok
+test_05_object_store_mgr_api (__main__.APIHealthTest)
+Verify Object Store Manager REST API functionality. ... ok
+test_06_memory_controller_api (__main__.APIHealthTest)
+Verify Memory Controller REST API functionality. ... ok
+----------------------------------------------------------------------
+Ran 6 tests in 1.130s
+OK
+[2026-05-01T20:56:48.516678] [INFO] Starting API Health and Functionality Tests...
+[INFO] Testing health of rag-admin-api at https://rag-admin-api.rag-system.svc.cluster.local:443...
+  [OK] rag-admin-api /readyz: {'status': 'ready'}
+  [OK] rag-admin-api /healthz: OK
+[INFO] Testing health of db-adapter at https://db-adapter.rag-system.svc.cluster.local:443...
+  [OK] db-adapter /readyz: {'status': 'ready'}
+  [OK] db-adapter /healthz: OK
+[INFO] Testing health of qdrant-adapter at https://qdrant-adapter.rag-system.svc.cluster.local:443...
+  [OK] qdrant-adapter /readyz: {'status': 'ready'}
+  [OK] qdrant-adapter /healthz: OK
+[INFO] Testing health of object-store-mgr at https://object-store-mgr.rag-system.svc.cluster.local:443...
+  [OK] object-store-mgr /readyz: {'status': 'ready'}
+  [OK] object-store-mgr /healthz: OK
+[INFO] Testing health of memory-controller at https://memory-controller.rag-system.svc.cluster.local:443...
+  [OK] memory-controller /readyz: {'status': 'ready'}
+  [OK] memory-controller /healthz: OK
+[INFO] Testing health of llm-gateway at https://llm-gateway.rag-system.svc.cluster.local:443...
+  [OK] llm-gateway /readyz: {'status': 'ready'}
+  [OK] llm-gateway /healthz: OK
+  [OK] Admin API Health Aggregation keys: ['db-adapter', 'llm-gateway', 'memory-controller', 'object-store-mgr', 'qdrant-adapter', 'rag-ingestion']
+  [OK] DB Adapter stats: {'prompts': 61, 'responses': 70, 'sessions': 55}
+  [OK] Qdrant Adapter collections count: 1
+  [OK] Object Store Mgr buckets count: 1
+  [OK] Memory Controller items count: 0
+[2026-05-01T20:56:49.647939] [SUCCESS] API Health Tests passed.
+--- Running Isolated Ingestion Pipeline Test ---
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'rag-web-ui.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+[2026-05-01T20:56:50.972507] --- Starting Isolated Ingestion Test [iso-test-0ae98aff] ---
+  - Creating tag: iso-test-0ae98aff
+  - Fetching tag ID for: iso-test-0ae98aff
+  - Uploading file: iso-file-0ae98aff.txt with tag ID: 4a0d78ab-cffa-4072-a762-e696c9bba448
+  - Triggering ingestion for tag ID: 4a0d78ab-cffa-4072-a762-e696c9bba448 (files: iso-file-0ae98aff.txt)
+  - Fetching tag ID for: iso-test-0ae98aff
+  - Verifying points in Qdrant for tag_id: 4a0d78ab-cffa-4072-a762-e696c9bba448 (dims: 4096)...
+    [WAIT] No points found yet for this tag.
+    [OK] Found 1 points in Qdrant.
+    [SUCCESS] Found code and valid timestamp (diff 11s)
+[2026-05-01T20:57:01.513625] [PASS] Ingestion pipeline isolated verification: SUCCESS
+--- Running Recursive RAG Flow Tests ---
+[2026-05-01T20:57:01.750493] [TEST] Recursive Multi-Model RAG Flow
+  - Connecting to Pulsar at pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+  - Sending request to Ingress topic persistent://rag-pipeline/stage/ingress (ID: f83dee9b-c068-4cc5-b110-795b3b420c3b)
+  - Monitoring Status messages (Thinking Trace)...
+    [STATUS] INGRESS_RECEIVED: Initial request received
+    [STATUS] PLANNING_TASK: Decomposing prompt into sub-tasks
+    [STATUS] RETRIEVING_CONTEXT: Executing 2 sub-queries
+    [STATUS] EXECUTING_TASK: Generating response with specialized model
+    [STATUS] COMPLETED: Response generated
+  - Waiting for final response on Results topic...
+    [WARN] Did not receive final result in Pulsar: 'NoneType' object is not subscriptable
+  - Verifying Thinking Trace states:
+    [PASS] State 'INGRESS_RECEIVED' observed.
+    [PASS] State 'PLANNING_TASK' observed.
+    [PASS] State 'RETRIEVING_CONTEXT' observed.
+    [PASS] State 'EXECUTING_TASK' observed.
+    [FAIL] Final response NOT received.
+[DONE] Recursive RAG Flow test finished.
+2026-05-01 21:57:15.802 DEBUG [140247124341504] ConsumerImpl:162 | [persistent://rag-pipeline/stage/status, test-recursive-rag-status-b924bd0e, 1] ~ConsumerImpl
+2026-05-01 21:57:15.803 DEBUG [140247124341504] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-recursive-rag-res-5129ffc6, 0] ~ConsumerImpl
+2026-05-01 21:57:15.803 INFO  [140247124341504] ClientConnection:282 | [10.244.3.227:46526 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-05-01 21:57:15.807 INFO  [140247124341504] ClientConnection:282 | [10.244.3.227:46504 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+--- Running Pulsar CRUD Tests ---
+/usr/local/lib/python3.9/site-packages/urllib3/connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'llm-gateway.rag-system.svc.cluster.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+[2026-05-01T20:57:16.266232] [TEST] LLM Gateway Session Upsert Side-Effect
+  - Using new session ID: 6636de2f-e5cd-444f-8085-42324897e528
+  - Calling LLM Gateway at https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions
+  - Gateway status: 200
+  - Verifying session 6636de2f-e5cd-444f-8085-42324897e528 exists in TimescaleDB... [OK] Last Active: 2026-05-01 21:57:16.308763+01:00
+[SUCCESS] Gateway Session Upsert Verified!
+[2026-05-01T20:57:27.698632] [TEST] Pulsar & Database CRUD Interaction
+  - Connecting to Pulsar at pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+  - Connecting to TimescaleDB with conn string (redacted host):
+    postgres://app:VPbdmQ0HcczUUOb819opOpRWcSviKbyxTj1ng1WS4DCWSTH6ktVRXky7f7KsScUv@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=require
+  - Creating test session: 31b7546d-cd81-4b7f-bd22-fc614dd66be9
+  - Sending prompt to Pulsar topic persistent://rag-pipeline/data/chat-prompts (ID: a43f33c3-2fd1-40b3-9694-1c6dd5872923)
+  - Waiting for DB Adapter to insert prompt into TimescaleDB.... [OK]
+  - Waiting for RAG Worker and DB Adapter to process response...
+  - Sending task to Pulsar topic persistent://rag-pipeline/stage/ingress
+  - Waiting for response on Pulsar topic persistent://rag-pipeline/stage/results...
+    [OK] Received response from Pulsar: N/A...
+  - Verifying response in TimescaleDB 'responses' table.... [OK] Response found.
+  - Sending delete session op via Pulsar for 31b7546d-cd81-4b7f-bd22-fc614dd66be9...
+  - Verifying deletion in DB.... [OK]
+[SUCCESS] Pulsar <-> DB CRUD Cycle Verified!
+[2026-05-01T20:57:38.540520] [TEST] Pulsar & Qdrant Search Interaction
+  - Sending Qdrant search op to Pulsar topic persistent://rag-pipeline/operations/qdrant-ops (ID: 1308c1ee-81fc-4cf4-868c-51a132afc861)
+  - Waiting for Qdrant result on Pulsar topic...
+    [OK] Received Qdrant result: {'id': '1308c1ee-81fc-4cf4-868c-51a132afc861', 'action': 'search', 'collection': 'vectors', 'result': [], 'timestamp': '2026-05-01T21:57:39+01:00'}
+[SUCCESS] Pulsar <-> Qdrant Search Flow Verified!
+2026-05-01 21:57:39.601 DEBUG [140351388500736] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-crud-sub-a1e1dd0e, 0] ~ConsumerImpl
+2026-05-01 21:57:39.601 DEBUG [140351388500736] ConsumerImpl:162 | [persistent://rag-pipeline/operations/qdrant-ops-results, test-qdrant-sub-091c7bbd, 0] ~ConsumerImpl
+2026-05-01 21:57:39.602 INFO  [140351388500736] ClientConnection:282 | [10.244.3.227:45124 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+--- Running Aggregator Flow Tests ---
+[2026-05-01T20:57:39.768714] [TEST] Prompt Aggregator Flow
+  - Connecting to Pulsar at pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651
+  - Request ID: a07d1cec-3119-4813-80c5-9fc2c20f0099
+  - Session ID: 8ebeb634-dd1b-4dd5-a0b6-5f6ad0d0f1cb
+  - Session Topic: persistent://rag-pipeline/sessions/a07d1cec-3119-4813-80c5-9fc2c20f0099
+  - Sending 5 chunks to persistent://rag-pipeline/sessions/a07d1cec-3119-4813-80c5-9fc2c20f0099... [OK]
+  - Triggering aggregation via persistent://rag-pipeline/stage/completion
+  - Waiting for aggregated result on persistent://rag-pipeline/stage/results...
+    [OK] Received result for a07d1cec-3119-4813-80c5-9fc2c20f0099
+    [SUCCESS] Aggregation verified correctly!
+[2026-05-01T20:57:46.898812] [TEST] Aggregator test finished.
+2026-05-01 21:57:46.905 DEBUG [139691085792000] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-aggregator-sub-d119fdf5, 0] ~ConsumerImpl
+2026-05-01 21:57:46.906 INFO  [139691085792000] ClientConnection:282 | [10.244.3.227:45150 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-05-01 21:57:46.910 INFO  [139691085792000] ClientConnection:282 | [10.244.3.227:45140 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-broker-2.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-05-01 21:57:46.913 INFO  [139691085792000] ClientConnection:282 | [10.244.3.227:45138 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+--- Running Aggregator Failure Tests ---
+[2026-05-01T20:57:47.066998] [TEST] Embedded JSON Test
+  - Request ID: 5b614315-2cc1-431f-a26d-dd1fb32406df
+  - Session Topic: persistent://rag-pipeline/sessions/5b614315-2cc1-431f-a26d-dd1fb32406df
+  - Sending 4 chunks to persistent://rag-pipeline/sessions/5b614315-2cc1-431f-a26d-dd1fb32406df... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[2026-05-01T20:57:51.769155] [TEST] Special Characters Test
+  - Request ID: 30c26dbd-0c88-4532-b921-783ea90f123f
+  - Session Topic: persistent://rag-pipeline/sessions/30c26dbd-0c88-4532-b921-783ea90f123f
+  - Sending 4 chunks to persistent://rag-pipeline/sessions/30c26dbd-0c88-4532-b921-783ea90f123f... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[2026-05-01T20:57:53.301061] [TEST] Quotes and Backslashes Test
+  - Request ID: 983c696a-5f5e-4fcd-a6a6-66fdab67d0e3
+  - Session Topic: persistent://rag-pipeline/sessions/983c696a-5f5e-4fcd-a6a6-66fdab67d0e3
+  - Sending 2 chunks to persistent://rag-pipeline/sessions/983c696a-5f5e-4fcd-a6a6-66fdab67d0e3... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[2026-05-01T20:57:55.041213] [TEST] UTF-8 Multi-byte Characters Test
+  - Request ID: 625be4a2-49be-4560-bef7-bf9882d409b4
+  - Session Topic: persistent://rag-pipeline/sessions/625be4a2-49be-4560-bef7-bf9882d409b4
+  - Sending 3 chunks to persistent://rag-pipeline/sessions/625be4a2-49be-4560-bef7-bf9882d409b4... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[2026-05-01T20:57:55.965588] [TEST] Null Byte Test
+  - Request ID: 70726501-6980-40dd-982f-4f581f9427bd
+  - Session Topic: persistent://rag-pipeline/sessions/70726501-6980-40dd-982f-4f581f9427bd
+  - Sending 2 chunks to persistent://rag-pipeline/sessions/70726501-6980-40dd-982f-4f581f9427bd... [OK]
+  - Waiting for aggregated result...
+    [SUCCESS] Aggregation verified!
+[ALL TESTS PASSED]
+2026-05-01 21:57:59.148 DEBUG [139883952841472] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-embedded-json-test-cf6cd18e, 0] ~ConsumerImpl
+2026-05-01 21:57:59.149 INFO  [139883952841472] ClientConnection:282 | [10.244.3.227:41294 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-broker-1.pulsar-broker.apache-pulsar.svc.cluster.local:6651-0
+2026-05-01 21:57:59.152 INFO  [139883952841472] ClientConnection:282 | [10.244.3.227:41276 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-05-01 21:57:59.155 DEBUG [139883952841472] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-special-characters-test-edd518e8, 0] ~ConsumerImpl
+2026-05-01 21:57:59.155 INFO  [139883952841472] ClientConnection:282 | [10.244.3.227:41296 -> 10.96.232.238:6651] Destroyed connection to pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651-0
+2026-05-01 21:57:59.160 DEBUG [139883952841472] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-quotes-and-backslashes-test-e36587e8, 0] ~ConsumerImpl
+2026-05-01 21:57:59.161 DEBUG [139883952841472] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-utf-8-multi-byte-characters-test-d1b07de8, 0] ~ConsumerImpl
+2026-05-01 21:57:59.161 DEBUG [139883952841472] ConsumerImpl:162 | [persistent://rag-pipeline/stage/results, test-null-byte-test-0ae0003e, 0] ~ConsumerImpl
+--- Seeding Qdrant Context ---
+[2026-05-01T20:58:00.527799] [SEED] Connecting to Qdrant at qdrant
+[SEED] Ensuring collection 'vectors-4096' (size: 4096)...
+  - Collection vectors-4096 already exists (race condition), continuing.
+  - Embedding chunk 1001 using llama3.1:latest...
+  - Embedding chunk 1002 using llama3.1:latest...
+  - Upserting 2 points...
+[2026-05-01T20:58:01.552871] [SEED] Done.
+--- Running Context Verification (Query) ---
+[2026-05-01T20:58:03.218370] [TEST] Running Context Verification Queries (Heat 0)...
+  - Query: What protocol does Project Alpha use?
+    - Pass: True
+  - Query: Who is the primary maintainer of Project Alpha?
+    - Pass: True
+  - Query: What is the secret passphrase for the beta portal?
+    - Pass: True
+[SUMMARY] Context verification: SUCCESS
+--- Running Sad Path Tests ---
+[2026-05-01T20:58:25.076050] [TEST] Sad Path: LLM Gateway
+  - Testing 405 Method Not Allowed (GET instead of POST) on https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions ...
+    [PASS] Received 405 as expected.
+  - Testing 400 Bad Request (Malformed JSON) on https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions ...
+    [PASS] Received 400 as expected.
+  - Testing 400 Bad Request (Empty JSON object)...
+    [INFO] Result for empty JSON: 200
+==================================================
+[2026-05-01T20:58:36.386593] [TEST] Sad Path: Worker Invalid Payload
+  - Sending malformed payload to persistent://rag-pipeline/stage/ingress...
+    [DONE] Malformed payload sent to worker.
+[STEP] Run Go E2E driver via Podman
+[INFO] Using bucket: rag-codebase-cfc01905-853a-4b9c-9680-c65799c77947
+[2026-05-01T20:58:50Z] --- Starting E2E Test (Isolation) ---
+Tag Name: test-tag-1777669130
+Session ID: 083d5109-6ba1-19ab-91c5-01447ec9aba6
+Session Name: e2e-session-1777669130
+Using vector_size: 4096
+[STEP 0] Getting bucket name...
+Using bucket: rag-codebase-cfc01905-853a-4b9c-9680-c65799c77947
+Bucket: rag-codebase-cfc01905-853a-4b9c-9680-c65799c77947
+[STEP 1] Creating tag...
+[STEP 2] Getting tag ID...
+Tag ID: f2df13ea-6e1d-4bd2-badd-f0b7fbd57b47
+[STEP 3] Uploading test file...
+[STEP 4] Triggering ingestion for tag test-tag-1777669130 (ID: f2df13ea-6e1d-4bd2-badd-f0b7fbd57b47) and session 083d5109-6ba1-19ab-91c5-01447ec9aba6...
+[STEP 5&6] Waiting for ingestion and verifying via RAG Query (up to 1m)...
+DEBUG: Received RAG Answer: "The secret code mentioned in the file is BLUE-ORCHID, and its generation timestamp is 1777669131."
+Waiting for ingestion... (elapsed: 11s, last answer: "The secret code mentioned in the file is BLUE-ORCHID, and its generation timestamp is 1777669131.")
+DEBUG: Received RAG Answer: "The secret code mentioned in the file is \"BLUE-ORCHID-f2df13ea\" and its generation timestamp is \"1777669131\"."
+SUCCESS: Found secret code BLUE-ORCHID-f2df13ea and valid timestamp (diff: 37s) in answer after 36.36486589s!
+RAG Answer: The secret code mentioned in the file is "BLUE-ORCHID-f2df13ea" and its generation timestamp is "1777669131".
+--- Starting Iteration 6b Extended Tests ---
+[STEP 6B.1] Verifying Virtual FS Listing...
+FAILURE: Virtual FS verification failed: expected file e2eTestBucket/e2e-test-file-1777669131.txt not found in virtual FS for session 083d5109-6ba1-19ab-91c5-01447ec9aba6
+[STEP 6B.2] Verifying Session Health...
+SUCCESS: Session Health verification passed.
+[STEP 6B.3] Verifying Audit Logs...
+FAILURE: Audit Logs verification failed: no RETRIEVAL logs found for session 083d5109-6ba1-19ab-91c5-01447ec9aba6
+[STEP 6B.4] Verifying Model Execution Metrics...
+SUCCESS: Model Metrics verification passed.
+[STEP 6B.5] Verifying Qdrant Stats...
+SUCCESS: Qdrant Stats verification passed.
+--- Iteration 6b Extended Tests Completed ---
+[STEP 7] Cleaning up data by tag, session and S3...
+[STEP 8] Final Verification (Checking if file is gone from S3)...
+SUCCESS: Test file removed from S3.
+[2026-05-01T20:59:33Z] --- E2E Test Completed ---
+--- E2E Scan Summary ---
+[WARN] Found 1 possible errors in integration tests log:
+    [FAIL] Final response NOT received.
+[WARN] Found 1 possible errors in Go E2E driver log:
+FAILURE: Audit Logs verification failed: no RETRIEVAL logs found for session 083d5109-6ba1-19ab-91c5-01447ec9aba6
+[FAILURE] Detected 2 possible failures/errors during the E2E run.

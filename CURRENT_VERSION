@@ -12,8 +12,8 @@
     "last_build": "2026-04-26T13:12:14Z"
   },
   "llm-gateway": {
-    "version": "2.10.17",
-    "last_build": null
+    "version": "2.10.21",
+    "last_build": "2026-05-01T20:55:56Z"
   },
   "db-adapter": {
     "version": "2.10.36",

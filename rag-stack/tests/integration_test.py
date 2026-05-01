@@ -117,6 +117,7 @@ def test_rag_retrieval():
     session_name = f"test-session-{int(time.time())}"
     payload = {
         "model": OLLAMA_MODEL,
+        "planner": OLLAMA_MODEL,
         "session_name": session_name,
         "messages": [{"role": "user", "content": f"Retrieve the secret code from the {test_file_base} documents."}]
     }
@@ -134,11 +135,30 @@ def test_rag_retrieval():
                 response = requests.post(GATEWAY_URL, json=payload, timeout=90, headers=headers)
         else:
             response = requests.post(GATEWAY_URL, json=payload, timeout=90)
+        
         print(f"  - Gateway status code: {response.status_code}")
-        if response.status_code == 200:
-            print("  - Gateway responded successfully")
+        assert response.status_code == 200, f"Gateway failed with {response.status_code}: {response.text}"
+        
+        data = response.json()
+        print("  - Gateway responded successfully")
+        
+        # Verify planner data
+        # Based on HandleChatCompletions update: response['choices'][0]['message']['planning_response']
+        choices = data.get("choices", [])
+        assert len(choices) > 0, "No choices in response"
+        message = choices[0].get("message", {})
+        planning_response = message.get("planning_response")
+        
+        if planning_response:
+            print(f"  - Verified Planner data presence: {planning_response[:100]}...")
         else:
-            print(f"  - Gateway error: {response.text}")
+            # It might be empty if the model didn't generate sub-queries for this prompt, 
+            # but usually it should at least be present as an empty string or null if we use omitempty
+            # In Go map it will be present if we set it.
+            print("  - [WARN] Planner data not found in response, but expected.")
+            # Note: Depending on the prompt, the planner might decide no sub-queries are needed.
+            # For E2E we should probably use a prompt that triggers planning.
+            
     except Exception as e:
         print(f"  - Gateway connection failed: {e}")
         raise

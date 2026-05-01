@@ -285,15 +285,9 @@ build_service() {
             update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
             deploy_update "$svc" "$ver"
         else
-             # In cluster mode, we might want to defer the update if WAIT_FOR_COMPLETION is false.
-             # But the user wants it built then updated.
-             # We'll update manifest now and let k8s retry pulling until image is ready.
-             deploy_update "$svc" "$ver"
-             # We'll set the timestamp if we are in non-waiting mode, 
-             # or handle it in the main wait loop.
-             if [[ "$WAIT_FOR_COMPLETION" != "true" ]]; then
-                 update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ') (triggered)\""
-             fi
+             # In cluster mode, we defer the update until the build is complete
+             # to avoid ImagePullBackOff on pods.
+             update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ') (triggered)\""
         fi
     else
         log "SKIP: $svc unchanged and already built"
@@ -370,6 +364,19 @@ main() {
 			log "CRITICAL: build-orchestrator needs update. Building it first to avoid conflicts."
 			build_service "build-orchestrator"
 			if [[ "$MODE" == "cluster" ]]; then
+				local bver=$(get_svc_version "build-orchestrator")
+				local bver_safe="${bver//./-}"
+				log "Waiting for build-orchestrator Kaniko job..."
+				"$KUBECTL" wait --for=condition=complete job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" --timeout=600s || true
+				
+				# Verify success before deploying
+				if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep 1 >/dev/null; then
+					deploy_update "build-orchestrator" "$bver"
+					update_svc_info "build-orchestrator" "$bver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
+				else
+					log "ERROR: build-orchestrator build failed. Cannot update deployment."
+				fi
+
 				log "Waiting for build-orchestrator rollout..."
 				"$KUBECTL" rollout status deployment/build-orchestrator -n build-pipeline --timeout=300s || true
 				sleep 10 # Allow new orchestrator to stabilize
@@ -409,12 +416,21 @@ main() {
         log "Waiting for cluster builds to complete..."
         # Wait for all jobs with the app=kaniko-build label
         "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l app=kaniko-build --timeout=900s || true
-        # After wait, we update timestamps for all services that were built
+        # After wait, we update timestamps and DEPLOY all services that were successfully built
         for svc in "${SERVICES[@]}" "${INFRA_SERVICES[@]}"; do
              local ver=$(get_svc_version "$svc")
              local last=$(get_svc_last_build "$svc")
              if [[ "$last" == "null" || "$last" == *"(triggered)"* ]]; then
-                  update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
+                  local ver_safe="${ver//./-}"
+                  if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep 1 >/dev/null; then
+                       deploy_update "$svc" "$ver"
+                       update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
+                  else
+                       # Only log error if a job actually exists (it might have been skipped if hash matched)
+                       if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" 2>/dev/null | grep "$svc" >/dev/null; then
+                           log "ERROR: Build for $svc version $ver did not succeed. Skipping deploy update."
+                       fi
+                  fi
              fi
         done
     fi

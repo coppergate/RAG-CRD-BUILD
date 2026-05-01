@@ -87,30 +87,45 @@ func (pc *pulsarClient) consumeResults() {
 	}
 }
 
-func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload proto.Message) (string, error) {
+func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error) {
 	tracer := otel.Tracer("pulsar-client")
 	ctx, span := tracer.Start(ctx, "SendRequest")
 	defer span.End()
 
-	resChan := make(chan response, 1)
+	resChan := make(chan response, 10) // Buffered channel for multiple chunks
 	pc.pending.Store(id, resChan)
 	defer pc.pending.Delete(id)
 
 	_, err := pulsarCommon.SendProto(ctx, pc.producer, payload)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	select {
-	case res := <-resChan:
-		if res.Error != "" {
-			return "", fmt.Errorf("worker error: %s", res.Error)
+	var finalRes *contracts.StreamChunk
+	for {
+		select {
+		case res := <-resChan:
+			if res.Error != "" {
+				return nil, fmt.Errorf("worker error: %s", res.Error)
+			}
+			if finalRes == nil {
+				// Clone the first response
+				finalRes = proto.Clone(&res).(*contracts.StreamChunk)
+			} else {
+				// Accumulate
+				finalRes.Result += res.Result
+				if res.PlanningResponse != "" {
+					finalRes.PlanningResponse = res.PlanningResponse
+				}
+			}
+			if res.IsLast {
+				return finalRes, nil
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(pc.requestTimeout):
+			return nil, fmt.Errorf("request timed out after %s", pc.requestTimeout)
 		}
-		return res.Result, nil
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case <-time.After(pc.requestTimeout):
-		return "", fmt.Errorf("request timed out after %s", pc.requestTimeout)
 	}
 }
 
