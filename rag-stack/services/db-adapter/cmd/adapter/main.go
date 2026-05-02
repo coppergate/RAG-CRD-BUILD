@@ -267,24 +267,32 @@ func setupConsumers(ctx context.Context, client *pulsarCommon.Client, cfg *confi
 	pc, err := client.NewSharedConsumer(cfg.PromptTopic, cfg.Subscription)
 	if err == nil {
 		go consumeLoop(ctx, pc, dlqHandler, processor.HandlePrompt)
+	} else {
+		log.Printf("Error creating prompt consumer on %s: %v", cfg.PromptTopic, err)
 	}
 
 	// Responses
 	rc, err := client.NewSharedConsumer(cfg.ResponseTopic, cfg.Subscription)
 	if err == nil {
 		go consumeLoop(ctx, rc, dlqHandler, processor.HandleResponse)
+	} else {
+		log.Printf("Error creating response consumer on %s: %v", cfg.ResponseTopic, err)
 	}
 
 	// Metrics
 	cc, err := client.NewSharedConsumer(cfg.CompletionTopic, cfg.Subscription+"-metrics")
 	if err == nil {
 		go consumeLoop(ctx, cc, dlqHandler, processor.HandleCompletion)
+	} else {
+		log.Printf("Error creating completion consumer on %s: %v", cfg.CompletionTopic, err)
 	}
 
 	// Ops
 	oc, err := client.NewSharedConsumer(cfg.DBOpsTopic, cfg.Subscription+"-ops")
 	if err == nil {
 		go consumeLoop(ctx, oc, dlqHandler, processor.HandleDBOp)
+	} else {
+		log.Printf("Error creating DB ops consumer on %s: %v", cfg.DBOpsTopic, err)
 	}
 }
 

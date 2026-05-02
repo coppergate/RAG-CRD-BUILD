@@ -95,67 +95,81 @@ func verifyVirtualFS(sessionID string, expectedFile string) error {
 
 func verifySessionHealth(sessionID string) error {
 	url := fmt.Sprintf("%s/api/db/metrics/sessions/health?session_id=%s", baseURL, sessionID)
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-
+	
 	var health struct {
 		SessionId     string  `json:"session_id"`
 		TotalRequests int     `json:"total_requests"`
 		SuccessRate   float64 `json:"success_rate"`
 		Status        string  `json:"status"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
-		return err
+
+	for i := 0; i < 5; i++ {
+		resp, err := client.Get(url)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+			return err
+		}
+
+		if health.TotalRequests > 0 {
+			if health.Status != "HEALTHY" {
+				return fmt.Errorf("expected HEALTHY status, got %s (success rate: %f)", health.Status, health.SuccessRate)
+			}
+			return nil
+		}
+		fmt.Printf(" [WAIT] Health report not yet populated (0 requests), retrying (%d/5)...\n", i+1)
+		time.Sleep(3 * time.Second)
 	}
 
-	if health.TotalRequests == 0 {
-		return fmt.Errorf("health report shows 0 requests for session %s", sessionID)
-	}
-	if health.Status != "HEALTHY" {
-		return fmt.Errorf("expected HEALTHY status, got %s (success rate: %f)", health.Status, health.SuccessRate)
-	}
-	return nil
+	return fmt.Errorf("health report shows %d requests for session %s", health.TotalRequests, sessionID)
 }
 
 func verifyAuditLogs(sessionID string) error {
 	url := fmt.Sprintf("%s/api/db/audit/retrieval?session_id=%s", baseURL, sessionID)
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-
+	
 	var logs []struct {
 		Type   string `json:"type"`
 		Detail string `json:"detail"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&logs); err != nil {
-		return err
-	}
 
-	foundRetrieval := false
-	for _, l := range logs {
-		if l.Type == "RETRIEVAL" {
-			foundRetrieval = true
-			break
+	for i := 0; i < 5; i++ {
+		resp, err := client.Get(url)
+		if err != nil {
+			return err
 		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&logs); err != nil {
+			return err
+		}
+
+		foundRetrieval := false
+		for _, l := range logs {
+			if l.Type == "RETRIEVAL" {
+				foundRetrieval = true
+				break
+			}
+		}
+
+		if foundRetrieval {
+			return nil
+		}
+		fmt.Printf(" [WAIT] Audit logs not yet populated, retrying (%d/5)...\n", i+1)
+		time.Sleep(3 * time.Second)
 	}
 
-	if !foundRetrieval {
-		return fmt.Errorf("no RETRIEVAL logs found for session %s", sessionID)
-	}
-	return nil
+	return fmt.Errorf("no RETRIEVAL logs found for session %s", sessionID)
 }
 
 func verifyModelMetrics() error {
