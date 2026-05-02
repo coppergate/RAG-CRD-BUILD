@@ -197,6 +197,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 	if parseErr != nil {
 		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID in response: %q: %w", payload.Id, parseErr)
 	}
+	respID := promptUUID
 
 	var sessID uuid.UUID
 	if payload.SessionId != "" {
@@ -265,17 +266,18 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		Where(response.PromptID(pr.ID)).
 		First(msgCtx)
 
-	if ent.IsNotFound(err) {
-		// Create new record
-		_, err = tx.Response.Create().
-			SetPromptID(pr.ID).
-			SetSessionID(sessID).
-			SetContent(result).
-			SetPlanningResponse(payload.PlanningResponse).
-			SetSequenceNumber(int(payload.SequenceNumber)).
-			SetNillableModelName(modelName).
-			SetMetadata(contracts.FromStruct(payload.Metadata)).
-			Save(msgCtx)
+		if ent.IsNotFound(err) {
+			// Create new record
+			_, err = tx.Response.Create().
+				SetResponseID(respID).
+				SetPromptID(pr.ID).
+				SetSessionID(sessID).
+				SetContent(result).
+				SetPlanningResponse(payload.PlanningResponse).
+				SetSequenceNumber(int(payload.SequenceNumber)).
+				SetNillableModelName(modelName).
+				SetMetadata(contracts.FromStruct(payload.Metadata)).
+				Save(msgCtx)
 		if err != nil {
 			tx.Rollback()
 			return dlq.TransientFailure, fmt.Errorf("create response in tx: %w", err)

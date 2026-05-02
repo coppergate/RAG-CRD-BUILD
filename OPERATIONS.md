@@ -591,3 +591,10 @@ The `CURRENT_VERSION` file tracks service versions across all environments.
 - **Permissions**: Should be `664` or `666` to allow both `wjones` and `junie` to update it.
 - **Workaround**: If `Permission denied` occurs on `hierophant`, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
 - **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.
+### 9.2 Response Aggregation
+To prevent duplicate "chunks" in chat history, the `db-adapter` consolidates multiple Pulsar messages for the same prompt into a single database record.
+- **Aggregation**: `HandleResponse` uses a transaction to find an existing record by `prompt_id`.
+- **Deltas**: Content chunks are appended to the existing record.
+- **Final Results**: Aggregated messages from `prompt-aggregator` (with `is_last=true`) overwrite the content to ensure accuracy.
+- **Planning Data**: Sub-queries from `rag-worker` are accumulated in the `planning_response` field.
+- **History**: `GetMessages` groups any legacy duplicate records by `prompt_id` before returning them to the UI.
