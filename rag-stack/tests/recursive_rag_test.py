@@ -85,16 +85,39 @@ def test_recursive_rag_flow():
     # 4. Catch final response in Results topic
     print("  - Waiting for final response on Results topic...")
     final_response = None
+    planning_received = False
+    
+    start_time = time.time()
+    timeout = 60 # 60 seconds to collect all chunks
+    
     try:
-        msg = result_consumer.receive(timeout_millis=30000) # Wait 30s more for the result
-        if msg:
-            res_data = json.loads(msg.data())
-            if res_data.get('id') == correlation_id:
-                final_response = res_data.get('result')
-                print(f"    [OK] Received final result: {final_response[:50]}...")
+        while time.time() - start_time < timeout:
+            msg = result_consumer.receive(timeout_millis=5000)
+            if msg:
+                res_data = json.loads(msg.data())
+                if res_data.get('id') == correlation_id:
+                    # Collect planning data if present
+                    if res_data.get('planningResponse'):
+                        print(f"    [PLAN] {res_data.get('planningResponse')[:50]}...")
+                        planning_received = True
+                    
+                    # Collect result chunk
+                    chunk_result = res_data.get('result')
+                    if chunk_result:
+                        if final_response is None:
+                            final_response = ""
+                        final_response += chunk_result
+                    
+                    is_last = res_data.get('isLast', False)
+                    if is_last:
+                        print(f"    [OK] Received final chunk. Total length: {len(final_response) if final_response else 0}")
+                        result_consumer.acknowledge(msg)
+                        break
+                
                 result_consumer.acknowledge(msg)
     except Exception as e:
-        print(f"    [WARN] Did not receive final result in Pulsar: {e}")
+        if "timeout" not in str(e).lower():
+            print(f"    [WARN] Error receiving result in Pulsar: {e}")
 
     # 5. Assertions
     print("\n  - Verifying Thinking Trace states:")

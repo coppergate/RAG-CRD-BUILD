@@ -80,6 +80,12 @@ func main() {
 		logFatal("Failed to trigger ingestion: %v", err)
 	}
 
+	// 4a. Associate Tag with Session (Required for Virtual FS visibility)
+	fmt.Println("[STEP 4a] Associating tag with session...")
+	if err := associateTagWithSession(sessionID, tagID); err != nil {
+		logFatal("Failed to associate tag with session: %v", err)
+	}
+
 	// 5 & 6. Wait for Ingestion and Verify via Ask
 	fmt.Println("[STEP 5&6] Waiting for ingestion and verifying via RAG Query (up to 1m)...")
 	
@@ -295,6 +301,23 @@ func triggerIngest(tagID string, vectorSize int, fileName string, sessionID stri
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func associateTagWithSession(sessionID, tagID string) error {
+	payload := map[string]interface{}{
+		"tag_ids": []string{tagID},
+	}
+	body, _ := json.Marshal(payload)
+	url := fmt.Sprintf("%s/api/db/sessions/tags?session_id=%s", baseURL, sessionID)
+	resp, err := client.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
 	return nil
