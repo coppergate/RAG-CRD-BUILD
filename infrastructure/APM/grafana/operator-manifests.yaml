@@ -21,7 +21,7 @@ spec:
       allow_embedding: "true"
     rendering:
       server_url: http://localhost:8081/render
-      callback_url: http://central-grafana-service.monitoring.svc:3000/
+      callback_url: http://localhost:3000/api/grafana/
   service:
     spec:
       type: ClusterIP
@@ -64,6 +64,9 @@ spec:
           containers:
             - name: image-renderer
               image: grafana/grafana-image-renderer:latest
+              env:
+                - name: IGNORE_HTTPS_ERRORS
+                  value: "true"
               ports:
                 - containerPort: 8081
 ---

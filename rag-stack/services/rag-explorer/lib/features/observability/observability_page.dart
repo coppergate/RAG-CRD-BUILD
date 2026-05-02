@@ -111,11 +111,6 @@ class ObservabilityPage extends ConsumerWidget {
                     const Icon(Icons.dashboard, size: 40, color: Colors.blue),
                     const SizedBox(height: 8),
                     Text('Grafana Panel Preview', style: TextStyle(color: Colors.grey.shade600)),
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(url, style: const TextStyle(fontSize: 9, color: Colors.blue), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
                   ],
                 ),
               ),
