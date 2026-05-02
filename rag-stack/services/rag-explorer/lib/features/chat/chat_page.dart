@@ -623,10 +623,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               onSubmitted: (_) => _sendMessage(),
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.send, color: isEnabled ? Colors.blue : Colors.grey),
-            onPressed: isEnabled ? _sendMessage : null,
-          ),
+          if (_isStreaming)
+            IconButton(
+              icon: const Icon(Icons.stop, color: Colors.red),
+              onPressed: _stopConversation,
+              tooltip: 'Stop generation',
+            )
+          else
+            IconButton(
+              icon: Icon(Icons.send, color: isEnabled ? Colors.blue : Colors.grey),
+              onPressed: isEnabled ? _sendMessage : null,
+            ),
         ],
       ),
     );
@@ -890,6 +897,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         },
       ),
     );
+  }
+
+  void _stopConversation() {
+    _chatSubscription?.cancel();
+    setState(() {
+      _isStreaming = false;
+    });
+    ref.read(logProvider.notifier).info('Conversation stopped by user');
   }
 
   void _sendMessage() {

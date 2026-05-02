@@ -21,6 +21,7 @@ class _S3PageState extends ConsumerState<S3Page> {
   late Future<List<Tag>> _tagsFuture;
   late Future<List<Session>> _sessionsFuture;
   final Set<String> _selectedFiles = {};
+  List<VirtualFile> _cachedFiles = [];
   int? _lastSelectedIndex;
   bool _isDeleting = false;
 
@@ -137,8 +138,25 @@ class _S3PageState extends ConsumerState<S3Page> {
     
     final response = await client.get('${config.ragAdminApiUrl}/api/db/storage/files', queryParameters: queryParams);
     final data = response.data;
-    if (data == null) return [];
-    return (data as List).map((e) => VirtualFile.fromJson(e)).toList();
+    if (data == null) {
+      _cachedFiles = [];
+      return [];
+    }
+    final files = (data as List).map((e) => VirtualFile.fromJson(e)).toList();
+    _cachedFiles = files;
+    return files;
+  }
+
+  void _selectAll(bool select) {
+    setState(() {
+      if (select) {
+        for (var f in _cachedFiles) {
+          _selectedFiles.add(f.path);
+        }
+      } else {
+        _selectedFiles.clear();
+      }
+    });
   }
 
   Future<List<Tag>> _fetchTags() async {
@@ -366,12 +384,24 @@ class _S3PageState extends ConsumerState<S3Page> {
               ),
             ],
           ),
-          if (_selectedFiles.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text('${_selectedFiles.length} items selected', style: const TextStyle(fontWeight: FontWeight.bold)),
-                const Spacer(),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              SizedBox(
+                width: 32,
+                child: Checkbox(
+                  value: _cachedFiles.isNotEmpty && _selectedFiles.length == _cachedFiles.length,
+                  tristate: _selectedFiles.isNotEmpty && _selectedFiles.length < _cachedFiles.length,
+                  onChanged: (val) => _selectAll(val ?? false),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${_selectedFiles.length} items selected',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              if (_selectedFiles.isNotEmpty) ...[
                 TextButton(
                   onPressed: () => setState(() => _selectedFiles.clear()),
                   child: const Text('Clear Selection'),
@@ -382,9 +412,10 @@ class _S3PageState extends ConsumerState<S3Page> {
                   icon: const Icon(Icons.delete, color: Colors.red, size: 18),
                   label: const Text('Delete Selected', style: TextStyle(color: Colors.red)),
                 ),
-              ],
-            ),
-          ],
+              ] else
+                const SizedBox(width: 150), // Placeholder to help center the count
+            ],
+          ),
         ],
       ),
     );
