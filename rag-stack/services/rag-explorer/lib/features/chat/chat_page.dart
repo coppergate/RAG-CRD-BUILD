@@ -145,6 +145,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               _currentSessionId = newId;
               _currentSessionName = name;
               _messages.clear();
+              _tags.clear();
+              // Re-apply default tags if needed
+              if (_availableTags.isNotEmpty) {
+                try {
+                  final general = _availableTags.firstWhere((t) => t.name.toLowerCase() == 'general');
+                  _tags.add(general);
+                } catch (_) {}
+              }
             });
           }
           // Close dialog as soon as backend call is done

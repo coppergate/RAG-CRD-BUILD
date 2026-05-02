@@ -65,7 +65,33 @@ func (s *SessionService) GetMessages(w http.ResponseWriter, r *http.Request, ses
 			Timestamp: p.CreatedAt,
 		})
 	}
+
+	// Group responses by prompt_id to handle legacy duplicates/chunks
+	responsesByPrompt := make(map[int64]*ent.Response)
 	for _, res := range responses {
+		if res.PromptID == 0 {
+			continue
+		}
+		pid := res.PromptID
+		if existing, ok := responsesByPrompt[pid]; ok {
+			// Take the longest content (likely the final aggregated result)
+			if len(res.Content) > len(existing.Content) {
+				// Preserve planning response if it was in an earlier chunk but missing here
+				if (res.PlanningResponse == nil || *res.PlanningResponse == "") && 
+				   (existing.PlanningResponse != nil && *existing.PlanningResponse != "") {
+					res.PlanningResponse = existing.PlanningResponse
+				}
+				responsesByPrompt[pid] = res
+			} else if (res.PlanningResponse != nil && *res.PlanningResponse != "") && 
+			          (existing.PlanningResponse == nil || *existing.PlanningResponse == "") {
+				existing.PlanningResponse = res.PlanningResponse
+			}
+		} else {
+			responsesByPrompt[pid] = res
+		}
+	}
+
+	for _, res := range responsesByPrompt {
 		model := ""
 		if res.ModelName != nil {
 			model = *res.ModelName

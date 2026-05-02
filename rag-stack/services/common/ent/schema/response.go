@@ -3,6 +3,7 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
 	"time"
 )
@@ -20,7 +21,8 @@ func (Response) Fields() []ent.Field {
 		field.UUID("response_id", uuid.UUID{}).
 			Default(uuid.New),
 		field.Int64("prompt_id").
-			Optional(),
+			Optional().
+			Unique(),
 		field.UUID("session_id", uuid.UUID{}).
 			Optional(),
 		field.Text("content"),
@@ -36,6 +38,13 @@ func (Response) Fields() []ent.Field {
 			Immutable(),
 		field.JSON("metadata", map[string]interface{}{}).
 			Optional(),
+	}
+}
+
+// Indexes of the Response.
+func (Response) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("prompt_id").Unique(),
 	}
 }
 

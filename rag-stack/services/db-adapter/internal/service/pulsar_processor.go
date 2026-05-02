@@ -16,6 +16,7 @@ import (
 	"app-builds/common/ent/inferencenode"
 	"app-builds/common/ent/modeldefinition"
 	"app-builds/common/ent/prompt"
+	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
 	"entgo.io/ent/dialect/sql"
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -247,20 +248,83 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 
 	result := p.sanitizeString(payload.Result)
 
-	_, err = p.client.Response.Create().
-		SetPromptID(pr.ID).
-		SetSessionID(sessID).
-		SetContent(result).
-		SetPlanningResponse(payload.PlanningResponse).
-		SetSequenceNumber(int(payload.SequenceNumber)).
-		SetNillableModelName(modelName).
-		SetMetadata(contracts.FromStruct(payload.Metadata)).
-		Save(msgCtx)
+	// Use a transaction to find or create a single response record per prompt_id.
+	// This ensures we aggregate chunks into one record instead of multiple.
+	tx, err := p.client.Tx(msgCtx)
 	if err != nil {
-		return dlq.TransientFailure, fmt.Errorf("insert response for prompt %s: %w", payload.Id, err)
+		return dlq.TransientFailure, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	existing, err := tx.Response.Query().
+		Where(response.PromptID(pr.ID)).
+		First(msgCtx)
+
+	if ent.IsNotFound(err) {
+		// Create new record
+		_, err = tx.Response.Create().
+			SetPromptID(pr.ID).
+			SetSessionID(sessID).
+			SetContent(result).
+			SetPlanningResponse(payload.PlanningResponse).
+			SetSequenceNumber(int(payload.SequenceNumber)).
+			SetNillableModelName(modelName).
+			SetMetadata(contracts.FromStruct(payload.Metadata)).
+			Save(msgCtx)
+		if err != nil {
+			tx.Rollback()
+			return dlq.TransientFailure, fmt.Errorf("create response in tx: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return dlq.TransientFailure, fmt.Errorf("commit create response: %w", err)
+		}
+	} else if err != nil {
+		tx.Rollback()
+		return dlq.TransientFailure, fmt.Errorf("query existing response in tx: %w", err)
+	} else {
+		// Update existing record
+		u := tx.Response.UpdateOne(existing)
+		if payload.PlanningResponse != "" {
+			newPR := ""
+			if existing.PlanningResponse != nil {
+				newPR = *existing.PlanningResponse + "\n"
+			}
+			newPR += payload.PlanningResponse
+			u.SetPlanningResponse(newPR)
+		}
+		if payload.Result != "" {
+			if payload.IsLast {
+				// Aggregated final result from prompt-aggregator (or final chunk)
+				u.SetContent(result)
+			} else {
+				// Delta chunk from worker, append it
+				u.SetContent(existing.Content + result)
+			}
+		}
+		if modelName != nil {
+			u.SetNillableModelName(modelName)
+		}
+		u.SetSequenceNumber(int(payload.SequenceNumber))
+		u.SetMetadata(contracts.FromStruct(payload.Metadata))
+		if err := u.Exec(msgCtx); err != nil {
+			tx.Rollback()
+			return dlq.TransientFailure, fmt.Errorf("update response in tx: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return dlq.TransientFailure, fmt.Errorf("commit update response: %w", err)
+		}
 	}
 
-	log.Printf("Inserted response for prompt %s (seq %d)", payload.Id, payload.SequenceNumber)
+	if err != nil {
+		return dlq.TransientFailure, fmt.Errorf("transactional upsert response for prompt %s: %w", payload.Id, err)
+	}
+
+	log.Printf("Aggregated response for prompt %s (seq %d, last=%v)", payload.Id, payload.SequenceNumber, payload.IsLast)
 	return dlq.Success, nil
 }
 
