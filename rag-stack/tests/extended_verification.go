@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
-func testIteration6b(sessionID string, tagID string, tagName string, fileName string, vectorSize int) {
+func testExtendedVerification(sessionID string, tagID string, tagName string, fileName string, vectorSize int) {
 	fmt.Println("\n--- Starting Iteration 6b Extended Tests ---")
 
 	// 1. Verify Virtual FS Listing

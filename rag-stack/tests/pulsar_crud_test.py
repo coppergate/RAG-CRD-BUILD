@@ -185,19 +185,45 @@ def test_pulsar_db_crud():
 
     # 7. Step D: Catch response in Pulsar
     print(f"  - Waiting for response on Pulsar topic {RESPONSE_TOPIC}...")
-    pulsar_response_received = False
+    final_response = None
+    
+    start_time = time.time()
+    timeout = 60
+    
     try:
-        msg = consumer.receive(timeout_millis=60000) # 60s timeout
-        if msg is None:
-            raise Exception(f"Timeout: No message received on {RESPONSE_TOPIC} topic after 60s")
-        res_data = json.loads(msg.data())
-        print(f"    [OK] Received response from Pulsar: {res_data.get('result', 'N/A')[:50]}...")
-        assert res_data['id'] == correlation_id
-        consumer.acknowledge(msg)
-        pulsar_response_received = True
+        while time.time() - start_time < timeout:
+            try:
+                msg = consumer.receive(timeout_millis=5000)
+                if msg:
+                    res_data = json.loads(msg.data())
+                    if res_data.get('id') == correlation_id:
+                        # Collect planning data if present
+                        if res_data.get('planningResponse'):
+                            print(f"    [PLAN] {res_data.get('planningResponse')[:50]}...")
+                        
+                        # Collect result chunk
+                        chunk_result = res_data.get('result')
+                        if chunk_result:
+                            if final_response is None:
+                                final_response = ""
+                            final_response += chunk_result
+                        
+                        is_last = res_data.get('isLast', False)
+                        if is_last:
+                            print(f"    [OK] Received final response from Pulsar. Total length: {len(final_response) if final_response else 0}")
+                            consumer.acknowledge(msg)
+                            break
+                    consumer.acknowledge(msg)
+            except Exception as e:
+                if "timeout" not in str(e).lower():
+                    print(f"    [WARN] Pulsar receive error: {e}")
+                # Otherwise just continue loop
     except Exception as e:
-        print(f"    [FAIL] Did not receive response in Pulsar: {e}")
+        print(f"    [FAIL] Unexpected error in Pulsar results loop: {e}")
         raise e
+    
+    if not final_response:
+        raise Exception("Timed out waiting for final response content in Pulsar")
 
     # 8. Step E: Verify DB Adapter inserted response into DB
     print("  - Verifying response in TimescaleDB 'responses' table...", end="", flush=True)
@@ -217,6 +243,9 @@ def test_pulsar_db_crud():
         raise Exception("Timed out waiting for response in DB")
 
     # 9. Step F: Test Pulsar-driven Delete
+    print("  - Waiting 5s for async processing to settle before deletion...")
+    time.sleep(5)
+    
     print(f"  - Sending delete session op via Pulsar for {session_id}...")
     delete_payload = {
         "op": "delete_session",

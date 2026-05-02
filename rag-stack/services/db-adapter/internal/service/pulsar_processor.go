@@ -14,9 +14,11 @@ import (
 	"app-builds/common/dlq"
 	"app-builds/common/ent"
 	"app-builds/common/ent/inferencenode"
+	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/modeldefinition"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
+	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
 	"entgo.io/ent/dialect/sql"
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -50,7 +52,9 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 	msgCtx, span := tracer.Start(msgCtx, "HandleDBOp")
 	defer span.End()
 
-	attrs := []attribute.KeyValue{attribute.String("op", "delete_session")}
+	log.Printf("Received DB op message: %s", string(msg.Payload()))
+
+	attrs := []attribute.KeyValue{attribute.String("op", "unknown")}
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
 		if p.queryLatency != nil {
@@ -69,24 +73,60 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal DB op payload: %w", err)
 	}
 
+	attrs[0] = attribute.String("op", payload.Op)
+
 	if payload.Op == "delete_session" {
 		sessID, parseErr := uuid.Parse(payload.Id)
 		if parseErr != nil {
-			if p.errorCounter != nil {
-				p.errorCounter.Add(msgCtx, 1, metric.WithAttributes(attribute.String("op", "delete_session_error")))
-			}
+			log.Printf("Invalid UUID for delete_session: %q", payload.Id)
 			return dlq.PermanentFailure, fmt.Errorf("invalid UUID in delete_session: %q: %w", payload.Id, parseErr)
 		}
-		_, err := p.client.Session.Delete().
-			Where(session.ID(sessID)).
-			Exec(ctx)
+
+		log.Printf("Attempting to delete session %s and its dependents", sessID)
+
+		tx, err := p.client.Tx(msgCtx)
 		if err != nil {
-			if p.errorCounter != nil {
-				p.errorCounter.Add(msgCtx, 1, metric.WithAttributes(attribute.String("op", "delete_session_error")))
+			return dlq.TransientFailure, fmt.Errorf("start tx for delete session: %w", err)
+		}
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				panic(r)
 			}
+		}()
+
+		// Delete metrics
+		_, err = tx.ModelExecutionMetric.Delete().Where(modelexecutionmetric.SessionID(sessID)).Exec(msgCtx)
+		if err != nil { log.Printf("Warning: failed to delete metrics for session %s: %v", sessID, err) }
+
+		// Delete retrieval logs
+		_, err = tx.RetrievalLog.Delete().Where(retrievallog.SessionID(sessID)).Exec(msgCtx)
+		if err != nil { log.Printf("Warning: failed to delete retrieval logs for session %s: %v", sessID, err) }
+
+		// Delete prompts & responses (using raw SQL as they don't have edges in Ent)
+		// Assuming 'prompts' and 'responses' are the table names.
+		// Note: Ent might use singular/plural names.
+		_, err = tx.Prompt.Delete().Where(prompt.SessionID(sessID)).Exec(msgCtx)
+		if err != nil { log.Printf("Warning: failed to delete prompts for session %s: %v", sessID, err) }
+
+		_, err = tx.Response.Delete().Where(response.SessionID(sessID)).Exec(msgCtx)
+		if err != nil { log.Printf("Warning: failed to delete responses for session %s: %v", sessID, err) }
+
+		// Finally delete the session
+		_, err = tx.Session.Delete().Where(session.ID(sessID)).Exec(msgCtx)
+		if err != nil {
+			tx.Rollback()
+			log.Printf("Error deleting session %s: %v", sessID, err)
 			return dlq.TransientFailure, fmt.Errorf("delete session %s: %w", payload.Id, err)
 		}
-		log.Printf("Deleted session %s via Pulsar op", payload.Id)
+
+		if err := tx.Commit(); err != nil {
+			return dlq.TransientFailure, fmt.Errorf("commit delete session %s: %w", sessID, err)
+		}
+
+		log.Printf("Successfully deleted session %s and dependents via Pulsar op", sessID)
+	} else {
+		log.Printf("Unknown DB op: %s", payload.Op)
 	}
 
 	return dlq.Success, nil
@@ -327,6 +367,24 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 	}
 
 	log.Printf("Aggregated response for prompt %s (seq %d, last=%v)", payload.Id, payload.SequenceNumber, payload.IsLast)
+
+	// Process retrieval logs if it's the last chunk and metadata has contexts
+	if payload.IsLast {
+		metadataMap := contracts.FromStruct(payload.Metadata)
+		if contexts, ok := metadataMap["contexts"].([]interface{}); ok && len(contexts) > 0 {
+			for _, c := range contexts {
+				if ctxStr, ok := c.(string); ok && ctxStr != "" {
+					_, _ = p.client.RetrievalLog.Create().
+						SetSessionID(sessID).
+						SetType("RETRIEVAL").
+						SetDetail(ctxStr).
+						Save(msgCtx)
+				}
+			}
+			log.Printf("Stored %d retrieval logs for session %s", len(contexts), sessID)
+		}
+	}
+
 	return dlq.Success, nil
 }
 

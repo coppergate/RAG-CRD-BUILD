@@ -250,7 +250,7 @@ var (
 	ResponsesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "response_id", Type: field.TypeUUID},
-		{Name: "prompt_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "prompt_id", Type: field.TypeInt64, Unique: true, Nullable: true},
 		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "content", Type: field.TypeString, Size: 2147483647},
 		{Name: "planning_response", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -264,12 +264,21 @@ var (
 		Name:       "responses",
 		Columns:    ResponsesColumns,
 		PrimaryKey: []*schema.Column{ResponsesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "response_prompt_id",
+				Unique:  true,
+				Columns: []*schema.Column{ResponsesColumns[2]},
+			},
+		},
 	}
 	// RetrievalLogsColumns holds the columns for the "retrieval_logs" table.
 	RetrievalLogsColumns = []*schema.Column{
 		{Name: "log_id", Type: field.TypeUUID},
 		{Name: "message_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "query", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "type", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "detail", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "retrieved_chunks", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
@@ -282,7 +291,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "retrieval_logs_sessions_retrieval_logs",
-				Columns:    []*schema.Column{RetrievalLogsColumns[5]},
+				Columns:    []*schema.Column{RetrievalLogsColumns[7]},
 				RefColumns: []*schema.Column{SessionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

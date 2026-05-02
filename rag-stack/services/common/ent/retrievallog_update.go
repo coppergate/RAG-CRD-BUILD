@@ -91,6 +91,46 @@ func (_u *RetrievalLogUpdate) ClearQuery() *RetrievalLogUpdate {
 	return _u
 }
 
+// SetType sets the "type" field.
+func (_u *RetrievalLogUpdate) SetType(v string) *RetrievalLogUpdate {
+	_u.mutation.SetType(v)
+	return _u
+}
+
+// SetNillableType sets the "type" field if the given value is not nil.
+func (_u *RetrievalLogUpdate) SetNillableType(v *string) *RetrievalLogUpdate {
+	if v != nil {
+		_u.SetType(*v)
+	}
+	return _u
+}
+
+// ClearType clears the value of the "type" field.
+func (_u *RetrievalLogUpdate) ClearType() *RetrievalLogUpdate {
+	_u.mutation.ClearType()
+	return _u
+}
+
+// SetDetail sets the "detail" field.
+func (_u *RetrievalLogUpdate) SetDetail(v string) *RetrievalLogUpdate {
+	_u.mutation.SetDetail(v)
+	return _u
+}
+
+// SetNillableDetail sets the "detail" field if the given value is not nil.
+func (_u *RetrievalLogUpdate) SetNillableDetail(v *string) *RetrievalLogUpdate {
+	if v != nil {
+		_u.SetDetail(*v)
+	}
+	return _u
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (_u *RetrievalLogUpdate) ClearDetail() *RetrievalLogUpdate {
+	_u.mutation.ClearDetail()
+	return _u
+}
+
 // SetRetrievedChunks sets the "retrieved_chunks" field.
 func (_u *RetrievalLogUpdate) SetRetrievedChunks(v []map[string]interface{}) *RetrievalLogUpdate {
 	_u.mutation.SetRetrievedChunks(v)
@@ -186,6 +226,18 @@ func (_u *RetrievalLogUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if _u.mutation.QueryCleared() {
 		_spec.ClearField(retrievallog.FieldQuery, field.TypeString)
+	}
+	if value, ok := _u.mutation.GetType(); ok {
+		_spec.SetField(retrievallog.FieldType, field.TypeString, value)
+	}
+	if _u.mutation.TypeCleared() {
+		_spec.ClearField(retrievallog.FieldType, field.TypeString)
+	}
+	if value, ok := _u.mutation.Detail(); ok {
+		_spec.SetField(retrievallog.FieldDetail, field.TypeString, value)
+	}
+	if _u.mutation.DetailCleared() {
+		_spec.ClearField(retrievallog.FieldDetail, field.TypeString)
 	}
 	if value, ok := _u.mutation.RetrievedChunks(); ok {
 		_spec.SetField(retrievallog.FieldRetrievedChunks, field.TypeJSON, value)
@@ -307,6 +359,46 @@ func (_u *RetrievalLogUpdateOne) SetNillableQuery(v *string) *RetrievalLogUpdate
 // ClearQuery clears the value of the "query" field.
 func (_u *RetrievalLogUpdateOne) ClearQuery() *RetrievalLogUpdateOne {
 	_u.mutation.ClearQuery()
+	return _u
+}
+
+// SetType sets the "type" field.
+func (_u *RetrievalLogUpdateOne) SetType(v string) *RetrievalLogUpdateOne {
+	_u.mutation.SetType(v)
+	return _u
+}
+
+// SetNillableType sets the "type" field if the given value is not nil.
+func (_u *RetrievalLogUpdateOne) SetNillableType(v *string) *RetrievalLogUpdateOne {
+	if v != nil {
+		_u.SetType(*v)
+	}
+	return _u
+}
+
+// ClearType clears the value of the "type" field.
+func (_u *RetrievalLogUpdateOne) ClearType() *RetrievalLogUpdateOne {
+	_u.mutation.ClearType()
+	return _u
+}
+
+// SetDetail sets the "detail" field.
+func (_u *RetrievalLogUpdateOne) SetDetail(v string) *RetrievalLogUpdateOne {
+	_u.mutation.SetDetail(v)
+	return _u
+}
+
+// SetNillableDetail sets the "detail" field if the given value is not nil.
+func (_u *RetrievalLogUpdateOne) SetNillableDetail(v *string) *RetrievalLogUpdateOne {
+	if v != nil {
+		_u.SetDetail(*v)
+	}
+	return _u
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (_u *RetrievalLogUpdateOne) ClearDetail() *RetrievalLogUpdateOne {
+	_u.mutation.ClearDetail()
 	return _u
 }
 
@@ -435,6 +527,18 @@ func (_u *RetrievalLogUpdateOne) sqlSave(ctx context.Context) (_node *RetrievalL
 	}
 	if _u.mutation.QueryCleared() {
 		_spec.ClearField(retrievallog.FieldQuery, field.TypeString)
+	}
+	if value, ok := _u.mutation.GetType(); ok {
+		_spec.SetField(retrievallog.FieldType, field.TypeString, value)
+	}
+	if _u.mutation.TypeCleared() {
+		_spec.ClearField(retrievallog.FieldType, field.TypeString)
+	}
+	if value, ok := _u.mutation.Detail(); ok {
+		_spec.SetField(retrievallog.FieldDetail, field.TypeString, value)
+	}
+	if _u.mutation.DetailCleared() {
+		_spec.ClearField(retrievallog.FieldDetail, field.TypeString)
 	}
 	if value, ok := _u.mutation.RetrievedChunks(); ok {
 		_spec.SetField(retrievallog.FieldRetrievedChunks, field.TypeJSON, value)

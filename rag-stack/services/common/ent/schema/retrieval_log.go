@@ -25,6 +25,10 @@ func (RetrievalLog) Fields() []ent.Field {
 			Optional(),
 		field.Text("query").
 			Optional(),
+		field.Text("type").
+			Optional(),
+		field.Text("detail").
+			Optional(),
 		field.JSON("retrieved_chunks", []map[string]interface{}{}).
 			Optional(),
 		field.Time("created_at").

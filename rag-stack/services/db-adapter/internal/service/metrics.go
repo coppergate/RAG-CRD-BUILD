@@ -99,6 +99,7 @@ func (s *MetricsService) GetAudit(w http.ResponseWriter, r *http.Request, sessio
 		Limit(50).
 		All(r.Context())
 	if err != nil {
+		fmt.Printf("[ERROR] Failed to query retrieval logs for session %s: %v\n", sessionID, err)
 		http.Error(w, "Failed to query retrieval logs: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

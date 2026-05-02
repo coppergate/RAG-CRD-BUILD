@@ -71,6 +71,16 @@ func Query(v string) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldEQ(FieldQuery, v))
 }
 
+// Type applies equality check predicate on the "type" field. It's identical to TypeEQ.
+func Type(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldEQ(FieldType, v))
+}
+
+// Detail applies equality check predicate on the "detail" field. It's identical to DetailEQ.
+func Detail(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldEQ(FieldDetail, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldEQ(FieldCreatedAt, v))
@@ -229,6 +239,156 @@ func QueryEqualFold(v string) predicate.RetrievalLog {
 // QueryContainsFold applies the ContainsFold predicate on the "query" field.
 func QueryContainsFold(v string) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldContainsFold(FieldQuery, v))
+}
+
+// TypeEQ applies the EQ predicate on the "type" field.
+func TypeEQ(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldEQ(FieldType, v))
+}
+
+// TypeNEQ applies the NEQ predicate on the "type" field.
+func TypeNEQ(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldNEQ(FieldType, v))
+}
+
+// TypeIn applies the In predicate on the "type" field.
+func TypeIn(vs ...string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldIn(FieldType, vs...))
+}
+
+// TypeNotIn applies the NotIn predicate on the "type" field.
+func TypeNotIn(vs ...string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldNotIn(FieldType, vs...))
+}
+
+// TypeGT applies the GT predicate on the "type" field.
+func TypeGT(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldGT(FieldType, v))
+}
+
+// TypeGTE applies the GTE predicate on the "type" field.
+func TypeGTE(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldGTE(FieldType, v))
+}
+
+// TypeLT applies the LT predicate on the "type" field.
+func TypeLT(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldLT(FieldType, v))
+}
+
+// TypeLTE applies the LTE predicate on the "type" field.
+func TypeLTE(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldLTE(FieldType, v))
+}
+
+// TypeContains applies the Contains predicate on the "type" field.
+func TypeContains(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldContains(FieldType, v))
+}
+
+// TypeHasPrefix applies the HasPrefix predicate on the "type" field.
+func TypeHasPrefix(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldHasPrefix(FieldType, v))
+}
+
+// TypeHasSuffix applies the HasSuffix predicate on the "type" field.
+func TypeHasSuffix(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldHasSuffix(FieldType, v))
+}
+
+// TypeIsNil applies the IsNil predicate on the "type" field.
+func TypeIsNil() predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldIsNull(FieldType))
+}
+
+// TypeNotNil applies the NotNil predicate on the "type" field.
+func TypeNotNil() predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldNotNull(FieldType))
+}
+
+// TypeEqualFold applies the EqualFold predicate on the "type" field.
+func TypeEqualFold(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldEqualFold(FieldType, v))
+}
+
+// TypeContainsFold applies the ContainsFold predicate on the "type" field.
+func TypeContainsFold(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldContainsFold(FieldType, v))
+}
+
+// DetailEQ applies the EQ predicate on the "detail" field.
+func DetailEQ(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldEQ(FieldDetail, v))
+}
+
+// DetailNEQ applies the NEQ predicate on the "detail" field.
+func DetailNEQ(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldNEQ(FieldDetail, v))
+}
+
+// DetailIn applies the In predicate on the "detail" field.
+func DetailIn(vs ...string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldIn(FieldDetail, vs...))
+}
+
+// DetailNotIn applies the NotIn predicate on the "detail" field.
+func DetailNotIn(vs ...string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldNotIn(FieldDetail, vs...))
+}
+
+// DetailGT applies the GT predicate on the "detail" field.
+func DetailGT(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldGT(FieldDetail, v))
+}
+
+// DetailGTE applies the GTE predicate on the "detail" field.
+func DetailGTE(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldGTE(FieldDetail, v))
+}
+
+// DetailLT applies the LT predicate on the "detail" field.
+func DetailLT(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldLT(FieldDetail, v))
+}
+
+// DetailLTE applies the LTE predicate on the "detail" field.
+func DetailLTE(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldLTE(FieldDetail, v))
+}
+
+// DetailContains applies the Contains predicate on the "detail" field.
+func DetailContains(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldContains(FieldDetail, v))
+}
+
+// DetailHasPrefix applies the HasPrefix predicate on the "detail" field.
+func DetailHasPrefix(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldHasPrefix(FieldDetail, v))
+}
+
+// DetailHasSuffix applies the HasSuffix predicate on the "detail" field.
+func DetailHasSuffix(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldHasSuffix(FieldDetail, v))
+}
+
+// DetailIsNil applies the IsNil predicate on the "detail" field.
+func DetailIsNil() predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldIsNull(FieldDetail))
+}
+
+// DetailNotNil applies the NotNil predicate on the "detail" field.
+func DetailNotNil() predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldNotNull(FieldDetail))
+}
+
+// DetailEqualFold applies the EqualFold predicate on the "detail" field.
+func DetailEqualFold(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldEqualFold(FieldDetail, v))
+}
+
+// DetailContainsFold applies the ContainsFold predicate on the "detail" field.
+func DetailContainsFold(v string) predicate.RetrievalLog {
+	return predicate.RetrievalLog(sql.FieldContainsFold(FieldDetail, v))
 }
 
 // RetrievedChunksIsNil applies the IsNil predicate on the "retrieved_chunks" field.

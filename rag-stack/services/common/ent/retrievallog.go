@@ -26,6 +26,10 @@ type RetrievalLog struct {
 	SessionID uuid.UUID `json:"session_id,omitempty"`
 	// Query holds the value of the "query" field.
 	Query string `json:"query,omitempty"`
+	// Type holds the value of the "type" field.
+	Type string `json:"type,omitempty"`
+	// Detail holds the value of the "detail" field.
+	Detail string `json:"detail,omitempty"`
 	// RetrievedChunks holds the value of the "retrieved_chunks" field.
 	RetrievedChunks []map[string]interface{} `json:"retrieved_chunks,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -63,7 +67,7 @@ func (*RetrievalLog) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case retrievallog.FieldRetrievedChunks:
 			values[i] = new([]byte)
-		case retrievallog.FieldQuery:
+		case retrievallog.FieldQuery, retrievallog.FieldType, retrievallog.FieldDetail:
 			values[i] = new(sql.NullString)
 		case retrievallog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -107,6 +111,18 @@ func (_m *RetrievalLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field query", values[i])
 			} else if value.Valid {
 				_m.Query = value.String
+			}
+		case retrievallog.FieldType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field type", values[i])
+			} else if value.Valid {
+				_m.Type = value.String
+			}
+		case retrievallog.FieldDetail:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field detail", values[i])
+			} else if value.Valid {
+				_m.Detail = value.String
 			}
 		case retrievallog.FieldRetrievedChunks:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -171,6 +187,12 @@ func (_m *RetrievalLog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("query=")
 	builder.WriteString(_m.Query)
+	builder.WriteString(", ")
+	builder.WriteString("type=")
+	builder.WriteString(_m.Type)
+	builder.WriteString(", ")
+	builder.WriteString("detail=")
+	builder.WriteString(_m.Detail)
 	builder.WriteString(", ")
 	builder.WriteString("retrieved_chunks=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RetrievedChunks))

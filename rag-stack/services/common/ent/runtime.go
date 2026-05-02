@@ -147,7 +147,7 @@ func init() {
 	retrievallogFields := schema.RetrievalLog{}.Fields()
 	_ = retrievallogFields
 	// retrievallogDescCreatedAt is the schema descriptor for created_at field.
-	retrievallogDescCreatedAt := retrievallogFields[5].Descriptor()
+	retrievallogDescCreatedAt := retrievallogFields[7].Descriptor()
 	// retrievallog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	retrievallog.DefaultCreatedAt = retrievallogDescCreatedAt.Default.(func() time.Time)
 	// retrievallogDescID is the schema descriptor for id field.

@@ -67,6 +67,34 @@ func (_c *RetrievalLogCreate) SetNillableQuery(v *string) *RetrievalLogCreate {
 	return _c
 }
 
+// SetType sets the "type" field.
+func (_c *RetrievalLogCreate) SetType(v string) *RetrievalLogCreate {
+	_c.mutation.SetType(v)
+	return _c
+}
+
+// SetNillableType sets the "type" field if the given value is not nil.
+func (_c *RetrievalLogCreate) SetNillableType(v *string) *RetrievalLogCreate {
+	if v != nil {
+		_c.SetType(*v)
+	}
+	return _c
+}
+
+// SetDetail sets the "detail" field.
+func (_c *RetrievalLogCreate) SetDetail(v string) *RetrievalLogCreate {
+	_c.mutation.SetDetail(v)
+	return _c
+}
+
+// SetNillableDetail sets the "detail" field if the given value is not nil.
+func (_c *RetrievalLogCreate) SetNillableDetail(v *string) *RetrievalLogCreate {
+	if v != nil {
+		_c.SetDetail(*v)
+	}
+	return _c
+}
+
 // SetRetrievedChunks sets the "retrieved_chunks" field.
 func (_c *RetrievalLogCreate) SetRetrievedChunks(v []map[string]interface{}) *RetrievalLogCreate {
 	_c.mutation.SetRetrievedChunks(v)
@@ -200,6 +228,14 @@ func (_c *RetrievalLogCreate) createSpec() (*RetrievalLog, *sqlgraph.CreateSpec)
 		_spec.SetField(retrievallog.FieldQuery, field.TypeString, value)
 		_node.Query = value
 	}
+	if value, ok := _c.mutation.GetType(); ok {
+		_spec.SetField(retrievallog.FieldType, field.TypeString, value)
+		_node.Type = value
+	}
+	if value, ok := _c.mutation.Detail(); ok {
+		_spec.SetField(retrievallog.FieldDetail, field.TypeString, value)
+		_node.Detail = value
+	}
 	if value, ok := _c.mutation.RetrievedChunks(); ok {
 		_spec.SetField(retrievallog.FieldRetrievedChunks, field.TypeJSON, value)
 		_node.RetrievedChunks = value
@@ -328,6 +364,42 @@ func (u *RetrievalLogUpsert) UpdateQuery() *RetrievalLogUpsert {
 // ClearQuery clears the value of the "query" field.
 func (u *RetrievalLogUpsert) ClearQuery() *RetrievalLogUpsert {
 	u.SetNull(retrievallog.FieldQuery)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *RetrievalLogUpsert) SetType(v string) *RetrievalLogUpsert {
+	u.Set(retrievallog.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *RetrievalLogUpsert) UpdateType() *RetrievalLogUpsert {
+	u.SetExcluded(retrievallog.FieldType)
+	return u
+}
+
+// ClearType clears the value of the "type" field.
+func (u *RetrievalLogUpsert) ClearType() *RetrievalLogUpsert {
+	u.SetNull(retrievallog.FieldType)
+	return u
+}
+
+// SetDetail sets the "detail" field.
+func (u *RetrievalLogUpsert) SetDetail(v string) *RetrievalLogUpsert {
+	u.Set(retrievallog.FieldDetail, v)
+	return u
+}
+
+// UpdateDetail sets the "detail" field to the value that was provided on create.
+func (u *RetrievalLogUpsert) UpdateDetail() *RetrievalLogUpsert {
+	u.SetExcluded(retrievallog.FieldDetail)
+	return u
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (u *RetrievalLogUpsert) ClearDetail() *RetrievalLogUpsert {
+	u.SetNull(retrievallog.FieldDetail)
 	return u
 }
 
@@ -469,6 +541,48 @@ func (u *RetrievalLogUpsertOne) UpdateQuery() *RetrievalLogUpsertOne {
 func (u *RetrievalLogUpsertOne) ClearQuery() *RetrievalLogUpsertOne {
 	return u.Update(func(s *RetrievalLogUpsert) {
 		s.ClearQuery()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *RetrievalLogUpsertOne) SetType(v string) *RetrievalLogUpsertOne {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *RetrievalLogUpsertOne) UpdateType() *RetrievalLogUpsertOne {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.UpdateType()
+	})
+}
+
+// ClearType clears the value of the "type" field.
+func (u *RetrievalLogUpsertOne) ClearType() *RetrievalLogUpsertOne {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.ClearType()
+	})
+}
+
+// SetDetail sets the "detail" field.
+func (u *RetrievalLogUpsertOne) SetDetail(v string) *RetrievalLogUpsertOne {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.SetDetail(v)
+	})
+}
+
+// UpdateDetail sets the "detail" field to the value that was provided on create.
+func (u *RetrievalLogUpsertOne) UpdateDetail() *RetrievalLogUpsertOne {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.UpdateDetail()
+	})
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (u *RetrievalLogUpsertOne) ClearDetail() *RetrievalLogUpsertOne {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.ClearDetail()
 	})
 }
 
@@ -782,6 +896,48 @@ func (u *RetrievalLogUpsertBulk) UpdateQuery() *RetrievalLogUpsertBulk {
 func (u *RetrievalLogUpsertBulk) ClearQuery() *RetrievalLogUpsertBulk {
 	return u.Update(func(s *RetrievalLogUpsert) {
 		s.ClearQuery()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *RetrievalLogUpsertBulk) SetType(v string) *RetrievalLogUpsertBulk {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *RetrievalLogUpsertBulk) UpdateType() *RetrievalLogUpsertBulk {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.UpdateType()
+	})
+}
+
+// ClearType clears the value of the "type" field.
+func (u *RetrievalLogUpsertBulk) ClearType() *RetrievalLogUpsertBulk {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.ClearType()
+	})
+}
+
+// SetDetail sets the "detail" field.
+func (u *RetrievalLogUpsertBulk) SetDetail(v string) *RetrievalLogUpsertBulk {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.SetDetail(v)
+	})
+}
+
+// UpdateDetail sets the "detail" field to the value that was provided on create.
+func (u *RetrievalLogUpsertBulk) UpdateDetail() *RetrievalLogUpsertBulk {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.UpdateDetail()
+	})
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (u *RetrievalLogUpsertBulk) ClearDetail() *RetrievalLogUpsertBulk {
+	return u.Update(func(s *RetrievalLogUpsert) {
+		s.ClearDetail()
 	})
 }
 

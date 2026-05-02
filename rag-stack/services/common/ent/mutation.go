@@ -8663,6 +8663,8 @@ type RetrievalLogMutation struct {
 	id                     *uuid.UUID
 	message_id             *uuid.UUID
 	query                  *string
+	_type                  *string
+	detail                 *string
 	retrieved_chunks       *[]map[string]interface{}
 	appendretrieved_chunks []map[string]interface{}
 	created_at             *time.Time
@@ -8925,6 +8927,104 @@ func (m *RetrievalLogMutation) ResetQuery() {
 	delete(m.clearedFields, retrievallog.FieldQuery)
 }
 
+// SetType sets the "type" field.
+func (m *RetrievalLogMutation) SetType(s string) {
+	m._type = &s
+}
+
+// GetType returns the value of the "type" field in the mutation.
+func (m *RetrievalLogMutation) GetType() (r string, exists bool) {
+	v := m._type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldType returns the old "type" field's value of the RetrievalLog entity.
+// If the RetrievalLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RetrievalLogMutation) OldType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldType: %w", err)
+	}
+	return oldValue.Type, nil
+}
+
+// ClearType clears the value of the "type" field.
+func (m *RetrievalLogMutation) ClearType() {
+	m._type = nil
+	m.clearedFields[retrievallog.FieldType] = struct{}{}
+}
+
+// TypeCleared returns if the "type" field was cleared in this mutation.
+func (m *RetrievalLogMutation) TypeCleared() bool {
+	_, ok := m.clearedFields[retrievallog.FieldType]
+	return ok
+}
+
+// ResetType resets all changes to the "type" field.
+func (m *RetrievalLogMutation) ResetType() {
+	m._type = nil
+	delete(m.clearedFields, retrievallog.FieldType)
+}
+
+// SetDetail sets the "detail" field.
+func (m *RetrievalLogMutation) SetDetail(s string) {
+	m.detail = &s
+}
+
+// Detail returns the value of the "detail" field in the mutation.
+func (m *RetrievalLogMutation) Detail() (r string, exists bool) {
+	v := m.detail
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDetail returns the old "detail" field's value of the RetrievalLog entity.
+// If the RetrievalLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *RetrievalLogMutation) OldDetail(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDetail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDetail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDetail: %w", err)
+	}
+	return oldValue.Detail, nil
+}
+
+// ClearDetail clears the value of the "detail" field.
+func (m *RetrievalLogMutation) ClearDetail() {
+	m.detail = nil
+	m.clearedFields[retrievallog.FieldDetail] = struct{}{}
+}
+
+// DetailCleared returns if the "detail" field was cleared in this mutation.
+func (m *RetrievalLogMutation) DetailCleared() bool {
+	_, ok := m.clearedFields[retrievallog.FieldDetail]
+	return ok
+}
+
+// ResetDetail resets all changes to the "detail" field.
+func (m *RetrievalLogMutation) ResetDetail() {
+	m.detail = nil
+	delete(m.clearedFields, retrievallog.FieldDetail)
+}
+
 // SetRetrievedChunks sets the "retrieved_chunks" field.
 func (m *RetrievalLogMutation) SetRetrievedChunks(value []map[string]interface{}) {
 	m.retrieved_chunks = &value
@@ -9087,7 +9187,7 @@ func (m *RetrievalLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *RetrievalLogMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 7)
 	if m.message_id != nil {
 		fields = append(fields, retrievallog.FieldMessageID)
 	}
@@ -9096,6 +9196,12 @@ func (m *RetrievalLogMutation) Fields() []string {
 	}
 	if m.query != nil {
 		fields = append(fields, retrievallog.FieldQuery)
+	}
+	if m._type != nil {
+		fields = append(fields, retrievallog.FieldType)
+	}
+	if m.detail != nil {
+		fields = append(fields, retrievallog.FieldDetail)
 	}
 	if m.retrieved_chunks != nil {
 		fields = append(fields, retrievallog.FieldRetrievedChunks)
@@ -9117,6 +9223,10 @@ func (m *RetrievalLogMutation) Field(name string) (ent.Value, bool) {
 		return m.SessionID()
 	case retrievallog.FieldQuery:
 		return m.Query()
+	case retrievallog.FieldType:
+		return m.GetType()
+	case retrievallog.FieldDetail:
+		return m.Detail()
 	case retrievallog.FieldRetrievedChunks:
 		return m.RetrievedChunks()
 	case retrievallog.FieldCreatedAt:
@@ -9136,6 +9246,10 @@ func (m *RetrievalLogMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldSessionID(ctx)
 	case retrievallog.FieldQuery:
 		return m.OldQuery(ctx)
+	case retrievallog.FieldType:
+		return m.OldType(ctx)
+	case retrievallog.FieldDetail:
+		return m.OldDetail(ctx)
 	case retrievallog.FieldRetrievedChunks:
 		return m.OldRetrievedChunks(ctx)
 	case retrievallog.FieldCreatedAt:
@@ -9169,6 +9283,20 @@ func (m *RetrievalLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetQuery(v)
+		return nil
+	case retrievallog.FieldType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetType(v)
+		return nil
+	case retrievallog.FieldDetail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDetail(v)
 		return nil
 	case retrievallog.FieldRetrievedChunks:
 		v, ok := value.([]map[string]interface{})
@@ -9223,6 +9351,12 @@ func (m *RetrievalLogMutation) ClearedFields() []string {
 	if m.FieldCleared(retrievallog.FieldQuery) {
 		fields = append(fields, retrievallog.FieldQuery)
 	}
+	if m.FieldCleared(retrievallog.FieldType) {
+		fields = append(fields, retrievallog.FieldType)
+	}
+	if m.FieldCleared(retrievallog.FieldDetail) {
+		fields = append(fields, retrievallog.FieldDetail)
+	}
 	if m.FieldCleared(retrievallog.FieldRetrievedChunks) {
 		fields = append(fields, retrievallog.FieldRetrievedChunks)
 	}
@@ -9249,6 +9383,12 @@ func (m *RetrievalLogMutation) ClearField(name string) error {
 	case retrievallog.FieldQuery:
 		m.ClearQuery()
 		return nil
+	case retrievallog.FieldType:
+		m.ClearType()
+		return nil
+	case retrievallog.FieldDetail:
+		m.ClearDetail()
+		return nil
 	case retrievallog.FieldRetrievedChunks:
 		m.ClearRetrievedChunks()
 		return nil
@@ -9268,6 +9408,12 @@ func (m *RetrievalLogMutation) ResetField(name string) error {
 		return nil
 	case retrievallog.FieldQuery:
 		m.ResetQuery()
+		return nil
+	case retrievallog.FieldType:
+		m.ResetType()
+		return nil
+	case retrievallog.FieldDetail:
+		m.ResetDetail()
 		return nil
 	case retrievallog.FieldRetrievedChunks:
 		m.ResetRetrievedChunks()

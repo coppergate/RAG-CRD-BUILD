@@ -21,6 +21,10 @@ const (
 	FieldSessionID = "session_id"
 	// FieldQuery holds the string denoting the query field in the database.
 	FieldQuery = "query"
+	// FieldType holds the string denoting the type field in the database.
+	FieldType = "type"
+	// FieldDetail holds the string denoting the detail field in the database.
+	FieldDetail = "detail"
 	// FieldRetrievedChunks holds the string denoting the retrieved_chunks field in the database.
 	FieldRetrievedChunks = "retrieved_chunks"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -46,6 +50,8 @@ var Columns = []string{
 	FieldMessageID,
 	FieldSessionID,
 	FieldQuery,
+	FieldType,
+	FieldDetail,
 	FieldRetrievedChunks,
 	FieldCreatedAt,
 }
@@ -88,6 +94,16 @@ func BySessionID(opts ...sql.OrderTermOption) OrderOption {
 // ByQuery orders the results by the query field.
 func ByQuery(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldQuery, opts...).ToFunc()
+}
+
+// ByType orders the results by the type field.
+func ByType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldType, opts...).ToFunc()
+}
+
+// ByDetail orders the results by the detail field.
+func ByDetail(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDetail, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.
