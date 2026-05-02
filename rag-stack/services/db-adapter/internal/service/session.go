@@ -156,9 +156,28 @@ func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Update session tags (replace existing)
+	// Ensure session exists first
+	_, err = s.client.Session.Query().Where(session.ID(sessionID)).Only(r.Context())
+	if ent.IsNotFound(err) {
+		// Create session if it doesn't exist
+		err = s.client.Session.Create().
+			SetID(sessionID).
+			SetName("Session " + sessionID.String()[:8]).
+			SetLastActiveAt(time.Now()).
+			Exec(r.Context())
+		if err != nil {
+			http.Error(w, "Failed to create session: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else if err != nil {
+		http.Error(w, "Failed to check session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	err = s.client.Session.UpdateOneID(sessionID).
 		ClearTags().
 		AddTagIDs(tagUUIDs...).
+		SetLastActiveAt(time.Now()).
 		Exec(r.Context())
 
 	if err != nil {
