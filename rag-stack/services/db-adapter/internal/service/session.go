@@ -140,20 +140,14 @@ func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Reques
 	}
 
 	var payload struct {
-		TagIDs []string `json:"tag_ids"`
+		TagIDs []int64 `json:"tag_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
 
-	var tagIDs []int64
-	for _, idStr := range payload.TagIDs {
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err == nil {
-			tagIDs = append(tagIDs, id)
-		}
-	}
+	tagIDs := payload.TagIDs
 
 	// Update session tags (replace existing)
 	// Ensure session exists first

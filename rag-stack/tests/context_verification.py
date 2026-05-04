@@ -63,7 +63,7 @@ def run_context_tests():
     results = []
     
     # We use a unique session for this test run to track it in TimescaleDB
-    session_id = f"test-session-{int(time.time())}"
+    session_id = int(time.time())
     
     for query in CONTEXT_QUERIES:
         print(f"  - Query: {query['question']}")

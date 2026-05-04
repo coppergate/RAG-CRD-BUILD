@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -16,7 +15,7 @@ import (
 
 var (
 	baseURL     = "https://rag-admin-api.rag.hierocracy.home"
-	sessionID   = ""
+	sessionID   int64
 	sessionName = ""
 	bucketName  = ""
 	s3Index     = "e2eTestBucket"
@@ -30,10 +29,10 @@ var (
 
 func main() {
 	tagName := fmt.Sprintf("test-tag-%d", time.Now().Unix())
-	sessionID = generateUUID()
+	sessionID = time.Now().Unix()
 	sessionName = fmt.Sprintf("e2e-session-%d", time.Now().Unix())
 	fmt.Printf("[%s] --- Starting E2E Test (Isolation) ---\n", time.Now().Format(time.RFC3339))
-	fmt.Printf("Tag Name: %s\nSession ID: %s\nSession Name: %s\n", tagName, sessionID, sessionName)
+	fmt.Printf("Tag Name: %s\nSession ID: %d\nSession Name: %s\n", tagName, sessionID, sessionName)
 
 	vectorSize := 4096 // Default for Llama 3.1
 	if vs := os.Getenv("VECTOR_SIZE"); vs != "" {
@@ -61,21 +60,21 @@ func main() {
 	if err != nil {
 		logFatal("Failed to get tag ID: %v", err)
 	}
-	fmt.Printf("Tag ID: %s\n", tagID)
+	fmt.Printf("Tag ID: %d\n", tagID)
 
 	// 3. Upload Test File
 	fmt.Println("[STEP 3] Uploading test file...")
 	baseFileName := fmt.Sprintf("e2e-test-file-%d.txt", time.Now().Unix())
 	fileName := fmt.Sprintf("%s/%s", s3Index, baseFileName)
 	timestamp := time.Now().Unix()
-	secretCode := fmt.Sprintf("BLUE-ORCHID-%s", tagID[:8])
+	secretCode := fmt.Sprintf("BLUE-ORCHID-%d", tagID)
 	fileContent := fmt.Sprintf("This is a secret code: %s. Generation timestamp: %d. This file is for RAG testing.", secretCode, timestamp)
 	if err := uploadFile(fileName, fileContent); err != nil {
 		logFatal("Failed to upload file: %v", err)
 	}
 
 	// 4. Trigger Ingestion
-	fmt.Printf("[STEP 4] Triggering ingestion for tag %s (ID: %s) and session %s...\n", tagName, tagID, sessionID)
+	fmt.Printf("[STEP 4] Triggering ingestion for tag %s (ID: %d) and session %d...\n", tagName, tagID, sessionID)
 	if err := triggerIngest(tagID, vectorSize, fileName, sessionID); err != nil {
 		logFatal("Failed to trigger ingestion: %v", err)
 	}
@@ -95,7 +94,7 @@ func main() {
 	for time.Since(start) < time.Minute {
 		// Use a very specific query to ensure we are testing the isolation and the file we just uploaded.
 		query := fmt.Sprintf("What is the secret code and its generation timestamp mentioned in the file %s? Provide the exact code and timestamp.", fileName)
-		answer, askErr := askRAG(query, []string{tagID})
+		answer, askErr := askRAG(query, []int64{tagID})
 		if askErr == nil {
 			lastAnswer = answer
 			fmt.Printf("DEBUG: Received RAG Answer: %q\n", answer)
@@ -212,7 +211,7 @@ func createTag(name string) error {
 	return nil
 }
 
-func getTags() (map[string]string, error) {
+func getTags() (map[string]int64, error) {
 	resp, err := client.Get(baseURL + "/api/db/tags")
 	if err != nil {
 		return nil, err
@@ -220,28 +219,28 @@ func getTags() (map[string]string, error) {
 	defer resp.Body.Close()
 
 	var tagsList []struct {
-		Id   string `json:"id"`
+		Id   int64  `json:"id"`
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tagsList); err != nil {
 		return nil, err
 	}
 
-	tags := make(map[string]string)
+	tags := make(map[string]int64)
 	for _, t := range tagsList {
 			tags[t.Name] = t.Id
 	}
 	return tags, nil
 }
 
-func getTagID(name string) (string, error) {
+func getTagID(name string) (int64, error) {
 	tags, err := getTags()
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	id, ok := tags[name]
 	if !ok {
-		return "", fmt.Errorf("tag %s not found", name)
+		return 0, fmt.Errorf("tag %s not found", name)
 	}
 	return id, nil
 }
@@ -282,10 +281,10 @@ func removeFileFromS3(name string) error {
 	return nil
 }
 
-func triggerIngest(tagID string, vectorSize int, fileName string, sessionID string) error {
+func triggerIngest(tagID int64, vectorSize int, fileName string, sessionID int64) error {
 	payload := map[string]interface{}{
 		"ingestion_id": tagID,
-		"tag_ids":      []string{tagID},
+		"tag_ids":      []int64{tagID},
 		"tag_names":    []string{"E2E-Tag"},
 		"vector_size":  vectorSize,
 		"file_names":   []string{fileName},
@@ -306,12 +305,12 @@ func triggerIngest(tagID string, vectorSize int, fileName string, sessionID stri
 	return nil
 }
 
-func associateTagWithSession(sessionID, tagID string) error {
+func associateTagWithSession(sessionID, tagID int64) error {
 	payload := map[string]interface{}{
-		"tag_ids": []string{tagID},
+		"tag_ids": []int64{tagID},
 	}
 	body, _ := json.Marshal(payload)
-	url := fmt.Sprintf("%s/api/db/sessions/tags?session_id=%s", baseURL, sessionID)
+	url := fmt.Sprintf("%s/api/db/sessions/tags?session_id=%d", baseURL, sessionID)
 	resp, err := client.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return err
@@ -323,7 +322,7 @@ func associateTagWithSession(sessionID, tagID string) error {
 	return nil
 }
 
-func askRAG(query string, tags []string) (string, error) {
+func askRAG(query string, tags []int64) (string, error) {
 	payload := map[string]interface{}{
 		"prompt":       query,
 		"tags":         tags,
@@ -350,8 +349,8 @@ func askRAG(query string, tags []string) (string, error) {
 	return result.Result, nil
 }
 
-func deleteData(tagID string) error {
-	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/db/tags/"+tagID, nil)
+func deleteData(tagID int64) error {
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/api/db/tags/%d", baseURL, tagID), nil)
 	if err != nil {
 		return err
 	}
@@ -366,8 +365,8 @@ func deleteData(tagID string) error {
 	return nil
 }
 
-func deleteSession(id string) error {
-	req, err := http.NewRequest(http.MethodDelete, baseURL+"/api/db/sessions/"+id, nil)
+func deleteSession(id int64) error {
+	req, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/api/db/sessions/%d", baseURL, id), nil)
 	if err != nil {
 		return err
 	}
@@ -385,10 +384,4 @@ func deleteSession(id string) error {
 func logFatal(format string, v ...interface{}) {
 	fmt.Printf(format+"\n", v...)
 	os.Exit(1)
-}
-
-func generateUUID() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }

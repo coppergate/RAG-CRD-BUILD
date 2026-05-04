@@ -345,7 +345,7 @@ fi
 
 if ! is_step_done "ingestion-job"; then
 echo "--- 12. Preparing Ingestion Pipeline ---"
-$KUBECTL apply -f "$REPO_DIR/ingestion/ingest-job-s3.yaml"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/ingestion/ingest-job.yaml"
 mark_step_done "ingestion-job"
 fi
 

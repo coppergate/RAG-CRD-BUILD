@@ -18,7 +18,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"github.com/apache/pulsar-client-go/pulsar"
-	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"app-builds/common/contracts"
@@ -84,7 +83,7 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type Group struct {
-		TagIDs   []string
+		TagIDs   []int64
 		TagNames []string
 		Paths    []string
 	}
@@ -121,9 +120,9 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		var newTagIDsStr []string
-		var newTagNames []string
 		var newTagIDs []int64
+		var newTagNames []string
+		var newTagIDsStr []string
 		for tid := range newTagIDsMap {
 			newTagIDs = append(newTagIDs, tid)
 			if name, ok := tagMap[tid]; ok {
@@ -139,7 +138,7 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 
 		if _, ok := groups[key]; !ok {
 			groups[key] = &Group{
-				TagIDs:   newTagIDsStr,
+				TagIDs:   newTagIDs,
 				TagNames: newTagNames,
 				Paths:    []string{},
 			}
@@ -163,7 +162,7 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 
 		if s.qdrantProducer != nil {
 			delOp := &contracts.QdrantOp{
-				Id:         uuid.New().String(),
+				Id:         strconv.FormatInt(time.Now().UnixNano(), 10),
 				Action:     "delete",
 				Collection: "vectors",
 				Paths:      group.Paths,
@@ -173,12 +172,12 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ingestReq := struct {
-			IngestionID string   `json:"ingestion_id"`
+			IngestionID int64    `json:"ingestion_id"`
 			TagNames    []string `json:"tag_names"`
-			TagIDs      []string `json:"tag_ids"`
+			TagIDs      []int64  `json:"tag_ids"`
 			FileNames   []string `json:"file_names"`
 		}{
-			IngestionID: uuid.New().String(),
+			IngestionID: time.Now().UnixNano(),
 			TagNames:    group.TagNames,
 			TagIDs:      group.TagIDs,
 			FileNames:   group.Paths,

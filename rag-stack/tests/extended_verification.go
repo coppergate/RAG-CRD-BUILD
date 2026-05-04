@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func testExtendedVerification(sessionID string, tagID string, tagName string, fileName string, vectorSize int) {
+func testExtendedVerification(sessionID int64, tagID int64, tagName string, fileName string, vectorSize int) {
 	fmt.Println("\n--- Starting Iteration 6b Extended Tests ---")
 
 	// 1. Verify Virtual FS Listing
@@ -57,8 +57,8 @@ func testExtendedVerification(sessionID string, tagID string, tagName string, fi
 	fmt.Println("--- Iteration 6b Extended Tests Completed ---\n")
 }
 
-func verifyVirtualFS(sessionID string, expectedFile string) error {
-	url := fmt.Sprintf("%s/api/db/storage/files?session_id=%s", baseURL, sessionID)
+func verifyVirtualFS(sessionID int64, expectedFile string) error {
+	url := fmt.Sprintf("%s/api/db/storage/files?session_id=%d", baseURL, sessionID)
 	resp, err := client.Get(url)
 	if err != nil {
 		return err
@@ -94,11 +94,11 @@ func verifyVirtualFS(sessionID string, expectedFile string) error {
 	return nil
 }
 
-func verifySessionHealth(sessionID string) error {
-	url := fmt.Sprintf("%s/api/db/metrics/sessions/health?session_id=%s", baseURL, sessionID)
+func verifySessionHealth(sessionID int64) error {
+	url := fmt.Sprintf("%s/api/db/metrics/sessions/health?session_id=%d", baseURL, sessionID)
 	
 	var health struct {
-		SessionId     string  `json:"session_id"`
+		SessionId     int64   `json:"session_id"`
 		TotalRequests int     `json:"total_requests"`
 		SuccessRate   float64 `json:"success_rate"`
 		Status        string  `json:"status"`
@@ -132,8 +132,8 @@ func verifySessionHealth(sessionID string) error {
 	return fmt.Errorf("health report shows %d requests for session %s", health.TotalRequests, sessionID)
 }
 
-func verifyAuditLogs(sessionID string) error {
-	url := fmt.Sprintf("%s/api/db/audit/retrieval?session_id=%s", baseURL, sessionID)
+func verifyAuditLogs(sessionID int64) error {
+	url := fmt.Sprintf("%s/api/db/audit/retrieval?session_id=%d", baseURL, sessionID)
 	
 	var logs []struct {
 		Type   string `json:"type"`

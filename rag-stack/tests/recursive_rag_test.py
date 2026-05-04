@@ -39,7 +39,7 @@ def test_recursive_rag_flow():
 
     # 2. Setup Test Request
     correlation_id = str(uuid.uuid4())
-    session_id = str(uuid.uuid4())
+    session_id = int(time.time())
     
     # A query that should ideally trigger some planning and execution
     # To test recursion, we would need a response that contains "insufficient context"

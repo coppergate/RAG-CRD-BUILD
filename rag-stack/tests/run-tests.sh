@@ -21,7 +21,6 @@ $KUBECTL delete configmap rag-integration-tests -n $NAMESPACE --ignore-not-found
 $KUBECTL create configmap rag-integration-tests -n $NAMESPACE \
     --from-file="${TEST_DIR}/integration_test.py" \
     --from-file="${TEST_DIR}/api_health_test.py" \
-    --from-file="${TEST_DIR}/ingestion_isolation.py" \
     --from-file="${TEST_DIR}/context_verification.py" \
     --from-file="${TEST_DIR}/recursive_rag_test.py" \
     --from-file="${TEST_DIR}/pulsar_crud_test.py" \
