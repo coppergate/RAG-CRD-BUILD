@@ -28,8 +28,8 @@ def test_aggregator_flow():
     client = Client(PULSAR_URL, **client_args)
     
     try:
-        request_id = str(uuid.uuid4())
-        session_id = str(uuid.uuid4())
+        request_id = str(time.time_ns())
+        session_id = int(time.time())
         session_topic = f"persistent://rag-pipeline/sessions/{request_id}"
         
         print(f"  - Request ID: {request_id}")
