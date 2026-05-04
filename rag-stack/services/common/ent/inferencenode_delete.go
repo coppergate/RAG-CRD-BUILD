@@ -40,7 +40,7 @@ func (_d *InferenceNodeDelete) ExecX(ctx context.Context) int {
 }
 
 func (_d *InferenceNodeDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(inferencenode.Table, sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewDeleteSpec(inferencenode.Table, sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64))
 	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {

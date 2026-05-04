@@ -8,61 +8,60 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/google/uuid"
 )
 
 // ID filters vertices based on their ID field.
-func ID(id uuid.UUID) predicate.MemoryEvent {
+func ID(id int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldEQ(FieldID, id))
 }
 
 // IDEQ applies the EQ predicate on the ID field.
-func IDEQ(id uuid.UUID) predicate.MemoryEvent {
+func IDEQ(id int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldEQ(FieldID, id))
 }
 
 // IDNEQ applies the NEQ predicate on the ID field.
-func IDNEQ(id uuid.UUID) predicate.MemoryEvent {
+func IDNEQ(id int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldNEQ(FieldID, id))
 }
 
 // IDIn applies the In predicate on the ID field.
-func IDIn(ids ...uuid.UUID) predicate.MemoryEvent {
+func IDIn(ids ...int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldIn(FieldID, ids...))
 }
 
 // IDNotIn applies the NotIn predicate on the ID field.
-func IDNotIn(ids ...uuid.UUID) predicate.MemoryEvent {
+func IDNotIn(ids ...int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldNotIn(FieldID, ids...))
 }
 
 // IDGT applies the GT predicate on the ID field.
-func IDGT(id uuid.UUID) predicate.MemoryEvent {
+func IDGT(id int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldGT(FieldID, id))
 }
 
 // IDGTE applies the GTE predicate on the ID field.
-func IDGTE(id uuid.UUID) predicate.MemoryEvent {
+func IDGTE(id int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldGTE(FieldID, id))
 }
 
 // IDLT applies the LT predicate on the ID field.
-func IDLT(id uuid.UUID) predicate.MemoryEvent {
+func IDLT(id int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldLT(FieldID, id))
 }
 
 // IDLTE applies the LTE predicate on the ID field.
-func IDLTE(id uuid.UUID) predicate.MemoryEvent {
+func IDLTE(id int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldLTE(FieldID, id))
 }
 
 // MemoryItemID applies equality check predicate on the "memory_item_id" field. It's identical to MemoryItemIDEQ.
-func MemoryItemID(v uuid.UUID) predicate.MemoryEvent {
+func MemoryItemID(v int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldEQ(FieldMemoryItemID, v))
 }
 
 // SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
-func SessionID(v uuid.UUID) predicate.MemoryEvent {
+func SessionID(v int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldEQ(FieldSessionID, v))
 }
 
@@ -77,62 +76,42 @@ func CreatedAt(v time.Time) predicate.MemoryEvent {
 }
 
 // MemoryItemIDEQ applies the EQ predicate on the "memory_item_id" field.
-func MemoryItemIDEQ(v uuid.UUID) predicate.MemoryEvent {
+func MemoryItemIDEQ(v int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldEQ(FieldMemoryItemID, v))
 }
 
 // MemoryItemIDNEQ applies the NEQ predicate on the "memory_item_id" field.
-func MemoryItemIDNEQ(v uuid.UUID) predicate.MemoryEvent {
+func MemoryItemIDNEQ(v int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldNEQ(FieldMemoryItemID, v))
 }
 
 // MemoryItemIDIn applies the In predicate on the "memory_item_id" field.
-func MemoryItemIDIn(vs ...uuid.UUID) predicate.MemoryEvent {
+func MemoryItemIDIn(vs ...int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldIn(FieldMemoryItemID, vs...))
 }
 
 // MemoryItemIDNotIn applies the NotIn predicate on the "memory_item_id" field.
-func MemoryItemIDNotIn(vs ...uuid.UUID) predicate.MemoryEvent {
+func MemoryItemIDNotIn(vs ...int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldNotIn(FieldMemoryItemID, vs...))
 }
 
-// MemoryItemIDGT applies the GT predicate on the "memory_item_id" field.
-func MemoryItemIDGT(v uuid.UUID) predicate.MemoryEvent {
-	return predicate.MemoryEvent(sql.FieldGT(FieldMemoryItemID, v))
-}
-
-// MemoryItemIDGTE applies the GTE predicate on the "memory_item_id" field.
-func MemoryItemIDGTE(v uuid.UUID) predicate.MemoryEvent {
-	return predicate.MemoryEvent(sql.FieldGTE(FieldMemoryItemID, v))
-}
-
-// MemoryItemIDLT applies the LT predicate on the "memory_item_id" field.
-func MemoryItemIDLT(v uuid.UUID) predicate.MemoryEvent {
-	return predicate.MemoryEvent(sql.FieldLT(FieldMemoryItemID, v))
-}
-
-// MemoryItemIDLTE applies the LTE predicate on the "memory_item_id" field.
-func MemoryItemIDLTE(v uuid.UUID) predicate.MemoryEvent {
-	return predicate.MemoryEvent(sql.FieldLTE(FieldMemoryItemID, v))
-}
-
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
-func SessionIDEQ(v uuid.UUID) predicate.MemoryEvent {
+func SessionIDEQ(v int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldEQ(FieldSessionID, v))
 }
 
 // SessionIDNEQ applies the NEQ predicate on the "session_id" field.
-func SessionIDNEQ(v uuid.UUID) predicate.MemoryEvent {
+func SessionIDNEQ(v int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldNEQ(FieldSessionID, v))
 }
 
 // SessionIDIn applies the In predicate on the "session_id" field.
-func SessionIDIn(vs ...uuid.UUID) predicate.MemoryEvent {
+func SessionIDIn(vs ...int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldIn(FieldSessionID, vs...))
 }
 
 // SessionIDNotIn applies the NotIn predicate on the "session_id" field.
-func SessionIDNotIn(vs ...uuid.UUID) predicate.MemoryEvent {
+func SessionIDNotIn(vs ...int64) predicate.MemoryEvent {
 	return predicate.MemoryEvent(sql.FieldNotIn(FieldSessionID, vs...))
 }
 
@@ -276,6 +255,29 @@ func HasSession() predicate.MemoryEvent {
 func HasSessionWith(preds ...predicate.Session) predicate.MemoryEvent {
 	return predicate.MemoryEvent(func(s *sql.Selector) {
 		step := newSessionStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasMemoryItem applies the HasEdge predicate on the "memory_item" edge.
+func HasMemoryItem() predicate.MemoryEvent {
+	return predicate.MemoryEvent(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, MemoryItemTable, MemoryItemColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasMemoryItemWith applies the HasEdge predicate on the "memory_item" edge with a given conditions (other predicates).
+func HasMemoryItemWith(preds ...predicate.MemoryItem) predicate.MemoryEvent {
+	return predicate.MemoryEvent(func(s *sql.Selector) {
+		step := newMemoryItemStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

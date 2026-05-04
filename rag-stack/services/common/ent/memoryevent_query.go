@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/predicate"
 	"app-builds/common/ent/session"
 	"context"
@@ -14,17 +15,17 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // MemoryEventQuery is the builder for querying MemoryEvent entities.
 type MemoryEventQuery struct {
 	config
-	ctx         *QueryContext
-	order       []memoryevent.OrderOption
-	inters      []Interceptor
-	predicates  []predicate.MemoryEvent
-	withSession *SessionQuery
+	ctx            *QueryContext
+	order          []memoryevent.OrderOption
+	inters         []Interceptor
+	predicates     []predicate.MemoryEvent
+	withSession    *SessionQuery
+	withMemoryItem *MemoryItemQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -83,6 +84,28 @@ func (_q *MemoryEventQuery) QuerySession() *SessionQuery {
 	return query
 }
 
+// QueryMemoryItem chains the current query on the "memory_item" edge.
+func (_q *MemoryEventQuery) QueryMemoryItem() *MemoryItemQuery {
+	query := (&MemoryItemClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memoryevent.Table, memoryevent.FieldID, selector),
+			sqlgraph.To(memoryitem.Table, memoryitem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, memoryevent.MemoryItemTable, memoryevent.MemoryItemColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // First returns the first MemoryEvent entity from the query.
 // Returns a *NotFoundError when no MemoryEvent was found.
 func (_q *MemoryEventQuery) First(ctx context.Context) (*MemoryEvent, error) {
@@ -107,8 +130,8 @@ func (_q *MemoryEventQuery) FirstX(ctx context.Context) *MemoryEvent {
 
 // FirstID returns the first MemoryEvent ID from the query.
 // Returns a *NotFoundError when no MemoryEvent ID was found.
-func (_q *MemoryEventQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *MemoryEventQuery) FirstID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -120,7 +143,7 @@ func (_q *MemoryEventQuery) FirstID(ctx context.Context) (id uuid.UUID, err erro
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *MemoryEventQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *MemoryEventQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -158,8 +181,8 @@ func (_q *MemoryEventQuery) OnlyX(ctx context.Context) *MemoryEvent {
 // OnlyID is like Only, but returns the only MemoryEvent ID in the query.
 // Returns a *NotSingularError when more than one MemoryEvent ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *MemoryEventQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *MemoryEventQuery) OnlyID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -175,7 +198,7 @@ func (_q *MemoryEventQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *MemoryEventQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *MemoryEventQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -203,7 +226,7 @@ func (_q *MemoryEventQuery) AllX(ctx context.Context) []*MemoryEvent {
 }
 
 // IDs executes the query and returns a list of MemoryEvent IDs.
-func (_q *MemoryEventQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+func (_q *MemoryEventQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
@@ -215,7 +238,7 @@ func (_q *MemoryEventQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *MemoryEventQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *MemoryEventQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -270,12 +293,13 @@ func (_q *MemoryEventQuery) Clone() *MemoryEventQuery {
 		return nil
 	}
 	return &MemoryEventQuery{
-		config:      _q.config,
-		ctx:         _q.ctx.Clone(),
-		order:       append([]memoryevent.OrderOption{}, _q.order...),
-		inters:      append([]Interceptor{}, _q.inters...),
-		predicates:  append([]predicate.MemoryEvent{}, _q.predicates...),
-		withSession: _q.withSession.Clone(),
+		config:         _q.config,
+		ctx:            _q.ctx.Clone(),
+		order:          append([]memoryevent.OrderOption{}, _q.order...),
+		inters:         append([]Interceptor{}, _q.inters...),
+		predicates:     append([]predicate.MemoryEvent{}, _q.predicates...),
+		withSession:    _q.withSession.Clone(),
+		withMemoryItem: _q.withMemoryItem.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -293,13 +317,24 @@ func (_q *MemoryEventQuery) WithSession(opts ...func(*SessionQuery)) *MemoryEven
 	return _q
 }
 
+// WithMemoryItem tells the query-builder to eager-load the nodes that are connected to
+// the "memory_item" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *MemoryEventQuery) WithMemoryItem(opts ...func(*MemoryItemQuery)) *MemoryEventQuery {
+	query := (&MemoryItemClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withMemoryItem = query
+	return _q
+}
+
 // GroupBy is used to group vertices by one or more fields/columns.
 // It is often used with aggregate functions, like: count, max, mean, min, sum.
 //
 // Example:
 //
 //	var v []struct {
-//		MemoryItemID uuid.UUID `json:"memory_item_id,omitempty"`
+//		MemoryItemID int64 `json:"memory_item_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
@@ -322,7 +357,7 @@ func (_q *MemoryEventQuery) GroupBy(field string, fields ...string) *MemoryEvent
 // Example:
 //
 //	var v []struct {
-//		MemoryItemID uuid.UUID `json:"memory_item_id,omitempty"`
+//		MemoryItemID int64 `json:"memory_item_id,omitempty"`
 //	}
 //
 //	client.MemoryEvent.Query().
@@ -371,8 +406,9 @@ func (_q *MemoryEventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 	var (
 		nodes       = []*MemoryEvent{}
 		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			_q.withSession != nil,
+			_q.withMemoryItem != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -399,12 +435,18 @@ func (_q *MemoryEventQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 			return nil, err
 		}
 	}
+	if query := _q.withMemoryItem; query != nil {
+		if err := _q.loadMemoryItem(ctx, query, nodes, nil,
+			func(n *MemoryEvent, e *MemoryItem) { n.Edges.MemoryItem = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
 func (_q *MemoryEventQuery) loadSession(ctx context.Context, query *SessionQuery, nodes []*MemoryEvent, init func(*MemoryEvent), assign func(*MemoryEvent, *Session)) error {
-	ids := make([]uuid.UUID, 0, len(nodes))
-	nodeids := make(map[uuid.UUID][]*MemoryEvent)
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*MemoryEvent)
 	for i := range nodes {
 		fk := nodes[i].SessionID
 		if _, ok := nodeids[fk]; !ok {
@@ -431,6 +473,35 @@ func (_q *MemoryEventQuery) loadSession(ctx context.Context, query *SessionQuery
 	}
 	return nil
 }
+func (_q *MemoryEventQuery) loadMemoryItem(ctx context.Context, query *MemoryItemQuery, nodes []*MemoryEvent, init func(*MemoryEvent), assign func(*MemoryEvent, *MemoryItem)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*MemoryEvent)
+	for i := range nodes {
+		fk := nodes[i].MemoryItemID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(memoryitem.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "memory_item_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 
 func (_q *MemoryEventQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
@@ -442,7 +513,7 @@ func (_q *MemoryEventQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (_q *MemoryEventQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(memoryevent.Table, memoryevent.Columns, sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewQuerySpec(memoryevent.Table, memoryevent.Columns, sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -459,6 +530,9 @@ func (_q *MemoryEventQuery) querySpec() *sqlgraph.QuerySpec {
 		}
 		if _q.withSession != nil {
 			_spec.Node.AddColumnOnce(memoryevent.FieldSessionID)
+		}
+		if _q.withMemoryItem != nil {
+			_spec.Node.AddColumnOnce(memoryevent.FieldMemoryItemID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

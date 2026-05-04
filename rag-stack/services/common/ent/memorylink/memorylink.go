@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -26,8 +26,17 @@ const (
 	FieldMetadata = "metadata"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// EdgeMemoryItem holds the string denoting the memory_item edge name in mutations.
+	EdgeMemoryItem = "memory_item"
 	// Table holds the table name of the memorylink in the database.
 	Table = "memory_links"
+	// MemoryItemTable is the table that holds the memory_item relation/edge.
+	MemoryItemTable = "memory_links"
+	// MemoryItemInverseTable is the table name for the MemoryItem entity.
+	// It exists in this package in order to avoid circular dependency with the "memoryitem" package.
+	MemoryItemInverseTable = "memory_items"
+	// MemoryItemColumn is the table column denoting the memory_item relation/edge.
+	MemoryItemColumn = "memory_item_id"
 )
 
 // Columns holds all SQL columns for memorylink fields.
@@ -41,10 +50,21 @@ var Columns = []string{
 	FieldCreatedAt,
 }
 
+// ForeignKeys holds the SQL foreign-keys that are owned by the "memory_links"
+// table and are not defined as standalone fields in the schema.
+var ForeignKeys = []string{
+	"memory_item_links",
+}
+
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
+			return true
+		}
+	}
+	for i := range ForeignKeys {
+		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -54,8 +74,6 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
-	// DefaultID holds the default value on creation for the "id" field.
-	DefaultID func() uuid.UUID
 )
 
 // OrderOption defines the ordering options for the MemoryLink queries.
@@ -74,4 +92,18 @@ func ByMemoryItemID(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByMemoryItemField orders the results by memory_item field.
+func ByMemoryItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newMemoryItemStep(), sql.OrderByField(field, opts...))
+	}
+}
+func newMemoryItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(MemoryItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, MemoryItemTable, MemoryItemColumn),
+	)
 }

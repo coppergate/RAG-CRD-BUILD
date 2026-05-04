@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/predicate"
 	"app-builds/common/ent/retrievallog"
@@ -34,16 +35,23 @@ func (_u *SessionUpdate) Where(ps ...predicate.Session) *SessionUpdate {
 }
 
 // SetProjectID sets the "project_id" field.
-func (_u *SessionUpdate) SetProjectID(v uuid.UUID) *SessionUpdate {
+func (_u *SessionUpdate) SetProjectID(v int64) *SessionUpdate {
+	_u.mutation.ResetProjectID()
 	_u.mutation.SetProjectID(v)
 	return _u
 }
 
 // SetNillableProjectID sets the "project_id" field if the given value is not nil.
-func (_u *SessionUpdate) SetNillableProjectID(v *uuid.UUID) *SessionUpdate {
+func (_u *SessionUpdate) SetNillableProjectID(v *int64) *SessionUpdate {
 	if v != nil {
 		_u.SetProjectID(*v)
 	}
+	return _u
+}
+
+// AddProjectID adds value to the "project_id" field.
+func (_u *SessionUpdate) AddProjectID(v int64) *SessionUpdate {
+	_u.mutation.AddProjectID(v)
 	return _u
 }
 
@@ -154,14 +162,14 @@ func (_u *SessionUpdate) SetNillableLastActiveAt(v *time.Time) *SessionUpdate {
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by IDs.
-func (_u *SessionUpdate) AddTagIDs(ids ...uuid.UUID) *SessionUpdate {
+func (_u *SessionUpdate) AddTagIDs(ids ...int64) *SessionUpdate {
 	_u.mutation.AddTagIDs(ids...)
 	return _u
 }
 
 // AddTags adds the "tags" edges to the Tag entity.
 func (_u *SessionUpdate) AddTags(v ...*Tag) *SessionUpdate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -184,14 +192,14 @@ func (_u *SessionUpdate) AddMetrics(v ...*ModelExecutionMetric) *SessionUpdate {
 }
 
 // AddRetrievalLogIDs adds the "retrieval_logs" edge to the RetrievalLog entity by IDs.
-func (_u *SessionUpdate) AddRetrievalLogIDs(ids ...uuid.UUID) *SessionUpdate {
+func (_u *SessionUpdate) AddRetrievalLogIDs(ids ...int64) *SessionUpdate {
 	_u.mutation.AddRetrievalLogIDs(ids...)
 	return _u
 }
 
 // AddRetrievalLogs adds the "retrieval_logs" edges to the RetrievalLog entity.
 func (_u *SessionUpdate) AddRetrievalLogs(v ...*RetrievalLog) *SessionUpdate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -199,18 +207,33 @@ func (_u *SessionUpdate) AddRetrievalLogs(v ...*RetrievalLog) *SessionUpdate {
 }
 
 // AddMemoryEventIDs adds the "memory_events" edge to the MemoryEvent entity by IDs.
-func (_u *SessionUpdate) AddMemoryEventIDs(ids ...uuid.UUID) *SessionUpdate {
+func (_u *SessionUpdate) AddMemoryEventIDs(ids ...int64) *SessionUpdate {
 	_u.mutation.AddMemoryEventIDs(ids...)
 	return _u
 }
 
 // AddMemoryEvents adds the "memory_events" edges to the MemoryEvent entity.
 func (_u *SessionUpdate) AddMemoryEvents(v ...*MemoryEvent) *SessionUpdate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
 	return _u.AddMemoryEventIDs(ids...)
+}
+
+// AddMemoryItemIDs adds the "memory_items" edge to the MemoryItem entity by IDs.
+func (_u *SessionUpdate) AddMemoryItemIDs(ids ...int64) *SessionUpdate {
+	_u.mutation.AddMemoryItemIDs(ids...)
+	return _u
+}
+
+// AddMemoryItems adds the "memory_items" edges to the MemoryItem entity.
+func (_u *SessionUpdate) AddMemoryItems(v ...*MemoryItem) *SessionUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddMemoryItemIDs(ids...)
 }
 
 // Mutation returns the SessionMutation object of the builder.
@@ -225,14 +248,14 @@ func (_u *SessionUpdate) ClearTags() *SessionUpdate {
 }
 
 // RemoveTagIDs removes the "tags" edge to Tag entities by IDs.
-func (_u *SessionUpdate) RemoveTagIDs(ids ...uuid.UUID) *SessionUpdate {
+func (_u *SessionUpdate) RemoveTagIDs(ids ...int64) *SessionUpdate {
 	_u.mutation.RemoveTagIDs(ids...)
 	return _u
 }
 
 // RemoveTags removes "tags" edges to Tag entities.
 func (_u *SessionUpdate) RemoveTags(v ...*Tag) *SessionUpdate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -267,14 +290,14 @@ func (_u *SessionUpdate) ClearRetrievalLogs() *SessionUpdate {
 }
 
 // RemoveRetrievalLogIDs removes the "retrieval_logs" edge to RetrievalLog entities by IDs.
-func (_u *SessionUpdate) RemoveRetrievalLogIDs(ids ...uuid.UUID) *SessionUpdate {
+func (_u *SessionUpdate) RemoveRetrievalLogIDs(ids ...int64) *SessionUpdate {
 	_u.mutation.RemoveRetrievalLogIDs(ids...)
 	return _u
 }
 
 // RemoveRetrievalLogs removes "retrieval_logs" edges to RetrievalLog entities.
 func (_u *SessionUpdate) RemoveRetrievalLogs(v ...*RetrievalLog) *SessionUpdate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -288,18 +311,39 @@ func (_u *SessionUpdate) ClearMemoryEvents() *SessionUpdate {
 }
 
 // RemoveMemoryEventIDs removes the "memory_events" edge to MemoryEvent entities by IDs.
-func (_u *SessionUpdate) RemoveMemoryEventIDs(ids ...uuid.UUID) *SessionUpdate {
+func (_u *SessionUpdate) RemoveMemoryEventIDs(ids ...int64) *SessionUpdate {
 	_u.mutation.RemoveMemoryEventIDs(ids...)
 	return _u
 }
 
 // RemoveMemoryEvents removes "memory_events" edges to MemoryEvent entities.
 func (_u *SessionUpdate) RemoveMemoryEvents(v ...*MemoryEvent) *SessionUpdate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveMemoryEventIDs(ids...)
+}
+
+// ClearMemoryItems clears all "memory_items" edges to the MemoryItem entity.
+func (_u *SessionUpdate) ClearMemoryItems() *SessionUpdate {
+	_u.mutation.ClearMemoryItems()
+	return _u
+}
+
+// RemoveMemoryItemIDs removes the "memory_items" edge to MemoryItem entities by IDs.
+func (_u *SessionUpdate) RemoveMemoryItemIDs(ids ...int64) *SessionUpdate {
+	_u.mutation.RemoveMemoryItemIDs(ids...)
+	return _u
+}
+
+// RemoveMemoryItems removes "memory_items" edges to MemoryItem entities.
+func (_u *SessionUpdate) RemoveMemoryItems(v ...*MemoryItem) *SessionUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveMemoryItemIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -330,7 +374,7 @@ func (_u *SessionUpdate) ExecX(ctx context.Context) {
 }
 
 func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	_spec := sqlgraph.NewUpdateSpec(session.Table, session.Columns, sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(session.Table, session.Columns, sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -339,10 +383,13 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 	}
 	if value, ok := _u.mutation.ProjectID(); ok {
-		_spec.SetField(session.FieldProjectID, field.TypeUUID, value)
+		_spec.SetField(session.FieldProjectID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedProjectID(); ok {
+		_spec.AddField(session.FieldProjectID, field.TypeInt64, value)
 	}
 	if _u.mutation.ProjectIDCleared() {
-		_spec.ClearField(session.FieldProjectID, field.TypeUUID)
+		_spec.ClearField(session.FieldProjectID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(session.FieldName, field.TypeString, value)
@@ -382,7 +429,7 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: session.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -395,7 +442,7 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: session.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -411,7 +458,7 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: session.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -472,7 +519,7 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: []string{session.RetrievalLogsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -485,7 +532,7 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: []string{session.RetrievalLogsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -501,7 +548,7 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: []string{session.RetrievalLogsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -517,7 +564,7 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: []string{session.MemoryEventsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -530,7 +577,7 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: []string{session.MemoryEventsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -546,7 +593,52 @@ func (_u *SessionUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Columns: []string{session.MemoryEventsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MemoryItemsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryItemsTable,
+			Columns: []string{session.MemoryItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedMemoryItemsIDs(); len(nodes) > 0 && !_u.mutation.MemoryItemsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryItemsTable,
+			Columns: []string{session.MemoryItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MemoryItemsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryItemsTable,
+			Columns: []string{session.MemoryItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -575,16 +667,23 @@ type SessionUpdateOne struct {
 }
 
 // SetProjectID sets the "project_id" field.
-func (_u *SessionUpdateOne) SetProjectID(v uuid.UUID) *SessionUpdateOne {
+func (_u *SessionUpdateOne) SetProjectID(v int64) *SessionUpdateOne {
+	_u.mutation.ResetProjectID()
 	_u.mutation.SetProjectID(v)
 	return _u
 }
 
 // SetNillableProjectID sets the "project_id" field if the given value is not nil.
-func (_u *SessionUpdateOne) SetNillableProjectID(v *uuid.UUID) *SessionUpdateOne {
+func (_u *SessionUpdateOne) SetNillableProjectID(v *int64) *SessionUpdateOne {
 	if v != nil {
 		_u.SetProjectID(*v)
 	}
+	return _u
+}
+
+// AddProjectID adds value to the "project_id" field.
+func (_u *SessionUpdateOne) AddProjectID(v int64) *SessionUpdateOne {
+	_u.mutation.AddProjectID(v)
 	return _u
 }
 
@@ -695,14 +794,14 @@ func (_u *SessionUpdateOne) SetNillableLastActiveAt(v *time.Time) *SessionUpdate
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by IDs.
-func (_u *SessionUpdateOne) AddTagIDs(ids ...uuid.UUID) *SessionUpdateOne {
+func (_u *SessionUpdateOne) AddTagIDs(ids ...int64) *SessionUpdateOne {
 	_u.mutation.AddTagIDs(ids...)
 	return _u
 }
 
 // AddTags adds the "tags" edges to the Tag entity.
 func (_u *SessionUpdateOne) AddTags(v ...*Tag) *SessionUpdateOne {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -725,14 +824,14 @@ func (_u *SessionUpdateOne) AddMetrics(v ...*ModelExecutionMetric) *SessionUpdat
 }
 
 // AddRetrievalLogIDs adds the "retrieval_logs" edge to the RetrievalLog entity by IDs.
-func (_u *SessionUpdateOne) AddRetrievalLogIDs(ids ...uuid.UUID) *SessionUpdateOne {
+func (_u *SessionUpdateOne) AddRetrievalLogIDs(ids ...int64) *SessionUpdateOne {
 	_u.mutation.AddRetrievalLogIDs(ids...)
 	return _u
 }
 
 // AddRetrievalLogs adds the "retrieval_logs" edges to the RetrievalLog entity.
 func (_u *SessionUpdateOne) AddRetrievalLogs(v ...*RetrievalLog) *SessionUpdateOne {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -740,18 +839,33 @@ func (_u *SessionUpdateOne) AddRetrievalLogs(v ...*RetrievalLog) *SessionUpdateO
 }
 
 // AddMemoryEventIDs adds the "memory_events" edge to the MemoryEvent entity by IDs.
-func (_u *SessionUpdateOne) AddMemoryEventIDs(ids ...uuid.UUID) *SessionUpdateOne {
+func (_u *SessionUpdateOne) AddMemoryEventIDs(ids ...int64) *SessionUpdateOne {
 	_u.mutation.AddMemoryEventIDs(ids...)
 	return _u
 }
 
 // AddMemoryEvents adds the "memory_events" edges to the MemoryEvent entity.
 func (_u *SessionUpdateOne) AddMemoryEvents(v ...*MemoryEvent) *SessionUpdateOne {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
 	return _u.AddMemoryEventIDs(ids...)
+}
+
+// AddMemoryItemIDs adds the "memory_items" edge to the MemoryItem entity by IDs.
+func (_u *SessionUpdateOne) AddMemoryItemIDs(ids ...int64) *SessionUpdateOne {
+	_u.mutation.AddMemoryItemIDs(ids...)
+	return _u
+}
+
+// AddMemoryItems adds the "memory_items" edges to the MemoryItem entity.
+func (_u *SessionUpdateOne) AddMemoryItems(v ...*MemoryItem) *SessionUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddMemoryItemIDs(ids...)
 }
 
 // Mutation returns the SessionMutation object of the builder.
@@ -766,14 +880,14 @@ func (_u *SessionUpdateOne) ClearTags() *SessionUpdateOne {
 }
 
 // RemoveTagIDs removes the "tags" edge to Tag entities by IDs.
-func (_u *SessionUpdateOne) RemoveTagIDs(ids ...uuid.UUID) *SessionUpdateOne {
+func (_u *SessionUpdateOne) RemoveTagIDs(ids ...int64) *SessionUpdateOne {
 	_u.mutation.RemoveTagIDs(ids...)
 	return _u
 }
 
 // RemoveTags removes "tags" edges to Tag entities.
 func (_u *SessionUpdateOne) RemoveTags(v ...*Tag) *SessionUpdateOne {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -808,14 +922,14 @@ func (_u *SessionUpdateOne) ClearRetrievalLogs() *SessionUpdateOne {
 }
 
 // RemoveRetrievalLogIDs removes the "retrieval_logs" edge to RetrievalLog entities by IDs.
-func (_u *SessionUpdateOne) RemoveRetrievalLogIDs(ids ...uuid.UUID) *SessionUpdateOne {
+func (_u *SessionUpdateOne) RemoveRetrievalLogIDs(ids ...int64) *SessionUpdateOne {
 	_u.mutation.RemoveRetrievalLogIDs(ids...)
 	return _u
 }
 
 // RemoveRetrievalLogs removes "retrieval_logs" edges to RetrievalLog entities.
 func (_u *SessionUpdateOne) RemoveRetrievalLogs(v ...*RetrievalLog) *SessionUpdateOne {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -829,18 +943,39 @@ func (_u *SessionUpdateOne) ClearMemoryEvents() *SessionUpdateOne {
 }
 
 // RemoveMemoryEventIDs removes the "memory_events" edge to MemoryEvent entities by IDs.
-func (_u *SessionUpdateOne) RemoveMemoryEventIDs(ids ...uuid.UUID) *SessionUpdateOne {
+func (_u *SessionUpdateOne) RemoveMemoryEventIDs(ids ...int64) *SessionUpdateOne {
 	_u.mutation.RemoveMemoryEventIDs(ids...)
 	return _u
 }
 
 // RemoveMemoryEvents removes "memory_events" edges to MemoryEvent entities.
 func (_u *SessionUpdateOne) RemoveMemoryEvents(v ...*MemoryEvent) *SessionUpdateOne {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveMemoryEventIDs(ids...)
+}
+
+// ClearMemoryItems clears all "memory_items" edges to the MemoryItem entity.
+func (_u *SessionUpdateOne) ClearMemoryItems() *SessionUpdateOne {
+	_u.mutation.ClearMemoryItems()
+	return _u
+}
+
+// RemoveMemoryItemIDs removes the "memory_items" edge to MemoryItem entities by IDs.
+func (_u *SessionUpdateOne) RemoveMemoryItemIDs(ids ...int64) *SessionUpdateOne {
+	_u.mutation.RemoveMemoryItemIDs(ids...)
+	return _u
+}
+
+// RemoveMemoryItems removes "memory_items" edges to MemoryItem entities.
+func (_u *SessionUpdateOne) RemoveMemoryItems(v ...*MemoryItem) *SessionUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveMemoryItemIDs(ids...)
 }
 
 // Where appends a list predicates to the SessionUpdate builder.
@@ -884,7 +1019,7 @@ func (_u *SessionUpdateOne) ExecX(ctx context.Context) {
 }
 
 func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err error) {
-	_spec := sqlgraph.NewUpdateSpec(session.Table, session.Columns, sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(session.Table, session.Columns, sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Session.id" for update`)}
@@ -910,10 +1045,13 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 		}
 	}
 	if value, ok := _u.mutation.ProjectID(); ok {
-		_spec.SetField(session.FieldProjectID, field.TypeUUID, value)
+		_spec.SetField(session.FieldProjectID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedProjectID(); ok {
+		_spec.AddField(session.FieldProjectID, field.TypeInt64, value)
 	}
 	if _u.mutation.ProjectIDCleared() {
-		_spec.ClearField(session.FieldProjectID, field.TypeUUID)
+		_spec.ClearField(session.FieldProjectID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(session.FieldName, field.TypeString, value)
@@ -953,7 +1091,7 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: session.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -966,7 +1104,7 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: session.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -982,7 +1120,7 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: session.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1043,7 +1181,7 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: []string{session.RetrievalLogsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1056,7 +1194,7 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: []string{session.RetrievalLogsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1072,7 +1210,7 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: []string{session.RetrievalLogsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1088,7 +1226,7 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: []string{session.MemoryEventsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1101,7 +1239,7 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: []string{session.MemoryEventsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1117,7 +1255,52 @@ func (_u *SessionUpdateOne) sqlSave(ctx context.Context) (_node *Session, err er
 			Columns: []string{session.MemoryEventsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MemoryItemsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryItemsTable,
+			Columns: []string{session.MemoryItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedMemoryItemsIDs(); len(nodes) > 0 && !_u.mutation.MemoryItemsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryItemsTable,
+			Columns: []string{session.MemoryItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MemoryItemsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryItemsTable,
+			Columns: []string{session.MemoryItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

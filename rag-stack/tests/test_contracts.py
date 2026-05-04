@@ -19,7 +19,7 @@ MEMORY_PACK_SCHEMA = load_schema("MemoryPack.schema.json")
 def test_prompt_schema_examples():
     ok = {
         "id": "123e4567-e89b-12d3-a456-426614174000",
-        "session_id": "eb984c67-00b6-4794-b848-6d72f20c034b",
+        "session_id": 12345,
         "content": "Who is Junie?",
         "metadata": {"source": "test"}
     }
@@ -38,42 +38,59 @@ def test_response_schema_examples():
 
 
 def test_dbop_schema_examples():
-    ok = {"op": "delete_session", "id": "eb984c67-00b6-4794-b848-6d72f20c034b"}
+    ok = {"op": "delete_session", "id": 12345}
     Draft7Validator(DBOP_SCHEMA).validate(ok)
 
 
 def test_memory_write_schema_examples():
     ok = {
-        "id": "123e4567-e89b-12d3-a456-426614174000",
-        "session_id": "eb984c67-00b6-4794-b848-6d72f20c034b",
-        "tags": ["test"],
-        "content": "Junie likes tea.",
-        "embedding": [0.1] * 4096
+        "request_id": "123e4567-e89b-12d3-a456-426614174000",
+        "scope": {
+            "session_id": 12345,
+            "project_id": 67890
+        },
+        "writes": [
+            {
+                "memory_id": 999,
+                "memory_type": "short_term_memory",
+                "summary": "Junie likes tea.",
+                "content": "Junie likes tea."
+            }
+        ]
     }
     Draft7Validator(MEMORY_WRITE_SCHEMA).validate(ok)
 
 
 def test_memory_retrieve_schema_examples():
     ok = {
-        "id": "123e4567-e89b-12d3-a456-426614174000",
-        "session_id": "eb984c67-00b6-4794-b848-6d72f20c034b",
-        "tags": ["test"],
-        "query_vector": [0.1] * 4096,
-        "limit": 5
+        "request_id": "123e4567-e89b-12d3-a456-426614174000",
+        "scope": {
+            "session_id": 12345,
+            "project_id": 67890
+        },
+        "query_text": "Junie",
+        "limits": {
+            "max_items": 5,
+            "max_tokens": 1024
+        }
     }
     Draft7Validator(MEMORY_RETRIEVE_SCHEMA).validate(ok)
 
 
 def test_memory_pack_schema_examples():
     ok = {
-        "id": "123e4567-e89b-12d3-a456-426614174000",
-        "session_id": "eb984c67-00b6-4794-b848-6d72f20c034b",
-        "memories": [
+        "request_id": "123e4567-e89b-12d3-a456-426614174000",
+        "generated_at": "2026-03-25T11:00:00Z",
+        "token_budget": {
+            "max_tokens": 4096,
+            "used_tokens": 100
+        },
+        "items": [
             {
-                "content": "Junie likes tea.",
-                "tags": ["test"],
-                "score": 0.95,
-                "created_at": "2026-03-25T11:00:00Z"
+                "memory_id": 999,
+                "memory_type": "short_term_memory",
+                "summary": "Junie likes tea.",
+                "rank_score": 0.95
             }
         ]
     }

@@ -11,11 +11,11 @@ import (
 var (
 	// CodeEmbeddingColumns holds the columns for the "code_embedding" table.
 	CodeEmbeddingColumns = []*schema.Column{
-		{Name: "embedding_id", Type: field.TypeUUID},
+		{Name: "embedding_id", Type: field.TypeInt64, Increment: true},
 		{Name: "embedding_vector", Type: field.TypeJSON, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "ingestion_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "ingestion_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// CodeEmbeddingTable holds the schema information for the "code_embedding" table.
 	CodeEmbeddingTable = &schema.Table{
@@ -33,7 +33,7 @@ var (
 	}
 	// CodeIngestionColumns holds the columns for the "code_ingestion" table.
 	CodeIngestionColumns = []*schema.Column{
-		{Name: "ingestion_id", Type: field.TypeUUID},
+		{Name: "ingestion_id", Type: field.TypeInt64, Increment: true},
 		{Name: "s3_bucket_id", Type: field.TypeString},
 		{Name: "created_at", Type: field.TypeTime},
 	}
@@ -45,7 +45,7 @@ var (
 	}
 	// InferenceNodesColumns holds the columns for the "inference_nodes" table.
 	InferenceNodesColumns = []*schema.Column{
-		{Name: "node_id", Type: field.TypeUUID},
+		{Name: "node_id", Type: field.TypeInt64, Increment: true},
 		{Name: "hostname", Type: field.TypeString, Unique: true},
 		{Name: "ip_address", Type: field.TypeString, Nullable: true},
 		{Name: "gpu_model", Type: field.TypeString, Nullable: true},
@@ -60,12 +60,12 @@ var (
 	}
 	// MemoryEventsColumns holds the columns for the "memory_events" table.
 	MemoryEventsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
-		{Name: "memory_item_id", Type: field.TypeUUID},
+		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "event_type", Type: field.TypeString},
 		{Name: "event_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "memory_item_id", Type: field.TypeInt64},
+		{Name: "session_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// MemoryEventsTable holds the schema information for the "memory_events" table.
 	MemoryEventsTable = &schema.Table{
@@ -73,6 +73,12 @@ var (
 		Columns:    MemoryEventsColumns,
 		PrimaryKey: []*schema.Column{MemoryEventsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "memory_events_memory_items_events",
+				Columns:    []*schema.Column{MemoryEventsColumns[4]},
+				RefColumns: []*schema.Column{MemoryItemsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
 			{
 				Symbol:     "memory_events_sessions_memory_events",
 				Columns:    []*schema.Column{MemoryEventsColumns[5]},
@@ -84,98 +90,121 @@ var (
 			{
 				Name:    "memoryevent_memory_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{MemoryEventsColumns[1]},
+				Columns: []*schema.Column{MemoryEventsColumns[4]},
 			},
 			{
 				Name:    "memoryevent_event_type",
 				Unique:  false,
-				Columns: []*schema.Column{MemoryEventsColumns[2]},
+				Columns: []*schema.Column{MemoryEventsColumns[1]},
 			},
 			{
 				Name:    "memoryevent_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{MemoryEventsColumns[4]},
+				Columns: []*schema.Column{MemoryEventsColumns[3]},
 			},
 		},
 	}
 	// MemoryItemsColumns holds the columns for the "memory_items" table.
 	MemoryItemsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
-		{Name: "tenant_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "project_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "type", Type: field.TypeString},
+		{Name: "memory_type", Type: field.TypeString},
 		{Name: "summary", Type: field.TypeString, Size: 2147483647},
 		{Name: "content", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "salience", Type: field.TypeFloat64, Default: 0},
 		{Name: "retention_score", Type: field.TypeFloat64, Default: 1},
 		{Name: "decay_state", Type: field.TypeJSON, Nullable: true},
 		{Name: "status", Type: field.TypeString, Default: "active"},
-		{Name: "pinning", Type: field.TypeBool, Default: false},
-		{Name: "ttl", Type: field.TypeInt64, Nullable: true},
+		{Name: "pinned", Type: field.TypeBool, Default: false},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "session_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// MemoryItemsTable holds the schema information for the "memory_items" table.
 	MemoryItemsTable = &schema.Table{
 		Name:       "memory_items",
 		Columns:    MemoryItemsColumns,
 		PrimaryKey: []*schema.Column{MemoryItemsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "memory_items_sessions_memory_items",
+				Columns:    []*schema.Column{MemoryItemsColumns[15]},
+				RefColumns: []*schema.Column{SessionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "memoryitem_tenant_id",
+				Name:    "memoryitem_project_id",
 				Unique:  false,
 				Columns: []*schema.Column{MemoryItemsColumns[1]},
 			},
 			{
 				Name:    "memoryitem_session_id",
 				Unique:  false,
-				Columns: []*schema.Column{MemoryItemsColumns[2]},
+				Columns: []*schema.Column{MemoryItemsColumns[15]},
 			},
 			{
 				Name:    "memoryitem_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{MemoryItemsColumns[3]},
+				Columns: []*schema.Column{MemoryItemsColumns[2]},
 			},
 			{
-				Name:    "memoryitem_type",
+				Name:    "memoryitem_memory_type",
 				Unique:  false,
-				Columns: []*schema.Column{MemoryItemsColumns[4]},
+				Columns: []*schema.Column{MemoryItemsColumns[3]},
 			},
 			{
 				Name:    "memoryitem_status",
 				Unique:  false,
-				Columns: []*schema.Column{MemoryItemsColumns[10]},
+				Columns: []*schema.Column{MemoryItemsColumns[9]},
 			},
 		},
 	}
 	// MemoryLinksColumns holds the columns for the "memory_links" table.
 	MemoryLinksColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
-		{Name: "memory_item_id", Type: field.TypeUUID},
+		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "source_message_ids", Type: field.TypeJSON, Nullable: true},
 		{Name: "ingestion_ids", Type: field.TypeJSON, Nullable: true},
 		{Name: "tags", Type: field.TypeJSON, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "memory_item_links", Type: field.TypeInt64, Nullable: true},
+		{Name: "memory_item_id", Type: field.TypeInt64},
 	}
 	// MemoryLinksTable holds the schema information for the "memory_links" table.
 	MemoryLinksTable = &schema.Table{
 		Name:       "memory_links",
 		Columns:    MemoryLinksColumns,
 		PrimaryKey: []*schema.Column{MemoryLinksColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "memory_links_memory_items_links",
+				Columns:    []*schema.Column{MemoryLinksColumns[6]},
+				RefColumns: []*schema.Column{MemoryItemsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "memory_links_memory_items_memory_item",
+				Columns:    []*schema.Column{MemoryLinksColumns[7]},
+				RefColumns: []*schema.Column{MemoryItemsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "memorylink_memory_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{MemoryLinksColumns[1]},
+				Columns: []*schema.Column{MemoryLinksColumns[7]},
 			},
 		},
 	}
 	// ModelDefinitionsColumns holds the columns for the "model_definitions" table.
 	ModelDefinitionsColumns = []*schema.Column{
-		{Name: "model_id", Type: field.TypeUUID},
+		{Name: "model_id", Type: field.TypeInt64, Increment: true},
 		{Name: "model_name", Type: field.TypeString, Unique: true},
 		{Name: "family", Type: field.TypeString, Nullable: true},
 		{Name: "parameters_billions", Type: field.TypeFloat32, Nullable: true},
@@ -191,7 +220,7 @@ var (
 	// ModelExecutionMetricsColumns holds the columns for the "model_execution_metrics" table.
 	ModelExecutionMetricsColumns = []*schema.Column{
 		{Name: "metric_id", Type: field.TypeInt64, Increment: true},
-		{Name: "response_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "response_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "prompt_tokens", Type: field.TypeInt, Nullable: true},
 		{Name: "completion_tokens", Type: field.TypeInt, Nullable: true},
 		{Name: "total_tokens", Type: field.TypeInt, Nullable: true},
@@ -201,9 +230,9 @@ var (
 		{Name: "eval_duration_usec", Type: field.TypeInt64, Nullable: true},
 		{Name: "tokens_per_second", Type: field.TypeFloat32, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "node_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "model_id", Type: field.TypeUUID, Nullable: true},
-		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "node_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "model_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "session_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// ModelExecutionMetricsTable holds the schema information for the "model_execution_metrics" table.
 	ModelExecutionMetricsTable = &schema.Table{
@@ -235,7 +264,7 @@ var (
 	PromptsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "prompt_id", Type: field.TypeUUID},
-		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "session_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "content", Type: field.TypeString, Size: 2147483647},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
@@ -251,7 +280,7 @@ var (
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "response_id", Type: field.TypeUUID},
 		{Name: "prompt_id", Type: field.TypeInt64, Unique: true, Nullable: true},
-		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "session_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "content", Type: field.TypeString, Size: 2147483647},
 		{Name: "planning_response", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "sequence_number", Type: field.TypeInt},
@@ -274,14 +303,14 @@ var (
 	}
 	// RetrievalLogsColumns holds the columns for the "retrieval_logs" table.
 	RetrievalLogsColumns = []*schema.Column{
-		{Name: "log_id", Type: field.TypeUUID},
+		{Name: "log_id", Type: field.TypeInt64, Increment: true},
 		{Name: "message_id", Type: field.TypeUUID, Nullable: true},
 		{Name: "query", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "type", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "detail", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "retrieved_chunks", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
-		{Name: "session_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "session_id", Type: field.TypeInt64, Nullable: true},
 	}
 	// RetrievalLogsTable holds the schema information for the "retrieval_logs" table.
 	RetrievalLogsTable = &schema.Table{
@@ -299,8 +328,8 @@ var (
 	}
 	// SessionsColumns holds the columns for the "sessions" table.
 	SessionsColumns = []*schema.Column{
-		{Name: "session_id", Type: field.TypeUUID},
-		{Name: "project_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "session_id", Type: field.TypeInt64, Increment: true},
+		{Name: "project_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "name", Type: field.TypeString, Unique: true, Nullable: true},
 		{Name: "description", Type: field.TypeString, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
@@ -316,7 +345,7 @@ var (
 	}
 	// TagColumns holds the columns for the "tag" table.
 	TagColumns = []*schema.Column{
-		{Name: "tag_id", Type: field.TypeUUID},
+		{Name: "tag_id", Type: field.TypeInt64, Increment: true},
 		{Name: "tag_name", Type: field.TypeString, Unique: true, Size: 2147483647},
 		{Name: "created_at", Type: field.TypeTime},
 	}
@@ -328,8 +357,8 @@ var (
 	}
 	// CodeEmbeddingTagColumns holds the columns for the "code_embedding_tag" table.
 	CodeEmbeddingTagColumns = []*schema.Column{
-		{Name: "embedding_id", Type: field.TypeUUID},
-		{Name: "tag_id", Type: field.TypeUUID},
+		{Name: "embedding_id", Type: field.TypeInt64},
+		{Name: "tag_id", Type: field.TypeInt64},
 	}
 	// CodeEmbeddingTagTable holds the schema information for the "code_embedding_tag" table.
 	CodeEmbeddingTagTable = &schema.Table{
@@ -353,8 +382,8 @@ var (
 	}
 	// CodeIngestionTagColumns holds the columns for the "code_ingestion_tag" table.
 	CodeIngestionTagColumns = []*schema.Column{
-		{Name: "ingestion_id", Type: field.TypeUUID},
-		{Name: "tag_id", Type: field.TypeUUID},
+		{Name: "ingestion_id", Type: field.TypeInt64},
+		{Name: "tag_id", Type: field.TypeInt64},
 	}
 	// CodeIngestionTagTable holds the schema information for the "code_ingestion_tag" table.
 	CodeIngestionTagTable = &schema.Table{
@@ -378,8 +407,8 @@ var (
 	}
 	// SessionTagColumns holds the columns for the "session_tag" table.
 	SessionTagColumns = []*schema.Column{
-		{Name: "session_id", Type: field.TypeUUID},
-		{Name: "tag_id", Type: field.TypeUUID},
+		{Name: "session_id", Type: field.TypeInt64},
+		{Name: "tag_id", Type: field.TypeInt64},
 	}
 	// SessionTagTable holds the schema information for the "session_tag" table.
 	SessionTagTable = &schema.Table{
@@ -430,7 +459,11 @@ func init() {
 	CodeIngestionTable.Annotation = &entsql.Annotation{
 		Table: "code_ingestion",
 	}
-	MemoryEventsTable.ForeignKeys[0].RefTable = SessionsTable
+	MemoryEventsTable.ForeignKeys[0].RefTable = MemoryItemsTable
+	MemoryEventsTable.ForeignKeys[1].RefTable = SessionsTable
+	MemoryItemsTable.ForeignKeys[0].RefTable = SessionsTable
+	MemoryLinksTable.ForeignKeys[0].RefTable = MemoryItemsTable
+	MemoryLinksTable.ForeignKeys[1].RefTable = MemoryItemsTable
 	ModelExecutionMetricsTable.ForeignKeys[0].RefTable = InferenceNodesTable
 	ModelExecutionMetricsTable.ForeignKeys[1].RefTable = ModelDefinitionsTable
 	ModelExecutionMetricsTable.ForeignKeys[2].RefTable = SessionsTable

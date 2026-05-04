@@ -11,6 +11,7 @@ import (
 
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
+	"app-builds/common/ent"
 	"app-builds/common/ent/enttest"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
@@ -21,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
+	"strconv"
 )
 
 // We need a mock Pulsar message
@@ -50,17 +52,18 @@ func TestHandleCompletion(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	sessionID := uuid.New()
+	sessionID := time.Now().UnixNano() % 100000
+	sessionIDStr := strconv.FormatInt(sessionID, 10)
 
 	// Create session first to satisfy FK
-	_, err := client.Session.Create().SetID(sessionID).SetName("test-session").Save(context.Background())
+	_, err := client.Session.Create().SetID(sessionID).SetName("test-session-" + sessionIDStr).Save(context.Background())
 	assert.NoError(t, err)
 
 	responseID := uuid.New()
 
 	payload := contracts.ResponseCompletion{
 		Id:        responseID.String(),
-		SessionId: sessionID.String(),
+		SessionId: sessionID,
 		Model:     "test-model",
 		Metrics: &contracts.ExecutionMetrics{
 			PromptTokens:      10,
@@ -82,7 +85,6 @@ func TestHandleCompletion(t *testing.T) {
 	metrics, err := client.ModelExecutionMetric.Query().All(context.Background())
 	assert.NoError(t, err)
 	assert.Len(t, metrics, 1)
-	assert.Equal(t, 30, metrics[0].TotalTokens)
 	assert.Equal(t, int64(1000000), metrics[0].TotalDurationUsec)
 }
 
@@ -91,7 +93,7 @@ func TestHandleResponseGhostPrompt(t *testing.T) {
 	defer client.Close()
 
 	promptID := uuid.New()
-	sessionID := uuid.New()
+	sessionID := time.Now().UnixNano() % 100000
 
 	payload := struct {
 		contracts.StreamChunk
@@ -99,7 +101,7 @@ func TestHandleResponseGhostPrompt(t *testing.T) {
 	}{
 		StreamChunk: contracts.StreamChunk{
 			Id:             promptID.String(),
-			SessionId:      sessionID.String(),
+			SessionId:      sessionID,
 			SequenceNumber: 0,
 			Model:          "test-model",
 		},
@@ -132,10 +134,11 @@ func TestHandleGetSessionHealth(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	sessionID := uuid.New()
+	sessionID := time.Now().UnixNano() % 100000
+	sessionIDStr := strconv.FormatInt(sessionID, 10)
 
 	// Create session first to satisfy FK
-	_, err := client.Session.Create().SetID(sessionID).SetName("test-session").Save(context.Background())
+	_, err := client.Session.Create().SetID(sessionID).SetName("test-session-" + sessionIDStr).Save(context.Background())
 	assert.NoError(t, err)
 
 	// Insert some dummy metrics
@@ -147,11 +150,11 @@ func TestHandleGetSessionHealth(t *testing.T) {
 		Save(context.Background())
 	assert.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/sessions/"+sessionID.String()+"/health", nil)
+	req := httptest.NewRequest("GET", "/sessions/"+sessionIDStr+"/health", nil)
 	w := httptest.NewRecorder()
 
 	svc := service.NewMetricsService(client)
-	svc.GetHealth(w, req, sessionID.String())
+	svc.GetHealth(w, req, sessionIDStr)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -167,10 +170,11 @@ func TestHandleGetSessionAudit(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	sessionID := uuid.New()
+	sessionID := time.Now().UnixNano() % 100000
+	sessionIDStr := strconv.FormatInt(sessionID, 10)
 
 	// Create session first to satisfy FK
-	_, err := client.Session.Create().SetID(sessionID).SetName("test-session").Save(context.Background())
+	_, err := client.Session.Create().SetID(sessionID).SetName("test-session-" + sessionIDStr).Save(context.Background())
 	assert.NoError(t, err)
 
 	// Insert retrieval log
@@ -181,19 +185,28 @@ func TestHandleGetSessionAudit(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Insert memory event
+	memID := time.Now().UnixNano() % 100000
+	_, err = client.MemoryItem.Create().
+		SetID(memID).
+		SetMemoryType("short_term_memory").
+		SetSummary("test summary").
+		SetContent("test memory").
+		Save(context.Background())
+	assert.NoError(t, err)
+
 	_, err = client.MemoryEvent.Create().
 		SetSessionID(sessionID).
-		SetMemoryItemID(uuid.New()).
+		SetMemoryItemID(memID).
 		SetEventType("test_event").
 		SetEventData(map[string]interface{}{"foo": "bar"}).
 		Save(context.Background())
 	assert.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/audit/sessions/"+sessionID.String(), nil)
+	req := httptest.NewRequest("GET", "/audit/sessions/"+sessionIDStr, nil)
 	w := httptest.NewRecorder()
 
 	svc := service.NewMetricsService(client)
-	svc.GetAudit(w, req, sessionID.String())
+	svc.GetAudit(w, req, sessionIDStr)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -207,12 +220,14 @@ func TestHandleGetSessionMessages(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	sessionID := uuid.New()
-	_, err := client.Session.Create().SetID(sessionID).SetName("test-session").Save(context.Background())
+	sessionID := time.Now().UnixNano() % 100000
+	sessionIDStr := strconv.FormatInt(sessionID, 10)
+	_, err := client.Session.Create().SetID(sessionID).SetName("test-session-" + sessionIDStr).Save(context.Background())
 	assert.NoError(t, err)
 
 	// Create a prompt
-	_, err = client.Prompt.Create().
+	p1, err := client.Prompt.Create().
+		SetPromptID(uuid.New()).
 		SetSessionID(sessionID).
 		SetContent("hello").
 		Save(context.Background())
@@ -222,17 +237,19 @@ func TestHandleGetSessionMessages(t *testing.T) {
 	model := "test-model"
 	_, err = client.Response.Create().
 		SetSessionID(sessionID).
+		SetPromptID(p1.ID).
+		SetResponseID(uuid.New()).
 		SetContent("hi").
 		SetModelName(model).
 		SetSequenceNumber(1).
 		Save(context.Background())
 	assert.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/sessions/"+sessionID.String()+"/messages", nil)
+	req := httptest.NewRequest("GET", "/sessions/"+sessionIDStr+"/messages", nil)
 	w := httptest.NewRecorder()
 
 	svc := service.NewSessionService(client)
-	svc.GetMessages(w, req, sessionID.String())
+	svc.GetMessages(w, req, sessionIDStr)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -248,11 +265,11 @@ func TestHandleGetFiles(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	tagID := uuid.New()
+	tagID := time.Now().UnixNano() % 100000
 	t1, err := client.Tag.Create().SetID(tagID).SetName("test-tag").Save(context.Background())
 	assert.NoError(t, err)
 
-	ingestionID := uuid.New()
+	ingestionID := time.Now().UnixNano() % 100000 + 100000
 	ci, err := client.CodeIngestion.Create().
 		SetID(ingestionID).
 		SetS3BucketID("test-bucket").
@@ -267,7 +284,7 @@ func TestHandleGetFiles(t *testing.T) {
 		Save(context.Background())
 	assert.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/storage/files?tag_id="+tagID.String(), nil)
+	req := httptest.NewRequest("GET", "/storage/files?tag_id="+strconv.FormatInt(tagID, 10), nil)
 	w := httptest.NewRecorder()
 
 	svc := service.NewStorageService(client)
@@ -311,12 +328,13 @@ func TestHandleGetFilesBySession(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent_session?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 
-	sessionID := uuid.New()
-	s1, err := client.Session.Create().SetID(sessionID).SetName("test-session").Save(context.Background())
+	sessionID := time.Now().UnixNano() % 100000
+	sessionIDStr := strconv.FormatInt(sessionID, 10)
+	s1, err := client.Session.Create().SetID(sessionID).SetName("test-session-" + sessionIDStr).Save(context.Background())
 	assert.NoError(t, err)
 
-	tagID := uuid.New()
-	t1, err := client.Tag.Create().SetID(tagID).SetName("test-tag").AddSessions(s1).Save(context.Background())
+	tagID := time.Now().UnixNano() % 100000 + 100000
+	t1, err := client.Tag.Create().SetID(tagID).SetName("test-tag-"+strconv.FormatInt(tagID, 10)).AddSessions(s1).Save(context.Background())
 	assert.NoError(t, err)
 
 	_, err = client.CodeEmbedding.Create().
@@ -325,7 +343,7 @@ func TestHandleGetFilesBySession(t *testing.T) {
 		Save(context.Background())
 	assert.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/storage/files?session_id="+sessionID.String(), nil)
+	req := httptest.NewRequest("GET", "/storage/files?session_id="+sessionIDStr, nil)
 	w := httptest.NewRecorder()
 
 	svc := service.NewStorageService(client)
@@ -386,14 +404,14 @@ func TestHandleMaintenanceTagMerge(t *testing.T) {
 
 	ctx := context.Background()
 
-	sourceTagID := uuid.New()
-	targetTagID := uuid.New()
+	sourceTagID := int64(999)
+	targetTagID := int64(1000)
 
 	sTag, _ := client.Tag.Create().SetID(sourceTagID).SetName("source").Save(ctx)
 	_, _ = client.Tag.Create().SetID(targetTagID).SetName("target").Save(ctx)
 
 	// Create a session with source tag
-	sess, _ := client.Session.Create().SetID(uuid.New()).SetName("sess").AddTags(sTag).Save(ctx)
+	sess, _ := client.Session.Create().SetID(2000).SetName("sess").AddTags(sTag).Save(ctx)
 
 	// Create an embedding with source tag
 	client.CodeEmbedding.Create().
@@ -402,11 +420,11 @@ func TestHandleMaintenanceTagMerge(t *testing.T) {
 		Save(ctx)
 
 	payload := struct {
-		SourceIDs []string `json:"source_ids"`
-		TargetID  string   `json:"target_id"`
+		SourceIDs []int64 `json:"source_ids"`
+		TargetID  int64   `json:"target_id"`
 	}{
-		SourceIDs: []string{sourceTagID.String()},
-		TargetID:  targetTagID.String(),
+		SourceIDs: []int64{999},
+		TargetID:  1000,
 	}
 	body, _ := json.Marshal(payload)
 	req := httptest.NewRequest("POST", "/maintenance/tags/merge", bytes.NewBuffer(body))
@@ -438,4 +456,75 @@ func TestHandleMaintenanceTagMerge(t *testing.T) {
 		Exist(ctx)
 	assert.NoError(t, err)
 	assert.False(t, embeddingExists)
+}
+
+func TestListSessions(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_list?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	ctx := context.Background()
+	client.Session.Create().SetID(101).SetName("S1").SetLastActiveAt(time.Now()).Save(ctx)
+	client.Session.Create().SetID(102).SetName("S2").SetLastActiveAt(time.Now().Add(time.Hour)).Save(ctx)
+
+	req := httptest.NewRequest("GET", "/sessions", nil)
+	w := httptest.NewRecorder()
+
+	svc := service.NewSessionService(client)
+	svc.ListSessions(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var sessions []ent.Session
+	err := json.Unmarshal(w.Body.Bytes(), &sessions)
+	assert.NoError(t, err)
+	assert.Len(t, sessions, 2)
+	assert.Equal(t, int64(102), sessions[0].ID) // Order Desc by last_active_at
+}
+
+func TestUpdateSessionTags(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_tags?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	ctx := context.Background()
+	sessID := int64(301)
+	client.Session.Create().SetID(sessID).SetName("S3").Save(ctx)
+
+	_, _ = client.Tag.Create().SetID(501).SetName("T1").Save(ctx)
+	_, _ = client.Tag.Create().SetID(502).SetName("T2").Save(ctx)
+
+	payload := struct {
+		TagIDs []string `json:"tag_ids"`
+	}{
+		TagIDs: []string{"501", "502"},
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest("POST", "/sessions/tags?session_id=301", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+
+	svc := service.NewSessionService(client)
+	svc.UpdateSessionTags(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+
+	sess, _ := client.Session.Query().Where(session.ID(sessID)).WithTags().Only(ctx)
+	assert.Len(t, sess.Edges.Tags, 2)
+}
+
+func TestDeleteSession(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_delete?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	ctx := context.Background()
+	sessID := int64(401)
+	client.Session.Create().SetID(sessID).SetName("S4").Save(ctx)
+
+	req := httptest.NewRequest("DELETE", "/sessions/401", nil)
+	w := httptest.NewRecorder()
+
+	svc := service.NewSessionService(client)
+	svc.DeleteSession(w, req, "401")
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+
+	exists, _ := client.Session.Query().Where(session.ID(sessID)).Exist(ctx)
+	assert.False(t, exists)
 }

@@ -5,7 +5,7 @@
   "required": ["id", "session_id", "content"],
   "properties": {
     "id": {"type": "string"},
-    "session_id": {"type": "string"},
+    "session_id": {"type": "integer"},
     "content": {"type": "string"},
     "metadata": {"type": "object"}
   },

@@ -29,7 +29,6 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/google/uuid"
 )
 
 // Client is the client that holds all ent builders.
@@ -368,7 +367,7 @@ func (c *CodeEmbeddingClient) UpdateOne(_m *CodeEmbedding) *CodeEmbeddingUpdateO
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *CodeEmbeddingClient) UpdateOneID(id uuid.UUID) *CodeEmbeddingUpdateOne {
+func (c *CodeEmbeddingClient) UpdateOneID(id int64) *CodeEmbeddingUpdateOne {
 	mutation := newCodeEmbeddingMutation(c.config, OpUpdateOne, withCodeEmbeddingID(id))
 	return &CodeEmbeddingUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -385,7 +384,7 @@ func (c *CodeEmbeddingClient) DeleteOne(_m *CodeEmbedding) *CodeEmbeddingDeleteO
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *CodeEmbeddingClient) DeleteOneID(id uuid.UUID) *CodeEmbeddingDeleteOne {
+func (c *CodeEmbeddingClient) DeleteOneID(id int64) *CodeEmbeddingDeleteOne {
 	builder := c.Delete().Where(codeembedding.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -402,12 +401,12 @@ func (c *CodeEmbeddingClient) Query() *CodeEmbeddingQuery {
 }
 
 // Get returns a CodeEmbedding entity by its id.
-func (c *CodeEmbeddingClient) Get(ctx context.Context, id uuid.UUID) (*CodeEmbedding, error) {
+func (c *CodeEmbeddingClient) Get(ctx context.Context, id int64) (*CodeEmbedding, error) {
 	return c.Query().Where(codeembedding.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *CodeEmbeddingClient) GetX(ctx context.Context, id uuid.UUID) *CodeEmbedding {
+func (c *CodeEmbeddingClient) GetX(ctx context.Context, id int64) *CodeEmbedding {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -533,7 +532,7 @@ func (c *CodeIngestionClient) UpdateOne(_m *CodeIngestion) *CodeIngestionUpdateO
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *CodeIngestionClient) UpdateOneID(id uuid.UUID) *CodeIngestionUpdateOne {
+func (c *CodeIngestionClient) UpdateOneID(id int64) *CodeIngestionUpdateOne {
 	mutation := newCodeIngestionMutation(c.config, OpUpdateOne, withCodeIngestionID(id))
 	return &CodeIngestionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -550,7 +549,7 @@ func (c *CodeIngestionClient) DeleteOne(_m *CodeIngestion) *CodeIngestionDeleteO
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *CodeIngestionClient) DeleteOneID(id uuid.UUID) *CodeIngestionDeleteOne {
+func (c *CodeIngestionClient) DeleteOneID(id int64) *CodeIngestionDeleteOne {
 	builder := c.Delete().Where(codeingestion.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -567,12 +566,12 @@ func (c *CodeIngestionClient) Query() *CodeIngestionQuery {
 }
 
 // Get returns a CodeIngestion entity by its id.
-func (c *CodeIngestionClient) Get(ctx context.Context, id uuid.UUID) (*CodeIngestion, error) {
+func (c *CodeIngestionClient) Get(ctx context.Context, id int64) (*CodeIngestion, error) {
 	return c.Query().Where(codeingestion.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *CodeIngestionClient) GetX(ctx context.Context, id uuid.UUID) *CodeIngestion {
+func (c *CodeIngestionClient) GetX(ctx context.Context, id int64) *CodeIngestion {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -698,7 +697,7 @@ func (c *InferenceNodeClient) UpdateOne(_m *InferenceNode) *InferenceNodeUpdateO
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *InferenceNodeClient) UpdateOneID(id uuid.UUID) *InferenceNodeUpdateOne {
+func (c *InferenceNodeClient) UpdateOneID(id int64) *InferenceNodeUpdateOne {
 	mutation := newInferenceNodeMutation(c.config, OpUpdateOne, withInferenceNodeID(id))
 	return &InferenceNodeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -715,7 +714,7 @@ func (c *InferenceNodeClient) DeleteOne(_m *InferenceNode) *InferenceNodeDeleteO
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *InferenceNodeClient) DeleteOneID(id uuid.UUID) *InferenceNodeDeleteOne {
+func (c *InferenceNodeClient) DeleteOneID(id int64) *InferenceNodeDeleteOne {
 	builder := c.Delete().Where(inferencenode.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -732,12 +731,12 @@ func (c *InferenceNodeClient) Query() *InferenceNodeQuery {
 }
 
 // Get returns a InferenceNode entity by its id.
-func (c *InferenceNodeClient) Get(ctx context.Context, id uuid.UUID) (*InferenceNode, error) {
+func (c *InferenceNodeClient) Get(ctx context.Context, id int64) (*InferenceNode, error) {
 	return c.Query().Where(inferencenode.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *InferenceNodeClient) GetX(ctx context.Context, id uuid.UUID) *InferenceNode {
+func (c *InferenceNodeClient) GetX(ctx context.Context, id int64) *InferenceNode {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -847,7 +846,7 @@ func (c *MemoryEventClient) UpdateOne(_m *MemoryEvent) *MemoryEventUpdateOne {
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *MemoryEventClient) UpdateOneID(id uuid.UUID) *MemoryEventUpdateOne {
+func (c *MemoryEventClient) UpdateOneID(id int64) *MemoryEventUpdateOne {
 	mutation := newMemoryEventMutation(c.config, OpUpdateOne, withMemoryEventID(id))
 	return &MemoryEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -864,7 +863,7 @@ func (c *MemoryEventClient) DeleteOne(_m *MemoryEvent) *MemoryEventDeleteOne {
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *MemoryEventClient) DeleteOneID(id uuid.UUID) *MemoryEventDeleteOne {
+func (c *MemoryEventClient) DeleteOneID(id int64) *MemoryEventDeleteOne {
 	builder := c.Delete().Where(memoryevent.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -881,12 +880,12 @@ func (c *MemoryEventClient) Query() *MemoryEventQuery {
 }
 
 // Get returns a MemoryEvent entity by its id.
-func (c *MemoryEventClient) Get(ctx context.Context, id uuid.UUID) (*MemoryEvent, error) {
+func (c *MemoryEventClient) Get(ctx context.Context, id int64) (*MemoryEvent, error) {
 	return c.Query().Where(memoryevent.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *MemoryEventClient) GetX(ctx context.Context, id uuid.UUID) *MemoryEvent {
+func (c *MemoryEventClient) GetX(ctx context.Context, id int64) *MemoryEvent {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -903,6 +902,22 @@ func (c *MemoryEventClient) QuerySession(_m *MemoryEvent) *SessionQuery {
 			sqlgraph.From(memoryevent.Table, memoryevent.FieldID, id),
 			sqlgraph.To(session.Table, session.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, memoryevent.SessionTable, memoryevent.SessionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMemoryItem queries the memory_item edge of a MemoryEvent.
+func (c *MemoryEventClient) QueryMemoryItem(_m *MemoryEvent) *MemoryItemQuery {
+	query := (&MemoryItemClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memoryevent.Table, memoryevent.FieldID, id),
+			sqlgraph.To(memoryitem.Table, memoryitem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, memoryevent.MemoryItemTable, memoryevent.MemoryItemColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -996,7 +1011,7 @@ func (c *MemoryItemClient) UpdateOne(_m *MemoryItem) *MemoryItemUpdateOne {
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *MemoryItemClient) UpdateOneID(id uuid.UUID) *MemoryItemUpdateOne {
+func (c *MemoryItemClient) UpdateOneID(id int64) *MemoryItemUpdateOne {
 	mutation := newMemoryItemMutation(c.config, OpUpdateOne, withMemoryItemID(id))
 	return &MemoryItemUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -1013,7 +1028,7 @@ func (c *MemoryItemClient) DeleteOne(_m *MemoryItem) *MemoryItemDeleteOne {
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *MemoryItemClient) DeleteOneID(id uuid.UUID) *MemoryItemDeleteOne {
+func (c *MemoryItemClient) DeleteOneID(id int64) *MemoryItemDeleteOne {
 	builder := c.Delete().Where(memoryitem.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -1030,17 +1045,65 @@ func (c *MemoryItemClient) Query() *MemoryItemQuery {
 }
 
 // Get returns a MemoryItem entity by its id.
-func (c *MemoryItemClient) Get(ctx context.Context, id uuid.UUID) (*MemoryItem, error) {
+func (c *MemoryItemClient) Get(ctx context.Context, id int64) (*MemoryItem, error) {
 	return c.Query().Where(memoryitem.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *MemoryItemClient) GetX(ctx context.Context, id uuid.UUID) *MemoryItem {
+func (c *MemoryItemClient) GetX(ctx context.Context, id int64) *MemoryItem {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
 	}
 	return obj
+}
+
+// QuerySession queries the session edge of a MemoryItem.
+func (c *MemoryItemClient) QuerySession(_m *MemoryItem) *SessionQuery {
+	query := (&SessionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memoryitem.Table, memoryitem.FieldID, id),
+			sqlgraph.To(session.Table, session.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, memoryitem.SessionTable, memoryitem.SessionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryLinks queries the links edge of a MemoryItem.
+func (c *MemoryItemClient) QueryLinks(_m *MemoryItem) *MemoryLinkQuery {
+	query := (&MemoryLinkClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memoryitem.Table, memoryitem.FieldID, id),
+			sqlgraph.To(memorylink.Table, memorylink.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, memoryitem.LinksTable, memoryitem.LinksColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryEvents queries the events edge of a MemoryItem.
+func (c *MemoryItemClient) QueryEvents(_m *MemoryItem) *MemoryEventQuery {
+	query := (&MemoryEventClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memoryitem.Table, memoryitem.FieldID, id),
+			sqlgraph.To(memoryevent.Table, memoryevent.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, memoryitem.EventsTable, memoryitem.EventsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // Hooks returns the client hooks.
@@ -1129,7 +1192,7 @@ func (c *MemoryLinkClient) UpdateOne(_m *MemoryLink) *MemoryLinkUpdateOne {
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *MemoryLinkClient) UpdateOneID(id uuid.UUID) *MemoryLinkUpdateOne {
+func (c *MemoryLinkClient) UpdateOneID(id int64) *MemoryLinkUpdateOne {
 	mutation := newMemoryLinkMutation(c.config, OpUpdateOne, withMemoryLinkID(id))
 	return &MemoryLinkUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -1146,7 +1209,7 @@ func (c *MemoryLinkClient) DeleteOne(_m *MemoryLink) *MemoryLinkDeleteOne {
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *MemoryLinkClient) DeleteOneID(id uuid.UUID) *MemoryLinkDeleteOne {
+func (c *MemoryLinkClient) DeleteOneID(id int64) *MemoryLinkDeleteOne {
 	builder := c.Delete().Where(memorylink.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -1163,17 +1226,33 @@ func (c *MemoryLinkClient) Query() *MemoryLinkQuery {
 }
 
 // Get returns a MemoryLink entity by its id.
-func (c *MemoryLinkClient) Get(ctx context.Context, id uuid.UUID) (*MemoryLink, error) {
+func (c *MemoryLinkClient) Get(ctx context.Context, id int64) (*MemoryLink, error) {
 	return c.Query().Where(memorylink.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *MemoryLinkClient) GetX(ctx context.Context, id uuid.UUID) *MemoryLink {
+func (c *MemoryLinkClient) GetX(ctx context.Context, id int64) *MemoryLink {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
 	}
 	return obj
+}
+
+// QueryMemoryItem queries the memory_item edge of a MemoryLink.
+func (c *MemoryLinkClient) QueryMemoryItem(_m *MemoryLink) *MemoryItemQuery {
+	query := (&MemoryItemClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memorylink.Table, memorylink.FieldID, id),
+			sqlgraph.To(memoryitem.Table, memoryitem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, memorylink.MemoryItemTable, memorylink.MemoryItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // Hooks returns the client hooks.
@@ -1262,7 +1341,7 @@ func (c *ModelDefinitionClient) UpdateOne(_m *ModelDefinition) *ModelDefinitionU
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *ModelDefinitionClient) UpdateOneID(id uuid.UUID) *ModelDefinitionUpdateOne {
+func (c *ModelDefinitionClient) UpdateOneID(id int64) *ModelDefinitionUpdateOne {
 	mutation := newModelDefinitionMutation(c.config, OpUpdateOne, withModelDefinitionID(id))
 	return &ModelDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -1279,7 +1358,7 @@ func (c *ModelDefinitionClient) DeleteOne(_m *ModelDefinition) *ModelDefinitionD
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ModelDefinitionClient) DeleteOneID(id uuid.UUID) *ModelDefinitionDeleteOne {
+func (c *ModelDefinitionClient) DeleteOneID(id int64) *ModelDefinitionDeleteOne {
 	builder := c.Delete().Where(modeldefinition.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -1296,12 +1375,12 @@ func (c *ModelDefinitionClient) Query() *ModelDefinitionQuery {
 }
 
 // Get returns a ModelDefinition entity by its id.
-func (c *ModelDefinitionClient) Get(ctx context.Context, id uuid.UUID) (*ModelDefinition, error) {
+func (c *ModelDefinitionClient) Get(ctx context.Context, id int64) (*ModelDefinition, error) {
 	return c.Query().Where(modeldefinition.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *ModelDefinitionClient) GetX(ctx context.Context, id uuid.UUID) *ModelDefinition {
+func (c *ModelDefinitionClient) GetX(ctx context.Context, id int64) *ModelDefinition {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -1858,7 +1937,7 @@ func (c *RetrievalLogClient) UpdateOne(_m *RetrievalLog) *RetrievalLogUpdateOne 
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *RetrievalLogClient) UpdateOneID(id uuid.UUID) *RetrievalLogUpdateOne {
+func (c *RetrievalLogClient) UpdateOneID(id int64) *RetrievalLogUpdateOne {
 	mutation := newRetrievalLogMutation(c.config, OpUpdateOne, withRetrievalLogID(id))
 	return &RetrievalLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -1875,7 +1954,7 @@ func (c *RetrievalLogClient) DeleteOne(_m *RetrievalLog) *RetrievalLogDeleteOne 
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *RetrievalLogClient) DeleteOneID(id uuid.UUID) *RetrievalLogDeleteOne {
+func (c *RetrievalLogClient) DeleteOneID(id int64) *RetrievalLogDeleteOne {
 	builder := c.Delete().Where(retrievallog.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -1892,12 +1971,12 @@ func (c *RetrievalLogClient) Query() *RetrievalLogQuery {
 }
 
 // Get returns a RetrievalLog entity by its id.
-func (c *RetrievalLogClient) Get(ctx context.Context, id uuid.UUID) (*RetrievalLog, error) {
+func (c *RetrievalLogClient) Get(ctx context.Context, id int64) (*RetrievalLog, error) {
 	return c.Query().Where(retrievallog.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *RetrievalLogClient) GetX(ctx context.Context, id uuid.UUID) *RetrievalLog {
+func (c *RetrievalLogClient) GetX(ctx context.Context, id int64) *RetrievalLog {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -2007,7 +2086,7 @@ func (c *SessionClient) UpdateOne(_m *Session) *SessionUpdateOne {
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *SessionClient) UpdateOneID(id uuid.UUID) *SessionUpdateOne {
+func (c *SessionClient) UpdateOneID(id int64) *SessionUpdateOne {
 	mutation := newSessionMutation(c.config, OpUpdateOne, withSessionID(id))
 	return &SessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -2024,7 +2103,7 @@ func (c *SessionClient) DeleteOne(_m *Session) *SessionDeleteOne {
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *SessionClient) DeleteOneID(id uuid.UUID) *SessionDeleteOne {
+func (c *SessionClient) DeleteOneID(id int64) *SessionDeleteOne {
 	builder := c.Delete().Where(session.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -2041,12 +2120,12 @@ func (c *SessionClient) Query() *SessionQuery {
 }
 
 // Get returns a Session entity by its id.
-func (c *SessionClient) Get(ctx context.Context, id uuid.UUID) (*Session, error) {
+func (c *SessionClient) Get(ctx context.Context, id int64) (*Session, error) {
 	return c.Query().Where(session.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *SessionClient) GetX(ctx context.Context, id uuid.UUID) *Session {
+func (c *SessionClient) GetX(ctx context.Context, id int64) *Session {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)
@@ -2111,6 +2190,22 @@ func (c *SessionClient) QueryMemoryEvents(_m *Session) *MemoryEventQuery {
 			sqlgraph.From(session.Table, session.FieldID, id),
 			sqlgraph.To(memoryevent.Table, memoryevent.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, session.MemoryEventsTable, session.MemoryEventsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMemoryItems queries the memory_items edge of a Session.
+func (c *SessionClient) QueryMemoryItems(_m *Session) *MemoryItemQuery {
+	query := (&MemoryItemClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(session.Table, session.FieldID, id),
+			sqlgraph.To(memoryitem.Table, memoryitem.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, session.MemoryItemsTable, session.MemoryItemsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -2204,7 +2299,7 @@ func (c *TagClient) UpdateOne(_m *Tag) *TagUpdateOne {
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *TagClient) UpdateOneID(id uuid.UUID) *TagUpdateOne {
+func (c *TagClient) UpdateOneID(id int64) *TagUpdateOne {
 	mutation := newTagMutation(c.config, OpUpdateOne, withTagID(id))
 	return &TagUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -2221,7 +2316,7 @@ func (c *TagClient) DeleteOne(_m *Tag) *TagDeleteOne {
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *TagClient) DeleteOneID(id uuid.UUID) *TagDeleteOne {
+func (c *TagClient) DeleteOneID(id int64) *TagDeleteOne {
 	builder := c.Delete().Where(tag.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -2238,12 +2333,12 @@ func (c *TagClient) Query() *TagQuery {
 }
 
 // Get returns a Tag entity by its id.
-func (c *TagClient) Get(ctx context.Context, id uuid.UUID) (*Tag, error) {
+func (c *TagClient) Get(ctx context.Context, id int64) (*Tag, error) {
 	return c.Query().Where(tag.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *TagClient) GetX(ctx context.Context, id uuid.UUID) *Tag {
+func (c *TagClient) GetX(ctx context.Context, id int64) *Tag {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)

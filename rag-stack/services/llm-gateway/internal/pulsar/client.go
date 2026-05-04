@@ -129,8 +129,8 @@ func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload prot
 	}
 }
 
-func (pc *pulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, content string) error {
-	payload := map[string]string{
+func (pc *pulsarClient) SendPromptEvent(ctx context.Context, id string, sessionID int64, content string) error {
+	payload := map[string]interface{}{
 		"id":         id,
 		"session_id": sessionID,
 		"content":    content,

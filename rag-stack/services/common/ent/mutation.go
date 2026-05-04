@@ -57,16 +57,16 @@ type CodeEmbeddingMutation struct {
 	config
 	op                     Op
 	typ                    string
-	id                     *uuid.UUID
+	id                     *int64
 	embedding_vector       *[]float32
 	appendembedding_vector []float32
 	metadata               *map[string]interface{}
 	created_at             *time.Time
 	clearedFields          map[string]struct{}
-	ingestion              *uuid.UUID
+	ingestion              *int64
 	clearedingestion       bool
-	tags                   map[uuid.UUID]struct{}
-	removedtags            map[uuid.UUID]struct{}
+	tags                   map[int64]struct{}
+	removedtags            map[int64]struct{}
 	clearedtags            bool
 	done                   bool
 	oldValue               func(context.Context) (*CodeEmbedding, error)
@@ -93,7 +93,7 @@ func newCodeEmbeddingMutation(c config, op Op, opts ...codeembeddingOption) *Cod
 }
 
 // withCodeEmbeddingID sets the ID field of the mutation.
-func withCodeEmbeddingID(id uuid.UUID) codeembeddingOption {
+func withCodeEmbeddingID(id int64) codeembeddingOption {
 	return func(m *CodeEmbeddingMutation) {
 		var (
 			err   error
@@ -145,13 +145,13 @@ func (m CodeEmbeddingMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of CodeEmbedding entities.
-func (m *CodeEmbeddingMutation) SetID(id uuid.UUID) {
+func (m *CodeEmbeddingMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *CodeEmbeddingMutation) ID() (id uuid.UUID, exists bool) {
+func (m *CodeEmbeddingMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -162,12 +162,12 @@ func (m *CodeEmbeddingMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *CodeEmbeddingMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *CodeEmbeddingMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -178,12 +178,12 @@ func (m *CodeEmbeddingMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 // SetIngestionID sets the "ingestion_id" field.
-func (m *CodeEmbeddingMutation) SetIngestionID(u uuid.UUID) {
-	m.ingestion = &u
+func (m *CodeEmbeddingMutation) SetIngestionID(i int64) {
+	m.ingestion = &i
 }
 
 // IngestionID returns the value of the "ingestion_id" field in the mutation.
-func (m *CodeEmbeddingMutation) IngestionID() (r uuid.UUID, exists bool) {
+func (m *CodeEmbeddingMutation) IngestionID() (r int64, exists bool) {
 	v := m.ingestion
 	if v == nil {
 		return
@@ -194,7 +194,7 @@ func (m *CodeEmbeddingMutation) IngestionID() (r uuid.UUID, exists bool) {
 // OldIngestionID returns the old "ingestion_id" field's value of the CodeEmbedding entity.
 // If the CodeEmbedding object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CodeEmbeddingMutation) OldIngestionID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *CodeEmbeddingMutation) OldIngestionID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldIngestionID is only allowed on UpdateOne operations")
 	}
@@ -390,7 +390,7 @@ func (m *CodeEmbeddingMutation) IngestionCleared() bool {
 // IngestionIDs returns the "ingestion" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
 // IngestionID instead. It exists only for internal usage by the builders.
-func (m *CodeEmbeddingMutation) IngestionIDs() (ids []uuid.UUID) {
+func (m *CodeEmbeddingMutation) IngestionIDs() (ids []int64) {
 	if id := m.ingestion; id != nil {
 		ids = append(ids, *id)
 	}
@@ -404,9 +404,9 @@ func (m *CodeEmbeddingMutation) ResetIngestion() {
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by ids.
-func (m *CodeEmbeddingMutation) AddTagIDs(ids ...uuid.UUID) {
+func (m *CodeEmbeddingMutation) AddTagIDs(ids ...int64) {
 	if m.tags == nil {
-		m.tags = make(map[uuid.UUID]struct{})
+		m.tags = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.tags[ids[i]] = struct{}{}
@@ -424,9 +424,9 @@ func (m *CodeEmbeddingMutation) TagsCleared() bool {
 }
 
 // RemoveTagIDs removes the "tags" edge to the Tag entity by IDs.
-func (m *CodeEmbeddingMutation) RemoveTagIDs(ids ...uuid.UUID) {
+func (m *CodeEmbeddingMutation) RemoveTagIDs(ids ...int64) {
 	if m.removedtags == nil {
-		m.removedtags = make(map[uuid.UUID]struct{})
+		m.removedtags = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.tags, ids[i])
@@ -435,7 +435,7 @@ func (m *CodeEmbeddingMutation) RemoveTagIDs(ids ...uuid.UUID) {
 }
 
 // RemovedTags returns the removed IDs of the "tags" edge to the Tag entity.
-func (m *CodeEmbeddingMutation) RemovedTagsIDs() (ids []uuid.UUID) {
+func (m *CodeEmbeddingMutation) RemovedTagsIDs() (ids []int64) {
 	for id := range m.removedtags {
 		ids = append(ids, id)
 	}
@@ -443,7 +443,7 @@ func (m *CodeEmbeddingMutation) RemovedTagsIDs() (ids []uuid.UUID) {
 }
 
 // TagsIDs returns the "tags" edge IDs in the mutation.
-func (m *CodeEmbeddingMutation) TagsIDs() (ids []uuid.UUID) {
+func (m *CodeEmbeddingMutation) TagsIDs() (ids []int64) {
 	for id := range m.tags {
 		ids = append(ids, id)
 	}
@@ -547,7 +547,7 @@ func (m *CodeEmbeddingMutation) OldField(ctx context.Context, name string) (ent.
 func (m *CodeEmbeddingMutation) SetField(name string, value ent.Value) error {
 	switch name {
 	case codeembedding.FieldIngestionID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -581,13 +581,16 @@ func (m *CodeEmbeddingMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *CodeEmbeddingMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *CodeEmbeddingMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
 	return nil, false
 }
 
@@ -767,15 +770,15 @@ type CodeIngestionMutation struct {
 	config
 	op                Op
 	typ               string
-	id                *uuid.UUID
+	id                *int64
 	s3_bucket_id      *string
 	created_at        *time.Time
 	clearedFields     map[string]struct{}
-	embeddings        map[uuid.UUID]struct{}
-	removedembeddings map[uuid.UUID]struct{}
+	embeddings        map[int64]struct{}
+	removedembeddings map[int64]struct{}
 	clearedembeddings bool
-	tags              map[uuid.UUID]struct{}
-	removedtags       map[uuid.UUID]struct{}
+	tags              map[int64]struct{}
+	removedtags       map[int64]struct{}
 	clearedtags       bool
 	done              bool
 	oldValue          func(context.Context) (*CodeIngestion, error)
@@ -802,7 +805,7 @@ func newCodeIngestionMutation(c config, op Op, opts ...codeingestionOption) *Cod
 }
 
 // withCodeIngestionID sets the ID field of the mutation.
-func withCodeIngestionID(id uuid.UUID) codeingestionOption {
+func withCodeIngestionID(id int64) codeingestionOption {
 	return func(m *CodeIngestionMutation) {
 		var (
 			err   error
@@ -854,13 +857,13 @@ func (m CodeIngestionMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of CodeIngestion entities.
-func (m *CodeIngestionMutation) SetID(id uuid.UUID) {
+func (m *CodeIngestionMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *CodeIngestionMutation) ID() (id uuid.UUID, exists bool) {
+func (m *CodeIngestionMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -871,12 +874,12 @@ func (m *CodeIngestionMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *CodeIngestionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *CodeIngestionMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -959,9 +962,9 @@ func (m *CodeIngestionMutation) ResetCreatedAt() {
 }
 
 // AddEmbeddingIDs adds the "embeddings" edge to the CodeEmbedding entity by ids.
-func (m *CodeIngestionMutation) AddEmbeddingIDs(ids ...uuid.UUID) {
+func (m *CodeIngestionMutation) AddEmbeddingIDs(ids ...int64) {
 	if m.embeddings == nil {
-		m.embeddings = make(map[uuid.UUID]struct{})
+		m.embeddings = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.embeddings[ids[i]] = struct{}{}
@@ -979,9 +982,9 @@ func (m *CodeIngestionMutation) EmbeddingsCleared() bool {
 }
 
 // RemoveEmbeddingIDs removes the "embeddings" edge to the CodeEmbedding entity by IDs.
-func (m *CodeIngestionMutation) RemoveEmbeddingIDs(ids ...uuid.UUID) {
+func (m *CodeIngestionMutation) RemoveEmbeddingIDs(ids ...int64) {
 	if m.removedembeddings == nil {
-		m.removedembeddings = make(map[uuid.UUID]struct{})
+		m.removedembeddings = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.embeddings, ids[i])
@@ -990,7 +993,7 @@ func (m *CodeIngestionMutation) RemoveEmbeddingIDs(ids ...uuid.UUID) {
 }
 
 // RemovedEmbeddings returns the removed IDs of the "embeddings" edge to the CodeEmbedding entity.
-func (m *CodeIngestionMutation) RemovedEmbeddingsIDs() (ids []uuid.UUID) {
+func (m *CodeIngestionMutation) RemovedEmbeddingsIDs() (ids []int64) {
 	for id := range m.removedembeddings {
 		ids = append(ids, id)
 	}
@@ -998,7 +1001,7 @@ func (m *CodeIngestionMutation) RemovedEmbeddingsIDs() (ids []uuid.UUID) {
 }
 
 // EmbeddingsIDs returns the "embeddings" edge IDs in the mutation.
-func (m *CodeIngestionMutation) EmbeddingsIDs() (ids []uuid.UUID) {
+func (m *CodeIngestionMutation) EmbeddingsIDs() (ids []int64) {
 	for id := range m.embeddings {
 		ids = append(ids, id)
 	}
@@ -1013,9 +1016,9 @@ func (m *CodeIngestionMutation) ResetEmbeddings() {
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by ids.
-func (m *CodeIngestionMutation) AddTagIDs(ids ...uuid.UUID) {
+func (m *CodeIngestionMutation) AddTagIDs(ids ...int64) {
 	if m.tags == nil {
-		m.tags = make(map[uuid.UUID]struct{})
+		m.tags = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.tags[ids[i]] = struct{}{}
@@ -1033,9 +1036,9 @@ func (m *CodeIngestionMutation) TagsCleared() bool {
 }
 
 // RemoveTagIDs removes the "tags" edge to the Tag entity by IDs.
-func (m *CodeIngestionMutation) RemoveTagIDs(ids ...uuid.UUID) {
+func (m *CodeIngestionMutation) RemoveTagIDs(ids ...int64) {
 	if m.removedtags == nil {
-		m.removedtags = make(map[uuid.UUID]struct{})
+		m.removedtags = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.tags, ids[i])
@@ -1044,7 +1047,7 @@ func (m *CodeIngestionMutation) RemoveTagIDs(ids ...uuid.UUID) {
 }
 
 // RemovedTags returns the removed IDs of the "tags" edge to the Tag entity.
-func (m *CodeIngestionMutation) RemovedTagsIDs() (ids []uuid.UUID) {
+func (m *CodeIngestionMutation) RemovedTagsIDs() (ids []int64) {
 	for id := range m.removedtags {
 		ids = append(ids, id)
 	}
@@ -1052,7 +1055,7 @@ func (m *CodeIngestionMutation) RemovedTagsIDs() (ids []uuid.UUID) {
 }
 
 // TagsIDs returns the "tags" edge IDs in the mutation.
-func (m *CodeIngestionMutation) TagsIDs() (ids []uuid.UUID) {
+func (m *CodeIngestionMutation) TagsIDs() (ids []int64) {
 	for id := range m.tags {
 		ids = append(ids, id)
 	}
@@ -1329,7 +1332,7 @@ type InferenceNodeMutation struct {
 	config
 	op               Op
 	typ              string
-	id               *uuid.UUID
+	id               *int64
 	hostname         *string
 	ip_address       *string
 	gpu_model        *string
@@ -1365,7 +1368,7 @@ func newInferenceNodeMutation(c config, op Op, opts ...inferencenodeOption) *Inf
 }
 
 // withInferenceNodeID sets the ID field of the mutation.
-func withInferenceNodeID(id uuid.UUID) inferencenodeOption {
+func withInferenceNodeID(id int64) inferencenodeOption {
 	return func(m *InferenceNodeMutation) {
 		var (
 			err   error
@@ -1417,13 +1420,13 @@ func (m InferenceNodeMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of InferenceNode entities.
-func (m *InferenceNodeMutation) SetID(id uuid.UUID) {
+func (m *InferenceNodeMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *InferenceNodeMutation) ID() (id uuid.UUID, exists bool) {
+func (m *InferenceNodeMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -1434,12 +1437,12 @@ func (m *InferenceNodeMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *InferenceNodeMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *InferenceNodeMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -2065,19 +2068,20 @@ func (m *InferenceNodeMutation) ResetEdge(name string) error {
 // MemoryEventMutation represents an operation that mutates the MemoryEvent nodes in the graph.
 type MemoryEventMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *uuid.UUID
-	memory_item_id *uuid.UUID
-	event_type     *string
-	event_data     *map[string]interface{}
-	created_at     *time.Time
-	clearedFields  map[string]struct{}
-	session        *uuid.UUID
-	clearedsession bool
-	done           bool
-	oldValue       func(context.Context) (*MemoryEvent, error)
-	predicates     []predicate.MemoryEvent
+	op                 Op
+	typ                string
+	id                 *int64
+	event_type         *string
+	event_data         *map[string]interface{}
+	created_at         *time.Time
+	clearedFields      map[string]struct{}
+	session            *int64
+	clearedsession     bool
+	memory_item        *int64
+	clearedmemory_item bool
+	done               bool
+	oldValue           func(context.Context) (*MemoryEvent, error)
+	predicates         []predicate.MemoryEvent
 }
 
 var _ ent.Mutation = (*MemoryEventMutation)(nil)
@@ -2100,7 +2104,7 @@ func newMemoryEventMutation(c config, op Op, opts ...memoryeventOption) *MemoryE
 }
 
 // withMemoryEventID sets the ID field of the mutation.
-func withMemoryEventID(id uuid.UUID) memoryeventOption {
+func withMemoryEventID(id int64) memoryeventOption {
 	return func(m *MemoryEventMutation) {
 		var (
 			err   error
@@ -2152,13 +2156,13 @@ func (m MemoryEventMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of MemoryEvent entities.
-func (m *MemoryEventMutation) SetID(id uuid.UUID) {
+func (m *MemoryEventMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *MemoryEventMutation) ID() (id uuid.UUID, exists bool) {
+func (m *MemoryEventMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -2169,12 +2173,12 @@ func (m *MemoryEventMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *MemoryEventMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *MemoryEventMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -2185,13 +2189,13 @@ func (m *MemoryEventMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (m *MemoryEventMutation) SetMemoryItemID(u uuid.UUID) {
-	m.memory_item_id = &u
+func (m *MemoryEventMutation) SetMemoryItemID(i int64) {
+	m.memory_item = &i
 }
 
 // MemoryItemID returns the value of the "memory_item_id" field in the mutation.
-func (m *MemoryEventMutation) MemoryItemID() (r uuid.UUID, exists bool) {
-	v := m.memory_item_id
+func (m *MemoryEventMutation) MemoryItemID() (r int64, exists bool) {
+	v := m.memory_item
 	if v == nil {
 		return
 	}
@@ -2201,7 +2205,7 @@ func (m *MemoryEventMutation) MemoryItemID() (r uuid.UUID, exists bool) {
 // OldMemoryItemID returns the old "memory_item_id" field's value of the MemoryEvent entity.
 // If the MemoryEvent object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryEventMutation) OldMemoryItemID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *MemoryEventMutation) OldMemoryItemID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldMemoryItemID is only allowed on UpdateOne operations")
 	}
@@ -2217,16 +2221,16 @@ func (m *MemoryEventMutation) OldMemoryItemID(ctx context.Context) (v uuid.UUID,
 
 // ResetMemoryItemID resets all changes to the "memory_item_id" field.
 func (m *MemoryEventMutation) ResetMemoryItemID() {
-	m.memory_item_id = nil
+	m.memory_item = nil
 }
 
 // SetSessionID sets the "session_id" field.
-func (m *MemoryEventMutation) SetSessionID(u uuid.UUID) {
-	m.session = &u
+func (m *MemoryEventMutation) SetSessionID(i int64) {
+	m.session = &i
 }
 
 // SessionID returns the value of the "session_id" field in the mutation.
-func (m *MemoryEventMutation) SessionID() (r uuid.UUID, exists bool) {
+func (m *MemoryEventMutation) SessionID() (r int64, exists bool) {
 	v := m.session
 	if v == nil {
 		return
@@ -2237,7 +2241,7 @@ func (m *MemoryEventMutation) SessionID() (r uuid.UUID, exists bool) {
 // OldSessionID returns the old "session_id" field's value of the MemoryEvent entity.
 // If the MemoryEvent object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryEventMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *MemoryEventMutation) OldSessionID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
 	}
@@ -2404,7 +2408,7 @@ func (m *MemoryEventMutation) SessionCleared() bool {
 // SessionIDs returns the "session" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
 // SessionID instead. It exists only for internal usage by the builders.
-func (m *MemoryEventMutation) SessionIDs() (ids []uuid.UUID) {
+func (m *MemoryEventMutation) SessionIDs() (ids []int64) {
 	if id := m.session; id != nil {
 		ids = append(ids, *id)
 	}
@@ -2415,6 +2419,33 @@ func (m *MemoryEventMutation) SessionIDs() (ids []uuid.UUID) {
 func (m *MemoryEventMutation) ResetSession() {
 	m.session = nil
 	m.clearedsession = false
+}
+
+// ClearMemoryItem clears the "memory_item" edge to the MemoryItem entity.
+func (m *MemoryEventMutation) ClearMemoryItem() {
+	m.clearedmemory_item = true
+	m.clearedFields[memoryevent.FieldMemoryItemID] = struct{}{}
+}
+
+// MemoryItemCleared reports if the "memory_item" edge to the MemoryItem entity was cleared.
+func (m *MemoryEventMutation) MemoryItemCleared() bool {
+	return m.clearedmemory_item
+}
+
+// MemoryItemIDs returns the "memory_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// MemoryItemID instead. It exists only for internal usage by the builders.
+func (m *MemoryEventMutation) MemoryItemIDs() (ids []int64) {
+	if id := m.memory_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetMemoryItem resets all changes to the "memory_item" edge.
+func (m *MemoryEventMutation) ResetMemoryItem() {
+	m.memory_item = nil
+	m.clearedmemory_item = false
 }
 
 // Where appends a list predicates to the MemoryEventMutation builder.
@@ -2452,7 +2483,7 @@ func (m *MemoryEventMutation) Type() string {
 // AddedFields().
 func (m *MemoryEventMutation) Fields() []string {
 	fields := make([]string, 0, 5)
-	if m.memory_item_id != nil {
+	if m.memory_item != nil {
 		fields = append(fields, memoryevent.FieldMemoryItemID)
 	}
 	if m.session != nil {
@@ -2514,14 +2545,14 @@ func (m *MemoryEventMutation) OldField(ctx context.Context, name string) (ent.Va
 func (m *MemoryEventMutation) SetField(name string, value ent.Value) error {
 	switch name {
 	case memoryevent.FieldMemoryItemID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMemoryItemID(v)
 		return nil
 	case memoryevent.FieldSessionID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -2555,13 +2586,16 @@ func (m *MemoryEventMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *MemoryEventMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *MemoryEventMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
 	return nil, false
 }
 
@@ -2633,9 +2667,12 @@ func (m *MemoryEventMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *MemoryEventMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.session != nil {
 		edges = append(edges, memoryevent.EdgeSession)
+	}
+	if m.memory_item != nil {
+		edges = append(edges, memoryevent.EdgeMemoryItem)
 	}
 	return edges
 }
@@ -2648,13 +2685,17 @@ func (m *MemoryEventMutation) AddedIDs(name string) []ent.Value {
 		if id := m.session; id != nil {
 			return []ent.Value{*id}
 		}
+	case memoryevent.EdgeMemoryItem:
+		if id := m.memory_item; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *MemoryEventMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	return edges
 }
 
@@ -2666,9 +2707,12 @@ func (m *MemoryEventMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *MemoryEventMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.clearedsession {
 		edges = append(edges, memoryevent.EdgeSession)
+	}
+	if m.clearedmemory_item {
+		edges = append(edges, memoryevent.EdgeMemoryItem)
 	}
 	return edges
 }
@@ -2679,6 +2723,8 @@ func (m *MemoryEventMutation) EdgeCleared(name string) bool {
 	switch name {
 	case memoryevent.EdgeSession:
 		return m.clearedsession
+	case memoryevent.EdgeMemoryItem:
+		return m.clearedmemory_item
 	}
 	return false
 }
@@ -2689,6 +2735,9 @@ func (m *MemoryEventMutation) ClearEdge(name string) error {
 	switch name {
 	case memoryevent.EdgeSession:
 		m.ClearSession()
+		return nil
+	case memoryevent.EdgeMemoryItem:
+		m.ClearMemoryItem()
 		return nil
 	}
 	return fmt.Errorf("unknown MemoryEvent unique edge %s", name)
@@ -2701,6 +2750,9 @@ func (m *MemoryEventMutation) ResetEdge(name string) error {
 	case memoryevent.EdgeSession:
 		m.ResetSession()
 		return nil
+	case memoryevent.EdgeMemoryItem:
+		m.ResetMemoryItem()
+		return nil
 	}
 	return fmt.Errorf("unknown MemoryEvent edge %s", name)
 }
@@ -2710,11 +2762,11 @@ type MemoryItemMutation struct {
 	config
 	op                 Op
 	typ                string
-	id                 *uuid.UUID
-	tenant_id          *uuid.UUID
-	session_id         *uuid.UUID
+	id                 *int64
+	project_id         *int64
+	addproject_id      *int64
 	user_id            *uuid.UUID
-	_type              *string
+	memory_type        *string
 	summary            *string
 	content            *string
 	salience           *float64
@@ -2723,13 +2775,20 @@ type MemoryItemMutation struct {
 	addretention_score *float64
 	decay_state        *map[string]interface{}
 	status             *string
-	pinning            *bool
-	ttl                *int64
-	addttl             *int64
+	pinned             *bool
+	expires_at         *time.Time
 	metadata           *map[string]interface{}
 	created_at         *time.Time
 	updated_at         *time.Time
 	clearedFields      map[string]struct{}
+	session            *int64
+	clearedsession     bool
+	links              map[int64]struct{}
+	removedlinks       map[int64]struct{}
+	clearedlinks       bool
+	events             map[int64]struct{}
+	removedevents      map[int64]struct{}
+	clearedevents      bool
 	done               bool
 	oldValue           func(context.Context) (*MemoryItem, error)
 	predicates         []predicate.MemoryItem
@@ -2755,7 +2814,7 @@ func newMemoryItemMutation(c config, op Op, opts ...memoryitemOption) *MemoryIte
 }
 
 // withMemoryItemID sets the ID field of the mutation.
-func withMemoryItemID(id uuid.UUID) memoryitemOption {
+func withMemoryItemID(id int64) memoryitemOption {
 	return func(m *MemoryItemMutation) {
 		var (
 			err   error
@@ -2807,13 +2866,13 @@ func (m MemoryItemMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of MemoryItem entities.
-func (m *MemoryItemMutation) SetID(id uuid.UUID) {
+func (m *MemoryItemMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *MemoryItemMutation) ID() (id uuid.UUID, exists bool) {
+func (m *MemoryItemMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -2824,12 +2883,12 @@ func (m *MemoryItemMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *MemoryItemMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *MemoryItemMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -2839,63 +2898,84 @@ func (m *MemoryItemMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
 	}
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (m *MemoryItemMutation) SetTenantID(u uuid.UUID) {
-	m.tenant_id = &u
+// SetProjectID sets the "project_id" field.
+func (m *MemoryItemMutation) SetProjectID(i int64) {
+	m.project_id = &i
+	m.addproject_id = nil
 }
 
-// TenantID returns the value of the "tenant_id" field in the mutation.
-func (m *MemoryItemMutation) TenantID() (r uuid.UUID, exists bool) {
-	v := m.tenant_id
+// ProjectID returns the value of the "project_id" field in the mutation.
+func (m *MemoryItemMutation) ProjectID() (r int64, exists bool) {
+	v := m.project_id
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTenantID returns the old "tenant_id" field's value of the MemoryItem entity.
+// OldProjectID returns the old "project_id" field's value of the MemoryItem entity.
 // If the MemoryItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryItemMutation) OldTenantID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *MemoryItemMutation) OldProjectID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+		return v, errors.New("OldProjectID is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTenantID requires an ID field in the mutation")
+		return v, errors.New("OldProjectID requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+		return v, fmt.Errorf("querying old value for OldProjectID: %w", err)
 	}
-	return oldValue.TenantID, nil
+	return oldValue.ProjectID, nil
 }
 
-// ClearTenantID clears the value of the "tenant_id" field.
-func (m *MemoryItemMutation) ClearTenantID() {
-	m.tenant_id = nil
-	m.clearedFields[memoryitem.FieldTenantID] = struct{}{}
+// AddProjectID adds i to the "project_id" field.
+func (m *MemoryItemMutation) AddProjectID(i int64) {
+	if m.addproject_id != nil {
+		*m.addproject_id += i
+	} else {
+		m.addproject_id = &i
+	}
 }
 
-// TenantIDCleared returns if the "tenant_id" field was cleared in this mutation.
-func (m *MemoryItemMutation) TenantIDCleared() bool {
-	_, ok := m.clearedFields[memoryitem.FieldTenantID]
+// AddedProjectID returns the value that was added to the "project_id" field in this mutation.
+func (m *MemoryItemMutation) AddedProjectID() (r int64, exists bool) {
+	v := m.addproject_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (m *MemoryItemMutation) ClearProjectID() {
+	m.project_id = nil
+	m.addproject_id = nil
+	m.clearedFields[memoryitem.FieldProjectID] = struct{}{}
+}
+
+// ProjectIDCleared returns if the "project_id" field was cleared in this mutation.
+func (m *MemoryItemMutation) ProjectIDCleared() bool {
+	_, ok := m.clearedFields[memoryitem.FieldProjectID]
 	return ok
 }
 
-// ResetTenantID resets all changes to the "tenant_id" field.
-func (m *MemoryItemMutation) ResetTenantID() {
-	m.tenant_id = nil
-	delete(m.clearedFields, memoryitem.FieldTenantID)
+// ResetProjectID resets all changes to the "project_id" field.
+func (m *MemoryItemMutation) ResetProjectID() {
+	m.project_id = nil
+	m.addproject_id = nil
+	delete(m.clearedFields, memoryitem.FieldProjectID)
 }
 
 // SetSessionID sets the "session_id" field.
-func (m *MemoryItemMutation) SetSessionID(u uuid.UUID) {
-	m.session_id = &u
+func (m *MemoryItemMutation) SetSessionID(i int64) {
+	m.session = &i
 }
 
 // SessionID returns the value of the "session_id" field in the mutation.
-func (m *MemoryItemMutation) SessionID() (r uuid.UUID, exists bool) {
-	v := m.session_id
+func (m *MemoryItemMutation) SessionID() (r int64, exists bool) {
+	v := m.session
 	if v == nil {
 		return
 	}
@@ -2905,7 +2985,7 @@ func (m *MemoryItemMutation) SessionID() (r uuid.UUID, exists bool) {
 // OldSessionID returns the old "session_id" field's value of the MemoryItem entity.
 // If the MemoryItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryItemMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *MemoryItemMutation) OldSessionID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
 	}
@@ -2921,7 +3001,7 @@ func (m *MemoryItemMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err
 
 // ClearSessionID clears the value of the "session_id" field.
 func (m *MemoryItemMutation) ClearSessionID() {
-	m.session_id = nil
+	m.session = nil
 	m.clearedFields[memoryitem.FieldSessionID] = struct{}{}
 }
 
@@ -2933,7 +3013,7 @@ func (m *MemoryItemMutation) SessionIDCleared() bool {
 
 // ResetSessionID resets all changes to the "session_id" field.
 func (m *MemoryItemMutation) ResetSessionID() {
-	m.session_id = nil
+	m.session = nil
 	delete(m.clearedFields, memoryitem.FieldSessionID)
 }
 
@@ -2986,40 +3066,40 @@ func (m *MemoryItemMutation) ResetUserID() {
 	delete(m.clearedFields, memoryitem.FieldUserID)
 }
 
-// SetType sets the "type" field.
-func (m *MemoryItemMutation) SetType(s string) {
-	m._type = &s
+// SetMemoryType sets the "memory_type" field.
+func (m *MemoryItemMutation) SetMemoryType(s string) {
+	m.memory_type = &s
 }
 
-// GetType returns the value of the "type" field in the mutation.
-func (m *MemoryItemMutation) GetType() (r string, exists bool) {
-	v := m._type
+// MemoryType returns the value of the "memory_type" field in the mutation.
+func (m *MemoryItemMutation) MemoryType() (r string, exists bool) {
+	v := m.memory_type
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldType returns the old "type" field's value of the MemoryItem entity.
+// OldMemoryType returns the old "memory_type" field's value of the MemoryItem entity.
 // If the MemoryItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryItemMutation) OldType(ctx context.Context) (v string, err error) {
+func (m *MemoryItemMutation) OldMemoryType(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldType is only allowed on UpdateOne operations")
+		return v, errors.New("OldMemoryType is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldType requires an ID field in the mutation")
+		return v, errors.New("OldMemoryType requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldType: %w", err)
+		return v, fmt.Errorf("querying old value for OldMemoryType: %w", err)
 	}
-	return oldValue.Type, nil
+	return oldValue.MemoryType, nil
 }
 
-// ResetType resets all changes to the "type" field.
-func (m *MemoryItemMutation) ResetType() {
-	m._type = nil
+// ResetMemoryType resets all changes to the "memory_type" field.
+func (m *MemoryItemMutation) ResetMemoryType() {
+	m.memory_type = nil
 }
 
 // SetSummary sets the "summary" field.
@@ -3304,110 +3384,89 @@ func (m *MemoryItemMutation) ResetStatus() {
 	m.status = nil
 }
 
-// SetPinning sets the "pinning" field.
-func (m *MemoryItemMutation) SetPinning(b bool) {
-	m.pinning = &b
+// SetPinned sets the "pinned" field.
+func (m *MemoryItemMutation) SetPinned(b bool) {
+	m.pinned = &b
 }
 
-// Pinning returns the value of the "pinning" field in the mutation.
-func (m *MemoryItemMutation) Pinning() (r bool, exists bool) {
-	v := m.pinning
+// Pinned returns the value of the "pinned" field in the mutation.
+func (m *MemoryItemMutation) Pinned() (r bool, exists bool) {
+	v := m.pinned
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldPinning returns the old "pinning" field's value of the MemoryItem entity.
+// OldPinned returns the old "pinned" field's value of the MemoryItem entity.
 // If the MemoryItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryItemMutation) OldPinning(ctx context.Context) (v bool, err error) {
+func (m *MemoryItemMutation) OldPinned(ctx context.Context) (v bool, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPinning is only allowed on UpdateOne operations")
+		return v, errors.New("OldPinned is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPinning requires an ID field in the mutation")
+		return v, errors.New("OldPinned requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPinning: %w", err)
+		return v, fmt.Errorf("querying old value for OldPinned: %w", err)
 	}
-	return oldValue.Pinning, nil
+	return oldValue.Pinned, nil
 }
 
-// ResetPinning resets all changes to the "pinning" field.
-func (m *MemoryItemMutation) ResetPinning() {
-	m.pinning = nil
+// ResetPinned resets all changes to the "pinned" field.
+func (m *MemoryItemMutation) ResetPinned() {
+	m.pinned = nil
 }
 
-// SetTTL sets the "ttl" field.
-func (m *MemoryItemMutation) SetTTL(i int64) {
-	m.ttl = &i
-	m.addttl = nil
+// SetExpiresAt sets the "expires_at" field.
+func (m *MemoryItemMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
 }
 
-// TTL returns the value of the "ttl" field in the mutation.
-func (m *MemoryItemMutation) TTL() (r int64, exists bool) {
-	v := m.ttl
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *MemoryItemMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTTL returns the old "ttl" field's value of the MemoryItem entity.
+// OldExpiresAt returns the old "expires_at" field's value of the MemoryItem entity.
 // If the MemoryItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryItemMutation) OldTTL(ctx context.Context) (v int64, err error) {
+func (m *MemoryItemMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTTL is only allowed on UpdateOne operations")
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTTL requires an ID field in the mutation")
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTTL: %w", err)
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
 	}
-	return oldValue.TTL, nil
+	return oldValue.ExpiresAt, nil
 }
 
-// AddTTL adds i to the "ttl" field.
-func (m *MemoryItemMutation) AddTTL(i int64) {
-	if m.addttl != nil {
-		*m.addttl += i
-	} else {
-		m.addttl = &i
-	}
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (m *MemoryItemMutation) ClearExpiresAt() {
+	m.expires_at = nil
+	m.clearedFields[memoryitem.FieldExpiresAt] = struct{}{}
 }
 
-// AddedTTL returns the value that was added to the "ttl" field in this mutation.
-func (m *MemoryItemMutation) AddedTTL() (r int64, exists bool) {
-	v := m.addttl
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearTTL clears the value of the "ttl" field.
-func (m *MemoryItemMutation) ClearTTL() {
-	m.ttl = nil
-	m.addttl = nil
-	m.clearedFields[memoryitem.FieldTTL] = struct{}{}
-}
-
-// TTLCleared returns if the "ttl" field was cleared in this mutation.
-func (m *MemoryItemMutation) TTLCleared() bool {
-	_, ok := m.clearedFields[memoryitem.FieldTTL]
+// ExpiresAtCleared returns if the "expires_at" field was cleared in this mutation.
+func (m *MemoryItemMutation) ExpiresAtCleared() bool {
+	_, ok := m.clearedFields[memoryitem.FieldExpiresAt]
 	return ok
 }
 
-// ResetTTL resets all changes to the "ttl" field.
-func (m *MemoryItemMutation) ResetTTL() {
-	m.ttl = nil
-	m.addttl = nil
-	delete(m.clearedFields, memoryitem.FieldTTL)
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *MemoryItemMutation) ResetExpiresAt() {
+	m.expires_at = nil
+	delete(m.clearedFields, memoryitem.FieldExpiresAt)
 }
 
 // SetMetadata sets the "metadata" field.
@@ -3531,6 +3590,141 @@ func (m *MemoryItemMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// ClearSession clears the "session" edge to the Session entity.
+func (m *MemoryItemMutation) ClearSession() {
+	m.clearedsession = true
+	m.clearedFields[memoryitem.FieldSessionID] = struct{}{}
+}
+
+// SessionCleared reports if the "session" edge to the Session entity was cleared.
+func (m *MemoryItemMutation) SessionCleared() bool {
+	return m.SessionIDCleared() || m.clearedsession
+}
+
+// SessionIDs returns the "session" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// SessionID instead. It exists only for internal usage by the builders.
+func (m *MemoryItemMutation) SessionIDs() (ids []int64) {
+	if id := m.session; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetSession resets all changes to the "session" edge.
+func (m *MemoryItemMutation) ResetSession() {
+	m.session = nil
+	m.clearedsession = false
+}
+
+// AddLinkIDs adds the "links" edge to the MemoryLink entity by ids.
+func (m *MemoryItemMutation) AddLinkIDs(ids ...int64) {
+	if m.links == nil {
+		m.links = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.links[ids[i]] = struct{}{}
+	}
+}
+
+// ClearLinks clears the "links" edge to the MemoryLink entity.
+func (m *MemoryItemMutation) ClearLinks() {
+	m.clearedlinks = true
+}
+
+// LinksCleared reports if the "links" edge to the MemoryLink entity was cleared.
+func (m *MemoryItemMutation) LinksCleared() bool {
+	return m.clearedlinks
+}
+
+// RemoveLinkIDs removes the "links" edge to the MemoryLink entity by IDs.
+func (m *MemoryItemMutation) RemoveLinkIDs(ids ...int64) {
+	if m.removedlinks == nil {
+		m.removedlinks = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.links, ids[i])
+		m.removedlinks[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedLinks returns the removed IDs of the "links" edge to the MemoryLink entity.
+func (m *MemoryItemMutation) RemovedLinksIDs() (ids []int64) {
+	for id := range m.removedlinks {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// LinksIDs returns the "links" edge IDs in the mutation.
+func (m *MemoryItemMutation) LinksIDs() (ids []int64) {
+	for id := range m.links {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetLinks resets all changes to the "links" edge.
+func (m *MemoryItemMutation) ResetLinks() {
+	m.links = nil
+	m.clearedlinks = false
+	m.removedlinks = nil
+}
+
+// AddEventIDs adds the "events" edge to the MemoryEvent entity by ids.
+func (m *MemoryItemMutation) AddEventIDs(ids ...int64) {
+	if m.events == nil {
+		m.events = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.events[ids[i]] = struct{}{}
+	}
+}
+
+// ClearEvents clears the "events" edge to the MemoryEvent entity.
+func (m *MemoryItemMutation) ClearEvents() {
+	m.clearedevents = true
+}
+
+// EventsCleared reports if the "events" edge to the MemoryEvent entity was cleared.
+func (m *MemoryItemMutation) EventsCleared() bool {
+	return m.clearedevents
+}
+
+// RemoveEventIDs removes the "events" edge to the MemoryEvent entity by IDs.
+func (m *MemoryItemMutation) RemoveEventIDs(ids ...int64) {
+	if m.removedevents == nil {
+		m.removedevents = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.events, ids[i])
+		m.removedevents[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedEvents returns the removed IDs of the "events" edge to the MemoryEvent entity.
+func (m *MemoryItemMutation) RemovedEventsIDs() (ids []int64) {
+	for id := range m.removedevents {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// EventsIDs returns the "events" edge IDs in the mutation.
+func (m *MemoryItemMutation) EventsIDs() (ids []int64) {
+	for id := range m.events {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetEvents resets all changes to the "events" edge.
+func (m *MemoryItemMutation) ResetEvents() {
+	m.events = nil
+	m.clearedevents = false
+	m.removedevents = nil
+}
+
 // Where appends a list predicates to the MemoryItemMutation builder.
 func (m *MemoryItemMutation) Where(ps ...predicate.MemoryItem) {
 	m.predicates = append(m.predicates, ps...)
@@ -3566,17 +3760,17 @@ func (m *MemoryItemMutation) Type() string {
 // AddedFields().
 func (m *MemoryItemMutation) Fields() []string {
 	fields := make([]string, 0, 15)
-	if m.tenant_id != nil {
-		fields = append(fields, memoryitem.FieldTenantID)
+	if m.project_id != nil {
+		fields = append(fields, memoryitem.FieldProjectID)
 	}
-	if m.session_id != nil {
+	if m.session != nil {
 		fields = append(fields, memoryitem.FieldSessionID)
 	}
 	if m.user_id != nil {
 		fields = append(fields, memoryitem.FieldUserID)
 	}
-	if m._type != nil {
-		fields = append(fields, memoryitem.FieldType)
+	if m.memory_type != nil {
+		fields = append(fields, memoryitem.FieldMemoryType)
 	}
 	if m.summary != nil {
 		fields = append(fields, memoryitem.FieldSummary)
@@ -3596,11 +3790,11 @@ func (m *MemoryItemMutation) Fields() []string {
 	if m.status != nil {
 		fields = append(fields, memoryitem.FieldStatus)
 	}
-	if m.pinning != nil {
-		fields = append(fields, memoryitem.FieldPinning)
+	if m.pinned != nil {
+		fields = append(fields, memoryitem.FieldPinned)
 	}
-	if m.ttl != nil {
-		fields = append(fields, memoryitem.FieldTTL)
+	if m.expires_at != nil {
+		fields = append(fields, memoryitem.FieldExpiresAt)
 	}
 	if m.metadata != nil {
 		fields = append(fields, memoryitem.FieldMetadata)
@@ -3619,14 +3813,14 @@ func (m *MemoryItemMutation) Fields() []string {
 // schema.
 func (m *MemoryItemMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case memoryitem.FieldTenantID:
-		return m.TenantID()
+	case memoryitem.FieldProjectID:
+		return m.ProjectID()
 	case memoryitem.FieldSessionID:
 		return m.SessionID()
 	case memoryitem.FieldUserID:
 		return m.UserID()
-	case memoryitem.FieldType:
-		return m.GetType()
+	case memoryitem.FieldMemoryType:
+		return m.MemoryType()
 	case memoryitem.FieldSummary:
 		return m.Summary()
 	case memoryitem.FieldContent:
@@ -3639,10 +3833,10 @@ func (m *MemoryItemMutation) Field(name string) (ent.Value, bool) {
 		return m.DecayState()
 	case memoryitem.FieldStatus:
 		return m.Status()
-	case memoryitem.FieldPinning:
-		return m.Pinning()
-	case memoryitem.FieldTTL:
-		return m.TTL()
+	case memoryitem.FieldPinned:
+		return m.Pinned()
+	case memoryitem.FieldExpiresAt:
+		return m.ExpiresAt()
 	case memoryitem.FieldMetadata:
 		return m.Metadata()
 	case memoryitem.FieldCreatedAt:
@@ -3658,14 +3852,14 @@ func (m *MemoryItemMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *MemoryItemMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case memoryitem.FieldTenantID:
-		return m.OldTenantID(ctx)
+	case memoryitem.FieldProjectID:
+		return m.OldProjectID(ctx)
 	case memoryitem.FieldSessionID:
 		return m.OldSessionID(ctx)
 	case memoryitem.FieldUserID:
 		return m.OldUserID(ctx)
-	case memoryitem.FieldType:
-		return m.OldType(ctx)
+	case memoryitem.FieldMemoryType:
+		return m.OldMemoryType(ctx)
 	case memoryitem.FieldSummary:
 		return m.OldSummary(ctx)
 	case memoryitem.FieldContent:
@@ -3678,10 +3872,10 @@ func (m *MemoryItemMutation) OldField(ctx context.Context, name string) (ent.Val
 		return m.OldDecayState(ctx)
 	case memoryitem.FieldStatus:
 		return m.OldStatus(ctx)
-	case memoryitem.FieldPinning:
-		return m.OldPinning(ctx)
-	case memoryitem.FieldTTL:
-		return m.OldTTL(ctx)
+	case memoryitem.FieldPinned:
+		return m.OldPinned(ctx)
+	case memoryitem.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
 	case memoryitem.FieldMetadata:
 		return m.OldMetadata(ctx)
 	case memoryitem.FieldCreatedAt:
@@ -3697,15 +3891,15 @@ func (m *MemoryItemMutation) OldField(ctx context.Context, name string) (ent.Val
 // type.
 func (m *MemoryItemMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case memoryitem.FieldTenantID:
-		v, ok := value.(uuid.UUID)
+	case memoryitem.FieldProjectID:
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetTenantID(v)
+		m.SetProjectID(v)
 		return nil
 	case memoryitem.FieldSessionID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -3718,12 +3912,12 @@ func (m *MemoryItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUserID(v)
 		return nil
-	case memoryitem.FieldType:
+	case memoryitem.FieldMemoryType:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetType(v)
+		m.SetMemoryType(v)
 		return nil
 	case memoryitem.FieldSummary:
 		v, ok := value.(string)
@@ -3767,19 +3961,19 @@ func (m *MemoryItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetStatus(v)
 		return nil
-	case memoryitem.FieldPinning:
+	case memoryitem.FieldPinned:
 		v, ok := value.(bool)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetPinning(v)
+		m.SetPinned(v)
 		return nil
-	case memoryitem.FieldTTL:
-		v, ok := value.(int64)
+	case memoryitem.FieldExpiresAt:
+		v, ok := value.(time.Time)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetTTL(v)
+		m.SetExpiresAt(v)
 		return nil
 	case memoryitem.FieldMetadata:
 		v, ok := value.(map[string]interface{})
@@ -3810,14 +4004,14 @@ func (m *MemoryItemMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *MemoryItemMutation) AddedFields() []string {
 	var fields []string
+	if m.addproject_id != nil {
+		fields = append(fields, memoryitem.FieldProjectID)
+	}
 	if m.addsalience != nil {
 		fields = append(fields, memoryitem.FieldSalience)
 	}
 	if m.addretention_score != nil {
 		fields = append(fields, memoryitem.FieldRetentionScore)
-	}
-	if m.addttl != nil {
-		fields = append(fields, memoryitem.FieldTTL)
 	}
 	return fields
 }
@@ -3827,12 +4021,12 @@ func (m *MemoryItemMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *MemoryItemMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case memoryitem.FieldProjectID:
+		return m.AddedProjectID()
 	case memoryitem.FieldSalience:
 		return m.AddedSalience()
 	case memoryitem.FieldRetentionScore:
 		return m.AddedRetentionScore()
-	case memoryitem.FieldTTL:
-		return m.AddedTTL()
 	}
 	return nil, false
 }
@@ -3842,6 +4036,13 @@ func (m *MemoryItemMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *MemoryItemMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case memoryitem.FieldProjectID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProjectID(v)
+		return nil
 	case memoryitem.FieldSalience:
 		v, ok := value.(float64)
 		if !ok {
@@ -3856,13 +4057,6 @@ func (m *MemoryItemMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddRetentionScore(v)
 		return nil
-	case memoryitem.FieldTTL:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddTTL(v)
-		return nil
 	}
 	return fmt.Errorf("unknown MemoryItem numeric field %s", name)
 }
@@ -3871,8 +4065,8 @@ func (m *MemoryItemMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *MemoryItemMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(memoryitem.FieldTenantID) {
-		fields = append(fields, memoryitem.FieldTenantID)
+	if m.FieldCleared(memoryitem.FieldProjectID) {
+		fields = append(fields, memoryitem.FieldProjectID)
 	}
 	if m.FieldCleared(memoryitem.FieldSessionID) {
 		fields = append(fields, memoryitem.FieldSessionID)
@@ -3886,8 +4080,8 @@ func (m *MemoryItemMutation) ClearedFields() []string {
 	if m.FieldCleared(memoryitem.FieldDecayState) {
 		fields = append(fields, memoryitem.FieldDecayState)
 	}
-	if m.FieldCleared(memoryitem.FieldTTL) {
-		fields = append(fields, memoryitem.FieldTTL)
+	if m.FieldCleared(memoryitem.FieldExpiresAt) {
+		fields = append(fields, memoryitem.FieldExpiresAt)
 	}
 	if m.FieldCleared(memoryitem.FieldMetadata) {
 		fields = append(fields, memoryitem.FieldMetadata)
@@ -3906,8 +4100,8 @@ func (m *MemoryItemMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *MemoryItemMutation) ClearField(name string) error {
 	switch name {
-	case memoryitem.FieldTenantID:
-		m.ClearTenantID()
+	case memoryitem.FieldProjectID:
+		m.ClearProjectID()
 		return nil
 	case memoryitem.FieldSessionID:
 		m.ClearSessionID()
@@ -3921,8 +4115,8 @@ func (m *MemoryItemMutation) ClearField(name string) error {
 	case memoryitem.FieldDecayState:
 		m.ClearDecayState()
 		return nil
-	case memoryitem.FieldTTL:
-		m.ClearTTL()
+	case memoryitem.FieldExpiresAt:
+		m.ClearExpiresAt()
 		return nil
 	case memoryitem.FieldMetadata:
 		m.ClearMetadata()
@@ -3935,8 +4129,8 @@ func (m *MemoryItemMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *MemoryItemMutation) ResetField(name string) error {
 	switch name {
-	case memoryitem.FieldTenantID:
-		m.ResetTenantID()
+	case memoryitem.FieldProjectID:
+		m.ResetProjectID()
 		return nil
 	case memoryitem.FieldSessionID:
 		m.ResetSessionID()
@@ -3944,8 +4138,8 @@ func (m *MemoryItemMutation) ResetField(name string) error {
 	case memoryitem.FieldUserID:
 		m.ResetUserID()
 		return nil
-	case memoryitem.FieldType:
-		m.ResetType()
+	case memoryitem.FieldMemoryType:
+		m.ResetMemoryType()
 		return nil
 	case memoryitem.FieldSummary:
 		m.ResetSummary()
@@ -3965,11 +4159,11 @@ func (m *MemoryItemMutation) ResetField(name string) error {
 	case memoryitem.FieldStatus:
 		m.ResetStatus()
 		return nil
-	case memoryitem.FieldPinning:
-		m.ResetPinning()
+	case memoryitem.FieldPinned:
+		m.ResetPinned()
 		return nil
-	case memoryitem.FieldTTL:
-		m.ResetTTL()
+	case memoryitem.FieldExpiresAt:
+		m.ResetExpiresAt()
 		return nil
 	case memoryitem.FieldMetadata:
 		m.ResetMetadata()
@@ -3986,49 +4180,129 @@ func (m *MemoryItemMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *MemoryItemMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 3)
+	if m.session != nil {
+		edges = append(edges, memoryitem.EdgeSession)
+	}
+	if m.links != nil {
+		edges = append(edges, memoryitem.EdgeLinks)
+	}
+	if m.events != nil {
+		edges = append(edges, memoryitem.EdgeEvents)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *MemoryItemMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case memoryitem.EdgeSession:
+		if id := m.session; id != nil {
+			return []ent.Value{*id}
+		}
+	case memoryitem.EdgeLinks:
+		ids := make([]ent.Value, 0, len(m.links))
+		for id := range m.links {
+			ids = append(ids, id)
+		}
+		return ids
+	case memoryitem.EdgeEvents:
+		ids := make([]ent.Value, 0, len(m.events))
+		for id := range m.events {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *MemoryItemMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 3)
+	if m.removedlinks != nil {
+		edges = append(edges, memoryitem.EdgeLinks)
+	}
+	if m.removedevents != nil {
+		edges = append(edges, memoryitem.EdgeEvents)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *MemoryItemMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case memoryitem.EdgeLinks:
+		ids := make([]ent.Value, 0, len(m.removedlinks))
+		for id := range m.removedlinks {
+			ids = append(ids, id)
+		}
+		return ids
+	case memoryitem.EdgeEvents:
+		ids := make([]ent.Value, 0, len(m.removedevents))
+		for id := range m.removedevents {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *MemoryItemMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 3)
+	if m.clearedsession {
+		edges = append(edges, memoryitem.EdgeSession)
+	}
+	if m.clearedlinks {
+		edges = append(edges, memoryitem.EdgeLinks)
+	}
+	if m.clearedevents {
+		edges = append(edges, memoryitem.EdgeEvents)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *MemoryItemMutation) EdgeCleared(name string) bool {
+	switch name {
+	case memoryitem.EdgeSession:
+		return m.clearedsession
+	case memoryitem.EdgeLinks:
+		return m.clearedlinks
+	case memoryitem.EdgeEvents:
+		return m.clearedevents
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *MemoryItemMutation) ClearEdge(name string) error {
+	switch name {
+	case memoryitem.EdgeSession:
+		m.ClearSession()
+		return nil
+	}
 	return fmt.Errorf("unknown MemoryItem unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *MemoryItemMutation) ResetEdge(name string) error {
+	switch name {
+	case memoryitem.EdgeSession:
+		m.ResetSession()
+		return nil
+	case memoryitem.EdgeLinks:
+		m.ResetLinks()
+		return nil
+	case memoryitem.EdgeEvents:
+		m.ResetEvents()
+		return nil
+	}
 	return fmt.Errorf("unknown MemoryItem edge %s", name)
 }
 
@@ -4037,17 +4311,18 @@ type MemoryLinkMutation struct {
 	config
 	op                       Op
 	typ                      string
-	id                       *uuid.UUID
-	memory_item_id           *uuid.UUID
-	source_message_ids       *[]uuid.UUID
-	appendsource_message_ids []uuid.UUID
-	ingestion_ids            *[]uuid.UUID
-	appendingestion_ids      []uuid.UUID
+	id                       *int64
+	source_message_ids       *[]int64
+	appendsource_message_ids []int64
+	ingestion_ids            *[]int64
+	appendingestion_ids      []int64
 	tags                     *[]string
 	appendtags               []string
 	metadata                 *map[string]interface{}
 	created_at               *time.Time
 	clearedFields            map[string]struct{}
+	memory_item              *int64
+	clearedmemory_item       bool
 	done                     bool
 	oldValue                 func(context.Context) (*MemoryLink, error)
 	predicates               []predicate.MemoryLink
@@ -4073,7 +4348,7 @@ func newMemoryLinkMutation(c config, op Op, opts ...memorylinkOption) *MemoryLin
 }
 
 // withMemoryLinkID sets the ID field of the mutation.
-func withMemoryLinkID(id uuid.UUID) memorylinkOption {
+func withMemoryLinkID(id int64) memorylinkOption {
 	return func(m *MemoryLinkMutation) {
 		var (
 			err   error
@@ -4125,13 +4400,13 @@ func (m MemoryLinkMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of MemoryLink entities.
-func (m *MemoryLinkMutation) SetID(id uuid.UUID) {
+func (m *MemoryLinkMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *MemoryLinkMutation) ID() (id uuid.UUID, exists bool) {
+func (m *MemoryLinkMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -4142,12 +4417,12 @@ func (m *MemoryLinkMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *MemoryLinkMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *MemoryLinkMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -4158,13 +4433,13 @@ func (m *MemoryLinkMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (m *MemoryLinkMutation) SetMemoryItemID(u uuid.UUID) {
-	m.memory_item_id = &u
+func (m *MemoryLinkMutation) SetMemoryItemID(i int64) {
+	m.memory_item = &i
 }
 
 // MemoryItemID returns the value of the "memory_item_id" field in the mutation.
-func (m *MemoryLinkMutation) MemoryItemID() (r uuid.UUID, exists bool) {
-	v := m.memory_item_id
+func (m *MemoryLinkMutation) MemoryItemID() (r int64, exists bool) {
+	v := m.memory_item
 	if v == nil {
 		return
 	}
@@ -4174,7 +4449,7 @@ func (m *MemoryLinkMutation) MemoryItemID() (r uuid.UUID, exists bool) {
 // OldMemoryItemID returns the old "memory_item_id" field's value of the MemoryLink entity.
 // If the MemoryLink object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryLinkMutation) OldMemoryItemID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *MemoryLinkMutation) OldMemoryItemID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldMemoryItemID is only allowed on UpdateOne operations")
 	}
@@ -4190,17 +4465,17 @@ func (m *MemoryLinkMutation) OldMemoryItemID(ctx context.Context) (v uuid.UUID, 
 
 // ResetMemoryItemID resets all changes to the "memory_item_id" field.
 func (m *MemoryLinkMutation) ResetMemoryItemID() {
-	m.memory_item_id = nil
+	m.memory_item = nil
 }
 
 // SetSourceMessageIds sets the "source_message_ids" field.
-func (m *MemoryLinkMutation) SetSourceMessageIds(u []uuid.UUID) {
-	m.source_message_ids = &u
+func (m *MemoryLinkMutation) SetSourceMessageIds(i []int64) {
+	m.source_message_ids = &i
 	m.appendsource_message_ids = nil
 }
 
 // SourceMessageIds returns the value of the "source_message_ids" field in the mutation.
-func (m *MemoryLinkMutation) SourceMessageIds() (r []uuid.UUID, exists bool) {
+func (m *MemoryLinkMutation) SourceMessageIds() (r []int64, exists bool) {
 	v := m.source_message_ids
 	if v == nil {
 		return
@@ -4211,7 +4486,7 @@ func (m *MemoryLinkMutation) SourceMessageIds() (r []uuid.UUID, exists bool) {
 // OldSourceMessageIds returns the old "source_message_ids" field's value of the MemoryLink entity.
 // If the MemoryLink object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryLinkMutation) OldSourceMessageIds(ctx context.Context) (v []uuid.UUID, err error) {
+func (m *MemoryLinkMutation) OldSourceMessageIds(ctx context.Context) (v []int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSourceMessageIds is only allowed on UpdateOne operations")
 	}
@@ -4225,13 +4500,13 @@ func (m *MemoryLinkMutation) OldSourceMessageIds(ctx context.Context) (v []uuid.
 	return oldValue.SourceMessageIds, nil
 }
 
-// AppendSourceMessageIds adds u to the "source_message_ids" field.
-func (m *MemoryLinkMutation) AppendSourceMessageIds(u []uuid.UUID) {
-	m.appendsource_message_ids = append(m.appendsource_message_ids, u...)
+// AppendSourceMessageIds adds i to the "source_message_ids" field.
+func (m *MemoryLinkMutation) AppendSourceMessageIds(i []int64) {
+	m.appendsource_message_ids = append(m.appendsource_message_ids, i...)
 }
 
 // AppendedSourceMessageIds returns the list of values that were appended to the "source_message_ids" field in this mutation.
-func (m *MemoryLinkMutation) AppendedSourceMessageIds() ([]uuid.UUID, bool) {
+func (m *MemoryLinkMutation) AppendedSourceMessageIds() ([]int64, bool) {
 	if len(m.appendsource_message_ids) == 0 {
 		return nil, false
 	}
@@ -4259,13 +4534,13 @@ func (m *MemoryLinkMutation) ResetSourceMessageIds() {
 }
 
 // SetIngestionIds sets the "ingestion_ids" field.
-func (m *MemoryLinkMutation) SetIngestionIds(u []uuid.UUID) {
-	m.ingestion_ids = &u
+func (m *MemoryLinkMutation) SetIngestionIds(i []int64) {
+	m.ingestion_ids = &i
 	m.appendingestion_ids = nil
 }
 
 // IngestionIds returns the value of the "ingestion_ids" field in the mutation.
-func (m *MemoryLinkMutation) IngestionIds() (r []uuid.UUID, exists bool) {
+func (m *MemoryLinkMutation) IngestionIds() (r []int64, exists bool) {
 	v := m.ingestion_ids
 	if v == nil {
 		return
@@ -4276,7 +4551,7 @@ func (m *MemoryLinkMutation) IngestionIds() (r []uuid.UUID, exists bool) {
 // OldIngestionIds returns the old "ingestion_ids" field's value of the MemoryLink entity.
 // If the MemoryLink object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryLinkMutation) OldIngestionIds(ctx context.Context) (v []uuid.UUID, err error) {
+func (m *MemoryLinkMutation) OldIngestionIds(ctx context.Context) (v []int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldIngestionIds is only allowed on UpdateOne operations")
 	}
@@ -4290,13 +4565,13 @@ func (m *MemoryLinkMutation) OldIngestionIds(ctx context.Context) (v []uuid.UUID
 	return oldValue.IngestionIds, nil
 }
 
-// AppendIngestionIds adds u to the "ingestion_ids" field.
-func (m *MemoryLinkMutation) AppendIngestionIds(u []uuid.UUID) {
-	m.appendingestion_ids = append(m.appendingestion_ids, u...)
+// AppendIngestionIds adds i to the "ingestion_ids" field.
+func (m *MemoryLinkMutation) AppendIngestionIds(i []int64) {
+	m.appendingestion_ids = append(m.appendingestion_ids, i...)
 }
 
 // AppendedIngestionIds returns the list of values that were appended to the "ingestion_ids" field in this mutation.
-func (m *MemoryLinkMutation) AppendedIngestionIds() ([]uuid.UUID, bool) {
+func (m *MemoryLinkMutation) AppendedIngestionIds() ([]int64, bool) {
 	if len(m.appendingestion_ids) == 0 {
 		return nil, false
 	}
@@ -4473,6 +4748,33 @@ func (m *MemoryLinkMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// ClearMemoryItem clears the "memory_item" edge to the MemoryItem entity.
+func (m *MemoryLinkMutation) ClearMemoryItem() {
+	m.clearedmemory_item = true
+	m.clearedFields[memorylink.FieldMemoryItemID] = struct{}{}
+}
+
+// MemoryItemCleared reports if the "memory_item" edge to the MemoryItem entity was cleared.
+func (m *MemoryLinkMutation) MemoryItemCleared() bool {
+	return m.clearedmemory_item
+}
+
+// MemoryItemIDs returns the "memory_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// MemoryItemID instead. It exists only for internal usage by the builders.
+func (m *MemoryLinkMutation) MemoryItemIDs() (ids []int64) {
+	if id := m.memory_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetMemoryItem resets all changes to the "memory_item" edge.
+func (m *MemoryLinkMutation) ResetMemoryItem() {
+	m.memory_item = nil
+	m.clearedmemory_item = false
+}
+
 // Where appends a list predicates to the MemoryLinkMutation builder.
 func (m *MemoryLinkMutation) Where(ps ...predicate.MemoryLink) {
 	m.predicates = append(m.predicates, ps...)
@@ -4508,7 +4810,7 @@ func (m *MemoryLinkMutation) Type() string {
 // AddedFields().
 func (m *MemoryLinkMutation) Fields() []string {
 	fields := make([]string, 0, 6)
-	if m.memory_item_id != nil {
+	if m.memory_item != nil {
 		fields = append(fields, memorylink.FieldMemoryItemID)
 	}
 	if m.source_message_ids != nil {
@@ -4577,21 +4879,21 @@ func (m *MemoryLinkMutation) OldField(ctx context.Context, name string) (ent.Val
 func (m *MemoryLinkMutation) SetField(name string, value ent.Value) error {
 	switch name {
 	case memorylink.FieldMemoryItemID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMemoryItemID(v)
 		return nil
 	case memorylink.FieldSourceMessageIds:
-		v, ok := value.([]uuid.UUID)
+		v, ok := value.([]int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSourceMessageIds(v)
 		return nil
 	case memorylink.FieldIngestionIds:
-		v, ok := value.([]uuid.UUID)
+		v, ok := value.([]int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -4625,13 +4927,16 @@ func (m *MemoryLinkMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *MemoryLinkMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *MemoryLinkMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
 	return nil, false
 }
 
@@ -4718,19 +5023,28 @@ func (m *MemoryLinkMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *MemoryLinkMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.memory_item != nil {
+		edges = append(edges, memorylink.EdgeMemoryItem)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *MemoryLinkMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case memorylink.EdgeMemoryItem:
+		if id := m.memory_item; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *MemoryLinkMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -4742,25 +5056,42 @@ func (m *MemoryLinkMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *MemoryLinkMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedmemory_item {
+		edges = append(edges, memorylink.EdgeMemoryItem)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *MemoryLinkMutation) EdgeCleared(name string) bool {
+	switch name {
+	case memorylink.EdgeMemoryItem:
+		return m.clearedmemory_item
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *MemoryLinkMutation) ClearEdge(name string) error {
+	switch name {
+	case memorylink.EdgeMemoryItem:
+		m.ClearMemoryItem()
+		return nil
+	}
 	return fmt.Errorf("unknown MemoryLink unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *MemoryLinkMutation) ResetEdge(name string) error {
+	switch name {
+	case memorylink.EdgeMemoryItem:
+		m.ResetMemoryItem()
+		return nil
+	}
 	return fmt.Errorf("unknown MemoryLink edge %s", name)
 }
 
@@ -4769,7 +5100,7 @@ type ModelDefinitionMutation struct {
 	config
 	op                     Op
 	typ                    string
-	id                     *uuid.UUID
+	id                     *int64
 	model_name             *string
 	family                 *string
 	parameters_billions    *float32
@@ -4805,7 +5136,7 @@ func newModelDefinitionMutation(c config, op Op, opts ...modeldefinitionOption) 
 }
 
 // withModelDefinitionID sets the ID field of the mutation.
-func withModelDefinitionID(id uuid.UUID) modeldefinitionOption {
+func withModelDefinitionID(id int64) modeldefinitionOption {
 	return func(m *ModelDefinitionMutation) {
 		var (
 			err   error
@@ -4857,13 +5188,13 @@ func (m ModelDefinitionMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of ModelDefinition entities.
-func (m *ModelDefinitionMutation) SetID(id uuid.UUID) {
+func (m *ModelDefinitionMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *ModelDefinitionMutation) ID() (id uuid.UUID, exists bool) {
+func (m *ModelDefinitionMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -4874,12 +5205,12 @@ func (m *ModelDefinitionMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *ModelDefinitionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *ModelDefinitionMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -5508,7 +5839,8 @@ type ModelExecutionMetricMutation struct {
 	op                           Op
 	typ                          string
 	id                           *int64
-	response_id                  *uuid.UUID
+	response_id                  *int64
+	addresponse_id               *int64
 	prompt_tokens                *int
 	addprompt_tokens             *int
 	completion_tokens            *int
@@ -5527,11 +5859,11 @@ type ModelExecutionMetricMutation struct {
 	addtokens_per_second         *float32
 	created_at                   *time.Time
 	clearedFields                map[string]struct{}
-	session                      *uuid.UUID
+	session                      *int64
 	clearedsession               bool
-	node                         *uuid.UUID
+	node                         *int64
 	clearednode                  bool
-	model                        *uuid.UUID
+	model                        *int64
 	clearedmodel                 bool
 	done                         bool
 	oldValue                     func(context.Context) (*ModelExecutionMetric, error)
@@ -5643,12 +5975,13 @@ func (m *ModelExecutionMetricMutation) IDs(ctx context.Context) ([]int64, error)
 }
 
 // SetResponseID sets the "response_id" field.
-func (m *ModelExecutionMetricMutation) SetResponseID(u uuid.UUID) {
-	m.response_id = &u
+func (m *ModelExecutionMetricMutation) SetResponseID(i int64) {
+	m.response_id = &i
+	m.addresponse_id = nil
 }
 
 // ResponseID returns the value of the "response_id" field in the mutation.
-func (m *ModelExecutionMetricMutation) ResponseID() (r uuid.UUID, exists bool) {
+func (m *ModelExecutionMetricMutation) ResponseID() (r int64, exists bool) {
 	v := m.response_id
 	if v == nil {
 		return
@@ -5659,7 +5992,7 @@ func (m *ModelExecutionMetricMutation) ResponseID() (r uuid.UUID, exists bool) {
 // OldResponseID returns the old "response_id" field's value of the ModelExecutionMetric entity.
 // If the ModelExecutionMetric object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ModelExecutionMetricMutation) OldResponseID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *ModelExecutionMetricMutation) OldResponseID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldResponseID is only allowed on UpdateOne operations")
 	}
@@ -5673,9 +6006,28 @@ func (m *ModelExecutionMetricMutation) OldResponseID(ctx context.Context) (v uui
 	return oldValue.ResponseID, nil
 }
 
+// AddResponseID adds i to the "response_id" field.
+func (m *ModelExecutionMetricMutation) AddResponseID(i int64) {
+	if m.addresponse_id != nil {
+		*m.addresponse_id += i
+	} else {
+		m.addresponse_id = &i
+	}
+}
+
+// AddedResponseID returns the value that was added to the "response_id" field in this mutation.
+func (m *ModelExecutionMetricMutation) AddedResponseID() (r int64, exists bool) {
+	v := m.addresponse_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
 // ClearResponseID clears the value of the "response_id" field.
 func (m *ModelExecutionMetricMutation) ClearResponseID() {
 	m.response_id = nil
+	m.addresponse_id = nil
 	m.clearedFields[modelexecutionmetric.FieldResponseID] = struct{}{}
 }
 
@@ -5688,16 +6040,17 @@ func (m *ModelExecutionMetricMutation) ResponseIDCleared() bool {
 // ResetResponseID resets all changes to the "response_id" field.
 func (m *ModelExecutionMetricMutation) ResetResponseID() {
 	m.response_id = nil
+	m.addresponse_id = nil
 	delete(m.clearedFields, modelexecutionmetric.FieldResponseID)
 }
 
 // SetSessionID sets the "session_id" field.
-func (m *ModelExecutionMetricMutation) SetSessionID(u uuid.UUID) {
-	m.session = &u
+func (m *ModelExecutionMetricMutation) SetSessionID(i int64) {
+	m.session = &i
 }
 
 // SessionID returns the value of the "session_id" field in the mutation.
-func (m *ModelExecutionMetricMutation) SessionID() (r uuid.UUID, exists bool) {
+func (m *ModelExecutionMetricMutation) SessionID() (r int64, exists bool) {
 	v := m.session
 	if v == nil {
 		return
@@ -5708,7 +6061,7 @@ func (m *ModelExecutionMetricMutation) SessionID() (r uuid.UUID, exists bool) {
 // OldSessionID returns the old "session_id" field's value of the ModelExecutionMetric entity.
 // If the ModelExecutionMetric object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ModelExecutionMetricMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *ModelExecutionMetricMutation) OldSessionID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
 	}
@@ -5741,12 +6094,12 @@ func (m *ModelExecutionMetricMutation) ResetSessionID() {
 }
 
 // SetNodeID sets the "node_id" field.
-func (m *ModelExecutionMetricMutation) SetNodeID(u uuid.UUID) {
-	m.node = &u
+func (m *ModelExecutionMetricMutation) SetNodeID(i int64) {
+	m.node = &i
 }
 
 // NodeID returns the value of the "node_id" field in the mutation.
-func (m *ModelExecutionMetricMutation) NodeID() (r uuid.UUID, exists bool) {
+func (m *ModelExecutionMetricMutation) NodeID() (r int64, exists bool) {
 	v := m.node
 	if v == nil {
 		return
@@ -5757,7 +6110,7 @@ func (m *ModelExecutionMetricMutation) NodeID() (r uuid.UUID, exists bool) {
 // OldNodeID returns the old "node_id" field's value of the ModelExecutionMetric entity.
 // If the ModelExecutionMetric object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ModelExecutionMetricMutation) OldNodeID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *ModelExecutionMetricMutation) OldNodeID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldNodeID is only allowed on UpdateOne operations")
 	}
@@ -5790,12 +6143,12 @@ func (m *ModelExecutionMetricMutation) ResetNodeID() {
 }
 
 // SetModelID sets the "model_id" field.
-func (m *ModelExecutionMetricMutation) SetModelID(u uuid.UUID) {
-	m.model = &u
+func (m *ModelExecutionMetricMutation) SetModelID(i int64) {
+	m.model = &i
 }
 
 // ModelID returns the value of the "model_id" field in the mutation.
-func (m *ModelExecutionMetricMutation) ModelID() (r uuid.UUID, exists bool) {
+func (m *ModelExecutionMetricMutation) ModelID() (r int64, exists bool) {
 	v := m.model
 	if v == nil {
 		return
@@ -5806,7 +6159,7 @@ func (m *ModelExecutionMetricMutation) ModelID() (r uuid.UUID, exists bool) {
 // OldModelID returns the old "model_id" field's value of the ModelExecutionMetric entity.
 // If the ModelExecutionMetric object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ModelExecutionMetricMutation) OldModelID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *ModelExecutionMetricMutation) OldModelID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldModelID is only allowed on UpdateOne operations")
 	}
@@ -6448,7 +6801,7 @@ func (m *ModelExecutionMetricMutation) SessionCleared() bool {
 // SessionIDs returns the "session" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
 // SessionID instead. It exists only for internal usage by the builders.
-func (m *ModelExecutionMetricMutation) SessionIDs() (ids []uuid.UUID) {
+func (m *ModelExecutionMetricMutation) SessionIDs() (ids []int64) {
 	if id := m.session; id != nil {
 		ids = append(ids, *id)
 	}
@@ -6475,7 +6828,7 @@ func (m *ModelExecutionMetricMutation) NodeCleared() bool {
 // NodeIDs returns the "node" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
 // NodeID instead. It exists only for internal usage by the builders.
-func (m *ModelExecutionMetricMutation) NodeIDs() (ids []uuid.UUID) {
+func (m *ModelExecutionMetricMutation) NodeIDs() (ids []int64) {
 	if id := m.node; id != nil {
 		ids = append(ids, *id)
 	}
@@ -6502,7 +6855,7 @@ func (m *ModelExecutionMetricMutation) ModelCleared() bool {
 // ModelIDs returns the "model" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
 // ModelID instead. It exists only for internal usage by the builders.
-func (m *ModelExecutionMetricMutation) ModelIDs() (ids []uuid.UUID) {
+func (m *ModelExecutionMetricMutation) ModelIDs() (ids []int64) {
 	if id := m.model; id != nil {
 		ids = append(ids, *id)
 	}
@@ -6668,28 +7021,28 @@ func (m *ModelExecutionMetricMutation) OldField(ctx context.Context, name string
 func (m *ModelExecutionMetricMutation) SetField(name string, value ent.Value) error {
 	switch name {
 	case modelexecutionmetric.FieldResponseID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetResponseID(v)
 		return nil
 	case modelexecutionmetric.FieldSessionID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSessionID(v)
 		return nil
 	case modelexecutionmetric.FieldNodeID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetNodeID(v)
 		return nil
 	case modelexecutionmetric.FieldModelID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -6766,6 +7119,9 @@ func (m *ModelExecutionMetricMutation) SetField(name string, value ent.Value) er
 // this mutation.
 func (m *ModelExecutionMetricMutation) AddedFields() []string {
 	var fields []string
+	if m.addresponse_id != nil {
+		fields = append(fields, modelexecutionmetric.FieldResponseID)
+	}
 	if m.addprompt_tokens != nil {
 		fields = append(fields, modelexecutionmetric.FieldPromptTokens)
 	}
@@ -6798,6 +7154,8 @@ func (m *ModelExecutionMetricMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ModelExecutionMetricMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case modelexecutionmetric.FieldResponseID:
+		return m.AddedResponseID()
 	case modelexecutionmetric.FieldPromptTokens:
 		return m.AddedPromptTokens()
 	case modelexecutionmetric.FieldCompletionTokens:
@@ -6823,6 +7181,13 @@ func (m *ModelExecutionMetricMutation) AddedField(name string) (ent.Value, bool)
 // type.
 func (m *ModelExecutionMetricMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case modelexecutionmetric.FieldResponseID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddResponseID(v)
+		return nil
 	case modelexecutionmetric.FieldPromptTokens:
 		v, ok := value.(int)
 		if !ok {
@@ -7141,7 +7506,8 @@ type PromptMutation struct {
 	typ           string
 	id            *int64
 	prompt_id     *uuid.UUID
-	session_id    *uuid.UUID
+	session_id    *int64
+	addsession_id *int64
 	content       *string
 	created_at    *time.Time
 	metadata      *map[string]interface{}
@@ -7292,12 +7658,13 @@ func (m *PromptMutation) ResetPromptID() {
 }
 
 // SetSessionID sets the "session_id" field.
-func (m *PromptMutation) SetSessionID(u uuid.UUID) {
-	m.session_id = &u
+func (m *PromptMutation) SetSessionID(i int64) {
+	m.session_id = &i
+	m.addsession_id = nil
 }
 
 // SessionID returns the value of the "session_id" field in the mutation.
-func (m *PromptMutation) SessionID() (r uuid.UUID, exists bool) {
+func (m *PromptMutation) SessionID() (r int64, exists bool) {
 	v := m.session_id
 	if v == nil {
 		return
@@ -7308,7 +7675,7 @@ func (m *PromptMutation) SessionID() (r uuid.UUID, exists bool) {
 // OldSessionID returns the old "session_id" field's value of the Prompt entity.
 // If the Prompt object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PromptMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *PromptMutation) OldSessionID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
 	}
@@ -7322,9 +7689,28 @@ func (m *PromptMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err err
 	return oldValue.SessionID, nil
 }
 
+// AddSessionID adds i to the "session_id" field.
+func (m *PromptMutation) AddSessionID(i int64) {
+	if m.addsession_id != nil {
+		*m.addsession_id += i
+	} else {
+		m.addsession_id = &i
+	}
+}
+
+// AddedSessionID returns the value that was added to the "session_id" field in this mutation.
+func (m *PromptMutation) AddedSessionID() (r int64, exists bool) {
+	v := m.addsession_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
 // ClearSessionID clears the value of the "session_id" field.
 func (m *PromptMutation) ClearSessionID() {
 	m.session_id = nil
+	m.addsession_id = nil
 	m.clearedFields[prompt.FieldSessionID] = struct{}{}
 }
 
@@ -7337,6 +7723,7 @@ func (m *PromptMutation) SessionIDCleared() bool {
 // ResetSessionID resets all changes to the "session_id" field.
 func (m *PromptMutation) ResetSessionID() {
 	m.session_id = nil
+	m.addsession_id = nil
 	delete(m.clearedFields, prompt.FieldSessionID)
 }
 
@@ -7565,7 +7952,7 @@ func (m *PromptMutation) SetField(name string, value ent.Value) error {
 		m.SetPromptID(v)
 		return nil
 	case prompt.FieldSessionID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -7599,13 +7986,21 @@ func (m *PromptMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *PromptMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addsession_id != nil {
+		fields = append(fields, prompt.FieldSessionID)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *PromptMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case prompt.FieldSessionID:
+		return m.AddedSessionID()
+	}
 	return nil, false
 }
 
@@ -7614,6 +8009,13 @@ func (m *PromptMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *PromptMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case prompt.FieldSessionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSessionID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Prompt numeric field %s", name)
 }
@@ -7732,7 +8134,8 @@ type ResponseMutation struct {
 	response_id        *uuid.UUID
 	prompt_id          *int64
 	addprompt_id       *int64
-	session_id         *uuid.UUID
+	session_id         *int64
+	addsession_id      *int64
 	content            *string
 	planning_response  *string
 	sequence_number    *int
@@ -7957,12 +8360,13 @@ func (m *ResponseMutation) ResetPromptID() {
 }
 
 // SetSessionID sets the "session_id" field.
-func (m *ResponseMutation) SetSessionID(u uuid.UUID) {
-	m.session_id = &u
+func (m *ResponseMutation) SetSessionID(i int64) {
+	m.session_id = &i
+	m.addsession_id = nil
 }
 
 // SessionID returns the value of the "session_id" field in the mutation.
-func (m *ResponseMutation) SessionID() (r uuid.UUID, exists bool) {
+func (m *ResponseMutation) SessionID() (r int64, exists bool) {
 	v := m.session_id
 	if v == nil {
 		return
@@ -7973,7 +8377,7 @@ func (m *ResponseMutation) SessionID() (r uuid.UUID, exists bool) {
 // OldSessionID returns the old "session_id" field's value of the Response entity.
 // If the Response object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ResponseMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *ResponseMutation) OldSessionID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
 	}
@@ -7987,9 +8391,28 @@ func (m *ResponseMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err e
 	return oldValue.SessionID, nil
 }
 
+// AddSessionID adds i to the "session_id" field.
+func (m *ResponseMutation) AddSessionID(i int64) {
+	if m.addsession_id != nil {
+		*m.addsession_id += i
+	} else {
+		m.addsession_id = &i
+	}
+}
+
+// AddedSessionID returns the value that was added to the "session_id" field in this mutation.
+func (m *ResponseMutation) AddedSessionID() (r int64, exists bool) {
+	v := m.addsession_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
 // ClearSessionID clears the value of the "session_id" field.
 func (m *ResponseMutation) ClearSessionID() {
 	m.session_id = nil
+	m.addsession_id = nil
 	m.clearedFields[response.FieldSessionID] = struct{}{}
 }
 
@@ -8002,6 +8425,7 @@ func (m *ResponseMutation) SessionIDCleared() bool {
 // ResetSessionID resets all changes to the "session_id" field.
 func (m *ResponseMutation) ResetSessionID() {
 	m.session_id = nil
+	m.addsession_id = nil
 	delete(m.clearedFields, response.FieldSessionID)
 }
 
@@ -8419,7 +8843,7 @@ func (m *ResponseMutation) SetField(name string, value ent.Value) error {
 		m.SetPromptID(v)
 		return nil
 	case response.FieldSessionID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -8478,6 +8902,9 @@ func (m *ResponseMutation) AddedFields() []string {
 	if m.addprompt_id != nil {
 		fields = append(fields, response.FieldPromptID)
 	}
+	if m.addsession_id != nil {
+		fields = append(fields, response.FieldSessionID)
+	}
 	if m.addsequence_number != nil {
 		fields = append(fields, response.FieldSequenceNumber)
 	}
@@ -8491,6 +8918,8 @@ func (m *ResponseMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case response.FieldPromptID:
 		return m.AddedPromptID()
+	case response.FieldSessionID:
+		return m.AddedSessionID()
 	case response.FieldSequenceNumber:
 		return m.AddedSequenceNumber()
 	}
@@ -8508,6 +8937,13 @@ func (m *ResponseMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddPromptID(v)
+		return nil
+	case response.FieldSessionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSessionID(v)
 		return nil
 	case response.FieldSequenceNumber:
 		v, ok := value.(int)
@@ -8660,7 +9096,7 @@ type RetrievalLogMutation struct {
 	config
 	op                     Op
 	typ                    string
-	id                     *uuid.UUID
+	id                     *int64
 	message_id             *uuid.UUID
 	query                  *string
 	_type                  *string
@@ -8669,7 +9105,7 @@ type RetrievalLogMutation struct {
 	appendretrieved_chunks []map[string]interface{}
 	created_at             *time.Time
 	clearedFields          map[string]struct{}
-	session                *uuid.UUID
+	session                *int64
 	clearedsession         bool
 	done                   bool
 	oldValue               func(context.Context) (*RetrievalLog, error)
@@ -8696,7 +9132,7 @@ func newRetrievalLogMutation(c config, op Op, opts ...retrievallogOption) *Retri
 }
 
 // withRetrievalLogID sets the ID field of the mutation.
-func withRetrievalLogID(id uuid.UUID) retrievallogOption {
+func withRetrievalLogID(id int64) retrievallogOption {
 	return func(m *RetrievalLogMutation) {
 		var (
 			err   error
@@ -8748,13 +9184,13 @@ func (m RetrievalLogMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of RetrievalLog entities.
-func (m *RetrievalLogMutation) SetID(id uuid.UUID) {
+func (m *RetrievalLogMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *RetrievalLogMutation) ID() (id uuid.UUID, exists bool) {
+func (m *RetrievalLogMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -8765,12 +9201,12 @@ func (m *RetrievalLogMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *RetrievalLogMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *RetrievalLogMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -8830,12 +9266,12 @@ func (m *RetrievalLogMutation) ResetMessageID() {
 }
 
 // SetSessionID sets the "session_id" field.
-func (m *RetrievalLogMutation) SetSessionID(u uuid.UUID) {
-	m.session = &u
+func (m *RetrievalLogMutation) SetSessionID(i int64) {
+	m.session = &i
 }
 
 // SessionID returns the value of the "session_id" field in the mutation.
-func (m *RetrievalLogMutation) SessionID() (r uuid.UUID, exists bool) {
+func (m *RetrievalLogMutation) SessionID() (r int64, exists bool) {
 	v := m.session
 	if v == nil {
 		return
@@ -8846,7 +9282,7 @@ func (m *RetrievalLogMutation) SessionID() (r uuid.UUID, exists bool) {
 // OldSessionID returns the old "session_id" field's value of the RetrievalLog entity.
 // If the RetrievalLog object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *RetrievalLogMutation) OldSessionID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *RetrievalLogMutation) OldSessionID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
 	}
@@ -9140,7 +9576,7 @@ func (m *RetrievalLogMutation) SessionCleared() bool {
 // SessionIDs returns the "session" edge IDs in the mutation.
 // Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
 // SessionID instead. It exists only for internal usage by the builders.
-func (m *RetrievalLogMutation) SessionIDs() (ids []uuid.UUID) {
+func (m *RetrievalLogMutation) SessionIDs() (ids []int64) {
 	if id := m.session; id != nil {
 		ids = append(ids, *id)
 	}
@@ -9271,7 +9707,7 @@ func (m *RetrievalLogMutation) SetField(name string, value ent.Value) error {
 		m.SetMessageID(v)
 		return nil
 	case retrievallog.FieldSessionID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -9319,13 +9755,16 @@ func (m *RetrievalLogMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *RetrievalLogMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *RetrievalLogMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
 	return nil, false
 }
 
@@ -9504,8 +9943,9 @@ type SessionMutation struct {
 	config
 	op                    Op
 	typ                   string
-	id                    *uuid.UUID
-	project_id            *uuid.UUID
+	id                    *int64
+	project_id            *int64
+	addproject_id         *int64
 	name                  *string
 	description           *string
 	metadata              *map[string]interface{}
@@ -9513,18 +9953,21 @@ type SessionMutation struct {
 	created_at            *time.Time
 	last_active_at        *time.Time
 	clearedFields         map[string]struct{}
-	tags                  map[uuid.UUID]struct{}
-	removedtags           map[uuid.UUID]struct{}
+	tags                  map[int64]struct{}
+	removedtags           map[int64]struct{}
 	clearedtags           bool
 	metrics               map[int64]struct{}
 	removedmetrics        map[int64]struct{}
 	clearedmetrics        bool
-	retrieval_logs        map[uuid.UUID]struct{}
-	removedretrieval_logs map[uuid.UUID]struct{}
+	retrieval_logs        map[int64]struct{}
+	removedretrieval_logs map[int64]struct{}
 	clearedretrieval_logs bool
-	memory_events         map[uuid.UUID]struct{}
-	removedmemory_events  map[uuid.UUID]struct{}
+	memory_events         map[int64]struct{}
+	removedmemory_events  map[int64]struct{}
 	clearedmemory_events  bool
+	memory_items          map[int64]struct{}
+	removedmemory_items   map[int64]struct{}
+	clearedmemory_items   bool
 	done                  bool
 	oldValue              func(context.Context) (*Session, error)
 	predicates            []predicate.Session
@@ -9550,7 +9993,7 @@ func newSessionMutation(c config, op Op, opts ...sessionOption) *SessionMutation
 }
 
 // withSessionID sets the ID field of the mutation.
-func withSessionID(id uuid.UUID) sessionOption {
+func withSessionID(id int64) sessionOption {
 	return func(m *SessionMutation) {
 		var (
 			err   error
@@ -9602,13 +10045,13 @@ func (m SessionMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of Session entities.
-func (m *SessionMutation) SetID(id uuid.UUID) {
+func (m *SessionMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *SessionMutation) ID() (id uuid.UUID, exists bool) {
+func (m *SessionMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -9619,12 +10062,12 @@ func (m *SessionMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *SessionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *SessionMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -9635,12 +10078,13 @@ func (m *SessionMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
 }
 
 // SetProjectID sets the "project_id" field.
-func (m *SessionMutation) SetProjectID(u uuid.UUID) {
-	m.project_id = &u
+func (m *SessionMutation) SetProjectID(i int64) {
+	m.project_id = &i
+	m.addproject_id = nil
 }
 
 // ProjectID returns the value of the "project_id" field in the mutation.
-func (m *SessionMutation) ProjectID() (r uuid.UUID, exists bool) {
+func (m *SessionMutation) ProjectID() (r int64, exists bool) {
 	v := m.project_id
 	if v == nil {
 		return
@@ -9651,7 +10095,7 @@ func (m *SessionMutation) ProjectID() (r uuid.UUID, exists bool) {
 // OldProjectID returns the old "project_id" field's value of the Session entity.
 // If the Session object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SessionMutation) OldProjectID(ctx context.Context) (v uuid.UUID, err error) {
+func (m *SessionMutation) OldProjectID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldProjectID is only allowed on UpdateOne operations")
 	}
@@ -9665,9 +10109,28 @@ func (m *SessionMutation) OldProjectID(ctx context.Context) (v uuid.UUID, err er
 	return oldValue.ProjectID, nil
 }
 
+// AddProjectID adds i to the "project_id" field.
+func (m *SessionMutation) AddProjectID(i int64) {
+	if m.addproject_id != nil {
+		*m.addproject_id += i
+	} else {
+		m.addproject_id = &i
+	}
+}
+
+// AddedProjectID returns the value that was added to the "project_id" field in this mutation.
+func (m *SessionMutation) AddedProjectID() (r int64, exists bool) {
+	v := m.addproject_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
 // ClearProjectID clears the value of the "project_id" field.
 func (m *SessionMutation) ClearProjectID() {
 	m.project_id = nil
+	m.addproject_id = nil
 	m.clearedFields[session.FieldProjectID] = struct{}{}
 }
 
@@ -9680,6 +10143,7 @@ func (m *SessionMutation) ProjectIDCleared() bool {
 // ResetProjectID resets all changes to the "project_id" field.
 func (m *SessionMutation) ResetProjectID() {
 	m.project_id = nil
+	m.addproject_id = nil
 	delete(m.clearedFields, session.FieldProjectID)
 }
 
@@ -9952,9 +10416,9 @@ func (m *SessionMutation) ResetLastActiveAt() {
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by ids.
-func (m *SessionMutation) AddTagIDs(ids ...uuid.UUID) {
+func (m *SessionMutation) AddTagIDs(ids ...int64) {
 	if m.tags == nil {
-		m.tags = make(map[uuid.UUID]struct{})
+		m.tags = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.tags[ids[i]] = struct{}{}
@@ -9972,9 +10436,9 @@ func (m *SessionMutation) TagsCleared() bool {
 }
 
 // RemoveTagIDs removes the "tags" edge to the Tag entity by IDs.
-func (m *SessionMutation) RemoveTagIDs(ids ...uuid.UUID) {
+func (m *SessionMutation) RemoveTagIDs(ids ...int64) {
 	if m.removedtags == nil {
-		m.removedtags = make(map[uuid.UUID]struct{})
+		m.removedtags = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.tags, ids[i])
@@ -9983,7 +10447,7 @@ func (m *SessionMutation) RemoveTagIDs(ids ...uuid.UUID) {
 }
 
 // RemovedTags returns the removed IDs of the "tags" edge to the Tag entity.
-func (m *SessionMutation) RemovedTagsIDs() (ids []uuid.UUID) {
+func (m *SessionMutation) RemovedTagsIDs() (ids []int64) {
 	for id := range m.removedtags {
 		ids = append(ids, id)
 	}
@@ -9991,7 +10455,7 @@ func (m *SessionMutation) RemovedTagsIDs() (ids []uuid.UUID) {
 }
 
 // TagsIDs returns the "tags" edge IDs in the mutation.
-func (m *SessionMutation) TagsIDs() (ids []uuid.UUID) {
+func (m *SessionMutation) TagsIDs() (ids []int64) {
 	for id := range m.tags {
 		ids = append(ids, id)
 	}
@@ -10060,9 +10524,9 @@ func (m *SessionMutation) ResetMetrics() {
 }
 
 // AddRetrievalLogIDs adds the "retrieval_logs" edge to the RetrievalLog entity by ids.
-func (m *SessionMutation) AddRetrievalLogIDs(ids ...uuid.UUID) {
+func (m *SessionMutation) AddRetrievalLogIDs(ids ...int64) {
 	if m.retrieval_logs == nil {
-		m.retrieval_logs = make(map[uuid.UUID]struct{})
+		m.retrieval_logs = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.retrieval_logs[ids[i]] = struct{}{}
@@ -10080,9 +10544,9 @@ func (m *SessionMutation) RetrievalLogsCleared() bool {
 }
 
 // RemoveRetrievalLogIDs removes the "retrieval_logs" edge to the RetrievalLog entity by IDs.
-func (m *SessionMutation) RemoveRetrievalLogIDs(ids ...uuid.UUID) {
+func (m *SessionMutation) RemoveRetrievalLogIDs(ids ...int64) {
 	if m.removedretrieval_logs == nil {
-		m.removedretrieval_logs = make(map[uuid.UUID]struct{})
+		m.removedretrieval_logs = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.retrieval_logs, ids[i])
@@ -10091,7 +10555,7 @@ func (m *SessionMutation) RemoveRetrievalLogIDs(ids ...uuid.UUID) {
 }
 
 // RemovedRetrievalLogs returns the removed IDs of the "retrieval_logs" edge to the RetrievalLog entity.
-func (m *SessionMutation) RemovedRetrievalLogsIDs() (ids []uuid.UUID) {
+func (m *SessionMutation) RemovedRetrievalLogsIDs() (ids []int64) {
 	for id := range m.removedretrieval_logs {
 		ids = append(ids, id)
 	}
@@ -10099,7 +10563,7 @@ func (m *SessionMutation) RemovedRetrievalLogsIDs() (ids []uuid.UUID) {
 }
 
 // RetrievalLogsIDs returns the "retrieval_logs" edge IDs in the mutation.
-func (m *SessionMutation) RetrievalLogsIDs() (ids []uuid.UUID) {
+func (m *SessionMutation) RetrievalLogsIDs() (ids []int64) {
 	for id := range m.retrieval_logs {
 		ids = append(ids, id)
 	}
@@ -10114,9 +10578,9 @@ func (m *SessionMutation) ResetRetrievalLogs() {
 }
 
 // AddMemoryEventIDs adds the "memory_events" edge to the MemoryEvent entity by ids.
-func (m *SessionMutation) AddMemoryEventIDs(ids ...uuid.UUID) {
+func (m *SessionMutation) AddMemoryEventIDs(ids ...int64) {
 	if m.memory_events == nil {
-		m.memory_events = make(map[uuid.UUID]struct{})
+		m.memory_events = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.memory_events[ids[i]] = struct{}{}
@@ -10134,9 +10598,9 @@ func (m *SessionMutation) MemoryEventsCleared() bool {
 }
 
 // RemoveMemoryEventIDs removes the "memory_events" edge to the MemoryEvent entity by IDs.
-func (m *SessionMutation) RemoveMemoryEventIDs(ids ...uuid.UUID) {
+func (m *SessionMutation) RemoveMemoryEventIDs(ids ...int64) {
 	if m.removedmemory_events == nil {
-		m.removedmemory_events = make(map[uuid.UUID]struct{})
+		m.removedmemory_events = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.memory_events, ids[i])
@@ -10145,7 +10609,7 @@ func (m *SessionMutation) RemoveMemoryEventIDs(ids ...uuid.UUID) {
 }
 
 // RemovedMemoryEvents returns the removed IDs of the "memory_events" edge to the MemoryEvent entity.
-func (m *SessionMutation) RemovedMemoryEventsIDs() (ids []uuid.UUID) {
+func (m *SessionMutation) RemovedMemoryEventsIDs() (ids []int64) {
 	for id := range m.removedmemory_events {
 		ids = append(ids, id)
 	}
@@ -10153,7 +10617,7 @@ func (m *SessionMutation) RemovedMemoryEventsIDs() (ids []uuid.UUID) {
 }
 
 // MemoryEventsIDs returns the "memory_events" edge IDs in the mutation.
-func (m *SessionMutation) MemoryEventsIDs() (ids []uuid.UUID) {
+func (m *SessionMutation) MemoryEventsIDs() (ids []int64) {
 	for id := range m.memory_events {
 		ids = append(ids, id)
 	}
@@ -10165,6 +10629,60 @@ func (m *SessionMutation) ResetMemoryEvents() {
 	m.memory_events = nil
 	m.clearedmemory_events = false
 	m.removedmemory_events = nil
+}
+
+// AddMemoryItemIDs adds the "memory_items" edge to the MemoryItem entity by ids.
+func (m *SessionMutation) AddMemoryItemIDs(ids ...int64) {
+	if m.memory_items == nil {
+		m.memory_items = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.memory_items[ids[i]] = struct{}{}
+	}
+}
+
+// ClearMemoryItems clears the "memory_items" edge to the MemoryItem entity.
+func (m *SessionMutation) ClearMemoryItems() {
+	m.clearedmemory_items = true
+}
+
+// MemoryItemsCleared reports if the "memory_items" edge to the MemoryItem entity was cleared.
+func (m *SessionMutation) MemoryItemsCleared() bool {
+	return m.clearedmemory_items
+}
+
+// RemoveMemoryItemIDs removes the "memory_items" edge to the MemoryItem entity by IDs.
+func (m *SessionMutation) RemoveMemoryItemIDs(ids ...int64) {
+	if m.removedmemory_items == nil {
+		m.removedmemory_items = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.memory_items, ids[i])
+		m.removedmemory_items[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedMemoryItems returns the removed IDs of the "memory_items" edge to the MemoryItem entity.
+func (m *SessionMutation) RemovedMemoryItemsIDs() (ids []int64) {
+	for id := range m.removedmemory_items {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// MemoryItemsIDs returns the "memory_items" edge IDs in the mutation.
+func (m *SessionMutation) MemoryItemsIDs() (ids []int64) {
+	for id := range m.memory_items {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetMemoryItems resets all changes to the "memory_items" edge.
+func (m *SessionMutation) ResetMemoryItems() {
+	m.memory_items = nil
+	m.clearedmemory_items = false
+	m.removedmemory_items = nil
 }
 
 // Where appends a list predicates to the SessionMutation builder.
@@ -10278,7 +10796,7 @@ func (m *SessionMutation) OldField(ctx context.Context, name string) (ent.Value,
 func (m *SessionMutation) SetField(name string, value ent.Value) error {
 	switch name {
 	case session.FieldProjectID:
-		v, ok := value.(uuid.UUID)
+		v, ok := value.(int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -10333,13 +10851,21 @@ func (m *SessionMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *SessionMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addproject_id != nil {
+		fields = append(fields, session.FieldProjectID)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *SessionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case session.FieldProjectID:
+		return m.AddedProjectID()
+	}
 	return nil, false
 }
 
@@ -10348,6 +10874,13 @@ func (m *SessionMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *SessionMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case session.FieldProjectID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProjectID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Session numeric field %s", name)
 }
@@ -10435,7 +10968,7 @@ func (m *SessionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SessionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 5)
 	if m.tags != nil {
 		edges = append(edges, session.EdgeTags)
 	}
@@ -10447,6 +10980,9 @@ func (m *SessionMutation) AddedEdges() []string {
 	}
 	if m.memory_events != nil {
 		edges = append(edges, session.EdgeMemoryEvents)
+	}
+	if m.memory_items != nil {
+		edges = append(edges, session.EdgeMemoryItems)
 	}
 	return edges
 }
@@ -10479,13 +11015,19 @@ func (m *SessionMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case session.EdgeMemoryItems:
+		ids := make([]ent.Value, 0, len(m.memory_items))
+		for id := range m.memory_items {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SessionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 5)
 	if m.removedtags != nil {
 		edges = append(edges, session.EdgeTags)
 	}
@@ -10497,6 +11039,9 @@ func (m *SessionMutation) RemovedEdges() []string {
 	}
 	if m.removedmemory_events != nil {
 		edges = append(edges, session.EdgeMemoryEvents)
+	}
+	if m.removedmemory_items != nil {
+		edges = append(edges, session.EdgeMemoryItems)
 	}
 	return edges
 }
@@ -10529,13 +11074,19 @@ func (m *SessionMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case session.EdgeMemoryItems:
+		ids := make([]ent.Value, 0, len(m.removedmemory_items))
+		for id := range m.removedmemory_items {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SessionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 4)
+	edges := make([]string, 0, 5)
 	if m.clearedtags {
 		edges = append(edges, session.EdgeTags)
 	}
@@ -10547,6 +11098,9 @@ func (m *SessionMutation) ClearedEdges() []string {
 	}
 	if m.clearedmemory_events {
 		edges = append(edges, session.EdgeMemoryEvents)
+	}
+	if m.clearedmemory_items {
+		edges = append(edges, session.EdgeMemoryItems)
 	}
 	return edges
 }
@@ -10563,6 +11117,8 @@ func (m *SessionMutation) EdgeCleared(name string) bool {
 		return m.clearedretrieval_logs
 	case session.EdgeMemoryEvents:
 		return m.clearedmemory_events
+	case session.EdgeMemoryItems:
+		return m.clearedmemory_items
 	}
 	return false
 }
@@ -10591,6 +11147,9 @@ func (m *SessionMutation) ResetEdge(name string) error {
 	case session.EdgeMemoryEvents:
 		m.ResetMemoryEvents()
 		return nil
+	case session.EdgeMemoryItems:
+		m.ResetMemoryItems()
+		return nil
 	}
 	return fmt.Errorf("unknown Session edge %s", name)
 }
@@ -10600,18 +11159,18 @@ type TagMutation struct {
 	config
 	op                Op
 	typ               string
-	id                *uuid.UUID
+	id                *int64
 	name              *string
 	created_at        *time.Time
 	clearedFields     map[string]struct{}
-	sessions          map[uuid.UUID]struct{}
-	removedsessions   map[uuid.UUID]struct{}
+	sessions          map[int64]struct{}
+	removedsessions   map[int64]struct{}
 	clearedsessions   bool
-	ingestions        map[uuid.UUID]struct{}
-	removedingestions map[uuid.UUID]struct{}
+	ingestions        map[int64]struct{}
+	removedingestions map[int64]struct{}
 	clearedingestions bool
-	embeddings        map[uuid.UUID]struct{}
-	removedembeddings map[uuid.UUID]struct{}
+	embeddings        map[int64]struct{}
+	removedembeddings map[int64]struct{}
 	clearedembeddings bool
 	done              bool
 	oldValue          func(context.Context) (*Tag, error)
@@ -10638,7 +11197,7 @@ func newTagMutation(c config, op Op, opts ...tagOption) *TagMutation {
 }
 
 // withTagID sets the ID field of the mutation.
-func withTagID(id uuid.UUID) tagOption {
+func withTagID(id int64) tagOption {
 	return func(m *TagMutation) {
 		var (
 			err   error
@@ -10690,13 +11249,13 @@ func (m TagMutation) Tx() (*Tx, error) {
 
 // SetID sets the value of the id field. Note that this
 // operation is only accepted on creation of Tag entities.
-func (m *TagMutation) SetID(id uuid.UUID) {
+func (m *TagMutation) SetID(id int64) {
 	m.id = &id
 }
 
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *TagMutation) ID() (id uuid.UUID, exists bool) {
+func (m *TagMutation) ID() (id int64, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -10707,12 +11266,12 @@ func (m *TagMutation) ID() (id uuid.UUID, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *TagMutation) IDs(ctx context.Context) ([]uuid.UUID, error) {
+func (m *TagMutation) IDs(ctx context.Context) ([]int64, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []uuid.UUID{id}, nil
+			return []int64{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):
@@ -10795,9 +11354,9 @@ func (m *TagMutation) ResetCreatedAt() {
 }
 
 // AddSessionIDs adds the "sessions" edge to the Session entity by ids.
-func (m *TagMutation) AddSessionIDs(ids ...uuid.UUID) {
+func (m *TagMutation) AddSessionIDs(ids ...int64) {
 	if m.sessions == nil {
-		m.sessions = make(map[uuid.UUID]struct{})
+		m.sessions = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.sessions[ids[i]] = struct{}{}
@@ -10815,9 +11374,9 @@ func (m *TagMutation) SessionsCleared() bool {
 }
 
 // RemoveSessionIDs removes the "sessions" edge to the Session entity by IDs.
-func (m *TagMutation) RemoveSessionIDs(ids ...uuid.UUID) {
+func (m *TagMutation) RemoveSessionIDs(ids ...int64) {
 	if m.removedsessions == nil {
-		m.removedsessions = make(map[uuid.UUID]struct{})
+		m.removedsessions = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.sessions, ids[i])
@@ -10826,7 +11385,7 @@ func (m *TagMutation) RemoveSessionIDs(ids ...uuid.UUID) {
 }
 
 // RemovedSessions returns the removed IDs of the "sessions" edge to the Session entity.
-func (m *TagMutation) RemovedSessionsIDs() (ids []uuid.UUID) {
+func (m *TagMutation) RemovedSessionsIDs() (ids []int64) {
 	for id := range m.removedsessions {
 		ids = append(ids, id)
 	}
@@ -10834,7 +11393,7 @@ func (m *TagMutation) RemovedSessionsIDs() (ids []uuid.UUID) {
 }
 
 // SessionsIDs returns the "sessions" edge IDs in the mutation.
-func (m *TagMutation) SessionsIDs() (ids []uuid.UUID) {
+func (m *TagMutation) SessionsIDs() (ids []int64) {
 	for id := range m.sessions {
 		ids = append(ids, id)
 	}
@@ -10849,9 +11408,9 @@ func (m *TagMutation) ResetSessions() {
 }
 
 // AddIngestionIDs adds the "ingestions" edge to the CodeIngestion entity by ids.
-func (m *TagMutation) AddIngestionIDs(ids ...uuid.UUID) {
+func (m *TagMutation) AddIngestionIDs(ids ...int64) {
 	if m.ingestions == nil {
-		m.ingestions = make(map[uuid.UUID]struct{})
+		m.ingestions = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.ingestions[ids[i]] = struct{}{}
@@ -10869,9 +11428,9 @@ func (m *TagMutation) IngestionsCleared() bool {
 }
 
 // RemoveIngestionIDs removes the "ingestions" edge to the CodeIngestion entity by IDs.
-func (m *TagMutation) RemoveIngestionIDs(ids ...uuid.UUID) {
+func (m *TagMutation) RemoveIngestionIDs(ids ...int64) {
 	if m.removedingestions == nil {
-		m.removedingestions = make(map[uuid.UUID]struct{})
+		m.removedingestions = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.ingestions, ids[i])
@@ -10880,7 +11439,7 @@ func (m *TagMutation) RemoveIngestionIDs(ids ...uuid.UUID) {
 }
 
 // RemovedIngestions returns the removed IDs of the "ingestions" edge to the CodeIngestion entity.
-func (m *TagMutation) RemovedIngestionsIDs() (ids []uuid.UUID) {
+func (m *TagMutation) RemovedIngestionsIDs() (ids []int64) {
 	for id := range m.removedingestions {
 		ids = append(ids, id)
 	}
@@ -10888,7 +11447,7 @@ func (m *TagMutation) RemovedIngestionsIDs() (ids []uuid.UUID) {
 }
 
 // IngestionsIDs returns the "ingestions" edge IDs in the mutation.
-func (m *TagMutation) IngestionsIDs() (ids []uuid.UUID) {
+func (m *TagMutation) IngestionsIDs() (ids []int64) {
 	for id := range m.ingestions {
 		ids = append(ids, id)
 	}
@@ -10903,9 +11462,9 @@ func (m *TagMutation) ResetIngestions() {
 }
 
 // AddEmbeddingIDs adds the "embeddings" edge to the CodeEmbedding entity by ids.
-func (m *TagMutation) AddEmbeddingIDs(ids ...uuid.UUID) {
+func (m *TagMutation) AddEmbeddingIDs(ids ...int64) {
 	if m.embeddings == nil {
-		m.embeddings = make(map[uuid.UUID]struct{})
+		m.embeddings = make(map[int64]struct{})
 	}
 	for i := range ids {
 		m.embeddings[ids[i]] = struct{}{}
@@ -10923,9 +11482,9 @@ func (m *TagMutation) EmbeddingsCleared() bool {
 }
 
 // RemoveEmbeddingIDs removes the "embeddings" edge to the CodeEmbedding entity by IDs.
-func (m *TagMutation) RemoveEmbeddingIDs(ids ...uuid.UUID) {
+func (m *TagMutation) RemoveEmbeddingIDs(ids ...int64) {
 	if m.removedembeddings == nil {
-		m.removedembeddings = make(map[uuid.UUID]struct{})
+		m.removedembeddings = make(map[int64]struct{})
 	}
 	for i := range ids {
 		delete(m.embeddings, ids[i])
@@ -10934,7 +11493,7 @@ func (m *TagMutation) RemoveEmbeddingIDs(ids ...uuid.UUID) {
 }
 
 // RemovedEmbeddings returns the removed IDs of the "embeddings" edge to the CodeEmbedding entity.
-func (m *TagMutation) RemovedEmbeddingsIDs() (ids []uuid.UUID) {
+func (m *TagMutation) RemovedEmbeddingsIDs() (ids []int64) {
 	for id := range m.removedembeddings {
 		ids = append(ids, id)
 	}
@@ -10942,7 +11501,7 @@ func (m *TagMutation) RemovedEmbeddingsIDs() (ids []uuid.UUID) {
 }
 
 // EmbeddingsIDs returns the "embeddings" edge IDs in the mutation.
-func (m *TagMutation) EmbeddingsIDs() (ids []uuid.UUID) {
+func (m *TagMutation) EmbeddingsIDs() (ids []int64) {
 	for id := range m.embeddings {
 		ids = append(ids, id)
 	}

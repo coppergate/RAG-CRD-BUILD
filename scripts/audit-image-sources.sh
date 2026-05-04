@@ -141,4 +141,4 @@ echo "Consumed refs missing from install-image-plan.sh:"
 comm -23 "$TMP_CONSUMED_UPSTREAM" "$TMP_PLAN" \
   | while read -r img; do normalize_to_upstream "$img"; done \
   | sort -u \
-  | grep -Ev '^(build-orchestrator:latest|llm-gateway:__VERSION__|rag-worker:__VERSION__|rag-web-ui:__VERSION__|rag-ingestion:__VERSION__|db-adapter:__VERSION__|qdrant-adapter:__VERSION__|object-store-mgr:__VERSION__|rag-test-runner:__VERSION__)$' || true
+  | grep -Ev '^(build-orchestrator:latest|llm-gateway:__VERSION__|rag-worker:__VERSION__|rag-ingestion:__VERSION__|db-adapter:__VERSION__|qdrant-adapter:__VERSION__|object-store-mgr:__VERSION__|rag-test-runner:__VERSION__)$' || true

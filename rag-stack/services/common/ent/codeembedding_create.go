@@ -11,11 +11,9 @@ import (
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // CodeEmbeddingCreate is the builder for creating a CodeEmbedding entity.
@@ -27,13 +25,13 @@ type CodeEmbeddingCreate struct {
 }
 
 // SetIngestionID sets the "ingestion_id" field.
-func (_c *CodeEmbeddingCreate) SetIngestionID(v uuid.UUID) *CodeEmbeddingCreate {
+func (_c *CodeEmbeddingCreate) SetIngestionID(v int64) *CodeEmbeddingCreate {
 	_c.mutation.SetIngestionID(v)
 	return _c
 }
 
 // SetNillableIngestionID sets the "ingestion_id" field if the given value is not nil.
-func (_c *CodeEmbeddingCreate) SetNillableIngestionID(v *uuid.UUID) *CodeEmbeddingCreate {
+func (_c *CodeEmbeddingCreate) SetNillableIngestionID(v *int64) *CodeEmbeddingCreate {
 	if v != nil {
 		_c.SetIngestionID(*v)
 	}
@@ -67,16 +65,8 @@ func (_c *CodeEmbeddingCreate) SetNillableCreatedAt(v *time.Time) *CodeEmbedding
 }
 
 // SetID sets the "id" field.
-func (_c *CodeEmbeddingCreate) SetID(v uuid.UUID) *CodeEmbeddingCreate {
+func (_c *CodeEmbeddingCreate) SetID(v int64) *CodeEmbeddingCreate {
 	_c.mutation.SetID(v)
-	return _c
-}
-
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *CodeEmbeddingCreate) SetNillableID(v *uuid.UUID) *CodeEmbeddingCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
 	return _c
 }
 
@@ -86,14 +76,14 @@ func (_c *CodeEmbeddingCreate) SetIngestion(v *CodeIngestion) *CodeEmbeddingCrea
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by IDs.
-func (_c *CodeEmbeddingCreate) AddTagIDs(ids ...uuid.UUID) *CodeEmbeddingCreate {
+func (_c *CodeEmbeddingCreate) AddTagIDs(ids ...int64) *CodeEmbeddingCreate {
 	_c.mutation.AddTagIDs(ids...)
 	return _c
 }
 
 // AddTags adds the "tags" edges to the Tag entity.
 func (_c *CodeEmbeddingCreate) AddTags(v ...*Tag) *CodeEmbeddingCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -139,10 +129,6 @@ func (_c *CodeEmbeddingCreate) defaults() {
 		v := codeembedding.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := codeembedding.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -164,12 +150,9 @@ func (_c *CodeEmbeddingCreate) sqlSave(ctx context.Context) (*CodeEmbedding, err
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -179,12 +162,12 @@ func (_c *CodeEmbeddingCreate) sqlSave(ctx context.Context) (*CodeEmbedding, err
 func (_c *CodeEmbeddingCreate) createSpec() (*CodeEmbedding, *sqlgraph.CreateSpec) {
 	var (
 		_node = &CodeEmbedding{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(codeembedding.Table, sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(codeembedding.Table, sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
+		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.EmbeddingVector(); ok {
 		_spec.SetField(codeembedding.FieldEmbeddingVector, field.TypeJSON, value)
@@ -206,7 +189,7 @@ func (_c *CodeEmbeddingCreate) createSpec() (*CodeEmbedding, *sqlgraph.CreateSpe
 			Columns: []string{codeembedding.IngestionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -223,7 +206,7 @@ func (_c *CodeEmbeddingCreate) createSpec() (*CodeEmbedding, *sqlgraph.CreateSpe
 			Columns: codeembedding.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -284,7 +267,7 @@ type (
 )
 
 // SetIngestionID sets the "ingestion_id" field.
-func (u *CodeEmbeddingUpsert) SetIngestionID(v uuid.UUID) *CodeEmbeddingUpsert {
+func (u *CodeEmbeddingUpsert) SetIngestionID(v int64) *CodeEmbeddingUpsert {
 	u.Set(codeembedding.FieldIngestionID, v)
 	return u
 }
@@ -398,7 +381,7 @@ func (u *CodeEmbeddingUpsertOne) Update(set func(*CodeEmbeddingUpsert)) *CodeEmb
 }
 
 // SetIngestionID sets the "ingestion_id" field.
-func (u *CodeEmbeddingUpsertOne) SetIngestionID(v uuid.UUID) *CodeEmbeddingUpsertOne {
+func (u *CodeEmbeddingUpsertOne) SetIngestionID(v int64) *CodeEmbeddingUpsertOne {
 	return u.Update(func(s *CodeEmbeddingUpsert) {
 		s.SetIngestionID(v)
 	})
@@ -490,12 +473,7 @@ func (u *CodeEmbeddingUpsertOne) ExecX(ctx context.Context) {
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *CodeEmbeddingUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
-	if u.create.driver.Dialect() == dialect.MySQL {
-		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
-		// fields from the database since MySQL does not support the RETURNING clause.
-		return id, errors.New("ent: CodeEmbeddingUpsertOne.ID is not supported by MySQL driver. Use CodeEmbeddingUpsertOne.Exec instead")
-	}
+func (u *CodeEmbeddingUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -504,7 +482,7 @@ func (u *CodeEmbeddingUpsertOne) ID(ctx context.Context) (id uuid.UUID, err erro
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *CodeEmbeddingUpsertOne) IDX(ctx context.Context) uuid.UUID {
+func (u *CodeEmbeddingUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -559,6 +537,10 @@ func (_c *CodeEmbeddingCreateBulk) Save(ctx context.Context) ([]*CodeEmbedding, 
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})
@@ -690,7 +672,7 @@ func (u *CodeEmbeddingUpsertBulk) Update(set func(*CodeEmbeddingUpsert)) *CodeEm
 }
 
 // SetIngestionID sets the "ingestion_id" field.
-func (u *CodeEmbeddingUpsertBulk) SetIngestionID(v uuid.UUID) *CodeEmbeddingUpsertBulk {
+func (u *CodeEmbeddingUpsertBulk) SetIngestionID(v int64) *CodeEmbeddingUpsertBulk {
 	return u.Update(func(s *CodeEmbeddingUpsert) {
 		s.SetIngestionID(v)
 	})

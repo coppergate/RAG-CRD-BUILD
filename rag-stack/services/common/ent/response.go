@@ -24,7 +24,7 @@ type Response struct {
 	// PromptID holds the value of the "prompt_id" field.
 	PromptID int64 `json:"prompt_id,omitempty"`
 	// SessionID holds the value of the "session_id" field.
-	SessionID uuid.UUID `json:"session_id,omitempty"`
+	SessionID int64 `json:"session_id,omitempty"`
 	// Content holds the value of the "content" field.
 	Content string `json:"content,omitempty"`
 	// PlanningResponse holds the value of the "planning_response" field.
@@ -47,13 +47,13 @@ func (*Response) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case response.FieldMetadata:
 			values[i] = new([]byte)
-		case response.FieldID, response.FieldPromptID, response.FieldSequenceNumber:
+		case response.FieldID, response.FieldPromptID, response.FieldSessionID, response.FieldSequenceNumber:
 			values[i] = new(sql.NullInt64)
 		case response.FieldContent, response.FieldPlanningResponse, response.FieldModelName:
 			values[i] = new(sql.NullString)
 		case response.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case response.FieldResponseID, response.FieldSessionID:
+		case response.FieldResponseID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -89,10 +89,10 @@ func (_m *Response) assignValues(columns []string, values []any) error {
 				_m.PromptID = value.Int64
 			}
 		case response.FieldSessionID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field session_id", values[i])
-			} else if value != nil {
-				_m.SessionID = *value
+			} else if value.Valid {
+				_m.SessionID = value.Int64
 			}
 		case response.FieldContent:
 			if value, ok := values[i].(*sql.NullString); !ok {

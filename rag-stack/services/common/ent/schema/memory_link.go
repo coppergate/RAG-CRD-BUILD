@@ -2,9 +2,9 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -16,15 +16,14 @@ type MemoryLink struct {
 // Fields of the MemoryLink.
 func (MemoryLink) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuid.New).
+		field.Int64("id").
 			StorageKey("id"),
-		field.UUID("memory_item_id", uuid.UUID{}).
+		field.Int64("memory_item_id").
 			Comment("The associated memory item"),
-		field.JSON("source_message_ids", []uuid.UUID{}).
+		field.JSON("source_message_ids", []int64{}).
 			Optional().
 			Comment("Provenance from chat messages"),
-		field.JSON("ingestion_ids", []uuid.UUID{}).
+		field.JSON("ingestion_ids", []int64{}).
 			Optional().
 			Comment("Provenance from ingested data"),
 		field.JSON("tags", []string{}).
@@ -38,7 +37,12 @@ func (MemoryLink) Fields() []ent.Field {
 
 // Edges of the MemoryLink.
 func (MemoryLink) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.To("memory_item", MemoryItem.Type).
+			Field("memory_item_id").
+			Unique().
+			Required(),
+	}
 }
 
 // Indexes of the MemoryLink.

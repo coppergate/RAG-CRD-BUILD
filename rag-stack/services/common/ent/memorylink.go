@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
 	"encoding/json"
 	"fmt"
@@ -11,27 +12,50 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 // MemoryLink is the model entity for the MemoryLink schema.
 type MemoryLink struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
 	// The associated memory item
-	MemoryItemID uuid.UUID `json:"memory_item_id,omitempty"`
+	MemoryItemID int64 `json:"memory_item_id,omitempty"`
 	// Provenance from chat messages
-	SourceMessageIds []uuid.UUID `json:"source_message_ids,omitempty"`
+	SourceMessageIds []int64 `json:"source_message_ids,omitempty"`
 	// Provenance from ingested data
-	IngestionIds []uuid.UUID `json:"ingestion_ids,omitempty"`
+	IngestionIds []int64 `json:"ingestion_ids,omitempty"`
 	// Tags holds the value of the "tags" field.
 	Tags []string `json:"tags,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
-	CreatedAt    time.Time `json:"created_at,omitempty"`
-	selectValues sql.SelectValues
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the MemoryLinkQuery when eager-loading is set.
+	Edges             MemoryLinkEdges `json:"edges"`
+	memory_item_links *int64
+	selectValues      sql.SelectValues
+}
+
+// MemoryLinkEdges holds the relations/edges for other nodes in the graph.
+type MemoryLinkEdges struct {
+	// MemoryItem holds the value of the memory_item edge.
+	MemoryItem *MemoryItem `json:"memory_item,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// MemoryItemOrErr returns the MemoryItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e MemoryLinkEdges) MemoryItemOrErr() (*MemoryItem, error) {
+	if e.MemoryItem != nil {
+		return e.MemoryItem, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: memoryitem.Label}
+	}
+	return nil, &NotLoadedError{edge: "memory_item"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -41,10 +65,12 @@ func (*MemoryLink) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case memorylink.FieldSourceMessageIds, memorylink.FieldIngestionIds, memorylink.FieldTags, memorylink.FieldMetadata:
 			values[i] = new([]byte)
+		case memorylink.FieldID, memorylink.FieldMemoryItemID:
+			values[i] = new(sql.NullInt64)
 		case memorylink.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case memorylink.FieldID, memorylink.FieldMemoryItemID:
-			values[i] = new(uuid.UUID)
+		case memorylink.ForeignKeys[0]: // memory_item_links
+			values[i] = new(sql.NullInt64)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -61,16 +87,16 @@ func (_m *MemoryLink) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case memorylink.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
+			_m.ID = int64(value.Int64)
 		case memorylink.FieldMemoryItemID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field memory_item_id", values[i])
-			} else if value != nil {
-				_m.MemoryItemID = *value
+			} else if value.Valid {
+				_m.MemoryItemID = value.Int64
 			}
 		case memorylink.FieldSourceMessageIds:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -110,6 +136,13 @@ func (_m *MemoryLink) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
+		case memorylink.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for edge-field memory_item_links", value)
+			} else if value.Valid {
+				_m.memory_item_links = new(int64)
+				*_m.memory_item_links = int64(value.Int64)
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -121,6 +154,11 @@ func (_m *MemoryLink) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *MemoryLink) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryMemoryItem queries the "memory_item" edge of the MemoryLink entity.
+func (_m *MemoryLink) QueryMemoryItem() *MemoryItemQuery {
+	return NewMemoryLinkClient(_m.config).QueryMemoryItem(_m)
 }
 
 // Update returns a builder for updating this MemoryLink.

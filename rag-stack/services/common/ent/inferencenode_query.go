@@ -15,7 +15,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // InferenceNodeQuery is the builder for querying InferenceNode entities.
@@ -108,8 +107,8 @@ func (_q *InferenceNodeQuery) FirstX(ctx context.Context) *InferenceNode {
 
 // FirstID returns the first InferenceNode ID from the query.
 // Returns a *NotFoundError when no InferenceNode ID was found.
-func (_q *InferenceNodeQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *InferenceNodeQuery) FirstID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -121,7 +120,7 @@ func (_q *InferenceNodeQuery) FirstID(ctx context.Context) (id uuid.UUID, err er
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *InferenceNodeQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *InferenceNodeQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -159,8 +158,8 @@ func (_q *InferenceNodeQuery) OnlyX(ctx context.Context) *InferenceNode {
 // OnlyID is like Only, but returns the only InferenceNode ID in the query.
 // Returns a *NotSingularError when more than one InferenceNode ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *InferenceNodeQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *InferenceNodeQuery) OnlyID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -176,7 +175,7 @@ func (_q *InferenceNodeQuery) OnlyID(ctx context.Context) (id uuid.UUID, err err
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *InferenceNodeQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *InferenceNodeQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -204,7 +203,7 @@ func (_q *InferenceNodeQuery) AllX(ctx context.Context) []*InferenceNode {
 }
 
 // IDs executes the query and returns a list of InferenceNode IDs.
-func (_q *InferenceNodeQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+func (_q *InferenceNodeQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
@@ -216,7 +215,7 @@ func (_q *InferenceNodeQuery) IDs(ctx context.Context) (ids []uuid.UUID, err err
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *InferenceNodeQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *InferenceNodeQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -406,7 +405,7 @@ func (_q *InferenceNodeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([
 
 func (_q *InferenceNodeQuery) loadMetrics(ctx context.Context, query *ModelExecutionMetricQuery, nodes []*InferenceNode, init func(*InferenceNode), assign func(*InferenceNode, *ModelExecutionMetric)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[uuid.UUID]*InferenceNode)
+	nodeids := make(map[int64]*InferenceNode)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -445,7 +444,7 @@ func (_q *InferenceNodeQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (_q *InferenceNodeQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(inferencenode.Table, inferencenode.Columns, sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewQuerySpec(inferencenode.Table, inferencenode.Columns, sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique

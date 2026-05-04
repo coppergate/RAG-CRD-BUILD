@@ -11,12 +11,12 @@ The system utilizes a modular microservices architecture:
 - **TimescaleDB**: Session and chat history management.
 - **Qdrant**: Vector database for code snippet embeddings.
 - **Rook-Ceph S3**: Local object storage for the codebase.
-- **RAG Web UI (Go)**: User interface for file management and chat.
+- **RAG Explorer (Flutter)**: Advanced management UI for the RAG pipeline.
 
 ## Repository Structure
 
 - `infrastructure/`: Core services (Pulsar, TimescaleDB, S3 OBC).
-- `services/`: RAG-specific microservices (Gateway, Worker, UI, Qdrant).
+- `services/`: RAG-specific microservices (Gateway, Worker, Admin API, Qdrant).
 - `ingestion/`: Pipeline for vectorizing files from S3 to Qdrant.
 - `tests/`: Integration and context verification suites.
 - `setup-all.sh`: Master orchestration script.
@@ -32,10 +32,9 @@ bash setup-all.sh
 
 ## Post-Deployment
 
-1.  **Access the Web UI**: Check the LoadBalancer IP for the `rag-web-ui` service.
-2.  **Upload Codebase**: Use the UI to upload files to the local S3 bucket.
-3.  **Trigger Ingestion**: Start the ingestion job via the UI to populate Qdrant.
-4.  **Ask the RAG**: Use the chat interface to query your ingested documents.
+1.  **Access the Admin API**: Verify health via the `rag-admin-api`.
+2.  **Use RAG Explorer**: Connect your RAG Explorer desktop client to the cluster.
+3.  **Chat & Ingest**: Use the explorer to manage ingestion and chat with the pipeline.
 
 ## Testing
 

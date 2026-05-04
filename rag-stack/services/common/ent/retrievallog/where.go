@@ -12,47 +12,47 @@ import (
 )
 
 // ID filters vertices based on their ID field.
-func ID(id uuid.UUID) predicate.RetrievalLog {
+func ID(id int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldEQ(FieldID, id))
 }
 
 // IDEQ applies the EQ predicate on the ID field.
-func IDEQ(id uuid.UUID) predicate.RetrievalLog {
+func IDEQ(id int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldEQ(FieldID, id))
 }
 
 // IDNEQ applies the NEQ predicate on the ID field.
-func IDNEQ(id uuid.UUID) predicate.RetrievalLog {
+func IDNEQ(id int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldNEQ(FieldID, id))
 }
 
 // IDIn applies the In predicate on the ID field.
-func IDIn(ids ...uuid.UUID) predicate.RetrievalLog {
+func IDIn(ids ...int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldIn(FieldID, ids...))
 }
 
 // IDNotIn applies the NotIn predicate on the ID field.
-func IDNotIn(ids ...uuid.UUID) predicate.RetrievalLog {
+func IDNotIn(ids ...int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldNotIn(FieldID, ids...))
 }
 
 // IDGT applies the GT predicate on the ID field.
-func IDGT(id uuid.UUID) predicate.RetrievalLog {
+func IDGT(id int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldGT(FieldID, id))
 }
 
 // IDGTE applies the GTE predicate on the ID field.
-func IDGTE(id uuid.UUID) predicate.RetrievalLog {
+func IDGTE(id int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldGTE(FieldID, id))
 }
 
 // IDLT applies the LT predicate on the ID field.
-func IDLT(id uuid.UUID) predicate.RetrievalLog {
+func IDLT(id int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldLT(FieldID, id))
 }
 
 // IDLTE applies the LTE predicate on the ID field.
-func IDLTE(id uuid.UUID) predicate.RetrievalLog {
+func IDLTE(id int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldLTE(FieldID, id))
 }
 
@@ -62,7 +62,7 @@ func MessageID(v uuid.UUID) predicate.RetrievalLog {
 }
 
 // SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
-func SessionID(v uuid.UUID) predicate.RetrievalLog {
+func SessionID(v int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldEQ(FieldSessionID, v))
 }
 
@@ -137,22 +137,22 @@ func MessageIDNotNil() predicate.RetrievalLog {
 }
 
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
-func SessionIDEQ(v uuid.UUID) predicate.RetrievalLog {
+func SessionIDEQ(v int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldEQ(FieldSessionID, v))
 }
 
 // SessionIDNEQ applies the NEQ predicate on the "session_id" field.
-func SessionIDNEQ(v uuid.UUID) predicate.RetrievalLog {
+func SessionIDNEQ(v int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldNEQ(FieldSessionID, v))
 }
 
 // SessionIDIn applies the In predicate on the "session_id" field.
-func SessionIDIn(vs ...uuid.UUID) predicate.RetrievalLog {
+func SessionIDIn(vs ...int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldIn(FieldSessionID, vs...))
 }
 
 // SessionIDNotIn applies the NotIn predicate on the "session_id" field.
-func SessionIDNotIn(vs ...uuid.UUID) predicate.RetrievalLog {
+func SessionIDNotIn(vs ...int64) predicate.RetrievalLog {
 	return predicate.RetrievalLog(sql.FieldNotIn(FieldSessionID, vs...))
 }
 

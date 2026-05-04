@@ -10,14 +10,13 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 // CodeIngestion is the model entity for the CodeIngestion schema.
 type CodeIngestion struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
 	// S3BucketID holds the value of the "s3_bucket_id" field.
 	S3BucketID string `json:"s3_bucket_id,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -62,12 +61,12 @@ func (*CodeIngestion) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case codeingestion.FieldID:
+			values[i] = new(sql.NullInt64)
 		case codeingestion.FieldS3BucketID:
 			values[i] = new(sql.NullString)
 		case codeingestion.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case codeingestion.FieldID:
-			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -84,11 +83,11 @@ func (_m *CodeIngestion) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case codeingestion.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
+			_m.ID = int64(value.Int64)
 		case codeingestion.FieldS3BucketID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field s3_bucket_id", values[i])

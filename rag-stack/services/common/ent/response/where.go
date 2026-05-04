@@ -66,7 +66,7 @@ func PromptID(v int64) predicate.Response {
 }
 
 // SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
-func SessionID(v uuid.UUID) predicate.Response {
+func SessionID(v int64) predicate.Response {
 	return predicate.Response(sql.FieldEQ(FieldSessionID, v))
 }
 
@@ -186,42 +186,42 @@ func PromptIDNotNil() predicate.Response {
 }
 
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
-func SessionIDEQ(v uuid.UUID) predicate.Response {
+func SessionIDEQ(v int64) predicate.Response {
 	return predicate.Response(sql.FieldEQ(FieldSessionID, v))
 }
 
 // SessionIDNEQ applies the NEQ predicate on the "session_id" field.
-func SessionIDNEQ(v uuid.UUID) predicate.Response {
+func SessionIDNEQ(v int64) predicate.Response {
 	return predicate.Response(sql.FieldNEQ(FieldSessionID, v))
 }
 
 // SessionIDIn applies the In predicate on the "session_id" field.
-func SessionIDIn(vs ...uuid.UUID) predicate.Response {
+func SessionIDIn(vs ...int64) predicate.Response {
 	return predicate.Response(sql.FieldIn(FieldSessionID, vs...))
 }
 
 // SessionIDNotIn applies the NotIn predicate on the "session_id" field.
-func SessionIDNotIn(vs ...uuid.UUID) predicate.Response {
+func SessionIDNotIn(vs ...int64) predicate.Response {
 	return predicate.Response(sql.FieldNotIn(FieldSessionID, vs...))
 }
 
 // SessionIDGT applies the GT predicate on the "session_id" field.
-func SessionIDGT(v uuid.UUID) predicate.Response {
+func SessionIDGT(v int64) predicate.Response {
 	return predicate.Response(sql.FieldGT(FieldSessionID, v))
 }
 
 // SessionIDGTE applies the GTE predicate on the "session_id" field.
-func SessionIDGTE(v uuid.UUID) predicate.Response {
+func SessionIDGTE(v int64) predicate.Response {
 	return predicate.Response(sql.FieldGTE(FieldSessionID, v))
 }
 
 // SessionIDLT applies the LT predicate on the "session_id" field.
-func SessionIDLT(v uuid.UUID) predicate.Response {
+func SessionIDLT(v int64) predicate.Response {
 	return predicate.Response(sql.FieldLT(FieldSessionID, v))
 }
 
 // SessionIDLTE applies the LTE predicate on the "session_id" field.
-func SessionIDLTE(v uuid.UUID) predicate.Response {
+func SessionIDLTE(v int64) predicate.Response {
 	return predicate.Response(sql.FieldLTE(FieldSessionID, v))
 }
 

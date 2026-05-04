@@ -73,7 +73,7 @@ func (s *QdrantSearcher) StartResultConsumer(consumer pulsar.Consumer) {
 }
 
 // Search sends a search request to Qdrant via Pulsar and waits for the result.
-func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []string, sessionID string) ([]string, error) {
+func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []string, sessionID int64) ([]string, error) {
 	if len(vector) == 0 {
 		log.Printf("DEBUG: Skipping Qdrant search for session %s - empty vector", sessionID)
 		return nil, nil

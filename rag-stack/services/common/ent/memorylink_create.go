@@ -3,17 +3,16 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
 	"context"
 	"errors"
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // MemoryLinkCreate is the builder for creating a MemoryLink entity.
@@ -25,19 +24,19 @@ type MemoryLinkCreate struct {
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (_c *MemoryLinkCreate) SetMemoryItemID(v uuid.UUID) *MemoryLinkCreate {
+func (_c *MemoryLinkCreate) SetMemoryItemID(v int64) *MemoryLinkCreate {
 	_c.mutation.SetMemoryItemID(v)
 	return _c
 }
 
 // SetSourceMessageIds sets the "source_message_ids" field.
-func (_c *MemoryLinkCreate) SetSourceMessageIds(v []uuid.UUID) *MemoryLinkCreate {
+func (_c *MemoryLinkCreate) SetSourceMessageIds(v []int64) *MemoryLinkCreate {
 	_c.mutation.SetSourceMessageIds(v)
 	return _c
 }
 
 // SetIngestionIds sets the "ingestion_ids" field.
-func (_c *MemoryLinkCreate) SetIngestionIds(v []uuid.UUID) *MemoryLinkCreate {
+func (_c *MemoryLinkCreate) SetIngestionIds(v []int64) *MemoryLinkCreate {
 	_c.mutation.SetIngestionIds(v)
 	return _c
 }
@@ -69,17 +68,14 @@ func (_c *MemoryLinkCreate) SetNillableCreatedAt(v *time.Time) *MemoryLinkCreate
 }
 
 // SetID sets the "id" field.
-func (_c *MemoryLinkCreate) SetID(v uuid.UUID) *MemoryLinkCreate {
+func (_c *MemoryLinkCreate) SetID(v int64) *MemoryLinkCreate {
 	_c.mutation.SetID(v)
 	return _c
 }
 
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *MemoryLinkCreate) SetNillableID(v *uuid.UUID) *MemoryLinkCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
-	return _c
+// SetMemoryItem sets the "memory_item" edge to the MemoryItem entity.
+func (_c *MemoryLinkCreate) SetMemoryItem(v *MemoryItem) *MemoryLinkCreate {
+	return _c.SetMemoryItemID(v.ID)
 }
 
 // Mutation returns the MemoryLinkMutation object of the builder.
@@ -121,10 +117,6 @@ func (_c *MemoryLinkCreate) defaults() {
 		v := memorylink.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := memorylink.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -134,6 +126,9 @@ func (_c *MemoryLinkCreate) check() error {
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MemoryLink.created_at"`)}
+	}
+	if len(_c.mutation.MemoryItemIDs()) == 0 {
+		return &ValidationError{Name: "memory_item", err: errors.New(`ent: missing required edge "MemoryLink.memory_item"`)}
 	}
 	return nil
 }
@@ -149,12 +144,9 @@ func (_c *MemoryLinkCreate) sqlSave(ctx context.Context) (*MemoryLink, error) {
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -164,16 +156,12 @@ func (_c *MemoryLinkCreate) sqlSave(ctx context.Context) (*MemoryLink, error) {
 func (_c *MemoryLinkCreate) createSpec() (*MemoryLink, *sqlgraph.CreateSpec) {
 	var (
 		_node = &MemoryLink{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(memorylink.Table, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(memorylink.Table, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
-	}
-	if value, ok := _c.mutation.MemoryItemID(); ok {
-		_spec.SetField(memorylink.FieldMemoryItemID, field.TypeUUID, value)
-		_node.MemoryItemID = value
+		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.SourceMessageIds(); ok {
 		_spec.SetField(memorylink.FieldSourceMessageIds, field.TypeJSON, value)
@@ -194,6 +182,23 @@ func (_c *MemoryLinkCreate) createSpec() (*MemoryLink, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(memorylink.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
+	}
+	if nodes := _c.mutation.MemoryItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   memorylink.MemoryItemTable,
+			Columns: []string{memorylink.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.MemoryItemID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
@@ -248,7 +253,7 @@ type (
 )
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (u *MemoryLinkUpsert) SetMemoryItemID(v uuid.UUID) *MemoryLinkUpsert {
+func (u *MemoryLinkUpsert) SetMemoryItemID(v int64) *MemoryLinkUpsert {
 	u.Set(memorylink.FieldMemoryItemID, v)
 	return u
 }
@@ -260,7 +265,7 @@ func (u *MemoryLinkUpsert) UpdateMemoryItemID() *MemoryLinkUpsert {
 }
 
 // SetSourceMessageIds sets the "source_message_ids" field.
-func (u *MemoryLinkUpsert) SetSourceMessageIds(v []uuid.UUID) *MemoryLinkUpsert {
+func (u *MemoryLinkUpsert) SetSourceMessageIds(v []int64) *MemoryLinkUpsert {
 	u.Set(memorylink.FieldSourceMessageIds, v)
 	return u
 }
@@ -278,7 +283,7 @@ func (u *MemoryLinkUpsert) ClearSourceMessageIds() *MemoryLinkUpsert {
 }
 
 // SetIngestionIds sets the "ingestion_ids" field.
-func (u *MemoryLinkUpsert) SetIngestionIds(v []uuid.UUID) *MemoryLinkUpsert {
+func (u *MemoryLinkUpsert) SetIngestionIds(v []int64) *MemoryLinkUpsert {
 	u.Set(memorylink.FieldIngestionIds, v)
 	return u
 }
@@ -392,7 +397,7 @@ func (u *MemoryLinkUpsertOne) Update(set func(*MemoryLinkUpsert)) *MemoryLinkUps
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (u *MemoryLinkUpsertOne) SetMemoryItemID(v uuid.UUID) *MemoryLinkUpsertOne {
+func (u *MemoryLinkUpsertOne) SetMemoryItemID(v int64) *MemoryLinkUpsertOne {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.SetMemoryItemID(v)
 	})
@@ -406,7 +411,7 @@ func (u *MemoryLinkUpsertOne) UpdateMemoryItemID() *MemoryLinkUpsertOne {
 }
 
 // SetSourceMessageIds sets the "source_message_ids" field.
-func (u *MemoryLinkUpsertOne) SetSourceMessageIds(v []uuid.UUID) *MemoryLinkUpsertOne {
+func (u *MemoryLinkUpsertOne) SetSourceMessageIds(v []int64) *MemoryLinkUpsertOne {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.SetSourceMessageIds(v)
 	})
@@ -427,7 +432,7 @@ func (u *MemoryLinkUpsertOne) ClearSourceMessageIds() *MemoryLinkUpsertOne {
 }
 
 // SetIngestionIds sets the "ingestion_ids" field.
-func (u *MemoryLinkUpsertOne) SetIngestionIds(v []uuid.UUID) *MemoryLinkUpsertOne {
+func (u *MemoryLinkUpsertOne) SetIngestionIds(v []int64) *MemoryLinkUpsertOne {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.SetIngestionIds(v)
 	})
@@ -519,12 +524,7 @@ func (u *MemoryLinkUpsertOne) ExecX(ctx context.Context) {
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *MemoryLinkUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
-	if u.create.driver.Dialect() == dialect.MySQL {
-		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
-		// fields from the database since MySQL does not support the RETURNING clause.
-		return id, errors.New("ent: MemoryLinkUpsertOne.ID is not supported by MySQL driver. Use MemoryLinkUpsertOne.Exec instead")
-	}
+func (u *MemoryLinkUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -533,7 +533,7 @@ func (u *MemoryLinkUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) 
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *MemoryLinkUpsertOne) IDX(ctx context.Context) uuid.UUID {
+func (u *MemoryLinkUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -588,6 +588,10 @@ func (_c *MemoryLinkCreateBulk) Save(ctx context.Context) ([]*MemoryLink, error)
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})
@@ -719,7 +723,7 @@ func (u *MemoryLinkUpsertBulk) Update(set func(*MemoryLinkUpsert)) *MemoryLinkUp
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (u *MemoryLinkUpsertBulk) SetMemoryItemID(v uuid.UUID) *MemoryLinkUpsertBulk {
+func (u *MemoryLinkUpsertBulk) SetMemoryItemID(v int64) *MemoryLinkUpsertBulk {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.SetMemoryItemID(v)
 	})
@@ -733,7 +737,7 @@ func (u *MemoryLinkUpsertBulk) UpdateMemoryItemID() *MemoryLinkUpsertBulk {
 }
 
 // SetSourceMessageIds sets the "source_message_ids" field.
-func (u *MemoryLinkUpsertBulk) SetSourceMessageIds(v []uuid.UUID) *MemoryLinkUpsertBulk {
+func (u *MemoryLinkUpsertBulk) SetSourceMessageIds(v []int64) *MemoryLinkUpsertBulk {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.SetSourceMessageIds(v)
 	})
@@ -754,7 +758,7 @@ func (u *MemoryLinkUpsertBulk) ClearSourceMessageIds() *MemoryLinkUpsertBulk {
 }
 
 // SetIngestionIds sets the "ingestion_ids" field.
-func (u *MemoryLinkUpsertBulk) SetIngestionIds(v []uuid.UUID) *MemoryLinkUpsertBulk {
+func (u *MemoryLinkUpsertBulk) SetIngestionIds(v []int64) *MemoryLinkUpsertBulk {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.SetIngestionIds(v)
 	})

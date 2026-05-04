@@ -5,13 +5,13 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"app-builds/common/ent"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
-	"github.com/google/uuid"
 )
 
 type SessionService struct {
@@ -33,7 +33,7 @@ type ChatMessage struct {
 
 func (s *SessionService) GetMessages(w http.ResponseWriter, r *http.Request, sessionIDStr string) {
 	ctx := r.Context()
-	sessionID, err := uuid.Parse(sessionIDStr)
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid session ID", http.StatusBadRequest)
 		return
@@ -133,7 +133,7 @@ func (s *SessionService) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Request) {
 	sessionIDStr := r.URL.Query().Get("session_id")
-	sessionID, err := uuid.Parse(sessionIDStr)
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid session ID", http.StatusBadRequest)
 		return
@@ -147,11 +147,11 @@ func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var tagUUIDs []uuid.UUID
+	var tagIDs []int64
 	for _, idStr := range payload.TagIDs {
-		id, err := uuid.Parse(idStr)
+		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err == nil {
-			tagUUIDs = append(tagUUIDs, id)
+			tagIDs = append(tagIDs, id)
 		}
 	}
 
@@ -162,7 +162,7 @@ func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Reques
 		// Create session if it doesn't exist
 		err = s.client.Session.Create().
 			SetID(sessionID).
-			SetName("Session " + sessionID.String()[:8]).
+			SetName("Session " + strconv.FormatInt(sessionID, 10)).
 			SetLastActiveAt(time.Now()).
 			Exec(r.Context())
 		if err != nil {
@@ -176,7 +176,7 @@ func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Reques
 
 	err = s.client.Session.UpdateOneID(sessionID).
 		ClearTags().
-		AddTagIDs(tagUUIDs...).
+		AddTagIDs(tagIDs...).
 		SetLastActiveAt(time.Now()).
 		Exec(r.Context())
 
@@ -191,7 +191,7 @@ func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Reques
 func (s *SessionService) DeleteSession(w http.ResponseWriter, r *http.Request, sessionIDStr string) {
 	ctx := r.Context()
 	log.Printf("[SESSION] Deleting session ID: %s", sessionIDStr)
-	sessionID, err := uuid.Parse(sessionIDStr)
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid session ID", http.StatusBadRequest)
 		return

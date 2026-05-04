@@ -1,10 +1,10 @@
 package schema
 
 import (
+"github.com/google/uuid"
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -16,10 +16,9 @@ type Session struct {
 // Fields of the Session.
 func (Session) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuid.New).
+		field.Int64("id").
 			StorageKey("session_id"),
-		field.UUID("project_id", uuid.UUID{}).
+		field.Int64("project_id").
 			Optional(),
 		field.String("name").
 			Unique().
@@ -45,5 +44,6 @@ func (Session) Edges() []ent.Edge {
 		edge.To("metrics", ModelExecutionMetric.Type),
 		edge.To("retrieval_logs", RetrievalLog.Type),
 		edge.To("memory_events", MemoryEvent.Type),
+		edge.To("memory_items", MemoryItem.Type),
 	}
 }

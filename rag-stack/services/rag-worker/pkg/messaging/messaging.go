@@ -136,7 +136,7 @@ func (c *Client) Close() {
 }
 
 // SendStatus sends a status message to the status topic.
-func (c *Client) SendStatus(ctx context.Context, id, sessionID, state, details string) {
+func (c *Client) SendStatus(ctx context.Context, id string, sessionID int64, state, details string) {
 	payload := &contracts.StatusMessage{
 		Id:        id,
 		SessionId: sessionID,
@@ -149,7 +149,7 @@ func (c *Client) SendStatus(ctx context.Context, id, sessionID, state, details s
 }
 
 // SendResult sends a result message as a single chunk for consistency with the aggregator.
-func (c *Client) SendResult(ctx context.Context, id, sessionID, result, model string, metadata map[string]interface{}) {
+func (c *Client) SendResult(ctx context.Context, id string, sessionID int64, result, model string, metadata map[string]interface{}) {
 	log.Printf("[%s] Sending non-streaming result as final chunk", id)
 	c.SendStreamChunk(ctx, id, sessionID, result, 0, true, model, true, metadata)
 }
@@ -173,7 +173,7 @@ func (c *Client) getSessionProducer(topic string) (pulsar.Producer, error) {
 	return producer, nil
 }
 
-func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, result string, sequence int, isLast bool, model string, inConversation bool, metadata map[string]interface{}) {
+func (c *Client) SendStreamChunk(ctx context.Context, id string, sessionID int64, result string, sequence int, isLast bool, model string, inConversation bool, metadata map[string]interface{}) {
 	topic := c.SessionTopic(id)
 	producer, err := c.getSessionProducer(topic)
 	if err != nil {
@@ -211,7 +211,7 @@ func (c *Client) SendStreamChunk(ctx context.Context, id, sessionID, result stri
 	}
 }
 
-func (c *Client) SendPlanningResponse(ctx context.Context, id, sessionID, planningResponse string) {
+func (c *Client) SendPlanningResponse(ctx context.Context, id string, sessionID int64, planningResponse string) {
 	topic := c.SessionTopic(id)
 	producer, err := c.getSessionProducer(topic)
 	if err != nil {
@@ -265,7 +265,7 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 }
 
 // SendCompletion sends a completion event to the completion topic.
-func (c *Client) SendCompletion(ctx context.Context, id, sessionID, startTS, model, status string, metrics *contracts.ExecutionMetrics) {
+func (c *Client) SendCompletion(ctx context.Context, id string, sessionID int64, startTS, model, status string, metrics *contracts.ExecutionMetrics) {
 	log.Printf("[%s] Sending completion event (status: %s)", id, status)
 	payload := &contracts.ResponseCompletion{
 		Id:             id,

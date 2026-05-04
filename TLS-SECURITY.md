@@ -24,7 +24,6 @@ Each service requiring TLS has a `Certificate` resource that defines its DNS nam
 | :--- | :--- | :--- | :--- |
 | **LLM Gateway** | `llm-gateway-tls` | `rag-system` | `gateway.hierocracy.home` |
 | **RAG Ingestion** | `rag-ingestion-tls` | `rag-system` | `rag-ingestion-service.rag-system.svc` |
-| **RAG Web UI** | `rag-web-ui-tls` | `rag-system` | `ui.hierocracy.home` |
 | **Qdrant** | `qdrant-tls` | `rag-system` | `qdrant.hierocracy.home` |
 | **TimescaleDB** | `timescaledb-server-tls`| `timescaledb` | `timescaledb.hierocracy.home` |
 | **Registry** | `in-cluster-registry-tls`| `container-registry`| `registry.hierocracy.home` |

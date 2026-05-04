@@ -40,7 +40,7 @@ func (_d *RetrievalLogDelete) ExecX(ctx context.Context) int {
 }
 
 func (_d *RetrievalLogDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(retrievallog.Table, sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewDeleteSpec(retrievallog.Table, sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64))
 	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {

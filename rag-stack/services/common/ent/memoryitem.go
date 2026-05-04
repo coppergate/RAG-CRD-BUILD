@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryitem"
+	"app-builds/common/ent/session"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -18,15 +19,15 @@ import (
 type MemoryItem struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
-	// TenantID holds the value of the "tenant_id" field.
-	TenantID uuid.UUID `json:"tenant_id,omitempty"`
+	ID int64 `json:"id,omitempty"`
+	// ProjectID holds the value of the "project_id" field.
+	ProjectID int64 `json:"project_id,omitempty"`
 	// SessionID holds the value of the "session_id" field.
-	SessionID uuid.UUID `json:"session_id,omitempty"`
+	SessionID int64 `json:"session_id,omitempty"`
 	// UserID holds the value of the "user_id" field.
 	UserID uuid.UUID `json:"user_id,omitempty"`
 	// short_term_memory, long_term_memory, persistent_memory
-	Type string `json:"type,omitempty"`
+	MemoryType string `json:"memory_type,omitempty"`
 	// Summary holds the value of the "summary" field.
 	Summary string `json:"summary,omitempty"`
 	// Content holds the value of the "content" field.
@@ -39,17 +40,62 @@ type MemoryItem struct {
 	DecayState map[string]interface{} `json:"decay_state,omitempty"`
 	// active, pruned, etc.
 	Status string `json:"status,omitempty"`
-	// Pinning holds the value of the "pinning" field.
-	Pinning bool `json:"pinning,omitempty"`
-	// TTL in seconds
-	TTL int64 `json:"ttl,omitempty"`
+	// Pinned holds the value of the "pinned" field.
+	Pinned bool `json:"pinned,omitempty"`
+	// TTL or expiry timestamp
+	ExpiresAt time.Time `json:"expires_at,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the MemoryItemQuery when eager-loading is set.
+	Edges        MemoryItemEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// MemoryItemEdges holds the relations/edges for other nodes in the graph.
+type MemoryItemEdges struct {
+	// Session holds the value of the session edge.
+	Session *Session `json:"session,omitempty"`
+	// Links holds the value of the links edge.
+	Links []*MemoryLink `json:"links,omitempty"`
+	// Events holds the value of the events edge.
+	Events []*MemoryEvent `json:"events,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [3]bool
+}
+
+// SessionOrErr returns the Session value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e MemoryItemEdges) SessionOrErr() (*Session, error) {
+	if e.Session != nil {
+		return e.Session, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: session.Label}
+	}
+	return nil, &NotLoadedError{edge: "session"}
+}
+
+// LinksOrErr returns the Links value or an error if the edge
+// was not loaded in eager-loading.
+func (e MemoryItemEdges) LinksOrErr() ([]*MemoryLink, error) {
+	if e.loadedTypes[1] {
+		return e.Links, nil
+	}
+	return nil, &NotLoadedError{edge: "links"}
+}
+
+// EventsOrErr returns the Events value or an error if the edge
+// was not loaded in eager-loading.
+func (e MemoryItemEdges) EventsOrErr() ([]*MemoryEvent, error) {
+	if e.loadedTypes[2] {
+		return e.Events, nil
+	}
+	return nil, &NotLoadedError{edge: "events"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -59,17 +105,17 @@ func (*MemoryItem) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case memoryitem.FieldDecayState, memoryitem.FieldMetadata:
 			values[i] = new([]byte)
-		case memoryitem.FieldPinning:
+		case memoryitem.FieldPinned:
 			values[i] = new(sql.NullBool)
 		case memoryitem.FieldSalience, memoryitem.FieldRetentionScore:
 			values[i] = new(sql.NullFloat64)
-		case memoryitem.FieldTTL:
+		case memoryitem.FieldID, memoryitem.FieldProjectID, memoryitem.FieldSessionID:
 			values[i] = new(sql.NullInt64)
-		case memoryitem.FieldType, memoryitem.FieldSummary, memoryitem.FieldContent, memoryitem.FieldStatus:
+		case memoryitem.FieldMemoryType, memoryitem.FieldSummary, memoryitem.FieldContent, memoryitem.FieldStatus:
 			values[i] = new(sql.NullString)
-		case memoryitem.FieldCreatedAt, memoryitem.FieldUpdatedAt:
+		case memoryitem.FieldExpiresAt, memoryitem.FieldCreatedAt, memoryitem.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
-		case memoryitem.FieldID, memoryitem.FieldTenantID, memoryitem.FieldSessionID, memoryitem.FieldUserID:
+		case memoryitem.FieldUserID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -87,22 +133,22 @@ func (_m *MemoryItem) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case memoryitem.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
-		case memoryitem.FieldTenantID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
-			} else if value != nil {
-				_m.TenantID = *value
+			_m.ID = int64(value.Int64)
+		case memoryitem.FieldProjectID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field project_id", values[i])
+			} else if value.Valid {
+				_m.ProjectID = value.Int64
 			}
 		case memoryitem.FieldSessionID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field session_id", values[i])
-			} else if value != nil {
-				_m.SessionID = *value
+			} else if value.Valid {
+				_m.SessionID = value.Int64
 			}
 		case memoryitem.FieldUserID:
 			if value, ok := values[i].(*uuid.UUID); !ok {
@@ -110,11 +156,11 @@ func (_m *MemoryItem) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				_m.UserID = *value
 			}
-		case memoryitem.FieldType:
+		case memoryitem.FieldMemoryType:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field type", values[i])
+				return fmt.Errorf("unexpected type %T for field memory_type", values[i])
 			} else if value.Valid {
-				_m.Type = value.String
+				_m.MemoryType = value.String
 			}
 		case memoryitem.FieldSummary:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -154,17 +200,17 @@ func (_m *MemoryItem) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Status = value.String
 			}
-		case memoryitem.FieldPinning:
+		case memoryitem.FieldPinned:
 			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field pinning", values[i])
+				return fmt.Errorf("unexpected type %T for field pinned", values[i])
 			} else if value.Valid {
-				_m.Pinning = value.Bool
+				_m.Pinned = value.Bool
 			}
-		case memoryitem.FieldTTL:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field ttl", values[i])
+		case memoryitem.FieldExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field expires_at", values[i])
 			} else if value.Valid {
-				_m.TTL = value.Int64
+				_m.ExpiresAt = value.Time
 			}
 		case memoryitem.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -199,6 +245,21 @@ func (_m *MemoryItem) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
+// QuerySession queries the "session" edge of the MemoryItem entity.
+func (_m *MemoryItem) QuerySession() *SessionQuery {
+	return NewMemoryItemClient(_m.config).QuerySession(_m)
+}
+
+// QueryLinks queries the "links" edge of the MemoryItem entity.
+func (_m *MemoryItem) QueryLinks() *MemoryLinkQuery {
+	return NewMemoryItemClient(_m.config).QueryLinks(_m)
+}
+
+// QueryEvents queries the "events" edge of the MemoryItem entity.
+func (_m *MemoryItem) QueryEvents() *MemoryEventQuery {
+	return NewMemoryItemClient(_m.config).QueryEvents(_m)
+}
+
 // Update returns a builder for updating this MemoryItem.
 // Note that you need to call MemoryItem.Unwrap() before calling this method if this MemoryItem
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -222,8 +283,8 @@ func (_m *MemoryItem) String() string {
 	var builder strings.Builder
 	builder.WriteString("MemoryItem(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("tenant_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
+	builder.WriteString("project_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ProjectID))
 	builder.WriteString(", ")
 	builder.WriteString("session_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SessionID))
@@ -231,8 +292,8 @@ func (_m *MemoryItem) String() string {
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
 	builder.WriteString(", ")
-	builder.WriteString("type=")
-	builder.WriteString(_m.Type)
+	builder.WriteString("memory_type=")
+	builder.WriteString(_m.MemoryType)
 	builder.WriteString(", ")
 	builder.WriteString("summary=")
 	builder.WriteString(_m.Summary)
@@ -252,11 +313,11 @@ func (_m *MemoryItem) String() string {
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
-	builder.WriteString("pinning=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Pinning))
+	builder.WriteString("pinned=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Pinned))
 	builder.WriteString(", ")
-	builder.WriteString("ttl=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TTL))
+	builder.WriteString("expires_at=")
+	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/predicate"
 	"app-builds/common/ent/session"
 	"context"
@@ -13,7 +14,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // MemoryEventUpdate is the builder for updating MemoryEvent entities.
@@ -30,13 +30,13 @@ func (_u *MemoryEventUpdate) Where(ps ...predicate.MemoryEvent) *MemoryEventUpda
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (_u *MemoryEventUpdate) SetMemoryItemID(v uuid.UUID) *MemoryEventUpdate {
+func (_u *MemoryEventUpdate) SetMemoryItemID(v int64) *MemoryEventUpdate {
 	_u.mutation.SetMemoryItemID(v)
 	return _u
 }
 
 // SetNillableMemoryItemID sets the "memory_item_id" field if the given value is not nil.
-func (_u *MemoryEventUpdate) SetNillableMemoryItemID(v *uuid.UUID) *MemoryEventUpdate {
+func (_u *MemoryEventUpdate) SetNillableMemoryItemID(v *int64) *MemoryEventUpdate {
 	if v != nil {
 		_u.SetMemoryItemID(*v)
 	}
@@ -44,13 +44,13 @@ func (_u *MemoryEventUpdate) SetNillableMemoryItemID(v *uuid.UUID) *MemoryEventU
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *MemoryEventUpdate) SetSessionID(v uuid.UUID) *MemoryEventUpdate {
+func (_u *MemoryEventUpdate) SetSessionID(v int64) *MemoryEventUpdate {
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *MemoryEventUpdate) SetNillableSessionID(v *uuid.UUID) *MemoryEventUpdate {
+func (_u *MemoryEventUpdate) SetNillableSessionID(v *int64) *MemoryEventUpdate {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
@@ -94,6 +94,11 @@ func (_u *MemoryEventUpdate) SetSession(v *Session) *MemoryEventUpdate {
 	return _u.SetSessionID(v.ID)
 }
 
+// SetMemoryItem sets the "memory_item" edge to the MemoryItem entity.
+func (_u *MemoryEventUpdate) SetMemoryItem(v *MemoryItem) *MemoryEventUpdate {
+	return _u.SetMemoryItemID(v.ID)
+}
+
 // Mutation returns the MemoryEventMutation object of the builder.
 func (_u *MemoryEventUpdate) Mutation() *MemoryEventMutation {
 	return _u.mutation
@@ -102,6 +107,12 @@ func (_u *MemoryEventUpdate) Mutation() *MemoryEventMutation {
 // ClearSession clears the "session" edge to the Session entity.
 func (_u *MemoryEventUpdate) ClearSession() *MemoryEventUpdate {
 	_u.mutation.ClearSession()
+	return _u
+}
+
+// ClearMemoryItem clears the "memory_item" edge to the MemoryItem entity.
+func (_u *MemoryEventUpdate) ClearMemoryItem() *MemoryEventUpdate {
+	_u.mutation.ClearMemoryItem()
 	return _u
 }
 
@@ -132,17 +143,25 @@ func (_u *MemoryEventUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *MemoryEventUpdate) check() error {
+	if _u.mutation.MemoryItemCleared() && len(_u.mutation.MemoryItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "MemoryEvent.memory_item"`)
+	}
+	return nil
+}
+
 func (_u *MemoryEventUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	_spec := sqlgraph.NewUpdateSpec(memoryevent.Table, memoryevent.Columns, sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID))
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
+	_spec := sqlgraph.NewUpdateSpec(memoryevent.Table, memoryevent.Columns, sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.MemoryItemID(); ok {
-		_spec.SetField(memoryevent.FieldMemoryItemID, field.TypeUUID, value)
 	}
 	if value, ok := _u.mutation.EventType(); ok {
 		_spec.SetField(memoryevent.FieldEventType, field.TypeString, value)
@@ -161,7 +180,7 @@ func (_u *MemoryEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 			Columns: []string{memoryevent.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -174,7 +193,36 @@ func (_u *MemoryEventUpdate) sqlSave(ctx context.Context) (_node int, err error)
 			Columns: []string{memoryevent.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MemoryItemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.MemoryItemTable,
+			Columns: []string{memoryevent.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MemoryItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.MemoryItemTable,
+			Columns: []string{memoryevent.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -203,13 +251,13 @@ type MemoryEventUpdateOne struct {
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (_u *MemoryEventUpdateOne) SetMemoryItemID(v uuid.UUID) *MemoryEventUpdateOne {
+func (_u *MemoryEventUpdateOne) SetMemoryItemID(v int64) *MemoryEventUpdateOne {
 	_u.mutation.SetMemoryItemID(v)
 	return _u
 }
 
 // SetNillableMemoryItemID sets the "memory_item_id" field if the given value is not nil.
-func (_u *MemoryEventUpdateOne) SetNillableMemoryItemID(v *uuid.UUID) *MemoryEventUpdateOne {
+func (_u *MemoryEventUpdateOne) SetNillableMemoryItemID(v *int64) *MemoryEventUpdateOne {
 	if v != nil {
 		_u.SetMemoryItemID(*v)
 	}
@@ -217,13 +265,13 @@ func (_u *MemoryEventUpdateOne) SetNillableMemoryItemID(v *uuid.UUID) *MemoryEve
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *MemoryEventUpdateOne) SetSessionID(v uuid.UUID) *MemoryEventUpdateOne {
+func (_u *MemoryEventUpdateOne) SetSessionID(v int64) *MemoryEventUpdateOne {
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *MemoryEventUpdateOne) SetNillableSessionID(v *uuid.UUID) *MemoryEventUpdateOne {
+func (_u *MemoryEventUpdateOne) SetNillableSessionID(v *int64) *MemoryEventUpdateOne {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
@@ -267,6 +315,11 @@ func (_u *MemoryEventUpdateOne) SetSession(v *Session) *MemoryEventUpdateOne {
 	return _u.SetSessionID(v.ID)
 }
 
+// SetMemoryItem sets the "memory_item" edge to the MemoryItem entity.
+func (_u *MemoryEventUpdateOne) SetMemoryItem(v *MemoryItem) *MemoryEventUpdateOne {
+	return _u.SetMemoryItemID(v.ID)
+}
+
 // Mutation returns the MemoryEventMutation object of the builder.
 func (_u *MemoryEventUpdateOne) Mutation() *MemoryEventMutation {
 	return _u.mutation
@@ -275,6 +328,12 @@ func (_u *MemoryEventUpdateOne) Mutation() *MemoryEventMutation {
 // ClearSession clears the "session" edge to the Session entity.
 func (_u *MemoryEventUpdateOne) ClearSession() *MemoryEventUpdateOne {
 	_u.mutation.ClearSession()
+	return _u
+}
+
+// ClearMemoryItem clears the "memory_item" edge to the MemoryItem entity.
+func (_u *MemoryEventUpdateOne) ClearMemoryItem() *MemoryEventUpdateOne {
+	_u.mutation.ClearMemoryItem()
 	return _u
 }
 
@@ -318,8 +377,19 @@ func (_u *MemoryEventUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *MemoryEventUpdateOne) check() error {
+	if _u.mutation.MemoryItemCleared() && len(_u.mutation.MemoryItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "MemoryEvent.memory_item"`)
+	}
+	return nil
+}
+
 func (_u *MemoryEventUpdateOne) sqlSave(ctx context.Context) (_node *MemoryEvent, err error) {
-	_spec := sqlgraph.NewUpdateSpec(memoryevent.Table, memoryevent.Columns, sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID))
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
+	_spec := sqlgraph.NewUpdateSpec(memoryevent.Table, memoryevent.Columns, sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MemoryEvent.id" for update`)}
@@ -344,9 +414,6 @@ func (_u *MemoryEventUpdateOne) sqlSave(ctx context.Context) (_node *MemoryEvent
 			}
 		}
 	}
-	if value, ok := _u.mutation.MemoryItemID(); ok {
-		_spec.SetField(memoryevent.FieldMemoryItemID, field.TypeUUID, value)
-	}
 	if value, ok := _u.mutation.EventType(); ok {
 		_spec.SetField(memoryevent.FieldEventType, field.TypeString, value)
 	}
@@ -364,7 +431,7 @@ func (_u *MemoryEventUpdateOne) sqlSave(ctx context.Context) (_node *MemoryEvent
 			Columns: []string{memoryevent.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -377,7 +444,36 @@ func (_u *MemoryEventUpdateOne) sqlSave(ctx context.Context) (_node *MemoryEvent
 			Columns: []string{memoryevent.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.MemoryItemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.MemoryItemTable,
+			Columns: []string{memoryevent.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MemoryItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.MemoryItemTable,
+			Columns: []string{memoryevent.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

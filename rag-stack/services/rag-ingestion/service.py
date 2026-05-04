@@ -137,10 +137,10 @@ text_splitter = RecursiveCharacterTextSplitter(
 )
 
 class IngestRequest(BaseModel):
-    ingestion_id: Optional[str] = None
+    ingestion_id: Optional[int] = None
     tag_names: Optional[List[str]] = None
-    tag_ids: List[str]
-    session_id: Optional[str] = None
+    tag_ids: List[int]
+    session_id: Optional[int] = None
     vector_size: Optional[int] = None
     file_names: Optional[List[str]] = None
     bucket_name: Optional[str] = None
@@ -208,9 +208,9 @@ def _create_pulsar_client():
             logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
     return pulsar.Client(PULSAR_URL, **kwargs)
 
-def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str], 
+def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int], 
                   vector_size: Optional[int] = None, file_names: Optional[List[str]] = None, 
-                  session_id: Optional[str] = None, bucket_name: Optional[str] = None, 
+                  session_id: Optional[int] = None, bucket_name: Optional[str] = None, 
                   prefix: Optional[str] = None, index: Optional[str] = None):
     pool = get_db_pool()
     conn = None
@@ -267,10 +267,17 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str],
 
         # Ensure ingestion entry exists to satisfy FK for code_embedding
         with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO code_ingestion (ingestion_id, s3_bucket_id) VALUES (%s, %s) ON CONFLICT (ingestion_id) DO NOTHING",
-                (ingestion_id, effective_bucket)
-            )
+            if ingestion_id > 0:
+                cur.execute(
+                    "INSERT INTO code_ingestion (id, s3_bucket_id) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
+                    (ingestion_id, effective_bucket)
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO code_ingestion (s3_bucket_id) VALUES (%s) RETURNING id",
+                    (effective_bucket,)
+                )
+                ingestion_id = cur.fetchone()[0]
             conn.commit()
 
         points = []
@@ -318,7 +325,7 @@ def run_ingestion(ingestion_id: str, tag_names: List[str], tag_ids: List[str],
                     # TimescaleDB Backup
                     with conn.cursor() as cur:
                         cur.execute(
-                            "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata) VALUES (%s, %s, %s) RETURNING embedding_id",
+                            "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata) VALUES (%s, %s, %s) RETURNING id",
                             (ingestion_id, json.dumps(vector), json.dumps({"path": s3_key, "chunk": i}))
                         )
                         emb_id = cur.fetchone()[0]
@@ -370,8 +377,8 @@ async def get_extensions():
 
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
-    # Generate ingestion_id if missing
-    ingestion_id = req.ingestion_id or str(uuid.uuid4())
+    # If ingestion_id is 0 or None, the task will generate it in DB
+    ingestion_id = req.ingestion_id or 0
     tag_names = req.tag_names or []
     
     logger.info(f"Received ingestion request for ID: {ingestion_id} (bucket: {req.bucket_name}, index/prefix: {req.index or req.prefix}, files: {req.file_names})")

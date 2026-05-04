@@ -14,7 +14,7 @@
         "type": "object",
         "required": ["memory_id", "memory_type", "summary", "rank_score"],
         "properties": {
-          "memory_id": {"type": "string"},
+          "memory_id": {"type": "integer"},
           "memory_type": {
             "type": "string",
             "enum": ["short_term_memory", "long_term_memory", "persistent_memory"]
@@ -60,7 +60,7 @@
       "items": {
         "type": "object",
         "properties": {
-          "memory_id": {"type": "string"},
+          "memory_id": {"type": "integer"},
           "reason": {"type": "string"}
         },
         "additionalProperties": true
@@ -71,8 +71,8 @@
       "items": {
         "type": "object",
         "properties": {
-          "winner_memory_id": {"type": "string"},
-          "loser_memory_id": {"type": "string"},
+          "winner_memory_id": {"type": "integer"},
+          "loser_memory_id": {"type": "integer"},
           "resolution": {"type": "string"}
         },
         "additionalProperties": true

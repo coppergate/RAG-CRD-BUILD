@@ -4,7 +4,7 @@
 # Default to the externally resolvable registry hostname; allow override via env
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
-SERVICES=("rag-worker" "rag-ingestion" "rag-web-ui" "llm-gateway")
+SERVICES=("rag-worker" "rag-ingestion" "llm-gateway")
 
 for service in "${SERVICES[@]}"; do
   echo "--- Building $service ---"

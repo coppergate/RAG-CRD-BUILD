@@ -7,7 +7,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/google/uuid"
 )
 
 const (
@@ -37,6 +36,8 @@ const (
 	EdgeRetrievalLogs = "retrieval_logs"
 	// EdgeMemoryEvents holds the string denoting the memory_events edge name in mutations.
 	EdgeMemoryEvents = "memory_events"
+	// EdgeMemoryItems holds the string denoting the memory_items edge name in mutations.
+	EdgeMemoryItems = "memory_items"
 	// TagFieldID holds the string denoting the ID field of the Tag.
 	TagFieldID = "tag_id"
 	// ModelExecutionMetricFieldID holds the string denoting the ID field of the ModelExecutionMetric.
@@ -45,6 +46,8 @@ const (
 	RetrievalLogFieldID = "log_id"
 	// MemoryEventFieldID holds the string denoting the ID field of the MemoryEvent.
 	MemoryEventFieldID = "id"
+	// MemoryItemFieldID holds the string denoting the ID field of the MemoryItem.
+	MemoryItemFieldID = "id"
 	// Table holds the table name of the session in the database.
 	Table = "sessions"
 	// TagsTable is the table that holds the tags relation/edge. The primary key declared below.
@@ -73,6 +76,13 @@ const (
 	MemoryEventsInverseTable = "memory_events"
 	// MemoryEventsColumn is the table column denoting the memory_events relation/edge.
 	MemoryEventsColumn = "session_id"
+	// MemoryItemsTable is the table that holds the memory_items relation/edge.
+	MemoryItemsTable = "memory_items"
+	// MemoryItemsInverseTable is the table name for the MemoryItem entity.
+	// It exists in this package in order to avoid circular dependency with the "memoryitem" package.
+	MemoryItemsInverseTable = "memory_items"
+	// MemoryItemsColumn is the table column denoting the memory_items relation/edge.
+	MemoryItemsColumn = "session_id"
 )
 
 // Columns holds all SQL columns for session fields.
@@ -108,8 +118,6 @@ var (
 	DefaultCreatedAt func() time.Time
 	// DefaultLastActiveAt holds the default value on creation for the "last_active_at" field.
 	DefaultLastActiveAt func() time.Time
-	// DefaultID holds the default value on creation for the "id" field.
-	DefaultID func() uuid.UUID
 )
 
 // OrderOption defines the ordering options for the Session queries.
@@ -205,6 +213,20 @@ func ByMemoryEvents(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newMemoryEventsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByMemoryItemsCount orders the results by memory_items count.
+func ByMemoryItemsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newMemoryItemsStep(), opts...)
+	}
+}
+
+// ByMemoryItems orders the results by memory_items terms.
+func ByMemoryItems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newMemoryItemsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newTagsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -231,5 +253,12 @@ func newMemoryEventsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(MemoryEventsInverseTable, MemoryEventFieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, MemoryEventsTable, MemoryEventsColumn),
+	)
+}
+func newMemoryItemsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(MemoryItemsInverseTable, MemoryItemFieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, MemoryItemsTable, MemoryItemsColumn),
 	)
 }

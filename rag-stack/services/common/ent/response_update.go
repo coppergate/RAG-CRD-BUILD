@@ -70,16 +70,23 @@ func (_u *ResponseUpdate) ClearPromptID() *ResponseUpdate {
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *ResponseUpdate) SetSessionID(v uuid.UUID) *ResponseUpdate {
+func (_u *ResponseUpdate) SetSessionID(v int64) *ResponseUpdate {
+	_u.mutation.ResetSessionID()
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *ResponseUpdate) SetNillableSessionID(v *uuid.UUID) *ResponseUpdate {
+func (_u *ResponseUpdate) SetNillableSessionID(v *int64) *ResponseUpdate {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
+	return _u
+}
+
+// AddSessionID adds value to the "session_id" field.
+func (_u *ResponseUpdate) AddSessionID(v int64) *ResponseUpdate {
+	_u.mutation.AddSessionID(v)
 	return _u
 }
 
@@ -230,10 +237,13 @@ func (_u *ResponseUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		_spec.ClearField(response.FieldPromptID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.SessionID(); ok {
-		_spec.SetField(response.FieldSessionID, field.TypeUUID, value)
+		_spec.SetField(response.FieldSessionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSessionID(); ok {
+		_spec.AddField(response.FieldSessionID, field.TypeInt64, value)
 	}
 	if _u.mutation.SessionIDCleared() {
-		_spec.ClearField(response.FieldSessionID, field.TypeUUID)
+		_spec.ClearField(response.FieldSessionID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.Content(); ok {
 		_spec.SetField(response.FieldContent, field.TypeString, value)
@@ -324,16 +334,23 @@ func (_u *ResponseUpdateOne) ClearPromptID() *ResponseUpdateOne {
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *ResponseUpdateOne) SetSessionID(v uuid.UUID) *ResponseUpdateOne {
+func (_u *ResponseUpdateOne) SetSessionID(v int64) *ResponseUpdateOne {
+	_u.mutation.ResetSessionID()
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *ResponseUpdateOne) SetNillableSessionID(v *uuid.UUID) *ResponseUpdateOne {
+func (_u *ResponseUpdateOne) SetNillableSessionID(v *int64) *ResponseUpdateOne {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
+	return _u
+}
+
+// AddSessionID adds value to the "session_id" field.
+func (_u *ResponseUpdateOne) AddSessionID(v int64) *ResponseUpdateOne {
+	_u.mutation.AddSessionID(v)
 	return _u
 }
 
@@ -514,10 +531,13 @@ func (_u *ResponseUpdateOne) sqlSave(ctx context.Context) (_node *Response, err 
 		_spec.ClearField(response.FieldPromptID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.SessionID(); ok {
-		_spec.SetField(response.FieldSessionID, field.TypeUUID, value)
+		_spec.SetField(response.FieldSessionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSessionID(); ok {
+		_spec.AddField(response.FieldSessionID, field.TypeInt64, value)
 	}
 	if _u.mutation.SessionIDCleared() {
-		_spec.ClearField(response.FieldSessionID, field.TypeUUID)
+		_spec.ClearField(response.FieldSessionID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.Content(); ok {
 		_spec.SetField(response.FieldContent, field.TypeString, value)

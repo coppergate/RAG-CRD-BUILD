@@ -4,7 +4,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -16,8 +15,7 @@ type InferenceNode struct {
 // Fields of the InferenceNode.
 func (InferenceNode) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuid.New).
+		field.Int64("id").
 			StorageKey("node_id"),
 		field.String("hostname").
 			Unique(),

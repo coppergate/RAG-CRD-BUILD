@@ -16,7 +16,7 @@ IMAGE_GROUPS[helm-runtime]="curlimages/curl:7.78.0 docker.io/grafana/alloy:v1.13
 
 # Local images built in-cluster or on-host and pushed to the in-cluster registry
 # These are not mirrored from external registries by this script.
-IMAGE_GROUPS[local-build-output]="registry.hierocracy.home:5000/build-orchestrator:latest registry.hierocracy.home:5000/llm-gateway:__VERSION__ registry.hierocracy.home:5000/rag-worker:__VERSION__ registry.hierocracy.home:5000/rag-web-ui:__VERSION__ registry.hierocracy.home:5000/rag-ingestion:__VERSION__ registry.hierocracy.home:5000/db-adapter:__VERSION__ registry.hierocracy.home:5000/qdrant-adapter:__VERSION__ registry.hierocracy.home:5000/object-store-mgr:__VERSION__ registry.hierocracy.home:5000/rag-test-runner:__VERSION__"
+IMAGE_GROUPS[local-build-output]="registry.hierocracy.home:5000/build-orchestrator:latest registry.hierocracy.home:5000/llm-gateway:__VERSION__ registry.hierocracy.home:5000/rag-worker:__VERSION__ registry.hierocracy.home:5000/rag-ingestion:__VERSION__ registry.hierocracy.home:5000/db-adapter:__VERSION__ registry.hierocracy.home:5000/qdrant-adapter:__VERSION__ registry.hierocracy.home:5000/object-store-mgr:__VERSION__ registry.hierocracy.home:5000/rag-test-runner:__VERSION__"
 
 declare -A STEP_IMAGE_GROUPS
 STEP_IMAGE_GROUPS[basic]="bootstrap storage helm-runtime"

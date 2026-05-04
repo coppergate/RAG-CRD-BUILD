@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
@@ -13,7 +14,6 @@ import (
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -29,13 +29,13 @@ type SessionCreate struct {
 }
 
 // SetProjectID sets the "project_id" field.
-func (_c *SessionCreate) SetProjectID(v uuid.UUID) *SessionCreate {
+func (_c *SessionCreate) SetProjectID(v int64) *SessionCreate {
 	_c.mutation.SetProjectID(v)
 	return _c
 }
 
 // SetNillableProjectID sets the "project_id" field if the given value is not nil.
-func (_c *SessionCreate) SetNillableProjectID(v *uuid.UUID) *SessionCreate {
+func (_c *SessionCreate) SetNillableProjectID(v *int64) *SessionCreate {
 	if v != nil {
 		_c.SetProjectID(*v)
 	}
@@ -119,28 +119,20 @@ func (_c *SessionCreate) SetNillableLastActiveAt(v *time.Time) *SessionCreate {
 }
 
 // SetID sets the "id" field.
-func (_c *SessionCreate) SetID(v uuid.UUID) *SessionCreate {
+func (_c *SessionCreate) SetID(v int64) *SessionCreate {
 	_c.mutation.SetID(v)
 	return _c
 }
 
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *SessionCreate) SetNillableID(v *uuid.UUID) *SessionCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
-	return _c
-}
-
 // AddTagIDs adds the "tags" edge to the Tag entity by IDs.
-func (_c *SessionCreate) AddTagIDs(ids ...uuid.UUID) *SessionCreate {
+func (_c *SessionCreate) AddTagIDs(ids ...int64) *SessionCreate {
 	_c.mutation.AddTagIDs(ids...)
 	return _c
 }
 
 // AddTags adds the "tags" edges to the Tag entity.
 func (_c *SessionCreate) AddTags(v ...*Tag) *SessionCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -163,14 +155,14 @@ func (_c *SessionCreate) AddMetrics(v ...*ModelExecutionMetric) *SessionCreate {
 }
 
 // AddRetrievalLogIDs adds the "retrieval_logs" edge to the RetrievalLog entity by IDs.
-func (_c *SessionCreate) AddRetrievalLogIDs(ids ...uuid.UUID) *SessionCreate {
+func (_c *SessionCreate) AddRetrievalLogIDs(ids ...int64) *SessionCreate {
 	_c.mutation.AddRetrievalLogIDs(ids...)
 	return _c
 }
 
 // AddRetrievalLogs adds the "retrieval_logs" edges to the RetrievalLog entity.
 func (_c *SessionCreate) AddRetrievalLogs(v ...*RetrievalLog) *SessionCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -178,18 +170,33 @@ func (_c *SessionCreate) AddRetrievalLogs(v ...*RetrievalLog) *SessionCreate {
 }
 
 // AddMemoryEventIDs adds the "memory_events" edge to the MemoryEvent entity by IDs.
-func (_c *SessionCreate) AddMemoryEventIDs(ids ...uuid.UUID) *SessionCreate {
+func (_c *SessionCreate) AddMemoryEventIDs(ids ...int64) *SessionCreate {
 	_c.mutation.AddMemoryEventIDs(ids...)
 	return _c
 }
 
 // AddMemoryEvents adds the "memory_events" edges to the MemoryEvent entity.
 func (_c *SessionCreate) AddMemoryEvents(v ...*MemoryEvent) *SessionCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
 	return _c.AddMemoryEventIDs(ids...)
+}
+
+// AddMemoryItemIDs adds the "memory_items" edge to the MemoryItem entity by IDs.
+func (_c *SessionCreate) AddMemoryItemIDs(ids ...int64) *SessionCreate {
+	_c.mutation.AddMemoryItemIDs(ids...)
+	return _c
+}
+
+// AddMemoryItems adds the "memory_items" edges to the MemoryItem entity.
+func (_c *SessionCreate) AddMemoryItems(v ...*MemoryItem) *SessionCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddMemoryItemIDs(ids...)
 }
 
 // Mutation returns the SessionMutation object of the builder.
@@ -235,10 +242,6 @@ func (_c *SessionCreate) defaults() {
 		v := session.DefaultLastActiveAt()
 		_c.mutation.SetLastActiveAt(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := session.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -263,12 +266,9 @@ func (_c *SessionCreate) sqlSave(ctx context.Context) (*Session, error) {
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -278,15 +278,15 @@ func (_c *SessionCreate) sqlSave(ctx context.Context) (*Session, error) {
 func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 	var (
 		_node = &Session{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(session.Table, sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(session.Table, sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
+		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.ProjectID(); ok {
-		_spec.SetField(session.FieldProjectID, field.TypeUUID, value)
+		_spec.SetField(session.FieldProjectID, field.TypeInt64, value)
 		_node.ProjectID = value
 	}
 	if value, ok := _c.mutation.Name(); ok {
@@ -321,7 +321,7 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 			Columns: session.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -353,7 +353,7 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 			Columns: []string{session.RetrievalLogsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -369,7 +369,23 @@ func (_c *SessionCreate) createSpec() (*Session, *sqlgraph.CreateSpec) {
 			Columns: []string{session.MemoryEventsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.MemoryItemsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   session.MemoryItemsTable,
+			Columns: []string{session.MemoryItemsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -430,7 +446,7 @@ type (
 )
 
 // SetProjectID sets the "project_id" field.
-func (u *SessionUpsert) SetProjectID(v uuid.UUID) *SessionUpsert {
+func (u *SessionUpsert) SetProjectID(v int64) *SessionUpsert {
 	u.Set(session.FieldProjectID, v)
 	return u
 }
@@ -438,6 +454,12 @@ func (u *SessionUpsert) SetProjectID(v uuid.UUID) *SessionUpsert {
 // UpdateProjectID sets the "project_id" field to the value that was provided on create.
 func (u *SessionUpsert) UpdateProjectID() *SessionUpsert {
 	u.SetExcluded(session.FieldProjectID)
+	return u
+}
+
+// AddProjectID adds v to the "project_id" field.
+func (u *SessionUpsert) AddProjectID(v int64) *SessionUpsert {
+	u.Add(session.FieldProjectID, v)
 	return u
 }
 
@@ -592,9 +614,16 @@ func (u *SessionUpsertOne) Update(set func(*SessionUpsert)) *SessionUpsertOne {
 }
 
 // SetProjectID sets the "project_id" field.
-func (u *SessionUpsertOne) SetProjectID(v uuid.UUID) *SessionUpsertOne {
+func (u *SessionUpsertOne) SetProjectID(v int64) *SessionUpsertOne {
 	return u.Update(func(s *SessionUpsert) {
 		s.SetProjectID(v)
+	})
+}
+
+// AddProjectID adds v to the "project_id" field.
+func (u *SessionUpsertOne) AddProjectID(v int64) *SessionUpsertOne {
+	return u.Update(func(s *SessionUpsert) {
+		s.AddProjectID(v)
 	})
 }
 
@@ -740,12 +769,7 @@ func (u *SessionUpsertOne) ExecX(ctx context.Context) {
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *SessionUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
-	if u.create.driver.Dialect() == dialect.MySQL {
-		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
-		// fields from the database since MySQL does not support the RETURNING clause.
-		return id, errors.New("ent: SessionUpsertOne.ID is not supported by MySQL driver. Use SessionUpsertOne.Exec instead")
-	}
+func (u *SessionUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -754,7 +778,7 @@ func (u *SessionUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *SessionUpsertOne) IDX(ctx context.Context) uuid.UUID {
+func (u *SessionUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -809,6 +833,10 @@ func (_c *SessionCreateBulk) Save(ctx context.Context) ([]*Session, error) {
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})
@@ -940,9 +968,16 @@ func (u *SessionUpsertBulk) Update(set func(*SessionUpsert)) *SessionUpsertBulk 
 }
 
 // SetProjectID sets the "project_id" field.
-func (u *SessionUpsertBulk) SetProjectID(v uuid.UUID) *SessionUpsertBulk {
+func (u *SessionUpsertBulk) SetProjectID(v int64) *SessionUpsertBulk {
 	return u.Update(func(s *SessionUpsert) {
 		s.SetProjectID(v)
+	})
+}
+
+// AddProjectID adds v to the "project_id" field.
+func (u *SessionUpsertBulk) AddProjectID(v int64) *SessionUpsertBulk {
+	return u.Update(func(s *SessionUpsert) {
+		s.AddProjectID(v)
 	})
 }
 

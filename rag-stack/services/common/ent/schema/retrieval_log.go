@@ -1,10 +1,10 @@
 package schema
 
 import (
+"github.com/google/uuid"
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -16,12 +16,11 @@ type RetrievalLog struct {
 // Fields of the RetrievalLog.
 func (RetrievalLog) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuid.New).
+		field.Int64("id").
 			StorageKey("log_id"),
 		field.UUID("message_id", uuid.UUID{}).
 			Optional(),
-		field.UUID("session_id", uuid.UUID{}).
+		field.Int64("session_id").
 			Optional(),
 		field.Text("query").
 			Optional(),

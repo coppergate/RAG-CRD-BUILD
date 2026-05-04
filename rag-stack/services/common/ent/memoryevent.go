@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/session"
 	"encoding/json"
 	"fmt"
@@ -12,18 +13,17 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 // MemoryEvent is the model entity for the MemoryEvent schema.
 type MemoryEvent struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
 	// The associated memory item
-	MemoryItemID uuid.UUID `json:"memory_item_id,omitempty"`
+	MemoryItemID int64 `json:"memory_item_id,omitempty"`
 	// The associated session for easier auditing
-	SessionID uuid.UUID `json:"session_id,omitempty"`
+	SessionID int64 `json:"session_id,omitempty"`
 	// write, update, prune, audit
 	EventType string `json:"event_type,omitempty"`
 	// EventData holds the value of the "event_data" field.
@@ -40,9 +40,11 @@ type MemoryEvent struct {
 type MemoryEventEdges struct {
 	// Session holds the value of the session edge.
 	Session *Session `json:"session,omitempty"`
+	// MemoryItem holds the value of the memory_item edge.
+	MemoryItem *MemoryItem `json:"memory_item,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // SessionOrErr returns the Session value or an error if the edge
@@ -56,6 +58,17 @@ func (e MemoryEventEdges) SessionOrErr() (*Session, error) {
 	return nil, &NotLoadedError{edge: "session"}
 }
 
+// MemoryItemOrErr returns the MemoryItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e MemoryEventEdges) MemoryItemOrErr() (*MemoryItem, error) {
+	if e.MemoryItem != nil {
+		return e.MemoryItem, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: memoryitem.Label}
+	}
+	return nil, &NotLoadedError{edge: "memory_item"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*MemoryEvent) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -63,12 +76,12 @@ func (*MemoryEvent) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case memoryevent.FieldEventData:
 			values[i] = new([]byte)
+		case memoryevent.FieldID, memoryevent.FieldMemoryItemID, memoryevent.FieldSessionID:
+			values[i] = new(sql.NullInt64)
 		case memoryevent.FieldEventType:
 			values[i] = new(sql.NullString)
 		case memoryevent.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case memoryevent.FieldID, memoryevent.FieldMemoryItemID, memoryevent.FieldSessionID:
-			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -85,22 +98,22 @@ func (_m *MemoryEvent) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case memoryevent.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
+			_m.ID = int64(value.Int64)
 		case memoryevent.FieldMemoryItemID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field memory_item_id", values[i])
-			} else if value != nil {
-				_m.MemoryItemID = *value
+			} else if value.Valid {
+				_m.MemoryItemID = value.Int64
 			}
 		case memoryevent.FieldSessionID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field session_id", values[i])
-			} else if value != nil {
-				_m.SessionID = *value
+			} else if value.Valid {
+				_m.SessionID = value.Int64
 			}
 		case memoryevent.FieldEventType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -138,6 +151,11 @@ func (_m *MemoryEvent) Value(name string) (ent.Value, error) {
 // QuerySession queries the "session" edge of the MemoryEvent entity.
 func (_m *MemoryEvent) QuerySession() *SessionQuery {
 	return NewMemoryEventClient(_m.config).QuerySession(_m)
+}
+
+// QueryMemoryItem queries the "memory_item" edge of the MemoryEvent entity.
+func (_m *MemoryEvent) QueryMemoryItem() *MemoryItemQuery {
+	return NewMemoryEventClient(_m.config).QueryMemoryItem(_m)
 }
 
 // Update returns a builder for updating this MemoryEvent.

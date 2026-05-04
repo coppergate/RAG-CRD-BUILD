@@ -15,7 +15,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // ModelExecutionMetricCreate is the builder for creating a ModelExecutionMetric entity.
@@ -27,13 +26,13 @@ type ModelExecutionMetricCreate struct {
 }
 
 // SetResponseID sets the "response_id" field.
-func (_c *ModelExecutionMetricCreate) SetResponseID(v uuid.UUID) *ModelExecutionMetricCreate {
+func (_c *ModelExecutionMetricCreate) SetResponseID(v int64) *ModelExecutionMetricCreate {
 	_c.mutation.SetResponseID(v)
 	return _c
 }
 
 // SetNillableResponseID sets the "response_id" field if the given value is not nil.
-func (_c *ModelExecutionMetricCreate) SetNillableResponseID(v *uuid.UUID) *ModelExecutionMetricCreate {
+func (_c *ModelExecutionMetricCreate) SetNillableResponseID(v *int64) *ModelExecutionMetricCreate {
 	if v != nil {
 		_c.SetResponseID(*v)
 	}
@@ -41,13 +40,13 @@ func (_c *ModelExecutionMetricCreate) SetNillableResponseID(v *uuid.UUID) *Model
 }
 
 // SetSessionID sets the "session_id" field.
-func (_c *ModelExecutionMetricCreate) SetSessionID(v uuid.UUID) *ModelExecutionMetricCreate {
+func (_c *ModelExecutionMetricCreate) SetSessionID(v int64) *ModelExecutionMetricCreate {
 	_c.mutation.SetSessionID(v)
 	return _c
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_c *ModelExecutionMetricCreate) SetNillableSessionID(v *uuid.UUID) *ModelExecutionMetricCreate {
+func (_c *ModelExecutionMetricCreate) SetNillableSessionID(v *int64) *ModelExecutionMetricCreate {
 	if v != nil {
 		_c.SetSessionID(*v)
 	}
@@ -55,13 +54,13 @@ func (_c *ModelExecutionMetricCreate) SetNillableSessionID(v *uuid.UUID) *ModelE
 }
 
 // SetNodeID sets the "node_id" field.
-func (_c *ModelExecutionMetricCreate) SetNodeID(v uuid.UUID) *ModelExecutionMetricCreate {
+func (_c *ModelExecutionMetricCreate) SetNodeID(v int64) *ModelExecutionMetricCreate {
 	_c.mutation.SetNodeID(v)
 	return _c
 }
 
 // SetNillableNodeID sets the "node_id" field if the given value is not nil.
-func (_c *ModelExecutionMetricCreate) SetNillableNodeID(v *uuid.UUID) *ModelExecutionMetricCreate {
+func (_c *ModelExecutionMetricCreate) SetNillableNodeID(v *int64) *ModelExecutionMetricCreate {
 	if v != nil {
 		_c.SetNodeID(*v)
 	}
@@ -69,13 +68,13 @@ func (_c *ModelExecutionMetricCreate) SetNillableNodeID(v *uuid.UUID) *ModelExec
 }
 
 // SetModelID sets the "model_id" field.
-func (_c *ModelExecutionMetricCreate) SetModelID(v uuid.UUID) *ModelExecutionMetricCreate {
+func (_c *ModelExecutionMetricCreate) SetModelID(v int64) *ModelExecutionMetricCreate {
 	_c.mutation.SetModelID(v)
 	return _c
 }
 
 // SetNillableModelID sets the "model_id" field if the given value is not nil.
-func (_c *ModelExecutionMetricCreate) SetNillableModelID(v *uuid.UUID) *ModelExecutionMetricCreate {
+func (_c *ModelExecutionMetricCreate) SetNillableModelID(v *int64) *ModelExecutionMetricCreate {
 	if v != nil {
 		_c.SetModelID(*v)
 	}
@@ -309,7 +308,7 @@ func (_c *ModelExecutionMetricCreate) createSpec() (*ModelExecutionMetric, *sqlg
 		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.ResponseID(); ok {
-		_spec.SetField(modelexecutionmetric.FieldResponseID, field.TypeUUID, value)
+		_spec.SetField(modelexecutionmetric.FieldResponseID, field.TypeInt64, value)
 		_node.ResponseID = value
 	}
 	if value, ok := _c.mutation.PromptTokens(); ok {
@@ -356,7 +355,7 @@ func (_c *ModelExecutionMetricCreate) createSpec() (*ModelExecutionMetric, *sqlg
 			Columns: []string{modelexecutionmetric.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -373,7 +372,7 @@ func (_c *ModelExecutionMetricCreate) createSpec() (*ModelExecutionMetric, *sqlg
 			Columns: []string{modelexecutionmetric.NodeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -390,7 +389,7 @@ func (_c *ModelExecutionMetricCreate) createSpec() (*ModelExecutionMetric, *sqlg
 			Columns: []string{modelexecutionmetric.ModelColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -452,7 +451,7 @@ type (
 )
 
 // SetResponseID sets the "response_id" field.
-func (u *ModelExecutionMetricUpsert) SetResponseID(v uuid.UUID) *ModelExecutionMetricUpsert {
+func (u *ModelExecutionMetricUpsert) SetResponseID(v int64) *ModelExecutionMetricUpsert {
 	u.Set(modelexecutionmetric.FieldResponseID, v)
 	return u
 }
@@ -463,6 +462,12 @@ func (u *ModelExecutionMetricUpsert) UpdateResponseID() *ModelExecutionMetricUps
 	return u
 }
 
+// AddResponseID adds v to the "response_id" field.
+func (u *ModelExecutionMetricUpsert) AddResponseID(v int64) *ModelExecutionMetricUpsert {
+	u.Add(modelexecutionmetric.FieldResponseID, v)
+	return u
+}
+
 // ClearResponseID clears the value of the "response_id" field.
 func (u *ModelExecutionMetricUpsert) ClearResponseID() *ModelExecutionMetricUpsert {
 	u.SetNull(modelexecutionmetric.FieldResponseID)
@@ -470,7 +475,7 @@ func (u *ModelExecutionMetricUpsert) ClearResponseID() *ModelExecutionMetricUpse
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *ModelExecutionMetricUpsert) SetSessionID(v uuid.UUID) *ModelExecutionMetricUpsert {
+func (u *ModelExecutionMetricUpsert) SetSessionID(v int64) *ModelExecutionMetricUpsert {
 	u.Set(modelexecutionmetric.FieldSessionID, v)
 	return u
 }
@@ -488,7 +493,7 @@ func (u *ModelExecutionMetricUpsert) ClearSessionID() *ModelExecutionMetricUpser
 }
 
 // SetNodeID sets the "node_id" field.
-func (u *ModelExecutionMetricUpsert) SetNodeID(v uuid.UUID) *ModelExecutionMetricUpsert {
+func (u *ModelExecutionMetricUpsert) SetNodeID(v int64) *ModelExecutionMetricUpsert {
 	u.Set(modelexecutionmetric.FieldNodeID, v)
 	return u
 }
@@ -506,7 +511,7 @@ func (u *ModelExecutionMetricUpsert) ClearNodeID() *ModelExecutionMetricUpsert {
 }
 
 // SetModelID sets the "model_id" field.
-func (u *ModelExecutionMetricUpsert) SetModelID(v uuid.UUID) *ModelExecutionMetricUpsert {
+func (u *ModelExecutionMetricUpsert) SetModelID(v int64) *ModelExecutionMetricUpsert {
 	u.Set(modelexecutionmetric.FieldModelID, v)
 	return u
 }
@@ -767,9 +772,16 @@ func (u *ModelExecutionMetricUpsertOne) Update(set func(*ModelExecutionMetricUps
 }
 
 // SetResponseID sets the "response_id" field.
-func (u *ModelExecutionMetricUpsertOne) SetResponseID(v uuid.UUID) *ModelExecutionMetricUpsertOne {
+func (u *ModelExecutionMetricUpsertOne) SetResponseID(v int64) *ModelExecutionMetricUpsertOne {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.SetResponseID(v)
+	})
+}
+
+// AddResponseID adds v to the "response_id" field.
+func (u *ModelExecutionMetricUpsertOne) AddResponseID(v int64) *ModelExecutionMetricUpsertOne {
+	return u.Update(func(s *ModelExecutionMetricUpsert) {
+		s.AddResponseID(v)
 	})
 }
 
@@ -788,7 +800,7 @@ func (u *ModelExecutionMetricUpsertOne) ClearResponseID() *ModelExecutionMetricU
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *ModelExecutionMetricUpsertOne) SetSessionID(v uuid.UUID) *ModelExecutionMetricUpsertOne {
+func (u *ModelExecutionMetricUpsertOne) SetSessionID(v int64) *ModelExecutionMetricUpsertOne {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.SetSessionID(v)
 	})
@@ -809,7 +821,7 @@ func (u *ModelExecutionMetricUpsertOne) ClearSessionID() *ModelExecutionMetricUp
 }
 
 // SetNodeID sets the "node_id" field.
-func (u *ModelExecutionMetricUpsertOne) SetNodeID(v uuid.UUID) *ModelExecutionMetricUpsertOne {
+func (u *ModelExecutionMetricUpsertOne) SetNodeID(v int64) *ModelExecutionMetricUpsertOne {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.SetNodeID(v)
 	})
@@ -830,7 +842,7 @@ func (u *ModelExecutionMetricUpsertOne) ClearNodeID() *ModelExecutionMetricUpser
 }
 
 // SetModelID sets the "model_id" field.
-func (u *ModelExecutionMetricUpsertOne) SetModelID(v uuid.UUID) *ModelExecutionMetricUpsertOne {
+func (u *ModelExecutionMetricUpsertOne) SetModelID(v int64) *ModelExecutionMetricUpsertOne {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.SetModelID(v)
 	})
@@ -1292,9 +1304,16 @@ func (u *ModelExecutionMetricUpsertBulk) Update(set func(*ModelExecutionMetricUp
 }
 
 // SetResponseID sets the "response_id" field.
-func (u *ModelExecutionMetricUpsertBulk) SetResponseID(v uuid.UUID) *ModelExecutionMetricUpsertBulk {
+func (u *ModelExecutionMetricUpsertBulk) SetResponseID(v int64) *ModelExecutionMetricUpsertBulk {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.SetResponseID(v)
+	})
+}
+
+// AddResponseID adds v to the "response_id" field.
+func (u *ModelExecutionMetricUpsertBulk) AddResponseID(v int64) *ModelExecutionMetricUpsertBulk {
+	return u.Update(func(s *ModelExecutionMetricUpsert) {
+		s.AddResponseID(v)
 	})
 }
 
@@ -1313,7 +1332,7 @@ func (u *ModelExecutionMetricUpsertBulk) ClearResponseID() *ModelExecutionMetric
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *ModelExecutionMetricUpsertBulk) SetSessionID(v uuid.UUID) *ModelExecutionMetricUpsertBulk {
+func (u *ModelExecutionMetricUpsertBulk) SetSessionID(v int64) *ModelExecutionMetricUpsertBulk {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.SetSessionID(v)
 	})
@@ -1334,7 +1353,7 @@ func (u *ModelExecutionMetricUpsertBulk) ClearSessionID() *ModelExecutionMetricU
 }
 
 // SetNodeID sets the "node_id" field.
-func (u *ModelExecutionMetricUpsertBulk) SetNodeID(v uuid.UUID) *ModelExecutionMetricUpsertBulk {
+func (u *ModelExecutionMetricUpsertBulk) SetNodeID(v int64) *ModelExecutionMetricUpsertBulk {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.SetNodeID(v)
 	})
@@ -1355,7 +1374,7 @@ func (u *ModelExecutionMetricUpsertBulk) ClearNodeID() *ModelExecutionMetricUpse
 }
 
 // SetModelID sets the "model_id" field.
-func (u *ModelExecutionMetricUpsertBulk) SetModelID(v uuid.UUID) *ModelExecutionMetricUpsertBulk {
+func (u *ModelExecutionMetricUpsertBulk) SetModelID(v int64) *ModelExecutionMetricUpsertBulk {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.SetModelID(v)
 	})

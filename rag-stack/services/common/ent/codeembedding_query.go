@@ -16,7 +16,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // CodeEmbeddingQuery is the builder for querying CodeEmbedding entities.
@@ -132,8 +131,8 @@ func (_q *CodeEmbeddingQuery) FirstX(ctx context.Context) *CodeEmbedding {
 
 // FirstID returns the first CodeEmbedding ID from the query.
 // Returns a *NotFoundError when no CodeEmbedding ID was found.
-func (_q *CodeEmbeddingQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *CodeEmbeddingQuery) FirstID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -145,7 +144,7 @@ func (_q *CodeEmbeddingQuery) FirstID(ctx context.Context) (id uuid.UUID, err er
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *CodeEmbeddingQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *CodeEmbeddingQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -183,8 +182,8 @@ func (_q *CodeEmbeddingQuery) OnlyX(ctx context.Context) *CodeEmbedding {
 // OnlyID is like Only, but returns the only CodeEmbedding ID in the query.
 // Returns a *NotSingularError when more than one CodeEmbedding ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *CodeEmbeddingQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *CodeEmbeddingQuery) OnlyID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -200,7 +199,7 @@ func (_q *CodeEmbeddingQuery) OnlyID(ctx context.Context) (id uuid.UUID, err err
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *CodeEmbeddingQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *CodeEmbeddingQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -228,7 +227,7 @@ func (_q *CodeEmbeddingQuery) AllX(ctx context.Context) []*CodeEmbedding {
 }
 
 // IDs executes the query and returns a list of CodeEmbedding IDs.
-func (_q *CodeEmbeddingQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+func (_q *CodeEmbeddingQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
@@ -240,7 +239,7 @@ func (_q *CodeEmbeddingQuery) IDs(ctx context.Context) (ids []uuid.UUID, err err
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *CodeEmbeddingQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *CodeEmbeddingQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -336,7 +335,7 @@ func (_q *CodeEmbeddingQuery) WithTags(opts ...func(*TagQuery)) *CodeEmbeddingQu
 // Example:
 //
 //	var v []struct {
-//		IngestionID uuid.UUID `json:"ingestion_id,omitempty"`
+//		IngestionID int64 `json:"ingestion_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
@@ -359,7 +358,7 @@ func (_q *CodeEmbeddingQuery) GroupBy(field string, fields ...string) *CodeEmbed
 // Example:
 //
 //	var v []struct {
-//		IngestionID uuid.UUID `json:"ingestion_id,omitempty"`
+//		IngestionID int64 `json:"ingestion_id,omitempty"`
 //	}
 //
 //	client.CodeEmbedding.Query().
@@ -448,8 +447,8 @@ func (_q *CodeEmbeddingQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([
 }
 
 func (_q *CodeEmbeddingQuery) loadIngestion(ctx context.Context, query *CodeIngestionQuery, nodes []*CodeEmbedding, init func(*CodeEmbedding), assign func(*CodeEmbedding, *CodeIngestion)) error {
-	ids := make([]uuid.UUID, 0, len(nodes))
-	nodeids := make(map[uuid.UUID][]*CodeEmbedding)
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*CodeEmbedding)
 	for i := range nodes {
 		fk := nodes[i].IngestionID
 		if _, ok := nodeids[fk]; !ok {
@@ -478,8 +477,8 @@ func (_q *CodeEmbeddingQuery) loadIngestion(ctx context.Context, query *CodeInge
 }
 func (_q *CodeEmbeddingQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*CodeEmbedding, init func(*CodeEmbedding), assign func(*CodeEmbedding, *Tag)) error {
 	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[uuid.UUID]*CodeEmbedding)
-	nids := make(map[uuid.UUID]map[*CodeEmbedding]struct{})
+	byID := make(map[int64]*CodeEmbedding)
+	nids := make(map[int64]map[*CodeEmbedding]struct{})
 	for i, node := range nodes {
 		edgeIDs[i] = node.ID
 		byID[node.ID] = node
@@ -508,11 +507,11 @@ func (_q *CodeEmbeddingQuery) loadTags(ctx context.Context, query *TagQuery, nod
 				if err != nil {
 					return nil, err
 				}
-				return append([]any{new(uuid.UUID)}, values...), nil
+				return append([]any{new(sql.NullInt64)}, values...), nil
 			}
 			spec.Assign = func(columns []string, values []any) error {
-				outValue := *values[0].(*uuid.UUID)
-				inValue := *values[1].(*uuid.UUID)
+				outValue := values[0].(*sql.NullInt64).Int64
+				inValue := values[1].(*sql.NullInt64).Int64
 				if nids[inValue] == nil {
 					nids[inValue] = map[*CodeEmbedding]struct{}{byID[outValue]: {}}
 					return assign(columns[1:], values[1:])
@@ -548,7 +547,7 @@ func (_q *CodeEmbeddingQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (_q *CodeEmbeddingQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(codeembedding.Table, codeembedding.Columns, sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewQuerySpec(codeembedding.Table, codeembedding.Columns, sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique

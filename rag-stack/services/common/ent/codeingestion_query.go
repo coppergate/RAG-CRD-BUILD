@@ -16,7 +16,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // CodeIngestionQuery is the builder for querying CodeIngestion entities.
@@ -132,8 +131,8 @@ func (_q *CodeIngestionQuery) FirstX(ctx context.Context) *CodeIngestion {
 
 // FirstID returns the first CodeIngestion ID from the query.
 // Returns a *NotFoundError when no CodeIngestion ID was found.
-func (_q *CodeIngestionQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *CodeIngestionQuery) FirstID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -145,7 +144,7 @@ func (_q *CodeIngestionQuery) FirstID(ctx context.Context) (id uuid.UUID, err er
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *CodeIngestionQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *CodeIngestionQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -183,8 +182,8 @@ func (_q *CodeIngestionQuery) OnlyX(ctx context.Context) *CodeIngestion {
 // OnlyID is like Only, but returns the only CodeIngestion ID in the query.
 // Returns a *NotSingularError when more than one CodeIngestion ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *CodeIngestionQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *CodeIngestionQuery) OnlyID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -200,7 +199,7 @@ func (_q *CodeIngestionQuery) OnlyID(ctx context.Context) (id uuid.UUID, err err
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *CodeIngestionQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *CodeIngestionQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -228,7 +227,7 @@ func (_q *CodeIngestionQuery) AllX(ctx context.Context) []*CodeIngestion {
 }
 
 // IDs executes the query and returns a list of CodeIngestion IDs.
-func (_q *CodeIngestionQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+func (_q *CodeIngestionQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
@@ -240,7 +239,7 @@ func (_q *CodeIngestionQuery) IDs(ctx context.Context) (ids []uuid.UUID, err err
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *CodeIngestionQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *CodeIngestionQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -450,7 +449,7 @@ func (_q *CodeIngestionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([
 
 func (_q *CodeIngestionQuery) loadEmbeddings(ctx context.Context, query *CodeEmbeddingQuery, nodes []*CodeIngestion, init func(*CodeIngestion), assign func(*CodeIngestion, *CodeEmbedding)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[uuid.UUID]*CodeIngestion)
+	nodeids := make(map[int64]*CodeIngestion)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -480,8 +479,8 @@ func (_q *CodeIngestionQuery) loadEmbeddings(ctx context.Context, query *CodeEmb
 }
 func (_q *CodeIngestionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*CodeIngestion, init func(*CodeIngestion), assign func(*CodeIngestion, *Tag)) error {
 	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[uuid.UUID]*CodeIngestion)
-	nids := make(map[uuid.UUID]map[*CodeIngestion]struct{})
+	byID := make(map[int64]*CodeIngestion)
+	nids := make(map[int64]map[*CodeIngestion]struct{})
 	for i, node := range nodes {
 		edgeIDs[i] = node.ID
 		byID[node.ID] = node
@@ -510,11 +509,11 @@ func (_q *CodeIngestionQuery) loadTags(ctx context.Context, query *TagQuery, nod
 				if err != nil {
 					return nil, err
 				}
-				return append([]any{new(uuid.UUID)}, values...), nil
+				return append([]any{new(sql.NullInt64)}, values...), nil
 			}
 			spec.Assign = func(columns []string, values []any) error {
-				outValue := *values[0].(*uuid.UUID)
-				inValue := *values[1].(*uuid.UUID)
+				outValue := values[0].(*sql.NullInt64).Int64
+				inValue := values[1].(*sql.NullInt64).Int64
 				if nids[inValue] == nil {
 					nids[inValue] = map[*CodeIngestion]struct{}{byID[outValue]: {}}
 					return assign(columns[1:], values[1:])
@@ -550,7 +549,7 @@ func (_q *CodeIngestionQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (_q *CodeIngestionQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(codeingestion.Table, codeingestion.Columns, sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewQuerySpec(codeingestion.Table, codeingestion.Columns, sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique

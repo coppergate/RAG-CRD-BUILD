@@ -20,7 +20,7 @@ echo "--- Updating TimescaleDB Connection Secret ---"
 $KUBECTL apply -f "$REPO_DIR/timescaledb-secret.yaml"
 
 echo "--- Restarting dependent deployments to pick up changes ---"
-for deploy in llm-gateway db-adapter rag-web-ui; do
+for deploy in llm-gateway db-adapter; do
     if $KUBECTL get deployment "$deploy" -n $NAMESPACE_RAG >/dev/null 2>&1; then
         echo "Restarting $deploy..."
         $KUBECTL rollout restart deployment "$deploy" -n $NAMESPACE_RAG

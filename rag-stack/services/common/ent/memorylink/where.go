@@ -7,56 +7,56 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // ID filters vertices based on their ID field.
-func ID(id uuid.UUID) predicate.MemoryLink {
+func ID(id int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldEQ(FieldID, id))
 }
 
 // IDEQ applies the EQ predicate on the ID field.
-func IDEQ(id uuid.UUID) predicate.MemoryLink {
+func IDEQ(id int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldEQ(FieldID, id))
 }
 
 // IDNEQ applies the NEQ predicate on the ID field.
-func IDNEQ(id uuid.UUID) predicate.MemoryLink {
+func IDNEQ(id int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldNEQ(FieldID, id))
 }
 
 // IDIn applies the In predicate on the ID field.
-func IDIn(ids ...uuid.UUID) predicate.MemoryLink {
+func IDIn(ids ...int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldIn(FieldID, ids...))
 }
 
 // IDNotIn applies the NotIn predicate on the ID field.
-func IDNotIn(ids ...uuid.UUID) predicate.MemoryLink {
+func IDNotIn(ids ...int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldNotIn(FieldID, ids...))
 }
 
 // IDGT applies the GT predicate on the ID field.
-func IDGT(id uuid.UUID) predicate.MemoryLink {
+func IDGT(id int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldGT(FieldID, id))
 }
 
 // IDGTE applies the GTE predicate on the ID field.
-func IDGTE(id uuid.UUID) predicate.MemoryLink {
+func IDGTE(id int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldGTE(FieldID, id))
 }
 
 // IDLT applies the LT predicate on the ID field.
-func IDLT(id uuid.UUID) predicate.MemoryLink {
+func IDLT(id int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldLT(FieldID, id))
 }
 
 // IDLTE applies the LTE predicate on the ID field.
-func IDLTE(id uuid.UUID) predicate.MemoryLink {
+func IDLTE(id int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldLTE(FieldID, id))
 }
 
 // MemoryItemID applies equality check predicate on the "memory_item_id" field. It's identical to MemoryItemIDEQ.
-func MemoryItemID(v uuid.UUID) predicate.MemoryLink {
+func MemoryItemID(v int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldEQ(FieldMemoryItemID, v))
 }
 
@@ -66,43 +66,23 @@ func CreatedAt(v time.Time) predicate.MemoryLink {
 }
 
 // MemoryItemIDEQ applies the EQ predicate on the "memory_item_id" field.
-func MemoryItemIDEQ(v uuid.UUID) predicate.MemoryLink {
+func MemoryItemIDEQ(v int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldEQ(FieldMemoryItemID, v))
 }
 
 // MemoryItemIDNEQ applies the NEQ predicate on the "memory_item_id" field.
-func MemoryItemIDNEQ(v uuid.UUID) predicate.MemoryLink {
+func MemoryItemIDNEQ(v int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldNEQ(FieldMemoryItemID, v))
 }
 
 // MemoryItemIDIn applies the In predicate on the "memory_item_id" field.
-func MemoryItemIDIn(vs ...uuid.UUID) predicate.MemoryLink {
+func MemoryItemIDIn(vs ...int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldIn(FieldMemoryItemID, vs...))
 }
 
 // MemoryItemIDNotIn applies the NotIn predicate on the "memory_item_id" field.
-func MemoryItemIDNotIn(vs ...uuid.UUID) predicate.MemoryLink {
+func MemoryItemIDNotIn(vs ...int64) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldNotIn(FieldMemoryItemID, vs...))
-}
-
-// MemoryItemIDGT applies the GT predicate on the "memory_item_id" field.
-func MemoryItemIDGT(v uuid.UUID) predicate.MemoryLink {
-	return predicate.MemoryLink(sql.FieldGT(FieldMemoryItemID, v))
-}
-
-// MemoryItemIDGTE applies the GTE predicate on the "memory_item_id" field.
-func MemoryItemIDGTE(v uuid.UUID) predicate.MemoryLink {
-	return predicate.MemoryLink(sql.FieldGTE(FieldMemoryItemID, v))
-}
-
-// MemoryItemIDLT applies the LT predicate on the "memory_item_id" field.
-func MemoryItemIDLT(v uuid.UUID) predicate.MemoryLink {
-	return predicate.MemoryLink(sql.FieldLT(FieldMemoryItemID, v))
-}
-
-// MemoryItemIDLTE applies the LTE predicate on the "memory_item_id" field.
-func MemoryItemIDLTE(v uuid.UUID) predicate.MemoryLink {
-	return predicate.MemoryLink(sql.FieldLTE(FieldMemoryItemID, v))
 }
 
 // SourceMessageIdsIsNil applies the IsNil predicate on the "source_message_ids" field.
@@ -183,6 +163,29 @@ func CreatedAtLT(v time.Time) predicate.MemoryLink {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.MemoryLink {
 	return predicate.MemoryLink(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// HasMemoryItem applies the HasEdge predicate on the "memory_item" edge.
+func HasMemoryItem() predicate.MemoryLink {
+	return predicate.MemoryLink(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, MemoryItemTable, MemoryItemColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasMemoryItemWith applies the HasEdge predicate on the "memory_item" edge with a given conditions (other predicates).
+func HasMemoryItemWith(preds ...predicate.MemoryItem) predicate.MemoryLink {
+	return predicate.MemoryLink(func(s *sql.Selector) {
+		step := newMemoryItemStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

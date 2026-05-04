@@ -38,13 +38,13 @@ func (_c *PromptCreate) SetNillablePromptID(v *uuid.UUID) *PromptCreate {
 }
 
 // SetSessionID sets the "session_id" field.
-func (_c *PromptCreate) SetSessionID(v uuid.UUID) *PromptCreate {
+func (_c *PromptCreate) SetSessionID(v int64) *PromptCreate {
 	_c.mutation.SetSessionID(v)
 	return _c
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_c *PromptCreate) SetNillableSessionID(v *uuid.UUID) *PromptCreate {
+func (_c *PromptCreate) SetNillableSessionID(v *int64) *PromptCreate {
 	if v != nil {
 		_c.SetSessionID(*v)
 	}
@@ -177,7 +177,7 @@ func (_c *PromptCreate) createSpec() (*Prompt, *sqlgraph.CreateSpec) {
 		_node.PromptID = value
 	}
 	if value, ok := _c.mutation.SessionID(); ok {
-		_spec.SetField(prompt.FieldSessionID, field.TypeUUID, value)
+		_spec.SetField(prompt.FieldSessionID, field.TypeInt64, value)
 		_node.SessionID = value
 	}
 	if value, ok := _c.mutation.Content(); ok {
@@ -257,7 +257,7 @@ func (u *PromptUpsert) UpdatePromptID() *PromptUpsert {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *PromptUpsert) SetSessionID(v uuid.UUID) *PromptUpsert {
+func (u *PromptUpsert) SetSessionID(v int64) *PromptUpsert {
 	u.Set(prompt.FieldSessionID, v)
 	return u
 }
@@ -265,6 +265,12 @@ func (u *PromptUpsert) SetSessionID(v uuid.UUID) *PromptUpsert {
 // UpdateSessionID sets the "session_id" field to the value that was provided on create.
 func (u *PromptUpsert) UpdateSessionID() *PromptUpsert {
 	u.SetExcluded(prompt.FieldSessionID)
+	return u
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *PromptUpsert) AddSessionID(v int64) *PromptUpsert {
+	u.Add(prompt.FieldSessionID, v)
 	return u
 }
 
@@ -370,9 +376,16 @@ func (u *PromptUpsertOne) UpdatePromptID() *PromptUpsertOne {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *PromptUpsertOne) SetSessionID(v uuid.UUID) *PromptUpsertOne {
+func (u *PromptUpsertOne) SetSessionID(v int64) *PromptUpsertOne {
 	return u.Update(func(s *PromptUpsert) {
 		s.SetSessionID(v)
+	})
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *PromptUpsertOne) AddSessionID(v int64) *PromptUpsertOne {
+	return u.Update(func(s *PromptUpsert) {
+		s.AddSessionID(v)
 	})
 }
 
@@ -657,9 +670,16 @@ func (u *PromptUpsertBulk) UpdatePromptID() *PromptUpsertBulk {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *PromptUpsertBulk) SetSessionID(v uuid.UUID) *PromptUpsertBulk {
+func (u *PromptUpsertBulk) SetSessionID(v int64) *PromptUpsertBulk {
 	return u.Update(func(s *PromptUpsert) {
 		s.SetSessionID(v)
+	})
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *PromptUpsertBulk) AddSessionID(v int64) *PromptUpsertBulk {
+	return u.Update(func(s *PromptUpsert) {
+		s.AddSessionID(v)
 	})
 }
 

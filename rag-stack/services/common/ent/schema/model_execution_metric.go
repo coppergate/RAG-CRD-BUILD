@@ -4,7 +4,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -18,13 +17,13 @@ func (ModelExecutionMetric) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id").
 			StorageKey("metric_id"),
-		field.UUID("response_id", uuid.UUID{}).
+		field.Int64("response_id").
 			Optional(),
-		field.UUID("session_id", uuid.UUID{}).
+		field.Int64("session_id").
 			Optional(),
-		field.UUID("node_id", uuid.UUID{}).
+		field.Int64("node_id").
 			Optional(),
-		field.UUID("model_id", uuid.UUID{}).
+		field.Int64("model_id").
 			Optional(),
 		field.Int("prompt_tokens").
 			Optional(),

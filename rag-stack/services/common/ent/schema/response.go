@@ -1,10 +1,10 @@
 package schema
 
 import (
+"github.com/google/uuid"
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -23,7 +23,7 @@ func (Response) Fields() []ent.Field {
 		field.Int64("prompt_id").
 			Optional().
 			Unique(),
-		field.UUID("session_id", uuid.UUID{}).
+		field.Int64("session_id").
 			Optional(),
 		field.Text("content"),
 		field.Text("planning_response").

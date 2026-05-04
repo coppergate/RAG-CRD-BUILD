@@ -7,61 +7,62 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
 
 // ID filters vertices based on their ID field.
-func ID(id uuid.UUID) predicate.MemoryItem {
+func ID(id int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldEQ(FieldID, id))
 }
 
 // IDEQ applies the EQ predicate on the ID field.
-func IDEQ(id uuid.UUID) predicate.MemoryItem {
+func IDEQ(id int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldEQ(FieldID, id))
 }
 
 // IDNEQ applies the NEQ predicate on the ID field.
-func IDNEQ(id uuid.UUID) predicate.MemoryItem {
+func IDNEQ(id int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldNEQ(FieldID, id))
 }
 
 // IDIn applies the In predicate on the ID field.
-func IDIn(ids ...uuid.UUID) predicate.MemoryItem {
+func IDIn(ids ...int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldIn(FieldID, ids...))
 }
 
 // IDNotIn applies the NotIn predicate on the ID field.
-func IDNotIn(ids ...uuid.UUID) predicate.MemoryItem {
+func IDNotIn(ids ...int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldNotIn(FieldID, ids...))
 }
 
 // IDGT applies the GT predicate on the ID field.
-func IDGT(id uuid.UUID) predicate.MemoryItem {
+func IDGT(id int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldGT(FieldID, id))
 }
 
 // IDGTE applies the GTE predicate on the ID field.
-func IDGTE(id uuid.UUID) predicate.MemoryItem {
+func IDGTE(id int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldGTE(FieldID, id))
 }
 
 // IDLT applies the LT predicate on the ID field.
-func IDLT(id uuid.UUID) predicate.MemoryItem {
+func IDLT(id int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldLT(FieldID, id))
 }
 
 // IDLTE applies the LTE predicate on the ID field.
-func IDLTE(id uuid.UUID) predicate.MemoryItem {
+func IDLTE(id int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldLTE(FieldID, id))
 }
 
-// TenantID applies equality check predicate on the "tenant_id" field. It's identical to TenantIDEQ.
-func TenantID(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEQ(FieldTenantID, v))
+// ProjectID applies equality check predicate on the "project_id" field. It's identical to ProjectIDEQ.
+func ProjectID(v int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEQ(FieldProjectID, v))
 }
 
 // SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
-func SessionID(v uuid.UUID) predicate.MemoryItem {
+func SessionID(v int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldEQ(FieldSessionID, v))
 }
 
@@ -70,9 +71,9 @@ func UserID(v uuid.UUID) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldEQ(FieldUserID, v))
 }
 
-// Type applies equality check predicate on the "type" field. It's identical to TypeEQ.
-func Type(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEQ(FieldType, v))
+// MemoryType applies equality check predicate on the "memory_type" field. It's identical to MemoryTypeEQ.
+func MemoryType(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEQ(FieldMemoryType, v))
 }
 
 // Summary applies equality check predicate on the "summary" field. It's identical to SummaryEQ.
@@ -100,14 +101,14 @@ func Status(v string) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldEQ(FieldStatus, v))
 }
 
-// Pinning applies equality check predicate on the "pinning" field. It's identical to PinningEQ.
-func Pinning(v bool) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEQ(FieldPinning, v))
+// Pinned applies equality check predicate on the "pinned" field. It's identical to PinnedEQ.
+func Pinned(v bool) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEQ(FieldPinned, v))
 }
 
-// TTL applies equality check predicate on the "ttl" field. It's identical to TTLEQ.
-func TTL(v int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEQ(FieldTTL, v))
+// ExpiresAt applies equality check predicate on the "expires_at" field. It's identical to ExpiresAtEQ.
+func ExpiresAt(v time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEQ(FieldExpiresAt, v))
 }
 
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
@@ -120,94 +121,74 @@ func UpdatedAt(v time.Time) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldEQ(FieldUpdatedAt, v))
 }
 
-// TenantIDEQ applies the EQ predicate on the "tenant_id" field.
-func TenantIDEQ(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEQ(FieldTenantID, v))
+// ProjectIDEQ applies the EQ predicate on the "project_id" field.
+func ProjectIDEQ(v int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEQ(FieldProjectID, v))
 }
 
-// TenantIDNEQ applies the NEQ predicate on the "tenant_id" field.
-func TenantIDNEQ(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNEQ(FieldTenantID, v))
+// ProjectIDNEQ applies the NEQ predicate on the "project_id" field.
+func ProjectIDNEQ(v int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNEQ(FieldProjectID, v))
 }
 
-// TenantIDIn applies the In predicate on the "tenant_id" field.
-func TenantIDIn(vs ...uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldIn(FieldTenantID, vs...))
+// ProjectIDIn applies the In predicate on the "project_id" field.
+func ProjectIDIn(vs ...int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldIn(FieldProjectID, vs...))
 }
 
-// TenantIDNotIn applies the NotIn predicate on the "tenant_id" field.
-func TenantIDNotIn(vs ...uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNotIn(FieldTenantID, vs...))
+// ProjectIDNotIn applies the NotIn predicate on the "project_id" field.
+func ProjectIDNotIn(vs ...int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNotIn(FieldProjectID, vs...))
 }
 
-// TenantIDGT applies the GT predicate on the "tenant_id" field.
-func TenantIDGT(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldGT(FieldTenantID, v))
+// ProjectIDGT applies the GT predicate on the "project_id" field.
+func ProjectIDGT(v int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldGT(FieldProjectID, v))
 }
 
-// TenantIDGTE applies the GTE predicate on the "tenant_id" field.
-func TenantIDGTE(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldGTE(FieldTenantID, v))
+// ProjectIDGTE applies the GTE predicate on the "project_id" field.
+func ProjectIDGTE(v int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldGTE(FieldProjectID, v))
 }
 
-// TenantIDLT applies the LT predicate on the "tenant_id" field.
-func TenantIDLT(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldLT(FieldTenantID, v))
+// ProjectIDLT applies the LT predicate on the "project_id" field.
+func ProjectIDLT(v int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldLT(FieldProjectID, v))
 }
 
-// TenantIDLTE applies the LTE predicate on the "tenant_id" field.
-func TenantIDLTE(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldLTE(FieldTenantID, v))
+// ProjectIDLTE applies the LTE predicate on the "project_id" field.
+func ProjectIDLTE(v int64) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldLTE(FieldProjectID, v))
 }
 
-// TenantIDIsNil applies the IsNil predicate on the "tenant_id" field.
-func TenantIDIsNil() predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldIsNull(FieldTenantID))
+// ProjectIDIsNil applies the IsNil predicate on the "project_id" field.
+func ProjectIDIsNil() predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldIsNull(FieldProjectID))
 }
 
-// TenantIDNotNil applies the NotNil predicate on the "tenant_id" field.
-func TenantIDNotNil() predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNotNull(FieldTenantID))
+// ProjectIDNotNil applies the NotNil predicate on the "project_id" field.
+func ProjectIDNotNil() predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNotNull(FieldProjectID))
 }
 
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
-func SessionIDEQ(v uuid.UUID) predicate.MemoryItem {
+func SessionIDEQ(v int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldEQ(FieldSessionID, v))
 }
 
 // SessionIDNEQ applies the NEQ predicate on the "session_id" field.
-func SessionIDNEQ(v uuid.UUID) predicate.MemoryItem {
+func SessionIDNEQ(v int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldNEQ(FieldSessionID, v))
 }
 
 // SessionIDIn applies the In predicate on the "session_id" field.
-func SessionIDIn(vs ...uuid.UUID) predicate.MemoryItem {
+func SessionIDIn(vs ...int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldIn(FieldSessionID, vs...))
 }
 
 // SessionIDNotIn applies the NotIn predicate on the "session_id" field.
-func SessionIDNotIn(vs ...uuid.UUID) predicate.MemoryItem {
+func SessionIDNotIn(vs ...int64) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldNotIn(FieldSessionID, vs...))
-}
-
-// SessionIDGT applies the GT predicate on the "session_id" field.
-func SessionIDGT(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldGT(FieldSessionID, v))
-}
-
-// SessionIDGTE applies the GTE predicate on the "session_id" field.
-func SessionIDGTE(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldGTE(FieldSessionID, v))
-}
-
-// SessionIDLT applies the LT predicate on the "session_id" field.
-func SessionIDLT(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldLT(FieldSessionID, v))
-}
-
-// SessionIDLTE applies the LTE predicate on the "session_id" field.
-func SessionIDLTE(v uuid.UUID) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldLTE(FieldSessionID, v))
 }
 
 // SessionIDIsNil applies the IsNil predicate on the "session_id" field.
@@ -270,69 +251,69 @@ func UserIDNotNil() predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldNotNull(FieldUserID))
 }
 
-// TypeEQ applies the EQ predicate on the "type" field.
-func TypeEQ(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEQ(FieldType, v))
+// MemoryTypeEQ applies the EQ predicate on the "memory_type" field.
+func MemoryTypeEQ(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEQ(FieldMemoryType, v))
 }
 
-// TypeNEQ applies the NEQ predicate on the "type" field.
-func TypeNEQ(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNEQ(FieldType, v))
+// MemoryTypeNEQ applies the NEQ predicate on the "memory_type" field.
+func MemoryTypeNEQ(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNEQ(FieldMemoryType, v))
 }
 
-// TypeIn applies the In predicate on the "type" field.
-func TypeIn(vs ...string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldIn(FieldType, vs...))
+// MemoryTypeIn applies the In predicate on the "memory_type" field.
+func MemoryTypeIn(vs ...string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldIn(FieldMemoryType, vs...))
 }
 
-// TypeNotIn applies the NotIn predicate on the "type" field.
-func TypeNotIn(vs ...string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNotIn(FieldType, vs...))
+// MemoryTypeNotIn applies the NotIn predicate on the "memory_type" field.
+func MemoryTypeNotIn(vs ...string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNotIn(FieldMemoryType, vs...))
 }
 
-// TypeGT applies the GT predicate on the "type" field.
-func TypeGT(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldGT(FieldType, v))
+// MemoryTypeGT applies the GT predicate on the "memory_type" field.
+func MemoryTypeGT(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldGT(FieldMemoryType, v))
 }
 
-// TypeGTE applies the GTE predicate on the "type" field.
-func TypeGTE(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldGTE(FieldType, v))
+// MemoryTypeGTE applies the GTE predicate on the "memory_type" field.
+func MemoryTypeGTE(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldGTE(FieldMemoryType, v))
 }
 
-// TypeLT applies the LT predicate on the "type" field.
-func TypeLT(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldLT(FieldType, v))
+// MemoryTypeLT applies the LT predicate on the "memory_type" field.
+func MemoryTypeLT(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldLT(FieldMemoryType, v))
 }
 
-// TypeLTE applies the LTE predicate on the "type" field.
-func TypeLTE(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldLTE(FieldType, v))
+// MemoryTypeLTE applies the LTE predicate on the "memory_type" field.
+func MemoryTypeLTE(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldLTE(FieldMemoryType, v))
 }
 
-// TypeContains applies the Contains predicate on the "type" field.
-func TypeContains(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldContains(FieldType, v))
+// MemoryTypeContains applies the Contains predicate on the "memory_type" field.
+func MemoryTypeContains(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldContains(FieldMemoryType, v))
 }
 
-// TypeHasPrefix applies the HasPrefix predicate on the "type" field.
-func TypeHasPrefix(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldHasPrefix(FieldType, v))
+// MemoryTypeHasPrefix applies the HasPrefix predicate on the "memory_type" field.
+func MemoryTypeHasPrefix(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldHasPrefix(FieldMemoryType, v))
 }
 
-// TypeHasSuffix applies the HasSuffix predicate on the "type" field.
-func TypeHasSuffix(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldHasSuffix(FieldType, v))
+// MemoryTypeHasSuffix applies the HasSuffix predicate on the "memory_type" field.
+func MemoryTypeHasSuffix(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldHasSuffix(FieldMemoryType, v))
 }
 
-// TypeEqualFold applies the EqualFold predicate on the "type" field.
-func TypeEqualFold(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEqualFold(FieldType, v))
+// MemoryTypeEqualFold applies the EqualFold predicate on the "memory_type" field.
+func MemoryTypeEqualFold(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEqualFold(FieldMemoryType, v))
 }
 
-// TypeContainsFold applies the ContainsFold predicate on the "type" field.
-func TypeContainsFold(v string) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldContainsFold(FieldType, v))
+// MemoryTypeContainsFold applies the ContainsFold predicate on the "memory_type" field.
+func MemoryTypeContainsFold(v string) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldContainsFold(FieldMemoryType, v))
 }
 
 // SummaryEQ applies the EQ predicate on the "summary" field.
@@ -630,64 +611,64 @@ func StatusContainsFold(v string) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldContainsFold(FieldStatus, v))
 }
 
-// PinningEQ applies the EQ predicate on the "pinning" field.
-func PinningEQ(v bool) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEQ(FieldPinning, v))
+// PinnedEQ applies the EQ predicate on the "pinned" field.
+func PinnedEQ(v bool) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEQ(FieldPinned, v))
 }
 
-// PinningNEQ applies the NEQ predicate on the "pinning" field.
-func PinningNEQ(v bool) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNEQ(FieldPinning, v))
+// PinnedNEQ applies the NEQ predicate on the "pinned" field.
+func PinnedNEQ(v bool) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNEQ(FieldPinned, v))
 }
 
-// TTLEQ applies the EQ predicate on the "ttl" field.
-func TTLEQ(v int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldEQ(FieldTTL, v))
+// ExpiresAtEQ applies the EQ predicate on the "expires_at" field.
+func ExpiresAtEQ(v time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldEQ(FieldExpiresAt, v))
 }
 
-// TTLNEQ applies the NEQ predicate on the "ttl" field.
-func TTLNEQ(v int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNEQ(FieldTTL, v))
+// ExpiresAtNEQ applies the NEQ predicate on the "expires_at" field.
+func ExpiresAtNEQ(v time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNEQ(FieldExpiresAt, v))
 }
 
-// TTLIn applies the In predicate on the "ttl" field.
-func TTLIn(vs ...int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldIn(FieldTTL, vs...))
+// ExpiresAtIn applies the In predicate on the "expires_at" field.
+func ExpiresAtIn(vs ...time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldIn(FieldExpiresAt, vs...))
 }
 
-// TTLNotIn applies the NotIn predicate on the "ttl" field.
-func TTLNotIn(vs ...int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNotIn(FieldTTL, vs...))
+// ExpiresAtNotIn applies the NotIn predicate on the "expires_at" field.
+func ExpiresAtNotIn(vs ...time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNotIn(FieldExpiresAt, vs...))
 }
 
-// TTLGT applies the GT predicate on the "ttl" field.
-func TTLGT(v int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldGT(FieldTTL, v))
+// ExpiresAtGT applies the GT predicate on the "expires_at" field.
+func ExpiresAtGT(v time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldGT(FieldExpiresAt, v))
 }
 
-// TTLGTE applies the GTE predicate on the "ttl" field.
-func TTLGTE(v int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldGTE(FieldTTL, v))
+// ExpiresAtGTE applies the GTE predicate on the "expires_at" field.
+func ExpiresAtGTE(v time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldGTE(FieldExpiresAt, v))
 }
 
-// TTLLT applies the LT predicate on the "ttl" field.
-func TTLLT(v int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldLT(FieldTTL, v))
+// ExpiresAtLT applies the LT predicate on the "expires_at" field.
+func ExpiresAtLT(v time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldLT(FieldExpiresAt, v))
 }
 
-// TTLLTE applies the LTE predicate on the "ttl" field.
-func TTLLTE(v int64) predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldLTE(FieldTTL, v))
+// ExpiresAtLTE applies the LTE predicate on the "expires_at" field.
+func ExpiresAtLTE(v time.Time) predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldLTE(FieldExpiresAt, v))
 }
 
-// TTLIsNil applies the IsNil predicate on the "ttl" field.
-func TTLIsNil() predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldIsNull(FieldTTL))
+// ExpiresAtIsNil applies the IsNil predicate on the "expires_at" field.
+func ExpiresAtIsNil() predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldIsNull(FieldExpiresAt))
 }
 
-// TTLNotNil applies the NotNil predicate on the "ttl" field.
-func TTLNotNil() predicate.MemoryItem {
-	return predicate.MemoryItem(sql.FieldNotNull(FieldTTL))
+// ExpiresAtNotNil applies the NotNil predicate on the "expires_at" field.
+func ExpiresAtNotNil() predicate.MemoryItem {
+	return predicate.MemoryItem(sql.FieldNotNull(FieldExpiresAt))
 }
 
 // MetadataIsNil applies the IsNil predicate on the "metadata" field.
@@ -778,6 +759,75 @@ func UpdatedAtLT(v time.Time) predicate.MemoryItem {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.MemoryItem {
 	return predicate.MemoryItem(sql.FieldLTE(FieldUpdatedAt, v))
+}
+
+// HasSession applies the HasEdge predicate on the "session" edge.
+func HasSession() predicate.MemoryItem {
+	return predicate.MemoryItem(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, SessionTable, SessionColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSessionWith applies the HasEdge predicate on the "session" edge with a given conditions (other predicates).
+func HasSessionWith(preds ...predicate.Session) predicate.MemoryItem {
+	return predicate.MemoryItem(func(s *sql.Selector) {
+		step := newSessionStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasLinks applies the HasEdge predicate on the "links" edge.
+func HasLinks() predicate.MemoryItem {
+	return predicate.MemoryItem(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, LinksTable, LinksColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasLinksWith applies the HasEdge predicate on the "links" edge with a given conditions (other predicates).
+func HasLinksWith(preds ...predicate.MemoryLink) predicate.MemoryItem {
+	return predicate.MemoryItem(func(s *sql.Selector) {
+		step := newLinksStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasEvents applies the HasEdge predicate on the "events" edge.
+func HasEvents() predicate.MemoryItem {
+	return predicate.MemoryItem(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, EventsTable, EventsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasEventsWith applies the HasEdge predicate on the "events" edge with a given conditions (other predicates).
+func HasEventsWith(preds ...predicate.MemoryEvent) predicate.MemoryItem {
+	return predicate.MemoryItem(func(s *sql.Selector) {
+		step := newEventsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

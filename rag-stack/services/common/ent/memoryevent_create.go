@@ -4,17 +4,16 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/session"
 	"context"
 	"errors"
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // MemoryEventCreate is the builder for creating a MemoryEvent entity.
@@ -26,19 +25,19 @@ type MemoryEventCreate struct {
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (_c *MemoryEventCreate) SetMemoryItemID(v uuid.UUID) *MemoryEventCreate {
+func (_c *MemoryEventCreate) SetMemoryItemID(v int64) *MemoryEventCreate {
 	_c.mutation.SetMemoryItemID(v)
 	return _c
 }
 
 // SetSessionID sets the "session_id" field.
-func (_c *MemoryEventCreate) SetSessionID(v uuid.UUID) *MemoryEventCreate {
+func (_c *MemoryEventCreate) SetSessionID(v int64) *MemoryEventCreate {
 	_c.mutation.SetSessionID(v)
 	return _c
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_c *MemoryEventCreate) SetNillableSessionID(v *uuid.UUID) *MemoryEventCreate {
+func (_c *MemoryEventCreate) SetNillableSessionID(v *int64) *MemoryEventCreate {
 	if v != nil {
 		_c.SetSessionID(*v)
 	}
@@ -72,22 +71,19 @@ func (_c *MemoryEventCreate) SetNillableCreatedAt(v *time.Time) *MemoryEventCrea
 }
 
 // SetID sets the "id" field.
-func (_c *MemoryEventCreate) SetID(v uuid.UUID) *MemoryEventCreate {
+func (_c *MemoryEventCreate) SetID(v int64) *MemoryEventCreate {
 	_c.mutation.SetID(v)
-	return _c
-}
-
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *MemoryEventCreate) SetNillableID(v *uuid.UUID) *MemoryEventCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
 	return _c
 }
 
 // SetSession sets the "session" edge to the Session entity.
 func (_c *MemoryEventCreate) SetSession(v *Session) *MemoryEventCreate {
 	return _c.SetSessionID(v.ID)
+}
+
+// SetMemoryItem sets the "memory_item" edge to the MemoryItem entity.
+func (_c *MemoryEventCreate) SetMemoryItem(v *MemoryItem) *MemoryEventCreate {
+	return _c.SetMemoryItemID(v.ID)
 }
 
 // Mutation returns the MemoryEventMutation object of the builder.
@@ -129,10 +125,6 @@ func (_c *MemoryEventCreate) defaults() {
 		v := memoryevent.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := memoryevent.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -145,6 +137,9 @@ func (_c *MemoryEventCreate) check() error {
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MemoryEvent.created_at"`)}
+	}
+	if len(_c.mutation.MemoryItemIDs()) == 0 {
+		return &ValidationError{Name: "memory_item", err: errors.New(`ent: missing required edge "MemoryEvent.memory_item"`)}
 	}
 	return nil
 }
@@ -160,12 +155,9 @@ func (_c *MemoryEventCreate) sqlSave(ctx context.Context) (*MemoryEvent, error) 
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -175,16 +167,12 @@ func (_c *MemoryEventCreate) sqlSave(ctx context.Context) (*MemoryEvent, error) 
 func (_c *MemoryEventCreate) createSpec() (*MemoryEvent, *sqlgraph.CreateSpec) {
 	var (
 		_node = &MemoryEvent{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(memoryevent.Table, sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(memoryevent.Table, sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
-	}
-	if value, ok := _c.mutation.MemoryItemID(); ok {
-		_spec.SetField(memoryevent.FieldMemoryItemID, field.TypeUUID, value)
-		_node.MemoryItemID = value
+		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.EventType(); ok {
 		_spec.SetField(memoryevent.FieldEventType, field.TypeString, value)
@@ -206,13 +194,30 @@ func (_c *MemoryEventCreate) createSpec() (*MemoryEvent, *sqlgraph.CreateSpec) {
 			Columns: []string{memoryevent.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.SessionID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.MemoryItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryevent.MemoryItemTable,
+			Columns: []string{memoryevent.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.MemoryItemID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
@@ -268,7 +273,7 @@ type (
 )
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (u *MemoryEventUpsert) SetMemoryItemID(v uuid.UUID) *MemoryEventUpsert {
+func (u *MemoryEventUpsert) SetMemoryItemID(v int64) *MemoryEventUpsert {
 	u.Set(memoryevent.FieldMemoryItemID, v)
 	return u
 }
@@ -280,7 +285,7 @@ func (u *MemoryEventUpsert) UpdateMemoryItemID() *MemoryEventUpsert {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *MemoryEventUpsert) SetSessionID(v uuid.UUID) *MemoryEventUpsert {
+func (u *MemoryEventUpsert) SetSessionID(v int64) *MemoryEventUpsert {
 	u.Set(memoryevent.FieldSessionID, v)
 	return u
 }
@@ -379,7 +384,7 @@ func (u *MemoryEventUpsertOne) Update(set func(*MemoryEventUpsert)) *MemoryEvent
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (u *MemoryEventUpsertOne) SetMemoryItemID(v uuid.UUID) *MemoryEventUpsertOne {
+func (u *MemoryEventUpsertOne) SetMemoryItemID(v int64) *MemoryEventUpsertOne {
 	return u.Update(func(s *MemoryEventUpsert) {
 		s.SetMemoryItemID(v)
 	})
@@ -393,7 +398,7 @@ func (u *MemoryEventUpsertOne) UpdateMemoryItemID() *MemoryEventUpsertOne {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *MemoryEventUpsertOne) SetSessionID(v uuid.UUID) *MemoryEventUpsertOne {
+func (u *MemoryEventUpsertOne) SetSessionID(v int64) *MemoryEventUpsertOne {
 	return u.Update(func(s *MemoryEventUpsert) {
 		s.SetSessionID(v)
 	})
@@ -464,12 +469,7 @@ func (u *MemoryEventUpsertOne) ExecX(ctx context.Context) {
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *MemoryEventUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
-	if u.create.driver.Dialect() == dialect.MySQL {
-		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
-		// fields from the database since MySQL does not support the RETURNING clause.
-		return id, errors.New("ent: MemoryEventUpsertOne.ID is not supported by MySQL driver. Use MemoryEventUpsertOne.Exec instead")
-	}
+func (u *MemoryEventUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -478,7 +478,7 @@ func (u *MemoryEventUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error)
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *MemoryEventUpsertOne) IDX(ctx context.Context) uuid.UUID {
+func (u *MemoryEventUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -533,6 +533,10 @@ func (_c *MemoryEventCreateBulk) Save(ctx context.Context) ([]*MemoryEvent, erro
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})
@@ -667,7 +671,7 @@ func (u *MemoryEventUpsertBulk) Update(set func(*MemoryEventUpsert)) *MemoryEven
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (u *MemoryEventUpsertBulk) SetMemoryItemID(v uuid.UUID) *MemoryEventUpsertBulk {
+func (u *MemoryEventUpsertBulk) SetMemoryItemID(v int64) *MemoryEventUpsertBulk {
 	return u.Update(func(s *MemoryEventUpsert) {
 		s.SetMemoryItemID(v)
 	})
@@ -681,7 +685,7 @@ func (u *MemoryEventUpsertBulk) UpdateMemoryItemID() *MemoryEventUpsertBulk {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *MemoryEventUpsertBulk) SetSessionID(v uuid.UUID) *MemoryEventUpsertBulk {
+func (u *MemoryEventUpsertBulk) SetSessionID(v int64) *MemoryEventUpsertBulk {
 	return u.Update(func(s *MemoryEventUpsert) {
 		s.SetSessionID(v)
 	})

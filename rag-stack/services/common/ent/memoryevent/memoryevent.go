@@ -7,7 +7,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/google/uuid"
 )
 
 const (
@@ -27,6 +26,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// EdgeSession holds the string denoting the session edge name in mutations.
 	EdgeSession = "session"
+	// EdgeMemoryItem holds the string denoting the memory_item edge name in mutations.
+	EdgeMemoryItem = "memory_item"
 	// SessionFieldID holds the string denoting the ID field of the Session.
 	SessionFieldID = "session_id"
 	// Table holds the table name of the memoryevent in the database.
@@ -38,6 +39,13 @@ const (
 	SessionInverseTable = "sessions"
 	// SessionColumn is the table column denoting the session relation/edge.
 	SessionColumn = "session_id"
+	// MemoryItemTable is the table that holds the memory_item relation/edge.
+	MemoryItemTable = "memory_events"
+	// MemoryItemInverseTable is the table name for the MemoryItem entity.
+	// It exists in this package in order to avoid circular dependency with the "memoryitem" package.
+	MemoryItemInverseTable = "memory_items"
+	// MemoryItemColumn is the table column denoting the memory_item relation/edge.
+	MemoryItemColumn = "memory_item_id"
 )
 
 // Columns holds all SQL columns for memoryevent fields.
@@ -63,8 +71,6 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
-	// DefaultID holds the default value on creation for the "id" field.
-	DefaultID func() uuid.UUID
 )
 
 // OrderOption defines the ordering options for the MemoryEvent queries.
@@ -101,10 +107,24 @@ func BySessionField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newSessionStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByMemoryItemField orders the results by memory_item field.
+func ByMemoryItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newMemoryItemStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newSessionStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(SessionInverseTable, SessionFieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, SessionTable, SessionColumn),
+	)
+}
+func newMemoryItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(MemoryItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, MemoryItemTable, MemoryItemColumn),
 	)
 }

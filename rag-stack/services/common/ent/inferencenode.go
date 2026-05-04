@@ -10,14 +10,13 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 // InferenceNode is the model entity for the InferenceNode schema.
 type InferenceNode struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
 	// Hostname holds the value of the "hostname" field.
 	Hostname string `json:"hostname,omitempty"`
 	// IPAddress holds the value of the "ip_address" field.
@@ -57,14 +56,12 @@ func (*InferenceNode) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case inferencenode.FieldTotalVramMB:
+		case inferencenode.FieldID, inferencenode.FieldTotalVramMB:
 			values[i] = new(sql.NullInt64)
 		case inferencenode.FieldHostname, inferencenode.FieldIPAddress, inferencenode.FieldGpuModel:
 			values[i] = new(sql.NullString)
 		case inferencenode.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case inferencenode.FieldID:
-			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -81,11 +78,11 @@ func (_m *InferenceNode) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case inferencenode.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
+			_m.ID = int64(value.Int64)
 		case inferencenode.FieldHostname:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field hostname", values[i])

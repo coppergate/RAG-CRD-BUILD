@@ -8,56 +8,55 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/google/uuid"
 )
 
 // ID filters vertices based on their ID field.
-func ID(id uuid.UUID) predicate.CodeEmbedding {
+func ID(id int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldEQ(FieldID, id))
 }
 
 // IDEQ applies the EQ predicate on the ID field.
-func IDEQ(id uuid.UUID) predicate.CodeEmbedding {
+func IDEQ(id int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldEQ(FieldID, id))
 }
 
 // IDNEQ applies the NEQ predicate on the ID field.
-func IDNEQ(id uuid.UUID) predicate.CodeEmbedding {
+func IDNEQ(id int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldNEQ(FieldID, id))
 }
 
 // IDIn applies the In predicate on the ID field.
-func IDIn(ids ...uuid.UUID) predicate.CodeEmbedding {
+func IDIn(ids ...int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldIn(FieldID, ids...))
 }
 
 // IDNotIn applies the NotIn predicate on the ID field.
-func IDNotIn(ids ...uuid.UUID) predicate.CodeEmbedding {
+func IDNotIn(ids ...int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldNotIn(FieldID, ids...))
 }
 
 // IDGT applies the GT predicate on the ID field.
-func IDGT(id uuid.UUID) predicate.CodeEmbedding {
+func IDGT(id int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldGT(FieldID, id))
 }
 
 // IDGTE applies the GTE predicate on the ID field.
-func IDGTE(id uuid.UUID) predicate.CodeEmbedding {
+func IDGTE(id int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldGTE(FieldID, id))
 }
 
 // IDLT applies the LT predicate on the ID field.
-func IDLT(id uuid.UUID) predicate.CodeEmbedding {
+func IDLT(id int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldLT(FieldID, id))
 }
 
 // IDLTE applies the LTE predicate on the ID field.
-func IDLTE(id uuid.UUID) predicate.CodeEmbedding {
+func IDLTE(id int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldLTE(FieldID, id))
 }
 
 // IngestionID applies equality check predicate on the "ingestion_id" field. It's identical to IngestionIDEQ.
-func IngestionID(v uuid.UUID) predicate.CodeEmbedding {
+func IngestionID(v int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldEQ(FieldIngestionID, v))
 }
 
@@ -67,22 +66,22 @@ func CreatedAt(v time.Time) predicate.CodeEmbedding {
 }
 
 // IngestionIDEQ applies the EQ predicate on the "ingestion_id" field.
-func IngestionIDEQ(v uuid.UUID) predicate.CodeEmbedding {
+func IngestionIDEQ(v int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldEQ(FieldIngestionID, v))
 }
 
 // IngestionIDNEQ applies the NEQ predicate on the "ingestion_id" field.
-func IngestionIDNEQ(v uuid.UUID) predicate.CodeEmbedding {
+func IngestionIDNEQ(v int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldNEQ(FieldIngestionID, v))
 }
 
 // IngestionIDIn applies the In predicate on the "ingestion_id" field.
-func IngestionIDIn(vs ...uuid.UUID) predicate.CodeEmbedding {
+func IngestionIDIn(vs ...int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldIn(FieldIngestionID, vs...))
 }
 
 // IngestionIDNotIn applies the NotIn predicate on the "ingestion_id" field.
-func IngestionIDNotIn(vs ...uuid.UUID) predicate.CodeEmbedding {
+func IngestionIDNotIn(vs ...int64) predicate.CodeEmbedding {
 	return predicate.CodeEmbedding(sql.FieldNotIn(FieldIngestionID, vs...))
 }
 

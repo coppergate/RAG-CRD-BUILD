@@ -10,9 +10,9 @@
     "scope": {
       "type": "object",
       "properties": {
-        "session_id": {"type": "string"},
+        "session_id": {"type": "integer"},
         "user_id": {"type": "string"},
-        "project_id": {"type": "string"},
+        "project_id": {"type": "integer"},
         "tags": {
           "type": "array",
           "items": {"type": "string"}

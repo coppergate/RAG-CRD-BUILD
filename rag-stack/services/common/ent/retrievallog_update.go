@@ -52,13 +52,13 @@ func (_u *RetrievalLogUpdate) ClearMessageID() *RetrievalLogUpdate {
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *RetrievalLogUpdate) SetSessionID(v uuid.UUID) *RetrievalLogUpdate {
+func (_u *RetrievalLogUpdate) SetSessionID(v int64) *RetrievalLogUpdate {
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *RetrievalLogUpdate) SetNillableSessionID(v *uuid.UUID) *RetrievalLogUpdate {
+func (_u *RetrievalLogUpdate) SetNillableSessionID(v *int64) *RetrievalLogUpdate {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
@@ -207,7 +207,7 @@ func (_u *RetrievalLogUpdate) ExecX(ctx context.Context) {
 }
 
 func (_u *RetrievalLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	_spec := sqlgraph.NewUpdateSpec(retrievallog.Table, retrievallog.Columns, sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(retrievallog.Table, retrievallog.Columns, sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -261,7 +261,7 @@ func (_u *RetrievalLogUpdate) sqlSave(ctx context.Context) (_node int, err error
 			Columns: []string{retrievallog.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -274,7 +274,7 @@ func (_u *RetrievalLogUpdate) sqlSave(ctx context.Context) (_node int, err error
 			Columns: []string{retrievallog.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -323,13 +323,13 @@ func (_u *RetrievalLogUpdateOne) ClearMessageID() *RetrievalLogUpdateOne {
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *RetrievalLogUpdateOne) SetSessionID(v uuid.UUID) *RetrievalLogUpdateOne {
+func (_u *RetrievalLogUpdateOne) SetSessionID(v int64) *RetrievalLogUpdateOne {
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *RetrievalLogUpdateOne) SetNillableSessionID(v *uuid.UUID) *RetrievalLogUpdateOne {
+func (_u *RetrievalLogUpdateOne) SetNillableSessionID(v *int64) *RetrievalLogUpdateOne {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
@@ -491,7 +491,7 @@ func (_u *RetrievalLogUpdateOne) ExecX(ctx context.Context) {
 }
 
 func (_u *RetrievalLogUpdateOne) sqlSave(ctx context.Context) (_node *RetrievalLog, err error) {
-	_spec := sqlgraph.NewUpdateSpec(retrievallog.Table, retrievallog.Columns, sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(retrievallog.Table, retrievallog.Columns, sqlgraph.NewFieldSpec(retrievallog.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "RetrievalLog.id" for update`)}
@@ -562,7 +562,7 @@ func (_u *RetrievalLogUpdateOne) sqlSave(ctx context.Context) (_node *RetrievalL
 			Columns: []string{retrievallog.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -575,7 +575,7 @@ func (_u *RetrievalLogUpdateOne) sqlSave(ctx context.Context) (_node *RetrievalL
 			Columns: []string{retrievallog.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

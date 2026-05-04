@@ -20,7 +20,7 @@ set -Eeuo pipefail
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-SERVICES=${SERVICES:-"rag-test-runner rag-worker rag-ingestion rag-web-ui llm-gateway db-adapter qdrant-adapter object-store-mgr"}
+SERVICES=${SERVICES:-"rag-test-runner rag-worker rag-ingestion llm-gateway db-adapter qdrant-adapter object-store-mgr"}
 
 # Source of truth for versioning
 if [[ -z "${VERSION:-}" ]]; then

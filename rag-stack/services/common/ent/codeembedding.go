@@ -12,16 +12,15 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 // CodeEmbedding is the model entity for the CodeEmbedding schema.
 type CodeEmbedding struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
 	// IngestionID holds the value of the "ingestion_id" field.
-	IngestionID uuid.UUID `json:"ingestion_id,omitempty"`
+	IngestionID int64 `json:"ingestion_id,omitempty"`
 	// EmbeddingVector holds the value of the "embedding_vector" field.
 	EmbeddingVector []float32 `json:"embedding_vector,omitempty"`
 	// Metadata holds the value of the "metadata" field.
@@ -72,10 +71,10 @@ func (*CodeEmbedding) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case codeembedding.FieldEmbeddingVector, codeembedding.FieldMetadata:
 			values[i] = new([]byte)
+		case codeembedding.FieldID, codeembedding.FieldIngestionID:
+			values[i] = new(sql.NullInt64)
 		case codeembedding.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case codeembedding.FieldID, codeembedding.FieldIngestionID:
-			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -92,16 +91,16 @@ func (_m *CodeEmbedding) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case codeembedding.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
+			_m.ID = int64(value.Int64)
 		case codeembedding.FieldIngestionID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field ingestion_id", values[i])
-			} else if value != nil {
-				_m.IngestionID = *value
+			} else if value.Valid {
+				_m.IngestionID = value.Int64
 			}
 		case codeembedding.FieldEmbeddingVector:
 			if value, ok := values[i].(*[]byte); !ok {

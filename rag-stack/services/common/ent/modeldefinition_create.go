@@ -10,11 +10,9 @@ import (
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // ModelDefinitionCreate is the builder for creating a ModelDefinition entity.
@@ -88,16 +86,8 @@ func (_c *ModelDefinitionCreate) SetNillableCreatedAt(v *time.Time) *ModelDefini
 }
 
 // SetID sets the "id" field.
-func (_c *ModelDefinitionCreate) SetID(v uuid.UUID) *ModelDefinitionCreate {
+func (_c *ModelDefinitionCreate) SetID(v int64) *ModelDefinitionCreate {
 	_c.mutation.SetID(v)
-	return _c
-}
-
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *ModelDefinitionCreate) SetNillableID(v *uuid.UUID) *ModelDefinitionCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
 	return _c
 }
 
@@ -155,10 +145,6 @@ func (_c *ModelDefinitionCreate) defaults() {
 		v := modeldefinition.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := modeldefinition.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -183,12 +169,9 @@ func (_c *ModelDefinitionCreate) sqlSave(ctx context.Context) (*ModelDefinition,
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -198,12 +181,12 @@ func (_c *ModelDefinitionCreate) sqlSave(ctx context.Context) (*ModelDefinition,
 func (_c *ModelDefinitionCreate) createSpec() (*ModelDefinition, *sqlgraph.CreateSpec) {
 	var (
 		_node = &ModelDefinition{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(modeldefinition.Table, sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(modeldefinition.Table, sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
+		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.ModelName(); ok {
 		_spec.SetField(modeldefinition.FieldModelName, field.TypeString, value)
@@ -539,12 +522,7 @@ func (u *ModelDefinitionUpsertOne) ExecX(ctx context.Context) {
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *ModelDefinitionUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
-	if u.create.driver.Dialect() == dialect.MySQL {
-		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
-		// fields from the database since MySQL does not support the RETURNING clause.
-		return id, errors.New("ent: ModelDefinitionUpsertOne.ID is not supported by MySQL driver. Use ModelDefinitionUpsertOne.Exec instead")
-	}
+func (u *ModelDefinitionUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -553,7 +531,7 @@ func (u *ModelDefinitionUpsertOne) ID(ctx context.Context) (id uuid.UUID, err er
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *ModelDefinitionUpsertOne) IDX(ctx context.Context) uuid.UUID {
+func (u *ModelDefinitionUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -608,6 +586,10 @@ func (_c *ModelDefinitionCreateBulk) Save(ctx context.Context) ([]*ModelDefiniti
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})

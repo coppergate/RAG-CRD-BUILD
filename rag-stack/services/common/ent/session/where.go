@@ -12,52 +12,52 @@ import (
 )
 
 // ID filters vertices based on their ID field.
-func ID(id uuid.UUID) predicate.Session {
+func ID(id int64) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldID, id))
 }
 
 // IDEQ applies the EQ predicate on the ID field.
-func IDEQ(id uuid.UUID) predicate.Session {
+func IDEQ(id int64) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldID, id))
 }
 
 // IDNEQ applies the NEQ predicate on the ID field.
-func IDNEQ(id uuid.UUID) predicate.Session {
+func IDNEQ(id int64) predicate.Session {
 	return predicate.Session(sql.FieldNEQ(FieldID, id))
 }
 
 // IDIn applies the In predicate on the ID field.
-func IDIn(ids ...uuid.UUID) predicate.Session {
+func IDIn(ids ...int64) predicate.Session {
 	return predicate.Session(sql.FieldIn(FieldID, ids...))
 }
 
 // IDNotIn applies the NotIn predicate on the ID field.
-func IDNotIn(ids ...uuid.UUID) predicate.Session {
+func IDNotIn(ids ...int64) predicate.Session {
 	return predicate.Session(sql.FieldNotIn(FieldID, ids...))
 }
 
 // IDGT applies the GT predicate on the ID field.
-func IDGT(id uuid.UUID) predicate.Session {
+func IDGT(id int64) predicate.Session {
 	return predicate.Session(sql.FieldGT(FieldID, id))
 }
 
 // IDGTE applies the GTE predicate on the ID field.
-func IDGTE(id uuid.UUID) predicate.Session {
+func IDGTE(id int64) predicate.Session {
 	return predicate.Session(sql.FieldGTE(FieldID, id))
 }
 
 // IDLT applies the LT predicate on the ID field.
-func IDLT(id uuid.UUID) predicate.Session {
+func IDLT(id int64) predicate.Session {
 	return predicate.Session(sql.FieldLT(FieldID, id))
 }
 
 // IDLTE applies the LTE predicate on the ID field.
-func IDLTE(id uuid.UUID) predicate.Session {
+func IDLTE(id int64) predicate.Session {
 	return predicate.Session(sql.FieldLTE(FieldID, id))
 }
 
 // ProjectID applies equality check predicate on the "project_id" field. It's identical to ProjectIDEQ.
-func ProjectID(v uuid.UUID) predicate.Session {
+func ProjectID(v int64) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldProjectID, v))
 }
 
@@ -87,42 +87,42 @@ func LastActiveAt(v time.Time) predicate.Session {
 }
 
 // ProjectIDEQ applies the EQ predicate on the "project_id" field.
-func ProjectIDEQ(v uuid.UUID) predicate.Session {
+func ProjectIDEQ(v int64) predicate.Session {
 	return predicate.Session(sql.FieldEQ(FieldProjectID, v))
 }
 
 // ProjectIDNEQ applies the NEQ predicate on the "project_id" field.
-func ProjectIDNEQ(v uuid.UUID) predicate.Session {
+func ProjectIDNEQ(v int64) predicate.Session {
 	return predicate.Session(sql.FieldNEQ(FieldProjectID, v))
 }
 
 // ProjectIDIn applies the In predicate on the "project_id" field.
-func ProjectIDIn(vs ...uuid.UUID) predicate.Session {
+func ProjectIDIn(vs ...int64) predicate.Session {
 	return predicate.Session(sql.FieldIn(FieldProjectID, vs...))
 }
 
 // ProjectIDNotIn applies the NotIn predicate on the "project_id" field.
-func ProjectIDNotIn(vs ...uuid.UUID) predicate.Session {
+func ProjectIDNotIn(vs ...int64) predicate.Session {
 	return predicate.Session(sql.FieldNotIn(FieldProjectID, vs...))
 }
 
 // ProjectIDGT applies the GT predicate on the "project_id" field.
-func ProjectIDGT(v uuid.UUID) predicate.Session {
+func ProjectIDGT(v int64) predicate.Session {
 	return predicate.Session(sql.FieldGT(FieldProjectID, v))
 }
 
 // ProjectIDGTE applies the GTE predicate on the "project_id" field.
-func ProjectIDGTE(v uuid.UUID) predicate.Session {
+func ProjectIDGTE(v int64) predicate.Session {
 	return predicate.Session(sql.FieldGTE(FieldProjectID, v))
 }
 
 // ProjectIDLT applies the LT predicate on the "project_id" field.
-func ProjectIDLT(v uuid.UUID) predicate.Session {
+func ProjectIDLT(v int64) predicate.Session {
 	return predicate.Session(sql.FieldLT(FieldProjectID, v))
 }
 
 // ProjectIDLTE applies the LTE predicate on the "project_id" field.
-func ProjectIDLTE(v uuid.UUID) predicate.Session {
+func ProjectIDLTE(v int64) predicate.Session {
 	return predicate.Session(sql.FieldLTE(FieldProjectID, v))
 }
 
@@ -510,6 +510,29 @@ func HasMemoryEvents() predicate.Session {
 func HasMemoryEventsWith(preds ...predicate.MemoryEvent) predicate.Session {
 	return predicate.Session(func(s *sql.Selector) {
 		step := newMemoryEventsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasMemoryItems applies the HasEdge predicate on the "memory_items" edge.
+func HasMemoryItems() predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, MemoryItemsTable, MemoryItemsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasMemoryItemsWith applies the HasEdge predicate on the "memory_items" edge with a given conditions (other predicates).
+func HasMemoryItemsWith(preds ...predicate.MemoryItem) predicate.Session {
+	return predicate.Session(func(s *sql.Selector) {
+		step := newMemoryItemsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

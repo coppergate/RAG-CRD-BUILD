@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
 	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/session"
-	"github.com/google/uuid"
 	"strings"
 	"time"
 )
@@ -40,7 +40,7 @@ func (h *MemoryHandler) listItems(w http.ResponseWriter, r *http.Request) {
 	query := h.client.MemoryItem.Query()
 	
 	if sessionIDStr != "" {
-		sessionID, err := uuid.Parse(sessionIDStr)
+		sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 		if err == nil {
 			query = query.Where(memoryitem.SessionID(sessionID))
 		}
@@ -73,21 +73,25 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 	
 	for _, item := range req.Writes {
 		builder := tx.MemoryItem.Create().
-			SetType(item.MemoryType).
+			SetMemoryType(item.MemoryType).
 			SetSummary(item.Summary).
 			SetContent(item.Content).
 			SetSalience(item.SalienceHint).
 			SetRetentionScore(item.RetentionHint).
-			SetPinning(item.Pinned).
+			SetPinned(item.Pinned).
 			SetMetadata(contracts.FromStruct(item.Metadata))
 		
-		if req.Scope.SessionId != "" {
-			sid, _ := uuid.Parse(req.Scope.SessionId)
-			builder = builder.SetSessionID(sid)
+		if req.Scope.SessionId > 0 {
+			builder = builder.SetSessionID(req.Scope.SessionId)
+		}
+
+		if req.Scope.ProjectId > 0 {
+			builder = builder.SetProjectID(req.Scope.ProjectId)
 		}
 		
 		mi, err := builder.Save(ctx)
 		if err != nil {
+			log.Printf("[MEMCTRL] Failed to save memory item: %v", err)
 			tx.Rollback()
 			http.Error(w, "Failed to save memory item: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -157,7 +161,7 @@ func (h *MemoryHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
-		Id   string `json:"id"`
+		Id   int64  `json:"id"`
 		Name string `json:"name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -172,7 +176,7 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 			First(ctx)
 		if err == nil && existing != nil {
 			// If name exists and ID is either not provided or different from existing
-			if req.Id == "" || existing.ID.String() != req.Id {
+			if req.Id == 0 || existing.ID != req.Id {
 				http.Error(w, "Session name already exists", http.StatusConflict)
 				return
 			}
@@ -183,10 +187,8 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 		SetName(req.Name).
 		SetLastActiveAt(time.Now())
 
-	if req.Id != "" {
-		if sid, err := uuid.Parse(req.Id); err == nil {
-			builder.SetID(sid)
-		}
+	if req.Id > 0 {
+		builder.SetID(req.Id)
 	}
 
 	// Use upsert to be safe for ID conflict
@@ -228,7 +230,7 @@ func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := uuid.Parse(idStr)
+	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid Session ID", http.StatusBadRequest)
 		return

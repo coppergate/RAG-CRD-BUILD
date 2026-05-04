@@ -13,7 +13,6 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
 )
 
 // ModelExecutionMetric is the model entity for the ModelExecutionMetric schema.
@@ -22,13 +21,13 @@ type ModelExecutionMetric struct {
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
 	// ResponseID holds the value of the "response_id" field.
-	ResponseID uuid.UUID `json:"response_id,omitempty"`
+	ResponseID int64 `json:"response_id,omitempty"`
 	// SessionID holds the value of the "session_id" field.
-	SessionID uuid.UUID `json:"session_id,omitempty"`
+	SessionID int64 `json:"session_id,omitempty"`
 	// NodeID holds the value of the "node_id" field.
-	NodeID uuid.UUID `json:"node_id,omitempty"`
+	NodeID int64 `json:"node_id,omitempty"`
 	// ModelID holds the value of the "model_id" field.
-	ModelID uuid.UUID `json:"model_id,omitempty"`
+	ModelID int64 `json:"model_id,omitempty"`
 	// PromptTokens holds the value of the "prompt_tokens" field.
 	PromptTokens int `json:"prompt_tokens,omitempty"`
 	// CompletionTokens holds the value of the "completion_tokens" field.
@@ -106,12 +105,10 @@ func (*ModelExecutionMetric) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case modelexecutionmetric.FieldTokensPerSecond:
 			values[i] = new(sql.NullFloat64)
-		case modelexecutionmetric.FieldID, modelexecutionmetric.FieldPromptTokens, modelexecutionmetric.FieldCompletionTokens, modelexecutionmetric.FieldTotalTokens, modelexecutionmetric.FieldTotalDurationUsec, modelexecutionmetric.FieldLoadDurationUsec, modelexecutionmetric.FieldPromptEvalDurationUsec, modelexecutionmetric.FieldEvalDurationUsec:
+		case modelexecutionmetric.FieldID, modelexecutionmetric.FieldResponseID, modelexecutionmetric.FieldSessionID, modelexecutionmetric.FieldNodeID, modelexecutionmetric.FieldModelID, modelexecutionmetric.FieldPromptTokens, modelexecutionmetric.FieldCompletionTokens, modelexecutionmetric.FieldTotalTokens, modelexecutionmetric.FieldTotalDurationUsec, modelexecutionmetric.FieldLoadDurationUsec, modelexecutionmetric.FieldPromptEvalDurationUsec, modelexecutionmetric.FieldEvalDurationUsec:
 			values[i] = new(sql.NullInt64)
 		case modelexecutionmetric.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case modelexecutionmetric.FieldResponseID, modelexecutionmetric.FieldSessionID, modelexecutionmetric.FieldNodeID, modelexecutionmetric.FieldModelID:
-			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -134,28 +131,28 @@ func (_m *ModelExecutionMetric) assignValues(columns []string, values []any) err
 			}
 			_m.ID = int64(value.Int64)
 		case modelexecutionmetric.FieldResponseID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field response_id", values[i])
-			} else if value != nil {
-				_m.ResponseID = *value
+			} else if value.Valid {
+				_m.ResponseID = value.Int64
 			}
 		case modelexecutionmetric.FieldSessionID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field session_id", values[i])
-			} else if value != nil {
-				_m.SessionID = *value
+			} else if value.Valid {
+				_m.SessionID = value.Int64
 			}
 		case modelexecutionmetric.FieldNodeID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field node_id", values[i])
-			} else if value != nil {
-				_m.NodeID = *value
+			} else if value.Valid {
+				_m.NodeID = value.Int64
 			}
 		case modelexecutionmetric.FieldModelID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field model_id", values[i])
-			} else if value != nil {
-				_m.ModelID = *value
+			} else if value.Valid {
+				_m.ModelID = value.Int64
 			}
 		case modelexecutionmetric.FieldPromptTokens:
 			if value, ok := values[i].(*sql.NullInt64); !ok {

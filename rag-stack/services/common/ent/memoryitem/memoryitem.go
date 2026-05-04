@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"github.com/google/uuid"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -14,14 +14,14 @@ const (
 	Label = "memory_item"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTenantID holds the string denoting the tenant_id field in the database.
-	FieldTenantID = "tenant_id"
+	// FieldProjectID holds the string denoting the project_id field in the database.
+	FieldProjectID = "project_id"
 	// FieldSessionID holds the string denoting the session_id field in the database.
 	FieldSessionID = "session_id"
 	// FieldUserID holds the string denoting the user_id field in the database.
 	FieldUserID = "user_id"
-	// FieldType holds the string denoting the type field in the database.
-	FieldType = "type"
+	// FieldMemoryType holds the string denoting the memory_type field in the database.
+	FieldMemoryType = "memory_type"
 	// FieldSummary holds the string denoting the summary field in the database.
 	FieldSummary = "summary"
 	// FieldContent holds the string denoting the content field in the database.
@@ -34,35 +34,64 @@ const (
 	FieldDecayState = "decay_state"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldPinning holds the string denoting the pinning field in the database.
-	FieldPinning = "pinning"
-	// FieldTTL holds the string denoting the ttl field in the database.
-	FieldTTL = "ttl"
+	// FieldPinned holds the string denoting the pinned field in the database.
+	FieldPinned = "pinned"
+	// FieldExpiresAt holds the string denoting the expires_at field in the database.
+	FieldExpiresAt = "expires_at"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// EdgeSession holds the string denoting the session edge name in mutations.
+	EdgeSession = "session"
+	// EdgeLinks holds the string denoting the links edge name in mutations.
+	EdgeLinks = "links"
+	// EdgeEvents holds the string denoting the events edge name in mutations.
+	EdgeEvents = "events"
+	// SessionFieldID holds the string denoting the ID field of the Session.
+	SessionFieldID = "session_id"
 	// Table holds the table name of the memoryitem in the database.
 	Table = "memory_items"
+	// SessionTable is the table that holds the session relation/edge.
+	SessionTable = "memory_items"
+	// SessionInverseTable is the table name for the Session entity.
+	// It exists in this package in order to avoid circular dependency with the "session" package.
+	SessionInverseTable = "sessions"
+	// SessionColumn is the table column denoting the session relation/edge.
+	SessionColumn = "session_id"
+	// LinksTable is the table that holds the links relation/edge.
+	LinksTable = "memory_links"
+	// LinksInverseTable is the table name for the MemoryLink entity.
+	// It exists in this package in order to avoid circular dependency with the "memorylink" package.
+	LinksInverseTable = "memory_links"
+	// LinksColumn is the table column denoting the links relation/edge.
+	LinksColumn = "memory_item_links"
+	// EventsTable is the table that holds the events relation/edge.
+	EventsTable = "memory_events"
+	// EventsInverseTable is the table name for the MemoryEvent entity.
+	// It exists in this package in order to avoid circular dependency with the "memoryevent" package.
+	EventsInverseTable = "memory_events"
+	// EventsColumn is the table column denoting the events relation/edge.
+	EventsColumn = "memory_item_id"
 )
 
 // Columns holds all SQL columns for memoryitem fields.
 var Columns = []string{
 	FieldID,
-	FieldTenantID,
+	FieldProjectID,
 	FieldSessionID,
 	FieldUserID,
-	FieldType,
+	FieldMemoryType,
 	FieldSummary,
 	FieldContent,
 	FieldSalience,
 	FieldRetentionScore,
 	FieldDecayState,
 	FieldStatus,
-	FieldPinning,
-	FieldTTL,
+	FieldPinned,
+	FieldExpiresAt,
 	FieldMetadata,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -85,16 +114,14 @@ var (
 	DefaultRetentionScore float64
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
-	// DefaultPinning holds the default value on creation for the "pinning" field.
-	DefaultPinning bool
+	// DefaultPinned holds the default value on creation for the "pinned" field.
+	DefaultPinned bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
-	// DefaultID holds the default value on creation for the "id" field.
-	DefaultID func() uuid.UUID
 )
 
 // OrderOption defines the ordering options for the MemoryItem queries.
@@ -105,9 +132,9 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByTenantID orders the results by the tenant_id field.
-func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTenantID, opts...).ToFunc()
+// ByProjectID orders the results by the project_id field.
+func ByProjectID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProjectID, opts...).ToFunc()
 }
 
 // BySessionID orders the results by the session_id field.
@@ -120,9 +147,9 @@ func ByUserID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUserID, opts...).ToFunc()
 }
 
-// ByType orders the results by the type field.
-func ByType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldType, opts...).ToFunc()
+// ByMemoryType orders the results by the memory_type field.
+func ByMemoryType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMemoryType, opts...).ToFunc()
 }
 
 // BySummary orders the results by the summary field.
@@ -150,14 +177,14 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
-// ByPinning orders the results by the pinning field.
-func ByPinning(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPinning, opts...).ToFunc()
+// ByPinned orders the results by the pinned field.
+func ByPinned(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPinned, opts...).ToFunc()
 }
 
-// ByTTL orders the results by the ttl field.
-func ByTTL(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTTL, opts...).ToFunc()
+// ByExpiresAt orders the results by the expires_at field.
+func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.
@@ -168,4 +195,60 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// BySessionField orders the results by session field.
+func BySessionField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSessionStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByLinksCount orders the results by links count.
+func ByLinksCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newLinksStep(), opts...)
+	}
+}
+
+// ByLinks orders the results by links terms.
+func ByLinks(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newLinksStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByEventsCount orders the results by events count.
+func ByEventsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newEventsStep(), opts...)
+	}
+}
+
+// ByEvents orders the results by events terms.
+func ByEvents(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newEventsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newSessionStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SessionInverseTable, SessionFieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, SessionTable, SessionColumn),
+	)
+}
+func newLinksStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(LinksInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, LinksTable, LinksColumn),
+	)
+}
+func newEventsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(EventsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, EventsTable, EventsColumn),
+	)
 }

@@ -225,12 +225,19 @@ Every new session for the **Junie** agent MUST establish the operational context
         - Switch to `main` and pull latest changes.
     - Create a new session branch named `Work-YYYYMMDD` (e.g., `Work-20260429`).
     - During the session, commit with short, meaningful messages.
-2.  **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project. 
+2. **File Size Limit**: Do not commit any files larger than 1MB without asking first.
+   - **Clean History (Rebase & Squash)**:
+   - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
+   - Rebase with autosquash: Run `git rebase -i --autosquash main` before pushing.
+   - Push safely: Use `git push --force-with-lease origin <branch>`.
+   - **Daily Push**: Every day, make a new push to GIT with the current committed code.
+   - **Pull Requests**: Create a pull request for each day's branch.
+3. **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project. 
     - Verify the current project version in `CURRENT_VERSION`.
     - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
     - `build.sh` performs automatic version incrementing when code changes are detected via hashing.
-3.  **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
-4.  **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
+4. **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
+5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
 ### 2.2 Current Focus (Iteration 7)
 As of version 2.10.x, the project is focusing on **Iteration 7: Local Prompt Memory + Recall (Miras/Titans-Inspired)**.
@@ -312,7 +319,7 @@ After pruning, run garbage collection on the in-cluster registry pod:
 ```bash
 ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
   "for svc in rag-worker llm-gateway db-adapter qdrant-adapter \
-              rag-ingestion rag-web-ui object-store-mgr rag-test-runner \
+              rag-ingestion object-store-mgr rag-test-runner \
               rag-admin-api memory-controller; do \
      echo \"\$svc: \$(curl -sk https://registry.hierocracy.home:5000/v2/\$svc/tags/list)\"; \
    done"
@@ -457,7 +464,6 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 
 ### 5.5 Excluded Services (TEMPORARY)
 The following services are intentionally excluded from the standard build and deployment process to optimize cluster resources and development focus.
-- **rag-web-ui**: Removed from `SERVICES` in `build.sh` and commented out in `setup-all.sh`.
 - **rag-explorer**: Removed from `SERVICES` in `build.sh` and commented out in `setup-all.sh`.
 - **Note**: DO NOT add these services back to the build or deployment scripts unless explicitly instructed by the user.
 

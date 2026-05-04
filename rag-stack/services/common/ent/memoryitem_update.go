@@ -3,8 +3,11 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/memoryitem"
+	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/predicate"
+	"app-builds/common/ent/session"
 	"context"
 	"errors"
 	"fmt"
@@ -29,34 +32,41 @@ func (_u *MemoryItemUpdate) Where(ps ...predicate.MemoryItem) *MemoryItemUpdate 
 	return _u
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (_u *MemoryItemUpdate) SetTenantID(v uuid.UUID) *MemoryItemUpdate {
-	_u.mutation.SetTenantID(v)
+// SetProjectID sets the "project_id" field.
+func (_u *MemoryItemUpdate) SetProjectID(v int64) *MemoryItemUpdate {
+	_u.mutation.ResetProjectID()
+	_u.mutation.SetProjectID(v)
 	return _u
 }
 
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *MemoryItemUpdate) SetNillableTenantID(v *uuid.UUID) *MemoryItemUpdate {
+// SetNillableProjectID sets the "project_id" field if the given value is not nil.
+func (_u *MemoryItemUpdate) SetNillableProjectID(v *int64) *MemoryItemUpdate {
 	if v != nil {
-		_u.SetTenantID(*v)
+		_u.SetProjectID(*v)
 	}
 	return _u
 }
 
-// ClearTenantID clears the value of the "tenant_id" field.
-func (_u *MemoryItemUpdate) ClearTenantID() *MemoryItemUpdate {
-	_u.mutation.ClearTenantID()
+// AddProjectID adds value to the "project_id" field.
+func (_u *MemoryItemUpdate) AddProjectID(v int64) *MemoryItemUpdate {
+	_u.mutation.AddProjectID(v)
+	return _u
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (_u *MemoryItemUpdate) ClearProjectID() *MemoryItemUpdate {
+	_u.mutation.ClearProjectID()
 	return _u
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *MemoryItemUpdate) SetSessionID(v uuid.UUID) *MemoryItemUpdate {
+func (_u *MemoryItemUpdate) SetSessionID(v int64) *MemoryItemUpdate {
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *MemoryItemUpdate) SetNillableSessionID(v *uuid.UUID) *MemoryItemUpdate {
+func (_u *MemoryItemUpdate) SetNillableSessionID(v *int64) *MemoryItemUpdate {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
@@ -89,16 +99,16 @@ func (_u *MemoryItemUpdate) ClearUserID() *MemoryItemUpdate {
 	return _u
 }
 
-// SetType sets the "type" field.
-func (_u *MemoryItemUpdate) SetType(v string) *MemoryItemUpdate {
-	_u.mutation.SetType(v)
+// SetMemoryType sets the "memory_type" field.
+func (_u *MemoryItemUpdate) SetMemoryType(v string) *MemoryItemUpdate {
+	_u.mutation.SetMemoryType(v)
 	return _u
 }
 
-// SetNillableType sets the "type" field if the given value is not nil.
-func (_u *MemoryItemUpdate) SetNillableType(v *string) *MemoryItemUpdate {
+// SetNillableMemoryType sets the "memory_type" field if the given value is not nil.
+func (_u *MemoryItemUpdate) SetNillableMemoryType(v *string) *MemoryItemUpdate {
 	if v != nil {
-		_u.SetType(*v)
+		_u.SetMemoryType(*v)
 	}
 	return _u
 }
@@ -205,44 +215,37 @@ func (_u *MemoryItemUpdate) SetNillableStatus(v *string) *MemoryItemUpdate {
 	return _u
 }
 
-// SetPinning sets the "pinning" field.
-func (_u *MemoryItemUpdate) SetPinning(v bool) *MemoryItemUpdate {
-	_u.mutation.SetPinning(v)
+// SetPinned sets the "pinned" field.
+func (_u *MemoryItemUpdate) SetPinned(v bool) *MemoryItemUpdate {
+	_u.mutation.SetPinned(v)
 	return _u
 }
 
-// SetNillablePinning sets the "pinning" field if the given value is not nil.
-func (_u *MemoryItemUpdate) SetNillablePinning(v *bool) *MemoryItemUpdate {
+// SetNillablePinned sets the "pinned" field if the given value is not nil.
+func (_u *MemoryItemUpdate) SetNillablePinned(v *bool) *MemoryItemUpdate {
 	if v != nil {
-		_u.SetPinning(*v)
+		_u.SetPinned(*v)
 	}
 	return _u
 }
 
-// SetTTL sets the "ttl" field.
-func (_u *MemoryItemUpdate) SetTTL(v int64) *MemoryItemUpdate {
-	_u.mutation.ResetTTL()
-	_u.mutation.SetTTL(v)
+// SetExpiresAt sets the "expires_at" field.
+func (_u *MemoryItemUpdate) SetExpiresAt(v time.Time) *MemoryItemUpdate {
+	_u.mutation.SetExpiresAt(v)
 	return _u
 }
 
-// SetNillableTTL sets the "ttl" field if the given value is not nil.
-func (_u *MemoryItemUpdate) SetNillableTTL(v *int64) *MemoryItemUpdate {
+// SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
+func (_u *MemoryItemUpdate) SetNillableExpiresAt(v *time.Time) *MemoryItemUpdate {
 	if v != nil {
-		_u.SetTTL(*v)
+		_u.SetExpiresAt(*v)
 	}
 	return _u
 }
 
-// AddTTL adds value to the "ttl" field.
-func (_u *MemoryItemUpdate) AddTTL(v int64) *MemoryItemUpdate {
-	_u.mutation.AddTTL(v)
-	return _u
-}
-
-// ClearTTL clears the value of the "ttl" field.
-func (_u *MemoryItemUpdate) ClearTTL() *MemoryItemUpdate {
-	_u.mutation.ClearTTL()
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (_u *MemoryItemUpdate) ClearExpiresAt() *MemoryItemUpdate {
+	_u.mutation.ClearExpiresAt()
 	return _u
 }
 
@@ -278,9 +281,92 @@ func (_u *MemoryItemUpdate) SetUpdatedAt(v time.Time) *MemoryItemUpdate {
 	return _u
 }
 
+// SetSession sets the "session" edge to the Session entity.
+func (_u *MemoryItemUpdate) SetSession(v *Session) *MemoryItemUpdate {
+	return _u.SetSessionID(v.ID)
+}
+
+// AddLinkIDs adds the "links" edge to the MemoryLink entity by IDs.
+func (_u *MemoryItemUpdate) AddLinkIDs(ids ...int64) *MemoryItemUpdate {
+	_u.mutation.AddLinkIDs(ids...)
+	return _u
+}
+
+// AddLinks adds the "links" edges to the MemoryLink entity.
+func (_u *MemoryItemUpdate) AddLinks(v ...*MemoryLink) *MemoryItemUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddLinkIDs(ids...)
+}
+
+// AddEventIDs adds the "events" edge to the MemoryEvent entity by IDs.
+func (_u *MemoryItemUpdate) AddEventIDs(ids ...int64) *MemoryItemUpdate {
+	_u.mutation.AddEventIDs(ids...)
+	return _u
+}
+
+// AddEvents adds the "events" edges to the MemoryEvent entity.
+func (_u *MemoryItemUpdate) AddEvents(v ...*MemoryEvent) *MemoryItemUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddEventIDs(ids...)
+}
+
 // Mutation returns the MemoryItemMutation object of the builder.
 func (_u *MemoryItemUpdate) Mutation() *MemoryItemMutation {
 	return _u.mutation
+}
+
+// ClearSession clears the "session" edge to the Session entity.
+func (_u *MemoryItemUpdate) ClearSession() *MemoryItemUpdate {
+	_u.mutation.ClearSession()
+	return _u
+}
+
+// ClearLinks clears all "links" edges to the MemoryLink entity.
+func (_u *MemoryItemUpdate) ClearLinks() *MemoryItemUpdate {
+	_u.mutation.ClearLinks()
+	return _u
+}
+
+// RemoveLinkIDs removes the "links" edge to MemoryLink entities by IDs.
+func (_u *MemoryItemUpdate) RemoveLinkIDs(ids ...int64) *MemoryItemUpdate {
+	_u.mutation.RemoveLinkIDs(ids...)
+	return _u
+}
+
+// RemoveLinks removes "links" edges to MemoryLink entities.
+func (_u *MemoryItemUpdate) RemoveLinks(v ...*MemoryLink) *MemoryItemUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveLinkIDs(ids...)
+}
+
+// ClearEvents clears all "events" edges to the MemoryEvent entity.
+func (_u *MemoryItemUpdate) ClearEvents() *MemoryItemUpdate {
+	_u.mutation.ClearEvents()
+	return _u
+}
+
+// RemoveEventIDs removes the "events" edge to MemoryEvent entities by IDs.
+func (_u *MemoryItemUpdate) RemoveEventIDs(ids ...int64) *MemoryItemUpdate {
+	_u.mutation.RemoveEventIDs(ids...)
+	return _u
+}
+
+// RemoveEvents removes "events" edges to MemoryEvent entities.
+func (_u *MemoryItemUpdate) RemoveEvents(v ...*MemoryEvent) *MemoryItemUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveEventIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -320,7 +406,7 @@ func (_u *MemoryItemUpdate) defaults() {
 }
 
 func (_u *MemoryItemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	_spec := sqlgraph.NewUpdateSpec(memoryitem.Table, memoryitem.Columns, sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(memoryitem.Table, memoryitem.Columns, sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -328,17 +414,14 @@ func (_u *MemoryItemUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 			}
 		}
 	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(memoryitem.FieldTenantID, field.TypeUUID, value)
+	if value, ok := _u.mutation.ProjectID(); ok {
+		_spec.SetField(memoryitem.FieldProjectID, field.TypeInt64, value)
 	}
-	if _u.mutation.TenantIDCleared() {
-		_spec.ClearField(memoryitem.FieldTenantID, field.TypeUUID)
+	if value, ok := _u.mutation.AddedProjectID(); ok {
+		_spec.AddField(memoryitem.FieldProjectID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.SessionID(); ok {
-		_spec.SetField(memoryitem.FieldSessionID, field.TypeUUID, value)
-	}
-	if _u.mutation.SessionIDCleared() {
-		_spec.ClearField(memoryitem.FieldSessionID, field.TypeUUID)
+	if _u.mutation.ProjectIDCleared() {
+		_spec.ClearField(memoryitem.FieldProjectID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.UserID(); ok {
 		_spec.SetField(memoryitem.FieldUserID, field.TypeUUID, value)
@@ -346,8 +429,8 @@ func (_u *MemoryItemUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if _u.mutation.UserIDCleared() {
 		_spec.ClearField(memoryitem.FieldUserID, field.TypeUUID)
 	}
-	if value, ok := _u.mutation.GetType(); ok {
-		_spec.SetField(memoryitem.FieldType, field.TypeString, value)
+	if value, ok := _u.mutation.MemoryType(); ok {
+		_spec.SetField(memoryitem.FieldMemoryType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Summary(); ok {
 		_spec.SetField(memoryitem.FieldSummary, field.TypeString, value)
@@ -379,17 +462,14 @@ func (_u *MemoryItemUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(memoryitem.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Pinning(); ok {
-		_spec.SetField(memoryitem.FieldPinning, field.TypeBool, value)
+	if value, ok := _u.mutation.Pinned(); ok {
+		_spec.SetField(memoryitem.FieldPinned, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.TTL(); ok {
-		_spec.SetField(memoryitem.FieldTTL, field.TypeInt64, value)
+	if value, ok := _u.mutation.ExpiresAt(); ok {
+		_spec.SetField(memoryitem.FieldExpiresAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.AddedTTL(); ok {
-		_spec.AddField(memoryitem.FieldTTL, field.TypeInt64, value)
-	}
-	if _u.mutation.TTLCleared() {
-		_spec.ClearField(memoryitem.FieldTTL, field.TypeInt64)
+	if _u.mutation.ExpiresAtCleared() {
+		_spec.ClearField(memoryitem.FieldExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(memoryitem.FieldMetadata, field.TypeJSON, value)
@@ -402,6 +482,125 @@ func (_u *MemoryItemUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(memoryitem.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.SessionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryitem.SessionTable,
+			Columns: []string{memoryitem.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SessionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryitem.SessionTable,
+			Columns: []string{memoryitem.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.LinksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.LinksTable,
+			Columns: []string{memoryitem.LinksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedLinksIDs(); len(nodes) > 0 && !_u.mutation.LinksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.LinksTable,
+			Columns: []string{memoryitem.LinksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.LinksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.LinksTable,
+			Columns: []string{memoryitem.LinksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.EventsTable,
+			Columns: []string{memoryitem.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedEventsIDs(); len(nodes) > 0 && !_u.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.EventsTable,
+			Columns: []string{memoryitem.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.EventsTable,
+			Columns: []string{memoryitem.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -423,34 +622,41 @@ type MemoryItemUpdateOne struct {
 	mutation *MemoryItemMutation
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (_u *MemoryItemUpdateOne) SetTenantID(v uuid.UUID) *MemoryItemUpdateOne {
-	_u.mutation.SetTenantID(v)
+// SetProjectID sets the "project_id" field.
+func (_u *MemoryItemUpdateOne) SetProjectID(v int64) *MemoryItemUpdateOne {
+	_u.mutation.ResetProjectID()
+	_u.mutation.SetProjectID(v)
 	return _u
 }
 
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_u *MemoryItemUpdateOne) SetNillableTenantID(v *uuid.UUID) *MemoryItemUpdateOne {
+// SetNillableProjectID sets the "project_id" field if the given value is not nil.
+func (_u *MemoryItemUpdateOne) SetNillableProjectID(v *int64) *MemoryItemUpdateOne {
 	if v != nil {
-		_u.SetTenantID(*v)
+		_u.SetProjectID(*v)
 	}
 	return _u
 }
 
-// ClearTenantID clears the value of the "tenant_id" field.
-func (_u *MemoryItemUpdateOne) ClearTenantID() *MemoryItemUpdateOne {
-	_u.mutation.ClearTenantID()
+// AddProjectID adds value to the "project_id" field.
+func (_u *MemoryItemUpdateOne) AddProjectID(v int64) *MemoryItemUpdateOne {
+	_u.mutation.AddProjectID(v)
+	return _u
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (_u *MemoryItemUpdateOne) ClearProjectID() *MemoryItemUpdateOne {
+	_u.mutation.ClearProjectID()
 	return _u
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *MemoryItemUpdateOne) SetSessionID(v uuid.UUID) *MemoryItemUpdateOne {
+func (_u *MemoryItemUpdateOne) SetSessionID(v int64) *MemoryItemUpdateOne {
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *MemoryItemUpdateOne) SetNillableSessionID(v *uuid.UUID) *MemoryItemUpdateOne {
+func (_u *MemoryItemUpdateOne) SetNillableSessionID(v *int64) *MemoryItemUpdateOne {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
@@ -483,16 +689,16 @@ func (_u *MemoryItemUpdateOne) ClearUserID() *MemoryItemUpdateOne {
 	return _u
 }
 
-// SetType sets the "type" field.
-func (_u *MemoryItemUpdateOne) SetType(v string) *MemoryItemUpdateOne {
-	_u.mutation.SetType(v)
+// SetMemoryType sets the "memory_type" field.
+func (_u *MemoryItemUpdateOne) SetMemoryType(v string) *MemoryItemUpdateOne {
+	_u.mutation.SetMemoryType(v)
 	return _u
 }
 
-// SetNillableType sets the "type" field if the given value is not nil.
-func (_u *MemoryItemUpdateOne) SetNillableType(v *string) *MemoryItemUpdateOne {
+// SetNillableMemoryType sets the "memory_type" field if the given value is not nil.
+func (_u *MemoryItemUpdateOne) SetNillableMemoryType(v *string) *MemoryItemUpdateOne {
 	if v != nil {
-		_u.SetType(*v)
+		_u.SetMemoryType(*v)
 	}
 	return _u
 }
@@ -599,44 +805,37 @@ func (_u *MemoryItemUpdateOne) SetNillableStatus(v *string) *MemoryItemUpdateOne
 	return _u
 }
 
-// SetPinning sets the "pinning" field.
-func (_u *MemoryItemUpdateOne) SetPinning(v bool) *MemoryItemUpdateOne {
-	_u.mutation.SetPinning(v)
+// SetPinned sets the "pinned" field.
+func (_u *MemoryItemUpdateOne) SetPinned(v bool) *MemoryItemUpdateOne {
+	_u.mutation.SetPinned(v)
 	return _u
 }
 
-// SetNillablePinning sets the "pinning" field if the given value is not nil.
-func (_u *MemoryItemUpdateOne) SetNillablePinning(v *bool) *MemoryItemUpdateOne {
+// SetNillablePinned sets the "pinned" field if the given value is not nil.
+func (_u *MemoryItemUpdateOne) SetNillablePinned(v *bool) *MemoryItemUpdateOne {
 	if v != nil {
-		_u.SetPinning(*v)
+		_u.SetPinned(*v)
 	}
 	return _u
 }
 
-// SetTTL sets the "ttl" field.
-func (_u *MemoryItemUpdateOne) SetTTL(v int64) *MemoryItemUpdateOne {
-	_u.mutation.ResetTTL()
-	_u.mutation.SetTTL(v)
+// SetExpiresAt sets the "expires_at" field.
+func (_u *MemoryItemUpdateOne) SetExpiresAt(v time.Time) *MemoryItemUpdateOne {
+	_u.mutation.SetExpiresAt(v)
 	return _u
 }
 
-// SetNillableTTL sets the "ttl" field if the given value is not nil.
-func (_u *MemoryItemUpdateOne) SetNillableTTL(v *int64) *MemoryItemUpdateOne {
+// SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
+func (_u *MemoryItemUpdateOne) SetNillableExpiresAt(v *time.Time) *MemoryItemUpdateOne {
 	if v != nil {
-		_u.SetTTL(*v)
+		_u.SetExpiresAt(*v)
 	}
 	return _u
 }
 
-// AddTTL adds value to the "ttl" field.
-func (_u *MemoryItemUpdateOne) AddTTL(v int64) *MemoryItemUpdateOne {
-	_u.mutation.AddTTL(v)
-	return _u
-}
-
-// ClearTTL clears the value of the "ttl" field.
-func (_u *MemoryItemUpdateOne) ClearTTL() *MemoryItemUpdateOne {
-	_u.mutation.ClearTTL()
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (_u *MemoryItemUpdateOne) ClearExpiresAt() *MemoryItemUpdateOne {
+	_u.mutation.ClearExpiresAt()
 	return _u
 }
 
@@ -672,9 +871,92 @@ func (_u *MemoryItemUpdateOne) SetUpdatedAt(v time.Time) *MemoryItemUpdateOne {
 	return _u
 }
 
+// SetSession sets the "session" edge to the Session entity.
+func (_u *MemoryItemUpdateOne) SetSession(v *Session) *MemoryItemUpdateOne {
+	return _u.SetSessionID(v.ID)
+}
+
+// AddLinkIDs adds the "links" edge to the MemoryLink entity by IDs.
+func (_u *MemoryItemUpdateOne) AddLinkIDs(ids ...int64) *MemoryItemUpdateOne {
+	_u.mutation.AddLinkIDs(ids...)
+	return _u
+}
+
+// AddLinks adds the "links" edges to the MemoryLink entity.
+func (_u *MemoryItemUpdateOne) AddLinks(v ...*MemoryLink) *MemoryItemUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddLinkIDs(ids...)
+}
+
+// AddEventIDs adds the "events" edge to the MemoryEvent entity by IDs.
+func (_u *MemoryItemUpdateOne) AddEventIDs(ids ...int64) *MemoryItemUpdateOne {
+	_u.mutation.AddEventIDs(ids...)
+	return _u
+}
+
+// AddEvents adds the "events" edges to the MemoryEvent entity.
+func (_u *MemoryItemUpdateOne) AddEvents(v ...*MemoryEvent) *MemoryItemUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddEventIDs(ids...)
+}
+
 // Mutation returns the MemoryItemMutation object of the builder.
 func (_u *MemoryItemUpdateOne) Mutation() *MemoryItemMutation {
 	return _u.mutation
+}
+
+// ClearSession clears the "session" edge to the Session entity.
+func (_u *MemoryItemUpdateOne) ClearSession() *MemoryItemUpdateOne {
+	_u.mutation.ClearSession()
+	return _u
+}
+
+// ClearLinks clears all "links" edges to the MemoryLink entity.
+func (_u *MemoryItemUpdateOne) ClearLinks() *MemoryItemUpdateOne {
+	_u.mutation.ClearLinks()
+	return _u
+}
+
+// RemoveLinkIDs removes the "links" edge to MemoryLink entities by IDs.
+func (_u *MemoryItemUpdateOne) RemoveLinkIDs(ids ...int64) *MemoryItemUpdateOne {
+	_u.mutation.RemoveLinkIDs(ids...)
+	return _u
+}
+
+// RemoveLinks removes "links" edges to MemoryLink entities.
+func (_u *MemoryItemUpdateOne) RemoveLinks(v ...*MemoryLink) *MemoryItemUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveLinkIDs(ids...)
+}
+
+// ClearEvents clears all "events" edges to the MemoryEvent entity.
+func (_u *MemoryItemUpdateOne) ClearEvents() *MemoryItemUpdateOne {
+	_u.mutation.ClearEvents()
+	return _u
+}
+
+// RemoveEventIDs removes the "events" edge to MemoryEvent entities by IDs.
+func (_u *MemoryItemUpdateOne) RemoveEventIDs(ids ...int64) *MemoryItemUpdateOne {
+	_u.mutation.RemoveEventIDs(ids...)
+	return _u
+}
+
+// RemoveEvents removes "events" edges to MemoryEvent entities.
+func (_u *MemoryItemUpdateOne) RemoveEvents(v ...*MemoryEvent) *MemoryItemUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveEventIDs(ids...)
 }
 
 // Where appends a list predicates to the MemoryItemUpdate builder.
@@ -727,7 +1009,7 @@ func (_u *MemoryItemUpdateOne) defaults() {
 }
 
 func (_u *MemoryItemUpdateOne) sqlSave(ctx context.Context) (_node *MemoryItem, err error) {
-	_spec := sqlgraph.NewUpdateSpec(memoryitem.Table, memoryitem.Columns, sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(memoryitem.Table, memoryitem.Columns, sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MemoryItem.id" for update`)}
@@ -752,17 +1034,14 @@ func (_u *MemoryItemUpdateOne) sqlSave(ctx context.Context) (_node *MemoryItem, 
 			}
 		}
 	}
-	if value, ok := _u.mutation.TenantID(); ok {
-		_spec.SetField(memoryitem.FieldTenantID, field.TypeUUID, value)
+	if value, ok := _u.mutation.ProjectID(); ok {
+		_spec.SetField(memoryitem.FieldProjectID, field.TypeInt64, value)
 	}
-	if _u.mutation.TenantIDCleared() {
-		_spec.ClearField(memoryitem.FieldTenantID, field.TypeUUID)
+	if value, ok := _u.mutation.AddedProjectID(); ok {
+		_spec.AddField(memoryitem.FieldProjectID, field.TypeInt64, value)
 	}
-	if value, ok := _u.mutation.SessionID(); ok {
-		_spec.SetField(memoryitem.FieldSessionID, field.TypeUUID, value)
-	}
-	if _u.mutation.SessionIDCleared() {
-		_spec.ClearField(memoryitem.FieldSessionID, field.TypeUUID)
+	if _u.mutation.ProjectIDCleared() {
+		_spec.ClearField(memoryitem.FieldProjectID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.UserID(); ok {
 		_spec.SetField(memoryitem.FieldUserID, field.TypeUUID, value)
@@ -770,8 +1049,8 @@ func (_u *MemoryItemUpdateOne) sqlSave(ctx context.Context) (_node *MemoryItem, 
 	if _u.mutation.UserIDCleared() {
 		_spec.ClearField(memoryitem.FieldUserID, field.TypeUUID)
 	}
-	if value, ok := _u.mutation.GetType(); ok {
-		_spec.SetField(memoryitem.FieldType, field.TypeString, value)
+	if value, ok := _u.mutation.MemoryType(); ok {
+		_spec.SetField(memoryitem.FieldMemoryType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Summary(); ok {
 		_spec.SetField(memoryitem.FieldSummary, field.TypeString, value)
@@ -803,17 +1082,14 @@ func (_u *MemoryItemUpdateOne) sqlSave(ctx context.Context) (_node *MemoryItem, 
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(memoryitem.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Pinning(); ok {
-		_spec.SetField(memoryitem.FieldPinning, field.TypeBool, value)
+	if value, ok := _u.mutation.Pinned(); ok {
+		_spec.SetField(memoryitem.FieldPinned, field.TypeBool, value)
 	}
-	if value, ok := _u.mutation.TTL(); ok {
-		_spec.SetField(memoryitem.FieldTTL, field.TypeInt64, value)
+	if value, ok := _u.mutation.ExpiresAt(); ok {
+		_spec.SetField(memoryitem.FieldExpiresAt, field.TypeTime, value)
 	}
-	if value, ok := _u.mutation.AddedTTL(); ok {
-		_spec.AddField(memoryitem.FieldTTL, field.TypeInt64, value)
-	}
-	if _u.mutation.TTLCleared() {
-		_spec.ClearField(memoryitem.FieldTTL, field.TypeInt64)
+	if _u.mutation.ExpiresAtCleared() {
+		_spec.ClearField(memoryitem.FieldExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(memoryitem.FieldMetadata, field.TypeJSON, value)
@@ -826,6 +1102,125 @@ func (_u *MemoryItemUpdateOne) sqlSave(ctx context.Context) (_node *MemoryItem, 
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(memoryitem.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.SessionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryitem.SessionTable,
+			Columns: []string{memoryitem.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.SessionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryitem.SessionTable,
+			Columns: []string{memoryitem.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.LinksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.LinksTable,
+			Columns: []string{memoryitem.LinksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedLinksIDs(); len(nodes) > 0 && !_u.mutation.LinksCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.LinksTable,
+			Columns: []string{memoryitem.LinksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.LinksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.LinksTable,
+			Columns: []string{memoryitem.LinksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.EventsTable,
+			Columns: []string{memoryitem.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedEventsIDs(); len(nodes) > 0 && !_u.mutation.EventsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.EventsTable,
+			Columns: []string{memoryitem.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.EventsTable,
+			Columns: []string{memoryitem.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &MemoryItem{config: _u.config}
 	_spec.Assign = _node.assignValues

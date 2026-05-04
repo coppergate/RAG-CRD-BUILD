@@ -11,11 +11,9 @@ import (
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // CodeIngestionCreate is the builder for creating a CodeIngestion entity.
@@ -47,28 +45,20 @@ func (_c *CodeIngestionCreate) SetNillableCreatedAt(v *time.Time) *CodeIngestion
 }
 
 // SetID sets the "id" field.
-func (_c *CodeIngestionCreate) SetID(v uuid.UUID) *CodeIngestionCreate {
+func (_c *CodeIngestionCreate) SetID(v int64) *CodeIngestionCreate {
 	_c.mutation.SetID(v)
 	return _c
 }
 
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *CodeIngestionCreate) SetNillableID(v *uuid.UUID) *CodeIngestionCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
-	return _c
-}
-
 // AddEmbeddingIDs adds the "embeddings" edge to the CodeEmbedding entity by IDs.
-func (_c *CodeIngestionCreate) AddEmbeddingIDs(ids ...uuid.UUID) *CodeIngestionCreate {
+func (_c *CodeIngestionCreate) AddEmbeddingIDs(ids ...int64) *CodeIngestionCreate {
 	_c.mutation.AddEmbeddingIDs(ids...)
 	return _c
 }
 
 // AddEmbeddings adds the "embeddings" edges to the CodeEmbedding entity.
 func (_c *CodeIngestionCreate) AddEmbeddings(v ...*CodeEmbedding) *CodeIngestionCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -76,14 +66,14 @@ func (_c *CodeIngestionCreate) AddEmbeddings(v ...*CodeEmbedding) *CodeIngestion
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by IDs.
-func (_c *CodeIngestionCreate) AddTagIDs(ids ...uuid.UUID) *CodeIngestionCreate {
+func (_c *CodeIngestionCreate) AddTagIDs(ids ...int64) *CodeIngestionCreate {
 	_c.mutation.AddTagIDs(ids...)
 	return _c
 }
 
 // AddTags adds the "tags" edges to the Tag entity.
 func (_c *CodeIngestionCreate) AddTags(v ...*Tag) *CodeIngestionCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -129,10 +119,6 @@ func (_c *CodeIngestionCreate) defaults() {
 		v := codeingestion.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := codeingestion.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -157,12 +143,9 @@ func (_c *CodeIngestionCreate) sqlSave(ctx context.Context) (*CodeIngestion, err
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -172,12 +155,12 @@ func (_c *CodeIngestionCreate) sqlSave(ctx context.Context) (*CodeIngestion, err
 func (_c *CodeIngestionCreate) createSpec() (*CodeIngestion, *sqlgraph.CreateSpec) {
 	var (
 		_node = &CodeIngestion{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(codeingestion.Table, sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(codeingestion.Table, sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
+		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.S3BucketID(); ok {
 		_spec.SetField(codeingestion.FieldS3BucketID, field.TypeString, value)
@@ -195,7 +178,7 @@ func (_c *CodeIngestionCreate) createSpec() (*CodeIngestion, *sqlgraph.CreateSpe
 			Columns: []string{codeingestion.EmbeddingsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -211,7 +194,7 @@ func (_c *CodeIngestionCreate) createSpec() (*CodeIngestion, *sqlgraph.CreateSpe
 			Columns: codeingestion.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -387,12 +370,7 @@ func (u *CodeIngestionUpsertOne) ExecX(ctx context.Context) {
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *CodeIngestionUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
-	if u.create.driver.Dialect() == dialect.MySQL {
-		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
-		// fields from the database since MySQL does not support the RETURNING clause.
-		return id, errors.New("ent: CodeIngestionUpsertOne.ID is not supported by MySQL driver. Use CodeIngestionUpsertOne.Exec instead")
-	}
+func (u *CodeIngestionUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -401,7 +379,7 @@ func (u *CodeIngestionUpsertOne) ID(ctx context.Context) (id uuid.UUID, err erro
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *CodeIngestionUpsertOne) IDX(ctx context.Context) uuid.UUID {
+func (u *CodeIngestionUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -456,6 +434,10 @@ func (_c *CodeIngestionCreateBulk) Save(ctx context.Context) ([]*CodeIngestion, 
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})

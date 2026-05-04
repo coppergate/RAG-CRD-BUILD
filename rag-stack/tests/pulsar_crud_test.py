@@ -44,7 +44,7 @@ def test_gateway_session_upsert():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] LLM Gateway Session Upsert Side-Effect")
     
     # 1. Setup Test Session ID
-    session_id = str(uuid.uuid4())
+    session_id = int(time.time() * 1000)
     print(f"  - Using new session ID: {session_id}")
     
     # 2. Call LLM Gateway
@@ -121,7 +121,7 @@ def test_pulsar_db_crud():
     cur = conn.cursor()
 
     # 3. Setup Test Session
-    session_id = str(uuid.uuid4())
+    session_id = int(time.time() * 1000)
     session_name = f"CRUD-Test-{int(time.time())}"
     print(f"  - Creating test session: {session_id}")
     cur.execute("INSERT INTO sessions (session_id, name, description) VALUES (%s, %s, %s)", 
@@ -290,7 +290,7 @@ def test_pulsar_qdrant_ops():
     q_res_consumer = client.subscribe(QDRANT_RESULTS_TOPIC, "test-qdrant-sub-" + str(uuid.uuid4())[:8])
 
     op_id = str(uuid.uuid4())
-    session_id = str(uuid.uuid4())
+    session_id = int(time.time() * 1000)
     vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
     search_payload = {
         "id": op_id,

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,48 +44,37 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var payload struct {
-		SourceIDs []string `json:"source_ids"`
-		TargetID  string   `json:"target_id"`
+		SourceIDs []int64 `json:"source_ids"`
+		TargetID  int64   `json:"target_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	targetUUID, err := uuid.Parse(payload.TargetID)
-	if err != nil {
-		http.Error(w, "Invalid target ID", http.StatusBadRequest)
-		return
-	}
-
+	targetID := payload.TargetID
 	ctx := r.Context()
 
-	sourceUUIDs := make([]uuid.UUID, 0, len(payload.SourceIDs))
-	for _, idStr := range payload.SourceIDs {
-		if uid, err := uuid.Parse(idStr); err == nil {
-			sourceUUIDs = append(sourceUUIDs, uid)
-		}
-	}
-
-	if len(sourceUUIDs) == 0 {
+	sourceIDs := payload.SourceIDs
+	if len(sourceIDs) == 0 {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	allTagIDs := append([]uuid.UUID{targetUUID}, sourceUUIDs...)
+	allTagIDs := append([]int64{targetID}, sourceIDs...)
 	involvedTags, err := s.client.Tag.Query().Where(tag.IDIn(allTagIDs...)).All(ctx)
 	if err != nil {
 		http.Error(w, "Failed to fetch tags", http.StatusInternalServerError)
 		return
 	}
 
-	tagMap := make(map[uuid.UUID]string)
+	tagMap := make(map[int64]string)
 	for _, t := range involvedTags {
 		tagMap[t.ID] = t.Name
 	}
 
 	embeddings, err := s.client.CodeEmbedding.Query().
-		Where(codeembedding.HasTagsWith(tag.IDIn(sourceUUIDs...))).
+		Where(codeembedding.HasTagsWith(tag.IDIn(sourceIDs...))).
 		WithTags().
 		All(ctx)
 	if err != nil {
@@ -100,14 +90,14 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 	}
 	groups := make(map[string]*Group)
 
-	pathTags := make(map[string]map[uuid.UUID]bool)
+	pathTags := make(map[string]map[int64]bool)
 	for _, ce := range embeddings {
 		path, _ := ce.Metadata["path"].(string)
 		if path == "" {
 			continue
 		}
 		if _, ok := pathTags[path]; !ok {
-			pathTags[path] = make(map[uuid.UUID]bool)
+			pathTags[path] = make(map[int64]bool)
 		}
 		for _, t := range ce.Edges.Tags {
 			pathTags[path][t.ID] = true
@@ -115,37 +105,41 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for path, currentTags := range pathTags {
-		newTagIDsMap := make(map[string]bool)
-		newTagIDsMap[payload.TargetID] = true
+		newTagIDsMap := make(map[int64]bool)
+		newTagIDsMap[targetID] = true
 
 		for tid := range currentTags {
 			isSource := false
-			for _, srcID := range sourceUUIDs {
+			for _, srcID := range sourceIDs {
 				if tid == srcID {
 					isSource = true
 					break
 				}
 			}
 			if !isSource {
-				newTagIDsMap[tid.String()] = true
+				newTagIDsMap[tid] = true
 			}
 		}
 
-		var newTagIDs []string
+		var newTagIDsStr []string
 		var newTagNames []string
-		for idStr := range newTagIDsMap {
-			newTagIDs = append(newTagIDs, idStr)
-			uid, _ := uuid.Parse(idStr)
-			if name, ok := tagMap[uid]; ok {
+		var newTagIDs []int64
+		for tid := range newTagIDsMap {
+			newTagIDs = append(newTagIDs, tid)
+			if name, ok := tagMap[tid]; ok {
 				newTagNames = append(newTagNames, name)
 			}
 		}
-		sort.Strings(newTagIDs)
-		key := strings.Join(newTagIDs, ",")
+		// For consistency in grouping, sort the IDs as strings or ints
+		sort.Slice(newTagIDs, func(i, j int) bool { return newTagIDs[i] < newTagIDs[j] })
+		for _, tid := range newTagIDs {
+			newTagIDsStr = append(newTagIDsStr, strconv.FormatInt(tid, 10))
+		}
+		key := strings.Join(newTagIDsStr, ",")
 
 		if _, ok := groups[key]; !ok {
 			groups[key] = &Group{
-				TagIDs:   newTagIDs,
+				TagIDs:   newTagIDsStr,
 				TagNames: newTagNames,
 				Paths:    []string{},
 			}
@@ -201,17 +195,17 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for _, srcUUID := range sourceUUIDs {
+	for _, srcID := range sourceIDs {
 		sessions, _ := s.client.Session.Query().
-			Where(session.HasTagsWith(tag.ID(srcUUID))).
+			Where(session.HasTagsWith(tag.ID(srcID))).
 			All(ctx)
 		for _, sess := range sessions {
 			sess.Update().
-				RemoveTagIDs(srcUUID).
-				AddTagIDs(targetUUID).
+				RemoveTagIDs(srcID).
+				AddTagIDs(targetID).
 				Exec(ctx)
 		}
-		s.client.Tag.DeleteOneID(srcUUID).Exec(ctx)
+		s.client.Tag.DeleteOneID(srcID).Exec(ctx)
 	}
 
 	w.WriteHeader(http.StatusOK)

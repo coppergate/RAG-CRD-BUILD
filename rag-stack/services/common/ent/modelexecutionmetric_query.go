@@ -16,7 +16,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // ModelExecutionMetricQuery is the builder for querying ModelExecutionMetric entities.
@@ -371,7 +370,7 @@ func (_q *ModelExecutionMetricQuery) WithModel(opts ...func(*ModelDefinitionQuer
 // Example:
 //
 //	var v []struct {
-//		ResponseID uuid.UUID `json:"response_id,omitempty"`
+//		ResponseID int64 `json:"response_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
@@ -394,7 +393,7 @@ func (_q *ModelExecutionMetricQuery) GroupBy(field string, fields ...string) *Mo
 // Example:
 //
 //	var v []struct {
-//		ResponseID uuid.UUID `json:"response_id,omitempty"`
+//		ResponseID int64 `json:"response_id,omitempty"`
 //	}
 //
 //	client.ModelExecutionMetric.Query().
@@ -489,8 +488,8 @@ func (_q *ModelExecutionMetricQuery) sqlAll(ctx context.Context, hooks ...queryH
 }
 
 func (_q *ModelExecutionMetricQuery) loadSession(ctx context.Context, query *SessionQuery, nodes []*ModelExecutionMetric, init func(*ModelExecutionMetric), assign func(*ModelExecutionMetric, *Session)) error {
-	ids := make([]uuid.UUID, 0, len(nodes))
-	nodeids := make(map[uuid.UUID][]*ModelExecutionMetric)
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*ModelExecutionMetric)
 	for i := range nodes {
 		fk := nodes[i].SessionID
 		if _, ok := nodeids[fk]; !ok {
@@ -518,8 +517,8 @@ func (_q *ModelExecutionMetricQuery) loadSession(ctx context.Context, query *Ses
 	return nil
 }
 func (_q *ModelExecutionMetricQuery) loadNode(ctx context.Context, query *InferenceNodeQuery, nodes []*ModelExecutionMetric, init func(*ModelExecutionMetric), assign func(*ModelExecutionMetric, *InferenceNode)) error {
-	ids := make([]uuid.UUID, 0, len(nodes))
-	nodeids := make(map[uuid.UUID][]*ModelExecutionMetric)
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*ModelExecutionMetric)
 	for i := range nodes {
 		fk := nodes[i].NodeID
 		if _, ok := nodeids[fk]; !ok {
@@ -547,8 +546,8 @@ func (_q *ModelExecutionMetricQuery) loadNode(ctx context.Context, query *Infere
 	return nil
 }
 func (_q *ModelExecutionMetricQuery) loadModel(ctx context.Context, query *ModelDefinitionQuery, nodes []*ModelExecutionMetric, init func(*ModelExecutionMetric), assign func(*ModelExecutionMetric, *ModelDefinition)) error {
-	ids := make([]uuid.UUID, 0, len(nodes))
-	nodeids := make(map[uuid.UUID][]*ModelExecutionMetric)
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*ModelExecutionMetric)
 	for i := range nodes {
 		fk := nodes[i].ModelID
 		if _, ok := nodeids[fk]; !ok {

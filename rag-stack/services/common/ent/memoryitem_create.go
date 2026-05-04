@@ -3,13 +3,15 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/memoryitem"
+	"app-builds/common/ent/memorylink"
+	"app-builds/common/ent/session"
 	"context"
 	"errors"
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
@@ -24,28 +26,28 @@ type MemoryItemCreate struct {
 	conflict []sql.ConflictOption
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (_c *MemoryItemCreate) SetTenantID(v uuid.UUID) *MemoryItemCreate {
-	_c.mutation.SetTenantID(v)
+// SetProjectID sets the "project_id" field.
+func (_c *MemoryItemCreate) SetProjectID(v int64) *MemoryItemCreate {
+	_c.mutation.SetProjectID(v)
 	return _c
 }
 
-// SetNillableTenantID sets the "tenant_id" field if the given value is not nil.
-func (_c *MemoryItemCreate) SetNillableTenantID(v *uuid.UUID) *MemoryItemCreate {
+// SetNillableProjectID sets the "project_id" field if the given value is not nil.
+func (_c *MemoryItemCreate) SetNillableProjectID(v *int64) *MemoryItemCreate {
 	if v != nil {
-		_c.SetTenantID(*v)
+		_c.SetProjectID(*v)
 	}
 	return _c
 }
 
 // SetSessionID sets the "session_id" field.
-func (_c *MemoryItemCreate) SetSessionID(v uuid.UUID) *MemoryItemCreate {
+func (_c *MemoryItemCreate) SetSessionID(v int64) *MemoryItemCreate {
 	_c.mutation.SetSessionID(v)
 	return _c
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_c *MemoryItemCreate) SetNillableSessionID(v *uuid.UUID) *MemoryItemCreate {
+func (_c *MemoryItemCreate) SetNillableSessionID(v *int64) *MemoryItemCreate {
 	if v != nil {
 		_c.SetSessionID(*v)
 	}
@@ -66,9 +68,9 @@ func (_c *MemoryItemCreate) SetNillableUserID(v *uuid.UUID) *MemoryItemCreate {
 	return _c
 }
 
-// SetType sets the "type" field.
-func (_c *MemoryItemCreate) SetType(v string) *MemoryItemCreate {
-	_c.mutation.SetType(v)
+// SetMemoryType sets the "memory_type" field.
+func (_c *MemoryItemCreate) SetMemoryType(v string) *MemoryItemCreate {
+	_c.mutation.SetMemoryType(v)
 	return _c
 }
 
@@ -140,30 +142,30 @@ func (_c *MemoryItemCreate) SetNillableStatus(v *string) *MemoryItemCreate {
 	return _c
 }
 
-// SetPinning sets the "pinning" field.
-func (_c *MemoryItemCreate) SetPinning(v bool) *MemoryItemCreate {
-	_c.mutation.SetPinning(v)
+// SetPinned sets the "pinned" field.
+func (_c *MemoryItemCreate) SetPinned(v bool) *MemoryItemCreate {
+	_c.mutation.SetPinned(v)
 	return _c
 }
 
-// SetNillablePinning sets the "pinning" field if the given value is not nil.
-func (_c *MemoryItemCreate) SetNillablePinning(v *bool) *MemoryItemCreate {
+// SetNillablePinned sets the "pinned" field if the given value is not nil.
+func (_c *MemoryItemCreate) SetNillablePinned(v *bool) *MemoryItemCreate {
 	if v != nil {
-		_c.SetPinning(*v)
+		_c.SetPinned(*v)
 	}
 	return _c
 }
 
-// SetTTL sets the "ttl" field.
-func (_c *MemoryItemCreate) SetTTL(v int64) *MemoryItemCreate {
-	_c.mutation.SetTTL(v)
+// SetExpiresAt sets the "expires_at" field.
+func (_c *MemoryItemCreate) SetExpiresAt(v time.Time) *MemoryItemCreate {
+	_c.mutation.SetExpiresAt(v)
 	return _c
 }
 
-// SetNillableTTL sets the "ttl" field if the given value is not nil.
-func (_c *MemoryItemCreate) SetNillableTTL(v *int64) *MemoryItemCreate {
+// SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
+func (_c *MemoryItemCreate) SetNillableExpiresAt(v *time.Time) *MemoryItemCreate {
 	if v != nil {
-		_c.SetTTL(*v)
+		_c.SetExpiresAt(*v)
 	}
 	return _c
 }
@@ -203,17 +205,44 @@ func (_c *MemoryItemCreate) SetNillableUpdatedAt(v *time.Time) *MemoryItemCreate
 }
 
 // SetID sets the "id" field.
-func (_c *MemoryItemCreate) SetID(v uuid.UUID) *MemoryItemCreate {
+func (_c *MemoryItemCreate) SetID(v int64) *MemoryItemCreate {
 	_c.mutation.SetID(v)
 	return _c
 }
 
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *MemoryItemCreate) SetNillableID(v *uuid.UUID) *MemoryItemCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
+// SetSession sets the "session" edge to the Session entity.
+func (_c *MemoryItemCreate) SetSession(v *Session) *MemoryItemCreate {
+	return _c.SetSessionID(v.ID)
+}
+
+// AddLinkIDs adds the "links" edge to the MemoryLink entity by IDs.
+func (_c *MemoryItemCreate) AddLinkIDs(ids ...int64) *MemoryItemCreate {
+	_c.mutation.AddLinkIDs(ids...)
 	return _c
+}
+
+// AddLinks adds the "links" edges to the MemoryLink entity.
+func (_c *MemoryItemCreate) AddLinks(v ...*MemoryLink) *MemoryItemCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddLinkIDs(ids...)
+}
+
+// AddEventIDs adds the "events" edge to the MemoryEvent entity by IDs.
+func (_c *MemoryItemCreate) AddEventIDs(ids ...int64) *MemoryItemCreate {
+	_c.mutation.AddEventIDs(ids...)
+	return _c
+}
+
+// AddEvents adds the "events" edges to the MemoryEvent entity.
+func (_c *MemoryItemCreate) AddEvents(v ...*MemoryEvent) *MemoryItemCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddEventIDs(ids...)
 }
 
 // Mutation returns the MemoryItemMutation object of the builder.
@@ -263,9 +292,9 @@ func (_c *MemoryItemCreate) defaults() {
 		v := memoryitem.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
-	if _, ok := _c.mutation.Pinning(); !ok {
-		v := memoryitem.DefaultPinning
-		_c.mutation.SetPinning(v)
+	if _, ok := _c.mutation.Pinned(); !ok {
+		v := memoryitem.DefaultPinned
+		_c.mutation.SetPinned(v)
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := memoryitem.DefaultCreatedAt()
@@ -275,16 +304,12 @@ func (_c *MemoryItemCreate) defaults() {
 		v := memoryitem.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := memoryitem.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *MemoryItemCreate) check() error {
-	if _, ok := _c.mutation.GetType(); !ok {
-		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "MemoryItem.type"`)}
+	if _, ok := _c.mutation.MemoryType(); !ok {
+		return &ValidationError{Name: "memory_type", err: errors.New(`ent: missing required field "MemoryItem.memory_type"`)}
 	}
 	if _, ok := _c.mutation.Summary(); !ok {
 		return &ValidationError{Name: "summary", err: errors.New(`ent: missing required field "MemoryItem.summary"`)}
@@ -298,8 +323,8 @@ func (_c *MemoryItemCreate) check() error {
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "MemoryItem.status"`)}
 	}
-	if _, ok := _c.mutation.Pinning(); !ok {
-		return &ValidationError{Name: "pinning", err: errors.New(`ent: missing required field "MemoryItem.pinning"`)}
+	if _, ok := _c.mutation.Pinned(); !ok {
+		return &ValidationError{Name: "pinned", err: errors.New(`ent: missing required field "MemoryItem.pinned"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "MemoryItem.created_at"`)}
@@ -321,12 +346,9 @@ func (_c *MemoryItemCreate) sqlSave(ctx context.Context) (*MemoryItem, error) {
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -336,28 +358,24 @@ func (_c *MemoryItemCreate) sqlSave(ctx context.Context) (*MemoryItem, error) {
 func (_c *MemoryItemCreate) createSpec() (*MemoryItem, *sqlgraph.CreateSpec) {
 	var (
 		_node = &MemoryItem{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(memoryitem.Table, sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(memoryitem.Table, sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
+		_spec.ID.Value = id
 	}
-	if value, ok := _c.mutation.TenantID(); ok {
-		_spec.SetField(memoryitem.FieldTenantID, field.TypeUUID, value)
-		_node.TenantID = value
-	}
-	if value, ok := _c.mutation.SessionID(); ok {
-		_spec.SetField(memoryitem.FieldSessionID, field.TypeUUID, value)
-		_node.SessionID = value
+	if value, ok := _c.mutation.ProjectID(); ok {
+		_spec.SetField(memoryitem.FieldProjectID, field.TypeInt64, value)
+		_node.ProjectID = value
 	}
 	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(memoryitem.FieldUserID, field.TypeUUID, value)
 		_node.UserID = value
 	}
-	if value, ok := _c.mutation.GetType(); ok {
-		_spec.SetField(memoryitem.FieldType, field.TypeString, value)
-		_node.Type = value
+	if value, ok := _c.mutation.MemoryType(); ok {
+		_spec.SetField(memoryitem.FieldMemoryType, field.TypeString, value)
+		_node.MemoryType = value
 	}
 	if value, ok := _c.mutation.Summary(); ok {
 		_spec.SetField(memoryitem.FieldSummary, field.TypeString, value)
@@ -383,13 +401,13 @@ func (_c *MemoryItemCreate) createSpec() (*MemoryItem, *sqlgraph.CreateSpec) {
 		_spec.SetField(memoryitem.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := _c.mutation.Pinning(); ok {
-		_spec.SetField(memoryitem.FieldPinning, field.TypeBool, value)
-		_node.Pinning = value
+	if value, ok := _c.mutation.Pinned(); ok {
+		_spec.SetField(memoryitem.FieldPinned, field.TypeBool, value)
+		_node.Pinned = value
 	}
-	if value, ok := _c.mutation.TTL(); ok {
-		_spec.SetField(memoryitem.FieldTTL, field.TypeInt64, value)
-		_node.TTL = value
+	if value, ok := _c.mutation.ExpiresAt(); ok {
+		_spec.SetField(memoryitem.FieldExpiresAt, field.TypeTime, value)
+		_node.ExpiresAt = value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(memoryitem.FieldMetadata, field.TypeJSON, value)
@@ -403,6 +421,55 @@ func (_c *MemoryItemCreate) createSpec() (*MemoryItem, *sqlgraph.CreateSpec) {
 		_spec.SetField(memoryitem.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
+	if nodes := _c.mutation.SessionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   memoryitem.SessionTable,
+			Columns: []string{memoryitem.SessionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.SessionID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.LinksIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.LinksTable,
+			Columns: []string{memoryitem.LinksColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.EventsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   memoryitem.EventsTable,
+			Columns: []string{memoryitem.EventsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryevent.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	return _node, _spec
 }
 
@@ -410,7 +477,7 @@ func (_c *MemoryItemCreate) createSpec() (*MemoryItem, *sqlgraph.CreateSpec) {
 // of the `INSERT` statement. For example:
 //
 //	client.MemoryItem.Create().
-//		SetTenantID(v).
+//		SetProjectID(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -419,7 +486,7 @@ func (_c *MemoryItemCreate) createSpec() (*MemoryItem, *sqlgraph.CreateSpec) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.MemoryItemUpsert) {
-//			SetTenantID(v+v).
+//			SetProjectID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *MemoryItemCreate) OnConflict(opts ...sql.ConflictOption) *MemoryItemUpsertOne {
@@ -455,26 +522,32 @@ type (
 	}
 )
 
-// SetTenantID sets the "tenant_id" field.
-func (u *MemoryItemUpsert) SetTenantID(v uuid.UUID) *MemoryItemUpsert {
-	u.Set(memoryitem.FieldTenantID, v)
+// SetProjectID sets the "project_id" field.
+func (u *MemoryItemUpsert) SetProjectID(v int64) *MemoryItemUpsert {
+	u.Set(memoryitem.FieldProjectID, v)
 	return u
 }
 
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *MemoryItemUpsert) UpdateTenantID() *MemoryItemUpsert {
-	u.SetExcluded(memoryitem.FieldTenantID)
+// UpdateProjectID sets the "project_id" field to the value that was provided on create.
+func (u *MemoryItemUpsert) UpdateProjectID() *MemoryItemUpsert {
+	u.SetExcluded(memoryitem.FieldProjectID)
 	return u
 }
 
-// ClearTenantID clears the value of the "tenant_id" field.
-func (u *MemoryItemUpsert) ClearTenantID() *MemoryItemUpsert {
-	u.SetNull(memoryitem.FieldTenantID)
+// AddProjectID adds v to the "project_id" field.
+func (u *MemoryItemUpsert) AddProjectID(v int64) *MemoryItemUpsert {
+	u.Add(memoryitem.FieldProjectID, v)
+	return u
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (u *MemoryItemUpsert) ClearProjectID() *MemoryItemUpsert {
+	u.SetNull(memoryitem.FieldProjectID)
 	return u
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *MemoryItemUpsert) SetSessionID(v uuid.UUID) *MemoryItemUpsert {
+func (u *MemoryItemUpsert) SetSessionID(v int64) *MemoryItemUpsert {
 	u.Set(memoryitem.FieldSessionID, v)
 	return u
 }
@@ -509,15 +582,15 @@ func (u *MemoryItemUpsert) ClearUserID() *MemoryItemUpsert {
 	return u
 }
 
-// SetType sets the "type" field.
-func (u *MemoryItemUpsert) SetType(v string) *MemoryItemUpsert {
-	u.Set(memoryitem.FieldType, v)
+// SetMemoryType sets the "memory_type" field.
+func (u *MemoryItemUpsert) SetMemoryType(v string) *MemoryItemUpsert {
+	u.Set(memoryitem.FieldMemoryType, v)
 	return u
 }
 
-// UpdateType sets the "type" field to the value that was provided on create.
-func (u *MemoryItemUpsert) UpdateType() *MemoryItemUpsert {
-	u.SetExcluded(memoryitem.FieldType)
+// UpdateMemoryType sets the "memory_type" field to the value that was provided on create.
+func (u *MemoryItemUpsert) UpdateMemoryType() *MemoryItemUpsert {
+	u.SetExcluded(memoryitem.FieldMemoryType)
 	return u
 }
 
@@ -617,39 +690,33 @@ func (u *MemoryItemUpsert) UpdateStatus() *MemoryItemUpsert {
 	return u
 }
 
-// SetPinning sets the "pinning" field.
-func (u *MemoryItemUpsert) SetPinning(v bool) *MemoryItemUpsert {
-	u.Set(memoryitem.FieldPinning, v)
+// SetPinned sets the "pinned" field.
+func (u *MemoryItemUpsert) SetPinned(v bool) *MemoryItemUpsert {
+	u.Set(memoryitem.FieldPinned, v)
 	return u
 }
 
-// UpdatePinning sets the "pinning" field to the value that was provided on create.
-func (u *MemoryItemUpsert) UpdatePinning() *MemoryItemUpsert {
-	u.SetExcluded(memoryitem.FieldPinning)
+// UpdatePinned sets the "pinned" field to the value that was provided on create.
+func (u *MemoryItemUpsert) UpdatePinned() *MemoryItemUpsert {
+	u.SetExcluded(memoryitem.FieldPinned)
 	return u
 }
 
-// SetTTL sets the "ttl" field.
-func (u *MemoryItemUpsert) SetTTL(v int64) *MemoryItemUpsert {
-	u.Set(memoryitem.FieldTTL, v)
+// SetExpiresAt sets the "expires_at" field.
+func (u *MemoryItemUpsert) SetExpiresAt(v time.Time) *MemoryItemUpsert {
+	u.Set(memoryitem.FieldExpiresAt, v)
 	return u
 }
 
-// UpdateTTL sets the "ttl" field to the value that was provided on create.
-func (u *MemoryItemUpsert) UpdateTTL() *MemoryItemUpsert {
-	u.SetExcluded(memoryitem.FieldTTL)
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *MemoryItemUpsert) UpdateExpiresAt() *MemoryItemUpsert {
+	u.SetExcluded(memoryitem.FieldExpiresAt)
 	return u
 }
 
-// AddTTL adds v to the "ttl" field.
-func (u *MemoryItemUpsert) AddTTL(v int64) *MemoryItemUpsert {
-	u.Add(memoryitem.FieldTTL, v)
-	return u
-}
-
-// ClearTTL clears the value of the "ttl" field.
-func (u *MemoryItemUpsert) ClearTTL() *MemoryItemUpsert {
-	u.SetNull(memoryitem.FieldTTL)
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *MemoryItemUpsert) ClearExpiresAt() *MemoryItemUpsert {
+	u.SetNull(memoryitem.FieldExpiresAt)
 	return u
 }
 
@@ -743,29 +810,36 @@ func (u *MemoryItemUpsertOne) Update(set func(*MemoryItemUpsert)) *MemoryItemUps
 	return u
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (u *MemoryItemUpsertOne) SetTenantID(v uuid.UUID) *MemoryItemUpsertOne {
+// SetProjectID sets the "project_id" field.
+func (u *MemoryItemUpsertOne) SetProjectID(v int64) *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.SetTenantID(v)
+		s.SetProjectID(v)
 	})
 }
 
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *MemoryItemUpsertOne) UpdateTenantID() *MemoryItemUpsertOne {
+// AddProjectID adds v to the "project_id" field.
+func (u *MemoryItemUpsertOne) AddProjectID(v int64) *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.UpdateTenantID()
+		s.AddProjectID(v)
 	})
 }
 
-// ClearTenantID clears the value of the "tenant_id" field.
-func (u *MemoryItemUpsertOne) ClearTenantID() *MemoryItemUpsertOne {
+// UpdateProjectID sets the "project_id" field to the value that was provided on create.
+func (u *MemoryItemUpsertOne) UpdateProjectID() *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.ClearTenantID()
+		s.UpdateProjectID()
+	})
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (u *MemoryItemUpsertOne) ClearProjectID() *MemoryItemUpsertOne {
+	return u.Update(func(s *MemoryItemUpsert) {
+		s.ClearProjectID()
 	})
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *MemoryItemUpsertOne) SetSessionID(v uuid.UUID) *MemoryItemUpsertOne {
+func (u *MemoryItemUpsertOne) SetSessionID(v int64) *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
 		s.SetSessionID(v)
 	})
@@ -806,17 +880,17 @@ func (u *MemoryItemUpsertOne) ClearUserID() *MemoryItemUpsertOne {
 	})
 }
 
-// SetType sets the "type" field.
-func (u *MemoryItemUpsertOne) SetType(v string) *MemoryItemUpsertOne {
+// SetMemoryType sets the "memory_type" field.
+func (u *MemoryItemUpsertOne) SetMemoryType(v string) *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.SetType(v)
+		s.SetMemoryType(v)
 	})
 }
 
-// UpdateType sets the "type" field to the value that was provided on create.
-func (u *MemoryItemUpsertOne) UpdateType() *MemoryItemUpsertOne {
+// UpdateMemoryType sets the "memory_type" field to the value that was provided on create.
+func (u *MemoryItemUpsertOne) UpdateMemoryType() *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.UpdateType()
+		s.UpdateMemoryType()
 	})
 }
 
@@ -932,45 +1006,38 @@ func (u *MemoryItemUpsertOne) UpdateStatus() *MemoryItemUpsertOne {
 	})
 }
 
-// SetPinning sets the "pinning" field.
-func (u *MemoryItemUpsertOne) SetPinning(v bool) *MemoryItemUpsertOne {
+// SetPinned sets the "pinned" field.
+func (u *MemoryItemUpsertOne) SetPinned(v bool) *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.SetPinning(v)
+		s.SetPinned(v)
 	})
 }
 
-// UpdatePinning sets the "pinning" field to the value that was provided on create.
-func (u *MemoryItemUpsertOne) UpdatePinning() *MemoryItemUpsertOne {
+// UpdatePinned sets the "pinned" field to the value that was provided on create.
+func (u *MemoryItemUpsertOne) UpdatePinned() *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.UpdatePinning()
+		s.UpdatePinned()
 	})
 }
 
-// SetTTL sets the "ttl" field.
-func (u *MemoryItemUpsertOne) SetTTL(v int64) *MemoryItemUpsertOne {
+// SetExpiresAt sets the "expires_at" field.
+func (u *MemoryItemUpsertOne) SetExpiresAt(v time.Time) *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.SetTTL(v)
+		s.SetExpiresAt(v)
 	})
 }
 
-// AddTTL adds v to the "ttl" field.
-func (u *MemoryItemUpsertOne) AddTTL(v int64) *MemoryItemUpsertOne {
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *MemoryItemUpsertOne) UpdateExpiresAt() *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.AddTTL(v)
+		s.UpdateExpiresAt()
 	})
 }
 
-// UpdateTTL sets the "ttl" field to the value that was provided on create.
-func (u *MemoryItemUpsertOne) UpdateTTL() *MemoryItemUpsertOne {
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *MemoryItemUpsertOne) ClearExpiresAt() *MemoryItemUpsertOne {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.UpdateTTL()
-	})
-}
-
-// ClearTTL clears the value of the "ttl" field.
-func (u *MemoryItemUpsertOne) ClearTTL() *MemoryItemUpsertOne {
-	return u.Update(func(s *MemoryItemUpsert) {
-		s.ClearTTL()
+		s.ClearExpiresAt()
 	})
 }
 
@@ -1039,12 +1106,7 @@ func (u *MemoryItemUpsertOne) ExecX(ctx context.Context) {
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *MemoryItemUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
-	if u.create.driver.Dialect() == dialect.MySQL {
-		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
-		// fields from the database since MySQL does not support the RETURNING clause.
-		return id, errors.New("ent: MemoryItemUpsertOne.ID is not supported by MySQL driver. Use MemoryItemUpsertOne.Exec instead")
-	}
+func (u *MemoryItemUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -1053,7 +1115,7 @@ func (u *MemoryItemUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) 
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *MemoryItemUpsertOne) IDX(ctx context.Context) uuid.UUID {
+func (u *MemoryItemUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -1108,6 +1170,10 @@ func (_c *MemoryItemCreateBulk) Save(ctx context.Context) ([]*MemoryItem, error)
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})
@@ -1159,7 +1225,7 @@ func (_c *MemoryItemCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.MemoryItemUpsert) {
-//			SetTenantID(v+v).
+//			SetProjectID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *MemoryItemCreateBulk) OnConflict(opts ...sql.ConflictOption) *MemoryItemUpsertBulk {
@@ -1238,29 +1304,36 @@ func (u *MemoryItemUpsertBulk) Update(set func(*MemoryItemUpsert)) *MemoryItemUp
 	return u
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (u *MemoryItemUpsertBulk) SetTenantID(v uuid.UUID) *MemoryItemUpsertBulk {
+// SetProjectID sets the "project_id" field.
+func (u *MemoryItemUpsertBulk) SetProjectID(v int64) *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.SetTenantID(v)
+		s.SetProjectID(v)
 	})
 }
 
-// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
-func (u *MemoryItemUpsertBulk) UpdateTenantID() *MemoryItemUpsertBulk {
+// AddProjectID adds v to the "project_id" field.
+func (u *MemoryItemUpsertBulk) AddProjectID(v int64) *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.UpdateTenantID()
+		s.AddProjectID(v)
 	})
 }
 
-// ClearTenantID clears the value of the "tenant_id" field.
-func (u *MemoryItemUpsertBulk) ClearTenantID() *MemoryItemUpsertBulk {
+// UpdateProjectID sets the "project_id" field to the value that was provided on create.
+func (u *MemoryItemUpsertBulk) UpdateProjectID() *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.ClearTenantID()
+		s.UpdateProjectID()
+	})
+}
+
+// ClearProjectID clears the value of the "project_id" field.
+func (u *MemoryItemUpsertBulk) ClearProjectID() *MemoryItemUpsertBulk {
+	return u.Update(func(s *MemoryItemUpsert) {
+		s.ClearProjectID()
 	})
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *MemoryItemUpsertBulk) SetSessionID(v uuid.UUID) *MemoryItemUpsertBulk {
+func (u *MemoryItemUpsertBulk) SetSessionID(v int64) *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
 		s.SetSessionID(v)
 	})
@@ -1301,17 +1374,17 @@ func (u *MemoryItemUpsertBulk) ClearUserID() *MemoryItemUpsertBulk {
 	})
 }
 
-// SetType sets the "type" field.
-func (u *MemoryItemUpsertBulk) SetType(v string) *MemoryItemUpsertBulk {
+// SetMemoryType sets the "memory_type" field.
+func (u *MemoryItemUpsertBulk) SetMemoryType(v string) *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.SetType(v)
+		s.SetMemoryType(v)
 	})
 }
 
-// UpdateType sets the "type" field to the value that was provided on create.
-func (u *MemoryItemUpsertBulk) UpdateType() *MemoryItemUpsertBulk {
+// UpdateMemoryType sets the "memory_type" field to the value that was provided on create.
+func (u *MemoryItemUpsertBulk) UpdateMemoryType() *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.UpdateType()
+		s.UpdateMemoryType()
 	})
 }
 
@@ -1427,45 +1500,38 @@ func (u *MemoryItemUpsertBulk) UpdateStatus() *MemoryItemUpsertBulk {
 	})
 }
 
-// SetPinning sets the "pinning" field.
-func (u *MemoryItemUpsertBulk) SetPinning(v bool) *MemoryItemUpsertBulk {
+// SetPinned sets the "pinned" field.
+func (u *MemoryItemUpsertBulk) SetPinned(v bool) *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.SetPinning(v)
+		s.SetPinned(v)
 	})
 }
 
-// UpdatePinning sets the "pinning" field to the value that was provided on create.
-func (u *MemoryItemUpsertBulk) UpdatePinning() *MemoryItemUpsertBulk {
+// UpdatePinned sets the "pinned" field to the value that was provided on create.
+func (u *MemoryItemUpsertBulk) UpdatePinned() *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.UpdatePinning()
+		s.UpdatePinned()
 	})
 }
 
-// SetTTL sets the "ttl" field.
-func (u *MemoryItemUpsertBulk) SetTTL(v int64) *MemoryItemUpsertBulk {
+// SetExpiresAt sets the "expires_at" field.
+func (u *MemoryItemUpsertBulk) SetExpiresAt(v time.Time) *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.SetTTL(v)
+		s.SetExpiresAt(v)
 	})
 }
 
-// AddTTL adds v to the "ttl" field.
-func (u *MemoryItemUpsertBulk) AddTTL(v int64) *MemoryItemUpsertBulk {
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *MemoryItemUpsertBulk) UpdateExpiresAt() *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.AddTTL(v)
+		s.UpdateExpiresAt()
 	})
 }
 
-// UpdateTTL sets the "ttl" field to the value that was provided on create.
-func (u *MemoryItemUpsertBulk) UpdateTTL() *MemoryItemUpsertBulk {
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *MemoryItemUpsertBulk) ClearExpiresAt() *MemoryItemUpsertBulk {
 	return u.Update(func(s *MemoryItemUpsert) {
-		s.UpdateTTL()
-	})
-}
-
-// ClearTTL clears the value of the "ttl" field.
-func (u *MemoryItemUpsertBulk) ClearTTL() *MemoryItemUpsertBulk {
-	return u.Update(func(s *MemoryItemUpsert) {
-		s.ClearTTL()
+		s.ClearExpiresAt()
 	})
 }
 

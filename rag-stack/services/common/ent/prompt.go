@@ -22,7 +22,7 @@ type Prompt struct {
 	// PromptID holds the value of the "prompt_id" field.
 	PromptID uuid.UUID `json:"prompt_id,omitempty"`
 	// SessionID holds the value of the "session_id" field.
-	SessionID uuid.UUID `json:"session_id,omitempty"`
+	SessionID int64 `json:"session_id,omitempty"`
 	// Content holds the value of the "content" field.
 	Content string `json:"content,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -39,13 +39,13 @@ func (*Prompt) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case prompt.FieldMetadata:
 			values[i] = new([]byte)
-		case prompt.FieldID:
+		case prompt.FieldID, prompt.FieldSessionID:
 			values[i] = new(sql.NullInt64)
 		case prompt.FieldContent:
 			values[i] = new(sql.NullString)
 		case prompt.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case prompt.FieldPromptID, prompt.FieldSessionID:
+		case prompt.FieldPromptID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -75,10 +75,10 @@ func (_m *Prompt) assignValues(columns []string, values []any) error {
 				_m.PromptID = *value
 			}
 		case prompt.FieldSessionID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field session_id", values[i])
-			} else if value != nil {
-				_m.SessionID = *value
+			} else if value.Valid {
+				_m.SessionID = value.Int64
 			}
 		case prompt.FieldContent:
 			if value, ok := values[i].(*sql.NullString); !ok {

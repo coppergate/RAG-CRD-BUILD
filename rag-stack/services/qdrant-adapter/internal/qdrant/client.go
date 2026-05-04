@@ -30,11 +30,11 @@ func NewClient(cfg *config.Config) *QdrantClient {
 	}
 }
 
-func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID string) ([]string, error) {
+func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID int64) ([]string, error) {
 	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, true)
 }
 
-func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID string, retry bool) ([]string, error) {
+func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID int64, retry bool) ([]string, error) {
 	if len(vector) == 0 {
 		return nil, nil // Cannot search with empty vector
 	}
@@ -69,7 +69,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		})
 	}
 
-	if sessionID != "" {
+	if sessionID > 0 {
 		// Allow points that match the session ID OR have no session ID (global context)
 		mustFilters = append(mustFilters, map[string]interface{}{
 			"should": []map[string]interface{}{
@@ -92,7 +92,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		query["filter"] = map[string]interface{}{
 			"must": mustFilters,
 		}
-		log.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%s): %+v", tags, sessionID, query["filter"])
+		log.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%d): %+v", tags, sessionID, query["filter"])
 	}
 
 	body, err := json.Marshal(query)

@@ -6,7 +6,6 @@ import (
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -25,10 +24,9 @@ func (CodeEmbedding) Annotations() []schema.Annotation {
 // Fields of the CodeEmbedding.
 func (CodeEmbedding) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuid.New).
+		field.Int64("id").
 			StorageKey("embedding_id"),
-		field.UUID("ingestion_id", uuid.UUID{}).
+		field.Int64("ingestion_id").
 			Optional(),
 		field.JSON("embedding_vector", []float32{}).
 			Optional(),

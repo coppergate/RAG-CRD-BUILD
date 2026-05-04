@@ -186,7 +186,6 @@ check_manifest_exists "$BASE_DIR/rag-stack/infrastructure/build-pipeline/orchest
 # Service manifests (__VERSION__ templates)
 check_manifest_exists_templated "$BASE_DIR/rag-stack/services/llm-gateway/k8s/deployment.yaml" "llm-gateway deployment"
 check_manifest_exists_templated "$BASE_DIR/rag-stack/services/rag-worker/k8s/deployment.yaml" "rag-worker deployment"
-check_manifest_exists_templated "$BASE_DIR/rag-stack/services/rag-web-ui/ui-deployment.yaml" "rag-web-ui deployment"
 check_manifest_exists_templated "$BASE_DIR/rag-stack/services/db-adapter/k8s/deployment.yaml" "db-adapter deployment"
 check_manifest_exists_templated "$BASE_DIR/rag-stack/services/qdrant-adapter/k8s/deployment.yaml" "qdrant-adapter deployment"
 check_manifest_exists_templated "$BASE_DIR/rag-stack/services/rag-ingestion/k8s/deployment.yaml" "rag-ingestion deployment/service"

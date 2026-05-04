@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/predicate"
 	"context"
@@ -13,16 +14,17 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // MemoryLinkQuery is the builder for querying MemoryLink entities.
 type MemoryLinkQuery struct {
 	config
-	ctx        *QueryContext
-	order      []memorylink.OrderOption
-	inters     []Interceptor
-	predicates []predicate.MemoryLink
+	ctx            *QueryContext
+	order          []memorylink.OrderOption
+	inters         []Interceptor
+	predicates     []predicate.MemoryLink
+	withMemoryItem *MemoryItemQuery
+	withFKs        bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -59,6 +61,28 @@ func (_q *MemoryLinkQuery) Order(o ...memorylink.OrderOption) *MemoryLinkQuery {
 	return _q
 }
 
+// QueryMemoryItem chains the current query on the "memory_item" edge.
+func (_q *MemoryLinkQuery) QueryMemoryItem() *MemoryItemQuery {
+	query := (&MemoryItemClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(memorylink.Table, memorylink.FieldID, selector),
+			sqlgraph.To(memoryitem.Table, memoryitem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, memorylink.MemoryItemTable, memorylink.MemoryItemColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // First returns the first MemoryLink entity from the query.
 // Returns a *NotFoundError when no MemoryLink was found.
 func (_q *MemoryLinkQuery) First(ctx context.Context) (*MemoryLink, error) {
@@ -83,8 +107,8 @@ func (_q *MemoryLinkQuery) FirstX(ctx context.Context) *MemoryLink {
 
 // FirstID returns the first MemoryLink ID from the query.
 // Returns a *NotFoundError when no MemoryLink ID was found.
-func (_q *MemoryLinkQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *MemoryLinkQuery) FirstID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -96,7 +120,7 @@ func (_q *MemoryLinkQuery) FirstID(ctx context.Context) (id uuid.UUID, err error
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *MemoryLinkQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *MemoryLinkQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -134,8 +158,8 @@ func (_q *MemoryLinkQuery) OnlyX(ctx context.Context) *MemoryLink {
 // OnlyID is like Only, but returns the only MemoryLink ID in the query.
 // Returns a *NotSingularError when more than one MemoryLink ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *MemoryLinkQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *MemoryLinkQuery) OnlyID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -151,7 +175,7 @@ func (_q *MemoryLinkQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error)
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *MemoryLinkQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *MemoryLinkQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -179,7 +203,7 @@ func (_q *MemoryLinkQuery) AllX(ctx context.Context) []*MemoryLink {
 }
 
 // IDs executes the query and returns a list of MemoryLink IDs.
-func (_q *MemoryLinkQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+func (_q *MemoryLinkQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
@@ -191,7 +215,7 @@ func (_q *MemoryLinkQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error)
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *MemoryLinkQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *MemoryLinkQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -246,15 +270,27 @@ func (_q *MemoryLinkQuery) Clone() *MemoryLinkQuery {
 		return nil
 	}
 	return &MemoryLinkQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]memorylink.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.MemoryLink{}, _q.predicates...),
+		config:         _q.config,
+		ctx:            _q.ctx.Clone(),
+		order:          append([]memorylink.OrderOption{}, _q.order...),
+		inters:         append([]Interceptor{}, _q.inters...),
+		predicates:     append([]predicate.MemoryLink{}, _q.predicates...),
+		withMemoryItem: _q.withMemoryItem.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithMemoryItem tells the query-builder to eager-load the nodes that are connected to
+// the "memory_item" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *MemoryLinkQuery) WithMemoryItem(opts ...func(*MemoryItemQuery)) *MemoryLinkQuery {
+	query := (&MemoryItemClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withMemoryItem = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -263,7 +299,7 @@ func (_q *MemoryLinkQuery) Clone() *MemoryLinkQuery {
 // Example:
 //
 //	var v []struct {
-//		MemoryItemID uuid.UUID `json:"memory_item_id,omitempty"`
+//		MemoryItemID int64 `json:"memory_item_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
@@ -286,7 +322,7 @@ func (_q *MemoryLinkQuery) GroupBy(field string, fields ...string) *MemoryLinkGr
 // Example:
 //
 //	var v []struct {
-//		MemoryItemID uuid.UUID `json:"memory_item_id,omitempty"`
+//		MemoryItemID int64 `json:"memory_item_id,omitempty"`
 //	}
 //
 //	client.MemoryLink.Query().
@@ -333,15 +369,23 @@ func (_q *MemoryLinkQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *MemoryLinkQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MemoryLink, error) {
 	var (
-		nodes = []*MemoryLink{}
-		_spec = _q.querySpec()
+		nodes       = []*MemoryLink{}
+		withFKs     = _q.withFKs
+		_spec       = _q.querySpec()
+		loadedTypes = [1]bool{
+			_q.withMemoryItem != nil,
+		}
 	)
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, memorylink.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*MemoryLink).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &MemoryLink{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -353,7 +397,43 @@ func (_q *MemoryLinkQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*M
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withMemoryItem; query != nil {
+		if err := _q.loadMemoryItem(ctx, query, nodes, nil,
+			func(n *MemoryLink, e *MemoryItem) { n.Edges.MemoryItem = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *MemoryLinkQuery) loadMemoryItem(ctx context.Context, query *MemoryItemQuery, nodes []*MemoryLink, init func(*MemoryLink), assign func(*MemoryLink, *MemoryItem)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*MemoryLink)
+	for i := range nodes {
+		fk := nodes[i].MemoryItemID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(memoryitem.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "memory_item_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (_q *MemoryLinkQuery) sqlCount(ctx context.Context) (int, error) {
@@ -366,7 +446,7 @@ func (_q *MemoryLinkQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (_q *MemoryLinkQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(memorylink.Table, memorylink.Columns, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewQuerySpec(memorylink.Table, memorylink.Columns, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -380,6 +460,9 @@ func (_q *MemoryLinkQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != memorylink.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withMemoryItem != nil {
+			_spec.Node.AddColumnOnce(memorylink.FieldMemoryItemID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

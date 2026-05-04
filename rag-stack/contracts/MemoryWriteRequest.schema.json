@@ -9,9 +9,9 @@
     "scope": {
       "type": "object",
       "properties": {
-        "session_id": {"type": "string"},
+        "session_id": {"type": "integer"},
         "user_id": {"type": "string"},
-        "project_id": {"type": "string"},
+        "project_id": {"type": "integer"},
         "tags": {
           "type": "array",
           "items": {"type": "string"}
@@ -26,7 +26,7 @@
         "type": "object",
         "required": ["memory_type", "summary"],
         "properties": {
-          "memory_id": {"type": "string"},
+          "memory_id": {"type": "integer"},
           "memory_type": {
             "type": "string",
             "enum": ["short_term_memory", "long_term_memory", "persistent_memory"]

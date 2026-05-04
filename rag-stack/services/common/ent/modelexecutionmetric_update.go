@@ -15,7 +15,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // ModelExecutionMetricUpdate is the builder for updating ModelExecutionMetric entities.
@@ -32,16 +31,23 @@ func (_u *ModelExecutionMetricUpdate) Where(ps ...predicate.ModelExecutionMetric
 }
 
 // SetResponseID sets the "response_id" field.
-func (_u *ModelExecutionMetricUpdate) SetResponseID(v uuid.UUID) *ModelExecutionMetricUpdate {
+func (_u *ModelExecutionMetricUpdate) SetResponseID(v int64) *ModelExecutionMetricUpdate {
+	_u.mutation.ResetResponseID()
 	_u.mutation.SetResponseID(v)
 	return _u
 }
 
 // SetNillableResponseID sets the "response_id" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdate) SetNillableResponseID(v *uuid.UUID) *ModelExecutionMetricUpdate {
+func (_u *ModelExecutionMetricUpdate) SetNillableResponseID(v *int64) *ModelExecutionMetricUpdate {
 	if v != nil {
 		_u.SetResponseID(*v)
 	}
+	return _u
+}
+
+// AddResponseID adds value to the "response_id" field.
+func (_u *ModelExecutionMetricUpdate) AddResponseID(v int64) *ModelExecutionMetricUpdate {
+	_u.mutation.AddResponseID(v)
 	return _u
 }
 
@@ -52,13 +58,13 @@ func (_u *ModelExecutionMetricUpdate) ClearResponseID() *ModelExecutionMetricUpd
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *ModelExecutionMetricUpdate) SetSessionID(v uuid.UUID) *ModelExecutionMetricUpdate {
+func (_u *ModelExecutionMetricUpdate) SetSessionID(v int64) *ModelExecutionMetricUpdate {
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdate) SetNillableSessionID(v *uuid.UUID) *ModelExecutionMetricUpdate {
+func (_u *ModelExecutionMetricUpdate) SetNillableSessionID(v *int64) *ModelExecutionMetricUpdate {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
@@ -72,13 +78,13 @@ func (_u *ModelExecutionMetricUpdate) ClearSessionID() *ModelExecutionMetricUpda
 }
 
 // SetNodeID sets the "node_id" field.
-func (_u *ModelExecutionMetricUpdate) SetNodeID(v uuid.UUID) *ModelExecutionMetricUpdate {
+func (_u *ModelExecutionMetricUpdate) SetNodeID(v int64) *ModelExecutionMetricUpdate {
 	_u.mutation.SetNodeID(v)
 	return _u
 }
 
 // SetNillableNodeID sets the "node_id" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdate) SetNillableNodeID(v *uuid.UUID) *ModelExecutionMetricUpdate {
+func (_u *ModelExecutionMetricUpdate) SetNillableNodeID(v *int64) *ModelExecutionMetricUpdate {
 	if v != nil {
 		_u.SetNodeID(*v)
 	}
@@ -92,13 +98,13 @@ func (_u *ModelExecutionMetricUpdate) ClearNodeID() *ModelExecutionMetricUpdate 
 }
 
 // SetModelID sets the "model_id" field.
-func (_u *ModelExecutionMetricUpdate) SetModelID(v uuid.UUID) *ModelExecutionMetricUpdate {
+func (_u *ModelExecutionMetricUpdate) SetModelID(v int64) *ModelExecutionMetricUpdate {
 	_u.mutation.SetModelID(v)
 	return _u
 }
 
 // SetNillableModelID sets the "model_id" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdate) SetNillableModelID(v *uuid.UUID) *ModelExecutionMetricUpdate {
+func (_u *ModelExecutionMetricUpdate) SetNillableModelID(v *int64) *ModelExecutionMetricUpdate {
 	if v != nil {
 		_u.SetModelID(*v)
 	}
@@ -402,10 +408,13 @@ func (_u *ModelExecutionMetricUpdate) sqlSave(ctx context.Context) (_node int, e
 		}
 	}
 	if value, ok := _u.mutation.ResponseID(); ok {
-		_spec.SetField(modelexecutionmetric.FieldResponseID, field.TypeUUID, value)
+		_spec.SetField(modelexecutionmetric.FieldResponseID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedResponseID(); ok {
+		_spec.AddField(modelexecutionmetric.FieldResponseID, field.TypeInt64, value)
 	}
 	if _u.mutation.ResponseIDCleared() {
-		_spec.ClearField(modelexecutionmetric.FieldResponseID, field.TypeUUID)
+		_spec.ClearField(modelexecutionmetric.FieldResponseID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.PromptTokens(); ok {
 		_spec.SetField(modelexecutionmetric.FieldPromptTokens, field.TypeInt, value)
@@ -487,7 +496,7 @@ func (_u *ModelExecutionMetricUpdate) sqlSave(ctx context.Context) (_node int, e
 			Columns: []string{modelexecutionmetric.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -500,7 +509,7 @@ func (_u *ModelExecutionMetricUpdate) sqlSave(ctx context.Context) (_node int, e
 			Columns: []string{modelexecutionmetric.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -516,7 +525,7 @@ func (_u *ModelExecutionMetricUpdate) sqlSave(ctx context.Context) (_node int, e
 			Columns: []string{modelexecutionmetric.NodeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -529,7 +538,7 @@ func (_u *ModelExecutionMetricUpdate) sqlSave(ctx context.Context) (_node int, e
 			Columns: []string{modelexecutionmetric.NodeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -545,7 +554,7 @@ func (_u *ModelExecutionMetricUpdate) sqlSave(ctx context.Context) (_node int, e
 			Columns: []string{modelexecutionmetric.ModelColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -558,7 +567,7 @@ func (_u *ModelExecutionMetricUpdate) sqlSave(ctx context.Context) (_node int, e
 			Columns: []string{modelexecutionmetric.ModelColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -587,16 +596,23 @@ type ModelExecutionMetricUpdateOne struct {
 }
 
 // SetResponseID sets the "response_id" field.
-func (_u *ModelExecutionMetricUpdateOne) SetResponseID(v uuid.UUID) *ModelExecutionMetricUpdateOne {
+func (_u *ModelExecutionMetricUpdateOne) SetResponseID(v int64) *ModelExecutionMetricUpdateOne {
+	_u.mutation.ResetResponseID()
 	_u.mutation.SetResponseID(v)
 	return _u
 }
 
 // SetNillableResponseID sets the "response_id" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdateOne) SetNillableResponseID(v *uuid.UUID) *ModelExecutionMetricUpdateOne {
+func (_u *ModelExecutionMetricUpdateOne) SetNillableResponseID(v *int64) *ModelExecutionMetricUpdateOne {
 	if v != nil {
 		_u.SetResponseID(*v)
 	}
+	return _u
+}
+
+// AddResponseID adds value to the "response_id" field.
+func (_u *ModelExecutionMetricUpdateOne) AddResponseID(v int64) *ModelExecutionMetricUpdateOne {
+	_u.mutation.AddResponseID(v)
 	return _u
 }
 
@@ -607,13 +623,13 @@ func (_u *ModelExecutionMetricUpdateOne) ClearResponseID() *ModelExecutionMetric
 }
 
 // SetSessionID sets the "session_id" field.
-func (_u *ModelExecutionMetricUpdateOne) SetSessionID(v uuid.UUID) *ModelExecutionMetricUpdateOne {
+func (_u *ModelExecutionMetricUpdateOne) SetSessionID(v int64) *ModelExecutionMetricUpdateOne {
 	_u.mutation.SetSessionID(v)
 	return _u
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdateOne) SetNillableSessionID(v *uuid.UUID) *ModelExecutionMetricUpdateOne {
+func (_u *ModelExecutionMetricUpdateOne) SetNillableSessionID(v *int64) *ModelExecutionMetricUpdateOne {
 	if v != nil {
 		_u.SetSessionID(*v)
 	}
@@ -627,13 +643,13 @@ func (_u *ModelExecutionMetricUpdateOne) ClearSessionID() *ModelExecutionMetricU
 }
 
 // SetNodeID sets the "node_id" field.
-func (_u *ModelExecutionMetricUpdateOne) SetNodeID(v uuid.UUID) *ModelExecutionMetricUpdateOne {
+func (_u *ModelExecutionMetricUpdateOne) SetNodeID(v int64) *ModelExecutionMetricUpdateOne {
 	_u.mutation.SetNodeID(v)
 	return _u
 }
 
 // SetNillableNodeID sets the "node_id" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdateOne) SetNillableNodeID(v *uuid.UUID) *ModelExecutionMetricUpdateOne {
+func (_u *ModelExecutionMetricUpdateOne) SetNillableNodeID(v *int64) *ModelExecutionMetricUpdateOne {
 	if v != nil {
 		_u.SetNodeID(*v)
 	}
@@ -647,13 +663,13 @@ func (_u *ModelExecutionMetricUpdateOne) ClearNodeID() *ModelExecutionMetricUpda
 }
 
 // SetModelID sets the "model_id" field.
-func (_u *ModelExecutionMetricUpdateOne) SetModelID(v uuid.UUID) *ModelExecutionMetricUpdateOne {
+func (_u *ModelExecutionMetricUpdateOne) SetModelID(v int64) *ModelExecutionMetricUpdateOne {
 	_u.mutation.SetModelID(v)
 	return _u
 }
 
 // SetNillableModelID sets the "model_id" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdateOne) SetNillableModelID(v *uuid.UUID) *ModelExecutionMetricUpdateOne {
+func (_u *ModelExecutionMetricUpdateOne) SetNillableModelID(v *int64) *ModelExecutionMetricUpdateOne {
 	if v != nil {
 		_u.SetModelID(*v)
 	}
@@ -987,10 +1003,13 @@ func (_u *ModelExecutionMetricUpdateOne) sqlSave(ctx context.Context) (_node *Mo
 		}
 	}
 	if value, ok := _u.mutation.ResponseID(); ok {
-		_spec.SetField(modelexecutionmetric.FieldResponseID, field.TypeUUID, value)
+		_spec.SetField(modelexecutionmetric.FieldResponseID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedResponseID(); ok {
+		_spec.AddField(modelexecutionmetric.FieldResponseID, field.TypeInt64, value)
 	}
 	if _u.mutation.ResponseIDCleared() {
-		_spec.ClearField(modelexecutionmetric.FieldResponseID, field.TypeUUID)
+		_spec.ClearField(modelexecutionmetric.FieldResponseID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.PromptTokens(); ok {
 		_spec.SetField(modelexecutionmetric.FieldPromptTokens, field.TypeInt, value)
@@ -1072,7 +1091,7 @@ func (_u *ModelExecutionMetricUpdateOne) sqlSave(ctx context.Context) (_node *Mo
 			Columns: []string{modelexecutionmetric.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1085,7 +1104,7 @@ func (_u *ModelExecutionMetricUpdateOne) sqlSave(ctx context.Context) (_node *Mo
 			Columns: []string{modelexecutionmetric.SessionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1101,7 +1120,7 @@ func (_u *ModelExecutionMetricUpdateOne) sqlSave(ctx context.Context) (_node *Mo
 			Columns: []string{modelexecutionmetric.NodeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1114,7 +1133,7 @@ func (_u *ModelExecutionMetricUpdateOne) sqlSave(ctx context.Context) (_node *Mo
 			Columns: []string{modelexecutionmetric.NodeColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1130,7 +1149,7 @@ func (_u *ModelExecutionMetricUpdateOne) sqlSave(ctx context.Context) (_node *Mo
 			Columns: []string{modelexecutionmetric.ModelColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1143,7 +1162,7 @@ func (_u *ModelExecutionMetricUpdateOne) sqlSave(ctx context.Context) (_node *Mo
 			Columns: []string{modelexecutionmetric.ModelColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(modeldefinition.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

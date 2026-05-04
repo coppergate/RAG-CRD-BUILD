@@ -193,7 +193,7 @@ func (_u *InferenceNodeUpdate) ExecX(ctx context.Context) {
 }
 
 func (_u *InferenceNodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	_spec := sqlgraph.NewUpdateSpec(inferencenode.Table, inferencenode.Columns, sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(inferencenode.Table, inferencenode.Columns, sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -470,7 +470,7 @@ func (_u *InferenceNodeUpdateOne) ExecX(ctx context.Context) {
 }
 
 func (_u *InferenceNodeUpdateOne) sqlSave(ctx context.Context) (_node *InferenceNode, err error) {
-	_spec := sqlgraph.NewUpdateSpec(inferencenode.Table, inferencenode.Columns, sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(inferencenode.Table, inferencenode.Columns, sqlgraph.NewFieldSpec(inferencenode.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "InferenceNode.id" for update`)}

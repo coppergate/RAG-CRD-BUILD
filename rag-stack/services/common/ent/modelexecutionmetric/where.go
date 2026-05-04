@@ -8,7 +8,6 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/google/uuid"
 )
 
 // ID filters vertices based on their ID field.
@@ -57,22 +56,22 @@ func IDLTE(id int64) predicate.ModelExecutionMetric {
 }
 
 // ResponseID applies equality check predicate on the "response_id" field. It's identical to ResponseIDEQ.
-func ResponseID(v uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseID(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldEQ(FieldResponseID, v))
 }
 
 // SessionID applies equality check predicate on the "session_id" field. It's identical to SessionIDEQ.
-func SessionID(v uuid.UUID) predicate.ModelExecutionMetric {
+func SessionID(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldEQ(FieldSessionID, v))
 }
 
 // NodeID applies equality check predicate on the "node_id" field. It's identical to NodeIDEQ.
-func NodeID(v uuid.UUID) predicate.ModelExecutionMetric {
+func NodeID(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldEQ(FieldNodeID, v))
 }
 
 // ModelID applies equality check predicate on the "model_id" field. It's identical to ModelIDEQ.
-func ModelID(v uuid.UUID) predicate.ModelExecutionMetric {
+func ModelID(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldEQ(FieldModelID, v))
 }
 
@@ -122,42 +121,42 @@ func CreatedAt(v time.Time) predicate.ModelExecutionMetric {
 }
 
 // ResponseIDEQ applies the EQ predicate on the "response_id" field.
-func ResponseIDEQ(v uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseIDEQ(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldEQ(FieldResponseID, v))
 }
 
 // ResponseIDNEQ applies the NEQ predicate on the "response_id" field.
-func ResponseIDNEQ(v uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseIDNEQ(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldNEQ(FieldResponseID, v))
 }
 
 // ResponseIDIn applies the In predicate on the "response_id" field.
-func ResponseIDIn(vs ...uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseIDIn(vs ...int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldIn(FieldResponseID, vs...))
 }
 
 // ResponseIDNotIn applies the NotIn predicate on the "response_id" field.
-func ResponseIDNotIn(vs ...uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseIDNotIn(vs ...int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldNotIn(FieldResponseID, vs...))
 }
 
 // ResponseIDGT applies the GT predicate on the "response_id" field.
-func ResponseIDGT(v uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseIDGT(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldGT(FieldResponseID, v))
 }
 
 // ResponseIDGTE applies the GTE predicate on the "response_id" field.
-func ResponseIDGTE(v uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseIDGTE(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldGTE(FieldResponseID, v))
 }
 
 // ResponseIDLT applies the LT predicate on the "response_id" field.
-func ResponseIDLT(v uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseIDLT(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldLT(FieldResponseID, v))
 }
 
 // ResponseIDLTE applies the LTE predicate on the "response_id" field.
-func ResponseIDLTE(v uuid.UUID) predicate.ModelExecutionMetric {
+func ResponseIDLTE(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldLTE(FieldResponseID, v))
 }
 
@@ -172,22 +171,22 @@ func ResponseIDNotNil() predicate.ModelExecutionMetric {
 }
 
 // SessionIDEQ applies the EQ predicate on the "session_id" field.
-func SessionIDEQ(v uuid.UUID) predicate.ModelExecutionMetric {
+func SessionIDEQ(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldEQ(FieldSessionID, v))
 }
 
 // SessionIDNEQ applies the NEQ predicate on the "session_id" field.
-func SessionIDNEQ(v uuid.UUID) predicate.ModelExecutionMetric {
+func SessionIDNEQ(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldNEQ(FieldSessionID, v))
 }
 
 // SessionIDIn applies the In predicate on the "session_id" field.
-func SessionIDIn(vs ...uuid.UUID) predicate.ModelExecutionMetric {
+func SessionIDIn(vs ...int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldIn(FieldSessionID, vs...))
 }
 
 // SessionIDNotIn applies the NotIn predicate on the "session_id" field.
-func SessionIDNotIn(vs ...uuid.UUID) predicate.ModelExecutionMetric {
+func SessionIDNotIn(vs ...int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldNotIn(FieldSessionID, vs...))
 }
 
@@ -202,22 +201,22 @@ func SessionIDNotNil() predicate.ModelExecutionMetric {
 }
 
 // NodeIDEQ applies the EQ predicate on the "node_id" field.
-func NodeIDEQ(v uuid.UUID) predicate.ModelExecutionMetric {
+func NodeIDEQ(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldEQ(FieldNodeID, v))
 }
 
 // NodeIDNEQ applies the NEQ predicate on the "node_id" field.
-func NodeIDNEQ(v uuid.UUID) predicate.ModelExecutionMetric {
+func NodeIDNEQ(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldNEQ(FieldNodeID, v))
 }
 
 // NodeIDIn applies the In predicate on the "node_id" field.
-func NodeIDIn(vs ...uuid.UUID) predicate.ModelExecutionMetric {
+func NodeIDIn(vs ...int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldIn(FieldNodeID, vs...))
 }
 
 // NodeIDNotIn applies the NotIn predicate on the "node_id" field.
-func NodeIDNotIn(vs ...uuid.UUID) predicate.ModelExecutionMetric {
+func NodeIDNotIn(vs ...int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldNotIn(FieldNodeID, vs...))
 }
 
@@ -232,22 +231,22 @@ func NodeIDNotNil() predicate.ModelExecutionMetric {
 }
 
 // ModelIDEQ applies the EQ predicate on the "model_id" field.
-func ModelIDEQ(v uuid.UUID) predicate.ModelExecutionMetric {
+func ModelIDEQ(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldEQ(FieldModelID, v))
 }
 
 // ModelIDNEQ applies the NEQ predicate on the "model_id" field.
-func ModelIDNEQ(v uuid.UUID) predicate.ModelExecutionMetric {
+func ModelIDNEQ(v int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldNEQ(FieldModelID, v))
 }
 
 // ModelIDIn applies the In predicate on the "model_id" field.
-func ModelIDIn(vs ...uuid.UUID) predicate.ModelExecutionMetric {
+func ModelIDIn(vs ...int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldIn(FieldModelID, vs...))
 }
 
 // ModelIDNotIn applies the NotIn predicate on the "model_id" field.
-func ModelIDNotIn(vs ...uuid.UUID) predicate.ModelExecutionMetric {
+func ModelIDNotIn(vs ...int64) predicate.ModelExecutionMetric {
 	return predicate.ModelExecutionMetric(sql.FieldNotIn(FieldModelID, vs...))
 }
 

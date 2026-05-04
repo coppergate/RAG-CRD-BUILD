@@ -64,38 +64,6 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: rag-web-ui-cert
-  namespace: rag-system
-spec:
-  secretName: rag-web-ui-tls
-  duration: 8760h # 1 year
-  renewBefore: 720h # 30 days
-  subject:
-    organizations:
-      - Hierocracy
-  commonName: rag-web-ui.rag-system.svc.cluster.local
-  isCA: false
-  privateKey:
-    algorithm: RSA
-    encoding: PKCS1
-    size: 2048
-  usages:
-    - server auth
-    - client auth
-  dnsNames:
-    - rag-web-ui
-    - rag-web-ui.rag-system
-    - rag-web-ui.rag-system.svc
-    - rag-web-ui.rag-system.svc.cluster.local
-    - ui.hierocracy.home
-  issuerRef:
-    name: hierocracy-ca-issuer
-    kind: ClusterIssuer
-    group: cert-manager.io
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
   name: db-adapter-cert
   namespace: rag-system
 spec:

@@ -16,7 +16,7 @@ import (
 
 type mockPulsarClient struct {
 	SendRequestFunc     func(ctx context.Context, id string, payload interface{}) (string, error)
-	SendPromptEventFunc func(ctx context.Context, id, sessionID, content string) error
+	SendPromptEventFunc func(ctx context.Context, id string, sessionID int64, content string) error
 	SubscribeStreamFunc func(id string, ch chan pulsar.StreamChunk)
 	UnsubscribeStreamFunc func(id string)
 	SendRawRequestFunc  func(ctx context.Context, payload interface{}) error
@@ -25,7 +25,7 @@ type mockPulsarClient struct {
 func (m *mockPulsarClient) SendRequest(ctx context.Context, id string, payload interface{}) (string, error) {
 	return m.SendRequestFunc(ctx, id, payload)
 }
-func (m *mockPulsarClient) SendPromptEvent(ctx context.Context, id, sessionID, content string) error {
+func (m *mockPulsarClient) SendPromptEvent(ctx context.Context, id string, sessionID int64, content string) error {
 	return m.SendPromptEventFunc(ctx, id, sessionID, content)
 }
 func (m *mockPulsarClient) SubscribeStream(id string, ch chan pulsar.StreamChunk) {
@@ -48,7 +48,7 @@ func TestHandleChatCompletions(t *testing.T) {
 		SendRequestFunc: func(ctx context.Context, id string, payload interface{}) (string, error) {
 			return "Hello from mock", nil
 		},
-		SendPromptEventFunc: func(ctx context.Context, id, sessionID, content string) error {
+		SendPromptEventFunc: func(ctx context.Context, id string, sessionID int64, content string) error {
 			return nil
 		},
 	}

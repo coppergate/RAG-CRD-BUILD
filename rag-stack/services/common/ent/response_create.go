@@ -52,13 +52,13 @@ func (_c *ResponseCreate) SetNillablePromptID(v *int64) *ResponseCreate {
 }
 
 // SetSessionID sets the "session_id" field.
-func (_c *ResponseCreate) SetSessionID(v uuid.UUID) *ResponseCreate {
+func (_c *ResponseCreate) SetSessionID(v int64) *ResponseCreate {
 	_c.mutation.SetSessionID(v)
 	return _c
 }
 
 // SetNillableSessionID sets the "session_id" field if the given value is not nil.
-func (_c *ResponseCreate) SetNillableSessionID(v *uuid.UUID) *ResponseCreate {
+func (_c *ResponseCreate) SetNillableSessionID(v *int64) *ResponseCreate {
 	if v != nil {
 		_c.SetSessionID(*v)
 	}
@@ -232,7 +232,7 @@ func (_c *ResponseCreate) createSpec() (*Response, *sqlgraph.CreateSpec) {
 		_node.PromptID = value
 	}
 	if value, ok := _c.mutation.SessionID(); ok {
-		_spec.SetField(response.FieldSessionID, field.TypeUUID, value)
+		_spec.SetField(response.FieldSessionID, field.TypeInt64, value)
 		_node.SessionID = value
 	}
 	if value, ok := _c.mutation.Content(); ok {
@@ -348,7 +348,7 @@ func (u *ResponseUpsert) ClearPromptID() *ResponseUpsert {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *ResponseUpsert) SetSessionID(v uuid.UUID) *ResponseUpsert {
+func (u *ResponseUpsert) SetSessionID(v int64) *ResponseUpsert {
 	u.Set(response.FieldSessionID, v)
 	return u
 }
@@ -356,6 +356,12 @@ func (u *ResponseUpsert) SetSessionID(v uuid.UUID) *ResponseUpsert {
 // UpdateSessionID sets the "session_id" field to the value that was provided on create.
 func (u *ResponseUpsert) UpdateSessionID() *ResponseUpsert {
 	u.SetExcluded(response.FieldSessionID)
+	return u
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *ResponseUpsert) AddSessionID(v int64) *ResponseUpsert {
+	u.Add(response.FieldSessionID, v)
 	return u
 }
 
@@ -543,9 +549,16 @@ func (u *ResponseUpsertOne) ClearPromptID() *ResponseUpsertOne {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *ResponseUpsertOne) SetSessionID(v uuid.UUID) *ResponseUpsertOne {
+func (u *ResponseUpsertOne) SetSessionID(v int64) *ResponseUpsertOne {
 	return u.Update(func(s *ResponseUpsert) {
 		s.SetSessionID(v)
+	})
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *ResponseUpsertOne) AddSessionID(v int64) *ResponseUpsertOne {
+	return u.Update(func(s *ResponseUpsert) {
+		s.AddSessionID(v)
 	})
 }
 
@@ -921,9 +934,16 @@ func (u *ResponseUpsertBulk) ClearPromptID() *ResponseUpsertBulk {
 }
 
 // SetSessionID sets the "session_id" field.
-func (u *ResponseUpsertBulk) SetSessionID(v uuid.UUID) *ResponseUpsertBulk {
+func (u *ResponseUpsertBulk) SetSessionID(v int64) *ResponseUpsertBulk {
 	return u.Update(func(s *ResponseUpsert) {
 		s.SetSessionID(v)
+	})
+}
+
+// AddSessionID adds v to the "session_id" field.
+func (u *ResponseUpsertBulk) AddSessionID(v int64) *ResponseUpsertBulk {
+	return u.Update(func(s *ResponseUpsert) {
+		s.AddSessionID(v)
 	})
 }
 

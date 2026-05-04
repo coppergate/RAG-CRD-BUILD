@@ -16,7 +16,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // CodeEmbeddingUpdate is the builder for updating CodeEmbedding entities.
@@ -33,13 +32,13 @@ func (_u *CodeEmbeddingUpdate) Where(ps ...predicate.CodeEmbedding) *CodeEmbeddi
 }
 
 // SetIngestionID sets the "ingestion_id" field.
-func (_u *CodeEmbeddingUpdate) SetIngestionID(v uuid.UUID) *CodeEmbeddingUpdate {
+func (_u *CodeEmbeddingUpdate) SetIngestionID(v int64) *CodeEmbeddingUpdate {
 	_u.mutation.SetIngestionID(v)
 	return _u
 }
 
 // SetNillableIngestionID sets the "ingestion_id" field if the given value is not nil.
-func (_u *CodeEmbeddingUpdate) SetNillableIngestionID(v *uuid.UUID) *CodeEmbeddingUpdate {
+func (_u *CodeEmbeddingUpdate) SetNillableIngestionID(v *int64) *CodeEmbeddingUpdate {
 	if v != nil {
 		_u.SetIngestionID(*v)
 	}
@@ -102,14 +101,14 @@ func (_u *CodeEmbeddingUpdate) SetIngestion(v *CodeIngestion) *CodeEmbeddingUpda
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by IDs.
-func (_u *CodeEmbeddingUpdate) AddTagIDs(ids ...uuid.UUID) *CodeEmbeddingUpdate {
+func (_u *CodeEmbeddingUpdate) AddTagIDs(ids ...int64) *CodeEmbeddingUpdate {
 	_u.mutation.AddTagIDs(ids...)
 	return _u
 }
 
 // AddTags adds the "tags" edges to the Tag entity.
 func (_u *CodeEmbeddingUpdate) AddTags(v ...*Tag) *CodeEmbeddingUpdate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -134,14 +133,14 @@ func (_u *CodeEmbeddingUpdate) ClearTags() *CodeEmbeddingUpdate {
 }
 
 // RemoveTagIDs removes the "tags" edge to Tag entities by IDs.
-func (_u *CodeEmbeddingUpdate) RemoveTagIDs(ids ...uuid.UUID) *CodeEmbeddingUpdate {
+func (_u *CodeEmbeddingUpdate) RemoveTagIDs(ids ...int64) *CodeEmbeddingUpdate {
 	_u.mutation.RemoveTagIDs(ids...)
 	return _u
 }
 
 // RemoveTags removes "tags" edges to Tag entities.
 func (_u *CodeEmbeddingUpdate) RemoveTags(v ...*Tag) *CodeEmbeddingUpdate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -176,7 +175,7 @@ func (_u *CodeEmbeddingUpdate) ExecX(ctx context.Context) {
 }
 
 func (_u *CodeEmbeddingUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	_spec := sqlgraph.NewUpdateSpec(codeembedding.Table, codeembedding.Columns, sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(codeembedding.Table, codeembedding.Columns, sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -212,7 +211,7 @@ func (_u *CodeEmbeddingUpdate) sqlSave(ctx context.Context) (_node int, err erro
 			Columns: []string{codeembedding.IngestionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -225,7 +224,7 @@ func (_u *CodeEmbeddingUpdate) sqlSave(ctx context.Context) (_node int, err erro
 			Columns: []string{codeembedding.IngestionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -241,7 +240,7 @@ func (_u *CodeEmbeddingUpdate) sqlSave(ctx context.Context) (_node int, err erro
 			Columns: codeembedding.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -254,7 +253,7 @@ func (_u *CodeEmbeddingUpdate) sqlSave(ctx context.Context) (_node int, err erro
 			Columns: codeembedding.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -270,7 +269,7 @@ func (_u *CodeEmbeddingUpdate) sqlSave(ctx context.Context) (_node int, err erro
 			Columns: codeembedding.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -299,13 +298,13 @@ type CodeEmbeddingUpdateOne struct {
 }
 
 // SetIngestionID sets the "ingestion_id" field.
-func (_u *CodeEmbeddingUpdateOne) SetIngestionID(v uuid.UUID) *CodeEmbeddingUpdateOne {
+func (_u *CodeEmbeddingUpdateOne) SetIngestionID(v int64) *CodeEmbeddingUpdateOne {
 	_u.mutation.SetIngestionID(v)
 	return _u
 }
 
 // SetNillableIngestionID sets the "ingestion_id" field if the given value is not nil.
-func (_u *CodeEmbeddingUpdateOne) SetNillableIngestionID(v *uuid.UUID) *CodeEmbeddingUpdateOne {
+func (_u *CodeEmbeddingUpdateOne) SetNillableIngestionID(v *int64) *CodeEmbeddingUpdateOne {
 	if v != nil {
 		_u.SetIngestionID(*v)
 	}
@@ -368,14 +367,14 @@ func (_u *CodeEmbeddingUpdateOne) SetIngestion(v *CodeIngestion) *CodeEmbeddingU
 }
 
 // AddTagIDs adds the "tags" edge to the Tag entity by IDs.
-func (_u *CodeEmbeddingUpdateOne) AddTagIDs(ids ...uuid.UUID) *CodeEmbeddingUpdateOne {
+func (_u *CodeEmbeddingUpdateOne) AddTagIDs(ids ...int64) *CodeEmbeddingUpdateOne {
 	_u.mutation.AddTagIDs(ids...)
 	return _u
 }
 
 // AddTags adds the "tags" edges to the Tag entity.
 func (_u *CodeEmbeddingUpdateOne) AddTags(v ...*Tag) *CodeEmbeddingUpdateOne {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -400,14 +399,14 @@ func (_u *CodeEmbeddingUpdateOne) ClearTags() *CodeEmbeddingUpdateOne {
 }
 
 // RemoveTagIDs removes the "tags" edge to Tag entities by IDs.
-func (_u *CodeEmbeddingUpdateOne) RemoveTagIDs(ids ...uuid.UUID) *CodeEmbeddingUpdateOne {
+func (_u *CodeEmbeddingUpdateOne) RemoveTagIDs(ids ...int64) *CodeEmbeddingUpdateOne {
 	_u.mutation.RemoveTagIDs(ids...)
 	return _u
 }
 
 // RemoveTags removes "tags" edges to Tag entities.
 func (_u *CodeEmbeddingUpdateOne) RemoveTags(v ...*Tag) *CodeEmbeddingUpdateOne {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -455,7 +454,7 @@ func (_u *CodeEmbeddingUpdateOne) ExecX(ctx context.Context) {
 }
 
 func (_u *CodeEmbeddingUpdateOne) sqlSave(ctx context.Context) (_node *CodeEmbedding, err error) {
-	_spec := sqlgraph.NewUpdateSpec(codeembedding.Table, codeembedding.Columns, sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewUpdateSpec(codeembedding.Table, codeembedding.Columns, sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "CodeEmbedding.id" for update`)}
@@ -508,7 +507,7 @@ func (_u *CodeEmbeddingUpdateOne) sqlSave(ctx context.Context) (_node *CodeEmbed
 			Columns: []string{codeembedding.IngestionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -521,7 +520,7 @@ func (_u *CodeEmbeddingUpdateOne) sqlSave(ctx context.Context) (_node *CodeEmbed
 			Columns: []string{codeembedding.IngestionColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -537,7 +536,7 @@ func (_u *CodeEmbeddingUpdateOne) sqlSave(ctx context.Context) (_node *CodeEmbed
 			Columns: codeembedding.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -550,7 +549,7 @@ func (_u *CodeEmbeddingUpdateOne) sqlSave(ctx context.Context) (_node *CodeEmbed
 			Columns: codeembedding.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -566,7 +565,7 @@ func (_u *CodeEmbeddingUpdateOne) sqlSave(ctx context.Context) (_node *CodeEmbed
 			Columns: codeembedding.TagsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

@@ -25,7 +25,7 @@ const (
 type InternalRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SessionId     int64                  `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	SessionName   string                 `protobuf:"bytes,3,opt,name=session_name,json=sessionName,proto3" json:"session_name,omitempty"`
 	Prompt        string                 `protobuf:"bytes,4,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	SystemPrompt  string                 `protobuf:"bytes,5,opt,name=system_prompt,json=systemPrompt,proto3" json:"system_prompt,omitempty"`
@@ -76,11 +76,11 @@ func (x *InternalRequest) GetId() string {
 	return ""
 }
 
-func (x *InternalRequest) GetSessionId() string {
+func (x *InternalRequest) GetSessionId() int64 {
 	if x != nil {
 		return x.SessionId
 	}
-	return ""
+	return 0
 }
 
 func (x *InternalRequest) GetSessionName() string {
@@ -149,7 +149,7 @@ func (x *InternalRequest) GetStream() bool {
 type StreamChunk struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId        string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SessionId        int64                  `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Result           string                 `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 	SequenceNumber   int32                  `protobuf:"varint,4,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
 	IsLast           bool                   `protobuf:"varint,5,opt,name=is_last,json=isLast,proto3" json:"is_last,omitempty"`
@@ -199,11 +199,11 @@ func (x *StreamChunk) GetId() string {
 	return ""
 }
 
-func (x *StreamChunk) GetSessionId() string {
+func (x *StreamChunk) GetSessionId() int64 {
 	if x != nil {
 		return x.SessionId
 	}
-	return ""
+	return 0
 }
 
 func (x *StreamChunk) GetResult() string {
@@ -265,7 +265,7 @@ func (x *StreamChunk) GetPlanningResponse() string {
 type ResponseCompletion struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId      string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SessionId      int64                  `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	StartTimestamp string                 `protobuf:"bytes,3,opt,name=start_timestamp,json=startTimestamp,proto3" json:"start_timestamp,omitempty"`
 	Model          string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
 	Status         string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
@@ -311,11 +311,11 @@ func (x *ResponseCompletion) GetId() string {
 	return ""
 }
 
-func (x *ResponseCompletion) GetSessionId() string {
+func (x *ResponseCompletion) GetSessionId() int64 {
 	if x != nil {
 		return x.SessionId
 	}
-	return ""
+	return 0
 }
 
 func (x *ResponseCompletion) GetStartTimestamp() string {
@@ -457,9 +457,9 @@ func (x *ExecutionMetrics) GetModelFamily() string {
 // Memory Contracts
 type MemoryScope struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SessionId     int64                  `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	ProjectId     string                 `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	ProjectId     int64                  `protobuf:"varint,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	Tags          []string               `protobuf:"bytes,4,rep,name=tags,proto3" json:"tags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -495,11 +495,11 @@ func (*MemoryScope) Descriptor() ([]byte, []int) {
 	return file_rag_stack_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *MemoryScope) GetSessionId() string {
+func (x *MemoryScope) GetSessionId() int64 {
 	if x != nil {
 		return x.SessionId
 	}
-	return ""
+	return 0
 }
 
 func (x *MemoryScope) GetUserId() string {
@@ -509,11 +509,11 @@ func (x *MemoryScope) GetUserId() string {
 	return ""
 }
 
-func (x *MemoryScope) GetProjectId() string {
+func (x *MemoryScope) GetProjectId() int64 {
 	if x != nil {
 		return x.ProjectId
 	}
-	return ""
+	return 0
 }
 
 func (x *MemoryScope) GetTags() []string {
@@ -601,7 +601,7 @@ func (x *MemorySourceRef) GetMetadata() *structpb.Struct {
 
 type MemoryWriteItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	MemoryId      string                 `protobuf:"bytes,1,opt,name=memory_id,json=memoryId,proto3" json:"memory_id,omitempty"`
+	MemoryId      int64                  `protobuf:"varint,1,opt,name=memory_id,json=memoryId,proto3" json:"memory_id,omitempty"`
 	MemoryType    string                 `protobuf:"bytes,2,opt,name=memory_type,json=memoryType,proto3" json:"memory_type,omitempty"`
 	Summary       string                 `protobuf:"bytes,3,opt,name=summary,proto3" json:"summary,omitempty"`
 	Content       string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
@@ -645,11 +645,11 @@ func (*MemoryWriteItem) Descriptor() ([]byte, []int) {
 	return file_rag_stack_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *MemoryWriteItem) GetMemoryId() string {
+func (x *MemoryWriteItem) GetMemoryId() int64 {
 	if x != nil {
 		return x.MemoryId
 	}
-	return ""
+	return 0
 }
 
 func (x *MemoryWriteItem) GetMemoryType() string {
@@ -914,7 +914,7 @@ func (x *MemoryPack) GetItems() []*MemoryWriteItem {
 type StatusMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SessionId     int64                  `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
 	Details       string                 `protobuf:"bytes,4,opt,name=details,proto3" json:"details,omitempty"`
 	Timestamp     string                 `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -959,11 +959,11 @@ func (x *StatusMessage) GetId() string {
 	return ""
 }
 
-func (x *StatusMessage) GetSessionId() string {
+func (x *StatusMessage) GetSessionId() int64 {
 	if x != nil {
 		return x.SessionId
 	}
-	return ""
+	return 0
 }
 
 func (x *StatusMessage) GetState() string {
@@ -989,10 +989,10 @@ func (x *StatusMessage) GetTimestamp() string {
 
 type IngestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	IngestionId   string                 `protobuf:"bytes,1,opt,name=ingestion_id,json=ingestionId,proto3" json:"ingestion_id,omitempty"`
+	IngestionId   int64                  `protobuf:"varint,1,opt,name=ingestion_id,json=ingestionId,proto3" json:"ingestion_id,omitempty"`
 	TagNames      []string               `protobuf:"bytes,2,rep,name=tag_names,json=tagNames,proto3" json:"tag_names,omitempty"`
-	TagIds        []string               `protobuf:"bytes,3,rep,name=tag_ids,json=tagIds,proto3" json:"tag_ids,omitempty"`
-	SessionId     string                 `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	TagIds        []int64                `protobuf:"varint,3,rep,packed,name=tag_ids,json=tagIds,proto3" json:"tag_ids,omitempty"`
+	SessionId     int64                  `protobuf:"varint,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	VectorSize    int32                  `protobuf:"varint,5,opt,name=vector_size,json=vectorSize,proto3" json:"vector_size,omitempty"`
 	FileNames     []string               `protobuf:"bytes,6,rep,name=file_names,json=fileNames,proto3" json:"file_names,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1029,11 +1029,11 @@ func (*IngestRequest) Descriptor() ([]byte, []int) {
 	return file_rag_stack_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *IngestRequest) GetIngestionId() string {
+func (x *IngestRequest) GetIngestionId() int64 {
 	if x != nil {
 		return x.IngestionId
 	}
-	return ""
+	return 0
 }
 
 func (x *IngestRequest) GetTagNames() []string {
@@ -1043,18 +1043,18 @@ func (x *IngestRequest) GetTagNames() []string {
 	return nil
 }
 
-func (x *IngestRequest) GetTagIds() []string {
+func (x *IngestRequest) GetTagIds() []int64 {
 	if x != nil {
 		return x.TagIds
 	}
 	return nil
 }
 
-func (x *IngestRequest) GetSessionId() string {
+func (x *IngestRequest) GetSessionId() int64 {
 	if x != nil {
 		return x.SessionId
 	}
-	return ""
+	return 0
 }
 
 func (x *IngestRequest) GetVectorSize() int32 {
@@ -1141,7 +1141,7 @@ type QdrantOp struct {
 	Vector        []float32              `protobuf:"fixed32,6,rep,packed,name=vector,proto3" json:"vector,omitempty"`
 	Limit         int32                  `protobuf:"varint,7,opt,name=limit,proto3" json:"limit,omitempty"`
 	Tags          []string               `protobuf:"bytes,8,rep,name=tags,proto3" json:"tags,omitempty"`
-	SessionId     string                 `protobuf:"bytes,9,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SessionId     int64                  `protobuf:"varint,9,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Paths         []string               `protobuf:"bytes,10,rep,name=paths,proto3" json:"paths,omitempty"`
 	SourceTag     string                 `protobuf:"bytes,11,opt,name=source_tag,json=sourceTag,proto3" json:"source_tag,omitempty"`
 	TargetTag     string                 `protobuf:"bytes,12,opt,name=target_tag,json=targetTag,proto3" json:"target_tag,omitempty"`
@@ -1235,11 +1235,11 @@ func (x *QdrantOp) GetTags() []string {
 	return nil
 }
 
-func (x *QdrantOp) GetSessionId() string {
+func (x *QdrantOp) GetSessionId() int64 {
 	if x != nil {
 		return x.SessionId
 	}
-	return ""
+	return 0
 }
 
 func (x *QdrantOp) GetPaths() []string {
@@ -1355,7 +1355,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x0fInternalRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\x12!\n" +
+	"session_id\x18\x02 \x01(\x03R\tsessionId\x12!\n" +
 	"\fsession_name\x18\x03 \x01(\tR\vsessionName\x12\x16\n" +
 	"\x06prompt\x18\x04 \x01(\tR\x06prompt\x12#\n" +
 	"\rsystem_prompt\x18\x05 \x01(\tR\fsystemPrompt\x12#\n" +
@@ -1369,7 +1369,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\vStreamChunk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x16\n" +
+	"session_id\x18\x02 \x01(\x03R\tsessionId\x12\x16\n" +
 	"\x06result\x18\x03 \x01(\tR\x06result\x12'\n" +
 	"\x0fsequence_number\x18\x04 \x01(\x05R\x0esequenceNumber\x12\x17\n" +
 	"\ais_last\x18\x05 \x01(\bR\x06isLast\x12\x14\n" +
@@ -1382,7 +1382,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x12ResponseCompletion\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\x12'\n" +
+	"session_id\x18\x02 \x01(\x03R\tsessionId\x12'\n" +
 	"\x0fstart_timestamp\x18\x03 \x01(\tR\x0estartTimestamp\x12\x14\n" +
 	"\x05model\x18\x04 \x01(\tR\x05model\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x125\n" +
@@ -1399,10 +1399,10 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\fmodel_family\x18\t \x01(\tR\vmodelFamily\"x\n" +
 	"\vMemoryScope\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
+	"session_id\x18\x01 \x01(\x03R\tsessionId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x03 \x01(\tR\tprojectId\x12\x12\n" +
+	"project_id\x18\x03 \x01(\x03R\tprojectId\x12\x12\n" +
 	"\x04tags\x18\x04 \x03(\tR\x04tags\"\xc1\x01\n" +
 	"\x0fMemorySourceRef\x12\x1f\n" +
 	"\vsource_kind\x18\x01 \x01(\tR\n" +
@@ -1412,7 +1412,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x06weight\x18\x04 \x01(\x01R\x06weight\x123\n" +
 	"\bmetadata\x18\x05 \x01(\v2\x17.google.protobuf.StructR\bmetadata\"\xf8\x02\n" +
 	"\x0fMemoryWriteItem\x12\x1b\n" +
-	"\tmemory_id\x18\x01 \x01(\tR\bmemoryId\x12\x1f\n" +
+	"\tmemory_id\x18\x01 \x01(\x03R\bmemoryId\x12\x1f\n" +
 	"\vmemory_type\x18\x02 \x01(\tR\n" +
 	"memoryType\x12\x18\n" +
 	"\asummary\x18\x03 \x01(\tR\asummary\x12\x18\n" +
@@ -1446,16 +1446,16 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\rStatusMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x14\n" +
+	"session_id\x18\x02 \x01(\x03R\tsessionId\x12\x14\n" +
 	"\x05state\x18\x03 \x01(\tR\x05state\x12\x18\n" +
 	"\adetails\x18\x04 \x01(\tR\adetails\x12\x1c\n" +
 	"\ttimestamp\x18\x05 \x01(\tR\ttimestamp\"\xc7\x01\n" +
 	"\rIngestRequest\x12!\n" +
-	"\fingestion_id\x18\x01 \x01(\tR\vingestionId\x12\x1b\n" +
+	"\fingestion_id\x18\x01 \x01(\x03R\vingestionId\x12\x1b\n" +
 	"\ttag_names\x18\x02 \x03(\tR\btagNames\x12\x17\n" +
-	"\atag_ids\x18\x03 \x03(\tR\x06tagIds\x12\x1d\n" +
+	"\atag_ids\x18\x03 \x03(\x03R\x06tagIds\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x04 \x01(\tR\tsessionId\x12\x1f\n" +
+	"session_id\x18\x04 \x01(\x03R\tsessionId\x12\x1f\n" +
 	"\vvector_size\x18\x05 \x01(\x05R\n" +
 	"vectorSize\x12\x1d\n" +
 	"\n" +
@@ -1477,7 +1477,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x05limit\x18\a \x01(\x05R\x05limit\x12\x12\n" +
 	"\x04tags\x18\b \x03(\tR\x04tags\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\t \x01(\tR\tsessionId\x12\x14\n" +
+	"session_id\x18\t \x01(\x03R\tsessionId\x12\x14\n" +
 	"\x05paths\x18\n" +
 	" \x03(\tR\x05paths\x12\x1d\n" +
 	"\n" +

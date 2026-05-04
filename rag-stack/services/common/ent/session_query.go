@@ -4,6 +4,7 @@ package ent
 
 import (
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/predicate"
 	"app-builds/common/ent/retrievallog"
@@ -18,7 +19,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // SessionQuery is the builder for querying Session entities.
@@ -32,6 +32,7 @@ type SessionQuery struct {
 	withMetrics       *ModelExecutionMetricQuery
 	withRetrievalLogs *RetrievalLogQuery
 	withMemoryEvents  *MemoryEventQuery
+	withMemoryItems   *MemoryItemQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -156,6 +157,28 @@ func (_q *SessionQuery) QueryMemoryEvents() *MemoryEventQuery {
 	return query
 }
 
+// QueryMemoryItems chains the current query on the "memory_items" edge.
+func (_q *SessionQuery) QueryMemoryItems() *MemoryItemQuery {
+	query := (&MemoryItemClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(session.Table, session.FieldID, selector),
+			sqlgraph.To(memoryitem.Table, memoryitem.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, session.MemoryItemsTable, session.MemoryItemsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // First returns the first Session entity from the query.
 // Returns a *NotFoundError when no Session was found.
 func (_q *SessionQuery) First(ctx context.Context) (*Session, error) {
@@ -180,8 +203,8 @@ func (_q *SessionQuery) FirstX(ctx context.Context) *Session {
 
 // FirstID returns the first Session ID from the query.
 // Returns a *NotFoundError when no Session ID was found.
-func (_q *SessionQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *SessionQuery) FirstID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -193,7 +216,7 @@ func (_q *SessionQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *SessionQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *SessionQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -231,8 +254,8 @@ func (_q *SessionQuery) OnlyX(ctx context.Context) *Session {
 // OnlyID is like Only, but returns the only Session ID in the query.
 // Returns a *NotSingularError when more than one Session ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *SessionQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *SessionQuery) OnlyID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -248,7 +271,7 @@ func (_q *SessionQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *SessionQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *SessionQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -276,7 +299,7 @@ func (_q *SessionQuery) AllX(ctx context.Context) []*Session {
 }
 
 // IDs executes the query and returns a list of Session IDs.
-func (_q *SessionQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+func (_q *SessionQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
@@ -288,7 +311,7 @@ func (_q *SessionQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *SessionQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *SessionQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -352,6 +375,7 @@ func (_q *SessionQuery) Clone() *SessionQuery {
 		withMetrics:       _q.withMetrics.Clone(),
 		withRetrievalLogs: _q.withRetrievalLogs.Clone(),
 		withMemoryEvents:  _q.withMemoryEvents.Clone(),
+		withMemoryItems:   _q.withMemoryItems.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -402,13 +426,24 @@ func (_q *SessionQuery) WithMemoryEvents(opts ...func(*MemoryEventQuery)) *Sessi
 	return _q
 }
 
+// WithMemoryItems tells the query-builder to eager-load the nodes that are connected to
+// the "memory_items" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *SessionQuery) WithMemoryItems(opts ...func(*MemoryItemQuery)) *SessionQuery {
+	query := (&MemoryItemClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withMemoryItems = query
+	return _q
+}
+
 // GroupBy is used to group vertices by one or more fields/columns.
 // It is often used with aggregate functions, like: count, max, mean, min, sum.
 //
 // Example:
 //
 //	var v []struct {
-//		ProjectID uuid.UUID `json:"project_id,omitempty"`
+//		ProjectID int64 `json:"project_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
@@ -431,7 +466,7 @@ func (_q *SessionQuery) GroupBy(field string, fields ...string) *SessionGroupBy 
 // Example:
 //
 //	var v []struct {
-//		ProjectID uuid.UUID `json:"project_id,omitempty"`
+//		ProjectID int64 `json:"project_id,omitempty"`
 //	}
 //
 //	client.Session.Query().
@@ -480,11 +515,12 @@ func (_q *SessionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Sess
 	var (
 		nodes       = []*Session{}
 		_spec       = _q.querySpec()
-		loadedTypes = [4]bool{
+		loadedTypes = [5]bool{
 			_q.withTags != nil,
 			_q.withMetrics != nil,
 			_q.withRetrievalLogs != nil,
 			_q.withMemoryEvents != nil,
+			_q.withMemoryItems != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -533,13 +569,20 @@ func (_q *SessionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Sess
 			return nil, err
 		}
 	}
+	if query := _q.withMemoryItems; query != nil {
+		if err := _q.loadMemoryItems(ctx, query, nodes,
+			func(n *Session) { n.Edges.MemoryItems = []*MemoryItem{} },
+			func(n *Session, e *MemoryItem) { n.Edges.MemoryItems = append(n.Edges.MemoryItems, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
 func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*Session, init func(*Session), assign func(*Session, *Tag)) error {
 	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[uuid.UUID]*Session)
-	nids := make(map[uuid.UUID]map[*Session]struct{})
+	byID := make(map[int64]*Session)
+	nids := make(map[int64]map[*Session]struct{})
 	for i, node := range nodes {
 		edgeIDs[i] = node.ID
 		byID[node.ID] = node
@@ -568,11 +611,11 @@ func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*
 				if err != nil {
 					return nil, err
 				}
-				return append([]any{new(uuid.UUID)}, values...), nil
+				return append([]any{new(sql.NullInt64)}, values...), nil
 			}
 			spec.Assign = func(columns []string, values []any) error {
-				outValue := *values[0].(*uuid.UUID)
-				inValue := *values[1].(*uuid.UUID)
+				outValue := values[0].(*sql.NullInt64).Int64
+				inValue := values[1].(*sql.NullInt64).Int64
 				if nids[inValue] == nil {
 					nids[inValue] = map[*Session]struct{}{byID[outValue]: {}}
 					return assign(columns[1:], values[1:])
@@ -599,7 +642,7 @@ func (_q *SessionQuery) loadTags(ctx context.Context, query *TagQuery, nodes []*
 }
 func (_q *SessionQuery) loadMetrics(ctx context.Context, query *ModelExecutionMetricQuery, nodes []*Session, init func(*Session), assign func(*Session, *ModelExecutionMetric)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[uuid.UUID]*Session)
+	nodeids := make(map[int64]*Session)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -629,7 +672,7 @@ func (_q *SessionQuery) loadMetrics(ctx context.Context, query *ModelExecutionMe
 }
 func (_q *SessionQuery) loadRetrievalLogs(ctx context.Context, query *RetrievalLogQuery, nodes []*Session, init func(*Session), assign func(*Session, *RetrievalLog)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[uuid.UUID]*Session)
+	nodeids := make(map[int64]*Session)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -659,7 +702,7 @@ func (_q *SessionQuery) loadRetrievalLogs(ctx context.Context, query *RetrievalL
 }
 func (_q *SessionQuery) loadMemoryEvents(ctx context.Context, query *MemoryEventQuery, nodes []*Session, init func(*Session), assign func(*Session, *MemoryEvent)) error {
 	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[uuid.UUID]*Session)
+	nodeids := make(map[int64]*Session)
 	for i := range nodes {
 		fks = append(fks, nodes[i].ID)
 		nodeids[nodes[i].ID] = nodes[i]
@@ -687,6 +730,36 @@ func (_q *SessionQuery) loadMemoryEvents(ctx context.Context, query *MemoryEvent
 	}
 	return nil
 }
+func (_q *SessionQuery) loadMemoryItems(ctx context.Context, query *MemoryItemQuery, nodes []*Session, init func(*Session), assign func(*Session, *MemoryItem)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*Session)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(memoryitem.FieldSessionID)
+	}
+	query.Where(predicate.MemoryItem(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(session.MemoryItemsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SessionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "session_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 
 func (_q *SessionQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
@@ -698,7 +771,7 @@ func (_q *SessionQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (_q *SessionQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(session.Table, session.Columns, sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewQuerySpec(session.Table, session.Columns, sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique

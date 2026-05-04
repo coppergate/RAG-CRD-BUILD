@@ -18,9 +18,9 @@ import (
 type Session struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
 	// ProjectID holds the value of the "project_id" field.
-	ProjectID uuid.UUID `json:"project_id,omitempty"`
+	ProjectID int64 `json:"project_id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
@@ -49,9 +49,11 @@ type SessionEdges struct {
 	RetrievalLogs []*RetrievalLog `json:"retrieval_logs,omitempty"`
 	// MemoryEvents holds the value of the memory_events edge.
 	MemoryEvents []*MemoryEvent `json:"memory_events,omitempty"`
+	// MemoryItems holds the value of the memory_items edge.
+	MemoryItems []*MemoryItem `json:"memory_items,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [5]bool
 }
 
 // TagsOrErr returns the Tags value or an error if the edge
@@ -90,6 +92,15 @@ func (e SessionEdges) MemoryEventsOrErr() ([]*MemoryEvent, error) {
 	return nil, &NotLoadedError{edge: "memory_events"}
 }
 
+// MemoryItemsOrErr returns the MemoryItems value or an error if the edge
+// was not loaded in eager-loading.
+func (e SessionEdges) MemoryItemsOrErr() ([]*MemoryItem, error) {
+	if e.loadedTypes[4] {
+		return e.MemoryItems, nil
+	}
+	return nil, &NotLoadedError{edge: "memory_items"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Session) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -97,11 +108,13 @@ func (*Session) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case session.FieldMetadata:
 			values[i] = new([]byte)
+		case session.FieldID, session.FieldProjectID:
+			values[i] = new(sql.NullInt64)
 		case session.FieldName, session.FieldDescription:
 			values[i] = new(sql.NullString)
 		case session.FieldCreatedAt, session.FieldLastActiveAt:
 			values[i] = new(sql.NullTime)
-		case session.FieldID, session.FieldProjectID, session.FieldUserID:
+		case session.FieldUserID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -119,16 +132,16 @@ func (_m *Session) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case session.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
+			_m.ID = int64(value.Int64)
 		case session.FieldProjectID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field project_id", values[i])
-			} else if value != nil {
-				_m.ProjectID = *value
+			} else if value.Valid {
+				_m.ProjectID = value.Int64
 			}
 		case session.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -199,6 +212,11 @@ func (_m *Session) QueryRetrievalLogs() *RetrievalLogQuery {
 // QueryMemoryEvents queries the "memory_events" edge of the Session entity.
 func (_m *Session) QueryMemoryEvents() *MemoryEventQuery {
 	return NewSessionClient(_m.config).QueryMemoryEvents(_m)
+}
+
+// QueryMemoryItems queries the "memory_items" edge of the Session entity.
+func (_m *Session) QueryMemoryItems() *MemoryItemQuery {
+	return NewSessionClient(_m.config).QueryMemoryItems(_m)
 }
 
 // Update returns a builder for updating this Session.

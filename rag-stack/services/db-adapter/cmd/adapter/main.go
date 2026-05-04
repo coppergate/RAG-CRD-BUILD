@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,7 +22,6 @@ import (
 	"app-builds/db-adapter/internal/config"
 	"app-builds/db-adapter/internal/service"
 	"github.com/apache/pulsar-client-go/pulsar"
-	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
@@ -202,14 +202,13 @@ func main() {
 	mux.HandleFunc("/tags/", func(w http.ResponseWriter, r *http.Request) {
 		idStr := strings.TrimPrefix(r.URL.Path, "/tags/")
 		if r.Method == http.MethodDelete && idStr != "" {
-			tagID, err := uuid.Parse(idStr)
+			tagID, err := strconv.ParseInt(idStr, 10, 64)
 			if err != nil {
 				http.Error(w, "Invalid tag ID", http.StatusBadRequest)
 				return
 			}
 			if qdrantProducer != nil {
 				op := &contracts.QdrantOp{
-					Id:         uuid.New().String(),
 					Action:     "delete",
 					Collection: "vectors",
 					Tags:       []string{idStr},

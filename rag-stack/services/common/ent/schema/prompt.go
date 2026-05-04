@@ -1,9 +1,9 @@
 package schema
 
 import (
+"github.com/google/uuid"
 	"entgo.io/ent"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -19,7 +19,7 @@ func (Prompt) Fields() []ent.Field {
 			StorageKey("id"),
 		field.UUID("prompt_id", uuid.UUID{}).
 			Default(uuid.New),
-		field.UUID("session_id", uuid.UUID{}).
+		field.Int64("session_id").
 			Optional(),
 		field.Text("content"),
 		field.Time("created_at").

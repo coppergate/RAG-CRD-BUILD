@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"app-builds/common/ent"
 	"app-builds/common/ent/codeembedding"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
-	"github.com/google/uuid"
 )
 
 type StorageService struct {
@@ -37,13 +37,13 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 	query := s.client.CodeEmbedding.Query()
 
 	if sessionIDStr != "" {
-		if sessID, err := uuid.Parse(sessionIDStr); err == nil {
+		if sessID, err := strconv.ParseInt(sessionIDStr, 10, 64); err == nil {
 			query = query.Where(codeembedding.HasTagsWith(tag.HasSessionsWith(session.ID(sessID))))
 		}
 	}
 	for _, tidStr := range tagIDs {
 		if tidStr != "" {
-			if tID, err := uuid.Parse(tidStr); err == nil {
+			if tID, err := strconv.ParseInt(tidStr, 10, 64); err == nil {
 				query = query.Where(codeembedding.HasTagsWith(tag.ID(tID)))
 			}
 		}

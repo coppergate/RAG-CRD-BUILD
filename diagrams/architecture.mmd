@@ -6,7 +6,6 @@ graph TD
     end
 
     subgraph "Kubernetes: rag-system namespace: TLS-SSL"
-        UI[rag-web-ui]
         Flutter[rag-explorer]
         Gateway[llm-gateway]
         Worker[rag-worker]
@@ -63,11 +62,10 @@ graph TD
     end
 
     %% Interaction Flows: HTTPS
-    Browser <-->|HTTPS/443| UI
     Explorer <-->|Websocket/HTTPS| Gateway
 
     %% Registry Flow
-    UI & Flutter & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
+    Flutter & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
     S3 & Qdrant & TDB & Ollama & OllamaCode -.->|Pull TLS| Reg
 
     %% Ingestion Flow
@@ -126,7 +124,7 @@ graph TD
     DBAdapter -->|Persist: TLS| TDB
 
     %% Observability Flow: OTLP & Logs over HTTPS
-    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|OTLP/HTTPS| Alloy
+    Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|OTLP/HTTPS| Alloy
     Alloy -->|Metrics: HTTPS| Mimir
     Alloy -->|Logs: HTTPS| Loki
     Alloy -->|Traces: HTTPS/4318| Tempo

@@ -19,11 +19,11 @@ import (
 type RetrievalLog struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID uuid.UUID `json:"id,omitempty"`
+	ID int64 `json:"id,omitempty"`
 	// MessageID holds the value of the "message_id" field.
 	MessageID uuid.UUID `json:"message_id,omitempty"`
 	// SessionID holds the value of the "session_id" field.
-	SessionID uuid.UUID `json:"session_id,omitempty"`
+	SessionID int64 `json:"session_id,omitempty"`
 	// Query holds the value of the "query" field.
 	Query string `json:"query,omitempty"`
 	// Type holds the value of the "type" field.
@@ -67,11 +67,13 @@ func (*RetrievalLog) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case retrievallog.FieldRetrievedChunks:
 			values[i] = new([]byte)
+		case retrievallog.FieldID, retrievallog.FieldSessionID:
+			values[i] = new(sql.NullInt64)
 		case retrievallog.FieldQuery, retrievallog.FieldType, retrievallog.FieldDetail:
 			values[i] = new(sql.NullString)
 		case retrievallog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
-		case retrievallog.FieldID, retrievallog.FieldMessageID, retrievallog.FieldSessionID:
+		case retrievallog.FieldMessageID:
 			values[i] = new(uuid.UUID)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -89,11 +91,11 @@ func (_m *RetrievalLog) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case retrievallog.FieldID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
-				return fmt.Errorf("unexpected type %T for field id", values[i])
-			} else if value != nil {
-				_m.ID = *value
+			value, ok := values[i].(*sql.NullInt64)
+			if !ok {
+				return fmt.Errorf("unexpected type %T for field id", value)
 			}
+			_m.ID = int64(value.Int64)
 		case retrievallog.FieldMessageID:
 			if value, ok := values[i].(*uuid.UUID); !ok {
 				return fmt.Errorf("unexpected type %T for field message_id", values[i])
@@ -101,10 +103,10 @@ func (_m *RetrievalLog) assignValues(columns []string, values []any) error {
 				_m.MessageID = *value
 			}
 		case retrievallog.FieldSessionID:
-			if value, ok := values[i].(*uuid.UUID); !ok {
+			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field session_id", values[i])
-			} else if value != nil {
-				_m.SessionID = *value
+			} else if value.Valid {
+				_m.SessionID = value.Int64
 			}
 		case retrievallog.FieldQuery:
 			if value, ok := values[i].(*sql.NullString); !ok {

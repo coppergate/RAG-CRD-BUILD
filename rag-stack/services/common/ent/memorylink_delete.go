@@ -40,7 +40,7 @@ func (_d *MemoryLinkDelete) ExecX(ctx context.Context) int {
 }
 
 func (_d *MemoryLinkDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(memorylink.Table, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewDeleteSpec(memorylink.Table, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64))
 	if ps := _d.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {

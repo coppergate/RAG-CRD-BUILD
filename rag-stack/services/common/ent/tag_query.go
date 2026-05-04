@@ -17,7 +17,6 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // TagQuery is the builder for querying Tag entities.
@@ -156,8 +155,8 @@ func (_q *TagQuery) FirstX(ctx context.Context) *Tag {
 
 // FirstID returns the first Tag ID from the query.
 // Returns a *NotFoundError when no Tag ID was found.
-func (_q *TagQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *TagQuery) FirstID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
@@ -169,7 +168,7 @@ func (_q *TagQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *TagQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (_q *TagQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -207,8 +206,8 @@ func (_q *TagQuery) OnlyX(ctx context.Context) *Tag {
 // OnlyID is like Only, but returns the only Tag ID in the query.
 // Returns a *NotSingularError when more than one Tag ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *TagQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (_q *TagQuery) OnlyID(ctx context.Context) (id int64, err error) {
+	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
 	}
@@ -224,7 +223,7 @@ func (_q *TagQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *TagQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (_q *TagQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -252,7 +251,7 @@ func (_q *TagQuery) AllX(ctx context.Context) []*Tag {
 }
 
 // IDs executes the query and returns a list of Tag IDs.
-func (_q *TagQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+func (_q *TagQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
@@ -264,7 +263,7 @@ func (_q *TagQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *TagQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (_q *TagQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -494,8 +493,8 @@ func (_q *TagQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Tag, err
 
 func (_q *TagQuery) loadSessions(ctx context.Context, query *SessionQuery, nodes []*Tag, init func(*Tag), assign func(*Tag, *Session)) error {
 	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[uuid.UUID]*Tag)
-	nids := make(map[uuid.UUID]map[*Tag]struct{})
+	byID := make(map[int64]*Tag)
+	nids := make(map[int64]map[*Tag]struct{})
 	for i, node := range nodes {
 		edgeIDs[i] = node.ID
 		byID[node.ID] = node
@@ -524,11 +523,11 @@ func (_q *TagQuery) loadSessions(ctx context.Context, query *SessionQuery, nodes
 				if err != nil {
 					return nil, err
 				}
-				return append([]any{new(uuid.UUID)}, values...), nil
+				return append([]any{new(sql.NullInt64)}, values...), nil
 			}
 			spec.Assign = func(columns []string, values []any) error {
-				outValue := *values[0].(*uuid.UUID)
-				inValue := *values[1].(*uuid.UUID)
+				outValue := values[0].(*sql.NullInt64).Int64
+				inValue := values[1].(*sql.NullInt64).Int64
 				if nids[inValue] == nil {
 					nids[inValue] = map[*Tag]struct{}{byID[outValue]: {}}
 					return assign(columns[1:], values[1:])
@@ -555,8 +554,8 @@ func (_q *TagQuery) loadSessions(ctx context.Context, query *SessionQuery, nodes
 }
 func (_q *TagQuery) loadIngestions(ctx context.Context, query *CodeIngestionQuery, nodes []*Tag, init func(*Tag), assign func(*Tag, *CodeIngestion)) error {
 	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[uuid.UUID]*Tag)
-	nids := make(map[uuid.UUID]map[*Tag]struct{})
+	byID := make(map[int64]*Tag)
+	nids := make(map[int64]map[*Tag]struct{})
 	for i, node := range nodes {
 		edgeIDs[i] = node.ID
 		byID[node.ID] = node
@@ -585,11 +584,11 @@ func (_q *TagQuery) loadIngestions(ctx context.Context, query *CodeIngestionQuer
 				if err != nil {
 					return nil, err
 				}
-				return append([]any{new(uuid.UUID)}, values...), nil
+				return append([]any{new(sql.NullInt64)}, values...), nil
 			}
 			spec.Assign = func(columns []string, values []any) error {
-				outValue := *values[0].(*uuid.UUID)
-				inValue := *values[1].(*uuid.UUID)
+				outValue := values[0].(*sql.NullInt64).Int64
+				inValue := values[1].(*sql.NullInt64).Int64
 				if nids[inValue] == nil {
 					nids[inValue] = map[*Tag]struct{}{byID[outValue]: {}}
 					return assign(columns[1:], values[1:])
@@ -616,8 +615,8 @@ func (_q *TagQuery) loadIngestions(ctx context.Context, query *CodeIngestionQuer
 }
 func (_q *TagQuery) loadEmbeddings(ctx context.Context, query *CodeEmbeddingQuery, nodes []*Tag, init func(*Tag), assign func(*Tag, *CodeEmbedding)) error {
 	edgeIDs := make([]driver.Value, len(nodes))
-	byID := make(map[uuid.UUID]*Tag)
-	nids := make(map[uuid.UUID]map[*Tag]struct{})
+	byID := make(map[int64]*Tag)
+	nids := make(map[int64]map[*Tag]struct{})
 	for i, node := range nodes {
 		edgeIDs[i] = node.ID
 		byID[node.ID] = node
@@ -646,11 +645,11 @@ func (_q *TagQuery) loadEmbeddings(ctx context.Context, query *CodeEmbeddingQuer
 				if err != nil {
 					return nil, err
 				}
-				return append([]any{new(uuid.UUID)}, values...), nil
+				return append([]any{new(sql.NullInt64)}, values...), nil
 			}
 			spec.Assign = func(columns []string, values []any) error {
-				outValue := *values[0].(*uuid.UUID)
-				inValue := *values[1].(*uuid.UUID)
+				outValue := values[0].(*sql.NullInt64).Int64
+				inValue := values[1].(*sql.NullInt64).Int64
 				if nids[inValue] == nil {
 					nids[inValue] = map[*Tag]struct{}{byID[outValue]: {}}
 					return assign(columns[1:], values[1:])
@@ -686,7 +685,7 @@ func (_q *TagQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (_q *TagQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(tag.Table, tag.Columns, sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID))
+	_spec := sqlgraph.NewQuerySpec(tag.Table, tag.Columns, sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique

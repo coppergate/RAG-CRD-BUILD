@@ -61,7 +61,7 @@ type OpenAIHandler struct {
 
 type ChatCompletionRequest struct {
 	Model       string   `json:"model"`
-	SessionId   string   `json:"session_id,omitempty"`   // Added for session tracking
+	SessionId   int64    `json:"session_id,omitempty"`   // Changed to int64
 	SessionName string   `json:"session_name,omitempty"` // Added for friendly name
 	Tags        []string `json:"tags,omitempty"`         // Added for RAG isolation
 	Messages    []struct {
@@ -71,7 +71,7 @@ type ChatCompletionRequest struct {
 }
 
 type GenericChatRequest struct {
-	SessionId   string   `json:"session_id"`
+	SessionId   int64    `json:"session_id"` // Changed to int64
 	SessionName string   `json:"session_name,omitempty"`
 	Prompt      string   `json:"prompt"`
 	Planner     string   `json:"planner"`
@@ -79,34 +79,28 @@ type GenericChatRequest struct {
 	Tags        []string `json:"tags"`
 }
 
-func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID string, sessionName string) (string, error) {
-	if sessionID == "" {
-		sessionID = uuid.New().String()
-	}
-	if sessionName == "" {
-		sessionName = sessionID
+func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sessionName string) (int64, error) {
+	if sessionName == "" && sessionID > 0 {
+		sessionName = fmt.Sprintf("Session %d", sessionID)
 	}
 
 	builder := h.Ent.Session.Create().
 		SetName(sessionName).
 		SetLastActiveAt(time.Now())
 
-	var upserter *ent.SessionUpsertOne
-	if u, err := uuid.Parse(sessionID); err == nil {
-		builder.SetID(u)
-		upserter = builder.OnConflictColumns(session.FieldID).
-			UpdateLastActiveAt().
-			UpdateName()
-	} else {
-		upserter = builder.OnConflictColumns(session.FieldName).
-			UpdateLastActiveAt()
+	if sessionID > 0 {
+		builder.SetID(sessionID)
 	}
 
-	id, err := upserter.ID(ctx)
+	s, err := builder.OnConflictColumns(session.FieldID).
+		UpdateLastActiveAt().
+		UpdateName().
+		ID(ctx)
+
 	if err != nil {
 		return sessionID, err
 	}
-	return id.String(), nil
+	return s, nil
 }
 
 func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {

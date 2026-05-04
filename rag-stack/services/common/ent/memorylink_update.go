@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/predicate"
 	"context"
@@ -14,7 +15,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // MemoryLinkUpdate is the builder for updating MemoryLink entities.
@@ -31,13 +31,13 @@ func (_u *MemoryLinkUpdate) Where(ps ...predicate.MemoryLink) *MemoryLinkUpdate 
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (_u *MemoryLinkUpdate) SetMemoryItemID(v uuid.UUID) *MemoryLinkUpdate {
+func (_u *MemoryLinkUpdate) SetMemoryItemID(v int64) *MemoryLinkUpdate {
 	_u.mutation.SetMemoryItemID(v)
 	return _u
 }
 
 // SetNillableMemoryItemID sets the "memory_item_id" field if the given value is not nil.
-func (_u *MemoryLinkUpdate) SetNillableMemoryItemID(v *uuid.UUID) *MemoryLinkUpdate {
+func (_u *MemoryLinkUpdate) SetNillableMemoryItemID(v *int64) *MemoryLinkUpdate {
 	if v != nil {
 		_u.SetMemoryItemID(*v)
 	}
@@ -45,13 +45,13 @@ func (_u *MemoryLinkUpdate) SetNillableMemoryItemID(v *uuid.UUID) *MemoryLinkUpd
 }
 
 // SetSourceMessageIds sets the "source_message_ids" field.
-func (_u *MemoryLinkUpdate) SetSourceMessageIds(v []uuid.UUID) *MemoryLinkUpdate {
+func (_u *MemoryLinkUpdate) SetSourceMessageIds(v []int64) *MemoryLinkUpdate {
 	_u.mutation.SetSourceMessageIds(v)
 	return _u
 }
 
 // AppendSourceMessageIds appends value to the "source_message_ids" field.
-func (_u *MemoryLinkUpdate) AppendSourceMessageIds(v []uuid.UUID) *MemoryLinkUpdate {
+func (_u *MemoryLinkUpdate) AppendSourceMessageIds(v []int64) *MemoryLinkUpdate {
 	_u.mutation.AppendSourceMessageIds(v)
 	return _u
 }
@@ -63,13 +63,13 @@ func (_u *MemoryLinkUpdate) ClearSourceMessageIds() *MemoryLinkUpdate {
 }
 
 // SetIngestionIds sets the "ingestion_ids" field.
-func (_u *MemoryLinkUpdate) SetIngestionIds(v []uuid.UUID) *MemoryLinkUpdate {
+func (_u *MemoryLinkUpdate) SetIngestionIds(v []int64) *MemoryLinkUpdate {
 	_u.mutation.SetIngestionIds(v)
 	return _u
 }
 
 // AppendIngestionIds appends value to the "ingestion_ids" field.
-func (_u *MemoryLinkUpdate) AppendIngestionIds(v []uuid.UUID) *MemoryLinkUpdate {
+func (_u *MemoryLinkUpdate) AppendIngestionIds(v []int64) *MemoryLinkUpdate {
 	_u.mutation.AppendIngestionIds(v)
 	return _u
 }
@@ -124,9 +124,20 @@ func (_u *MemoryLinkUpdate) SetNillableCreatedAt(v *time.Time) *MemoryLinkUpdate
 	return _u
 }
 
+// SetMemoryItem sets the "memory_item" edge to the MemoryItem entity.
+func (_u *MemoryLinkUpdate) SetMemoryItem(v *MemoryItem) *MemoryLinkUpdate {
+	return _u.SetMemoryItemID(v.ID)
+}
+
 // Mutation returns the MemoryLinkMutation object of the builder.
 func (_u *MemoryLinkUpdate) Mutation() *MemoryLinkMutation {
 	return _u.mutation
+}
+
+// ClearMemoryItem clears the "memory_item" edge to the MemoryItem entity.
+func (_u *MemoryLinkUpdate) ClearMemoryItem() *MemoryLinkUpdate {
+	_u.mutation.ClearMemoryItem()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -156,17 +167,25 @@ func (_u *MemoryLinkUpdate) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *MemoryLinkUpdate) check() error {
+	if _u.mutation.MemoryItemCleared() && len(_u.mutation.MemoryItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "MemoryLink.memory_item"`)
+	}
+	return nil
+}
+
 func (_u *MemoryLinkUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	_spec := sqlgraph.NewUpdateSpec(memorylink.Table, memorylink.Columns, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeUUID))
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
+	_spec := sqlgraph.NewUpdateSpec(memorylink.Table, memorylink.Columns, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.MemoryItemID(); ok {
-		_spec.SetField(memorylink.FieldMemoryItemID, field.TypeUUID, value)
 	}
 	if value, ok := _u.mutation.SourceMessageIds(); ok {
 		_spec.SetField(memorylink.FieldSourceMessageIds, field.TypeJSON, value)
@@ -210,6 +229,35 @@ func (_u *MemoryLinkUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(memorylink.FieldCreatedAt, field.TypeTime, value)
 	}
+	if _u.mutation.MemoryItemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   memorylink.MemoryItemTable,
+			Columns: []string{memorylink.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MemoryItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   memorylink.MemoryItemTable,
+			Columns: []string{memorylink.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{memorylink.Label}
@@ -231,13 +279,13 @@ type MemoryLinkUpdateOne struct {
 }
 
 // SetMemoryItemID sets the "memory_item_id" field.
-func (_u *MemoryLinkUpdateOne) SetMemoryItemID(v uuid.UUID) *MemoryLinkUpdateOne {
+func (_u *MemoryLinkUpdateOne) SetMemoryItemID(v int64) *MemoryLinkUpdateOne {
 	_u.mutation.SetMemoryItemID(v)
 	return _u
 }
 
 // SetNillableMemoryItemID sets the "memory_item_id" field if the given value is not nil.
-func (_u *MemoryLinkUpdateOne) SetNillableMemoryItemID(v *uuid.UUID) *MemoryLinkUpdateOne {
+func (_u *MemoryLinkUpdateOne) SetNillableMemoryItemID(v *int64) *MemoryLinkUpdateOne {
 	if v != nil {
 		_u.SetMemoryItemID(*v)
 	}
@@ -245,13 +293,13 @@ func (_u *MemoryLinkUpdateOne) SetNillableMemoryItemID(v *uuid.UUID) *MemoryLink
 }
 
 // SetSourceMessageIds sets the "source_message_ids" field.
-func (_u *MemoryLinkUpdateOne) SetSourceMessageIds(v []uuid.UUID) *MemoryLinkUpdateOne {
+func (_u *MemoryLinkUpdateOne) SetSourceMessageIds(v []int64) *MemoryLinkUpdateOne {
 	_u.mutation.SetSourceMessageIds(v)
 	return _u
 }
 
 // AppendSourceMessageIds appends value to the "source_message_ids" field.
-func (_u *MemoryLinkUpdateOne) AppendSourceMessageIds(v []uuid.UUID) *MemoryLinkUpdateOne {
+func (_u *MemoryLinkUpdateOne) AppendSourceMessageIds(v []int64) *MemoryLinkUpdateOne {
 	_u.mutation.AppendSourceMessageIds(v)
 	return _u
 }
@@ -263,13 +311,13 @@ func (_u *MemoryLinkUpdateOne) ClearSourceMessageIds() *MemoryLinkUpdateOne {
 }
 
 // SetIngestionIds sets the "ingestion_ids" field.
-func (_u *MemoryLinkUpdateOne) SetIngestionIds(v []uuid.UUID) *MemoryLinkUpdateOne {
+func (_u *MemoryLinkUpdateOne) SetIngestionIds(v []int64) *MemoryLinkUpdateOne {
 	_u.mutation.SetIngestionIds(v)
 	return _u
 }
 
 // AppendIngestionIds appends value to the "ingestion_ids" field.
-func (_u *MemoryLinkUpdateOne) AppendIngestionIds(v []uuid.UUID) *MemoryLinkUpdateOne {
+func (_u *MemoryLinkUpdateOne) AppendIngestionIds(v []int64) *MemoryLinkUpdateOne {
 	_u.mutation.AppendIngestionIds(v)
 	return _u
 }
@@ -324,9 +372,20 @@ func (_u *MemoryLinkUpdateOne) SetNillableCreatedAt(v *time.Time) *MemoryLinkUpd
 	return _u
 }
 
+// SetMemoryItem sets the "memory_item" edge to the MemoryItem entity.
+func (_u *MemoryLinkUpdateOne) SetMemoryItem(v *MemoryItem) *MemoryLinkUpdateOne {
+	return _u.SetMemoryItemID(v.ID)
+}
+
 // Mutation returns the MemoryLinkMutation object of the builder.
 func (_u *MemoryLinkUpdateOne) Mutation() *MemoryLinkMutation {
 	return _u.mutation
+}
+
+// ClearMemoryItem clears the "memory_item" edge to the MemoryItem entity.
+func (_u *MemoryLinkUpdateOne) ClearMemoryItem() *MemoryLinkUpdateOne {
+	_u.mutation.ClearMemoryItem()
+	return _u
 }
 
 // Where appends a list predicates to the MemoryLinkUpdate builder.
@@ -369,8 +428,19 @@ func (_u *MemoryLinkUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
+// check runs all checks and user-defined validators on the builder.
+func (_u *MemoryLinkUpdateOne) check() error {
+	if _u.mutation.MemoryItemCleared() && len(_u.mutation.MemoryItemIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "MemoryLink.memory_item"`)
+	}
+	return nil
+}
+
 func (_u *MemoryLinkUpdateOne) sqlSave(ctx context.Context) (_node *MemoryLink, err error) {
-	_spec := sqlgraph.NewUpdateSpec(memorylink.Table, memorylink.Columns, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeUUID))
+	if err := _u.check(); err != nil {
+		return _node, err
+	}
+	_spec := sqlgraph.NewUpdateSpec(memorylink.Table, memorylink.Columns, sqlgraph.NewFieldSpec(memorylink.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "MemoryLink.id" for update`)}
@@ -394,9 +464,6 @@ func (_u *MemoryLinkUpdateOne) sqlSave(ctx context.Context) (_node *MemoryLink, 
 				ps[i](selector)
 			}
 		}
-	}
-	if value, ok := _u.mutation.MemoryItemID(); ok {
-		_spec.SetField(memorylink.FieldMemoryItemID, field.TypeUUID, value)
 	}
 	if value, ok := _u.mutation.SourceMessageIds(); ok {
 		_spec.SetField(memorylink.FieldSourceMessageIds, field.TypeJSON, value)
@@ -439,6 +506,35 @@ func (_u *MemoryLinkUpdateOne) sqlSave(ctx context.Context) (_node *MemoryLink, 
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(memorylink.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.MemoryItemCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   memorylink.MemoryItemTable,
+			Columns: []string{memorylink.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.MemoryItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   memorylink.MemoryItemTable,
+			Columns: []string{memorylink.MemoryItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(memoryitem.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &MemoryLink{config: _u.config}
 	_spec.Assign = _node.assignValues

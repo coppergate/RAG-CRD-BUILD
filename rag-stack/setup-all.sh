@@ -311,11 +311,6 @@ apply_manifest "$REPO_DIR/services/memory-controller/k8s/deployment.yaml"
 mark_step_done "memory-controller"
 fi
 
-# if ! is_step_done "rag-web-ui"; then
-# echo "--- 9. Deploying RAG Web UI (Go) ---"
-# apply_manifest "$REPO_DIR/services/rag-web-ui/ui-deployment.yaml"
-# mark_step_done "rag-web-ui"
-# fi
 # if ! is_step_done "rag-explorer"; then
 # echo "--- 9.5 Deploying RAG Explorer (Flutter) ---"
 # apply_manifest "$REPO_DIR/services/rag-explorer/k8s/deployment.yaml"

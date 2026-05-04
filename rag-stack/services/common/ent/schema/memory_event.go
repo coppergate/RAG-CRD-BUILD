@@ -5,7 +5,6 @@ import (
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -17,12 +16,11 @@ type MemoryEvent struct {
 // Fields of the MemoryEvent.
 func (MemoryEvent) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuid.New).
+		field.Int64("id").
 			StorageKey("id"),
-		field.UUID("memory_item_id", uuid.UUID{}).
+		field.Int64("memory_item_id").
 			Comment("The associated memory item"),
-		field.UUID("session_id", uuid.UUID{}).
+		field.Int64("session_id").
 			Optional().
 			Comment("The associated session for easier auditing"),
 		field.String("event_type").
@@ -42,6 +40,11 @@ func (MemoryEvent) Edges() []ent.Edge {
 			Ref("memory_events").
 			Field("session_id").
 			Unique(),
+		edge.From("memory_item", MemoryItem.Type).
+			Ref("events").
+			Field("memory_item_id").
+			Unique().
+			Required(),
 	}
 }
 

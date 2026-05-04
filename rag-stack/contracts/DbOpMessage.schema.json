@@ -5,7 +5,7 @@
   "required": ["op", "id"],
   "properties": {
     "op": {"type": "string", "enum": ["delete_session"]},
-    "id": {"type": "string"}
+    "id": {"type": "integer"}
   },
   "additionalProperties": true
 }

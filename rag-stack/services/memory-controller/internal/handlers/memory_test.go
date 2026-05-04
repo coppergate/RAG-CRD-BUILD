@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
 	"app-builds/common/ent/enttest"
-	"github.com/google/uuid"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -26,7 +26,10 @@ func TestMemoryHandler(t *testing.T) {
 
 	// 2. Test POST /items
 	t.Run("WriteItems", func(t *testing.T) {
-		sessionID := uuid.New().String()
+		sessionID := time.Now().UnixNano() % 100000
+		// Create session first
+		client.Session.Create().SetID(sessionID).SetName("write-items-session").SaveX(ctx)
+
 		reqBody := contracts.MemoryWriteRequest{
 			RequestId: "req-1",
 			Scope: &contracts.MemoryScope{
@@ -83,10 +86,10 @@ func TestMemoryHandler(t *testing.T) {
 	// 4. Test POST /sessions
 	t.Run("CreateSession", func(t *testing.T) {
 		reqBody := struct {
-			Id   string `json:"id"`
+			Id   int64  `json:"id"`
 			Name string `json:"name"`
 		}{
-			Id:   uuid.New().String(),
+			Id:   time.Now().UnixNano() % 100000,
 			Name: "test session",
 		}
 
@@ -104,10 +107,10 @@ func TestMemoryHandler(t *testing.T) {
 	// 5. Test POST /sessions conflict (Duplicate name, different ID)
 	t.Run("CreateSessionDuplicateName", func(t *testing.T) {
 		reqBody := struct {
-			Id   string `json:"id"`
+			Id   int64  `json:"id"`
 			Name string `json:"name"`
 		}{
-			Id:   uuid.New().String(),
+			Id:   time.Now().UnixNano() % 100000,
 			Name: "test session", // Same name as before
 		}
 
@@ -129,10 +132,10 @@ func TestMemoryHandler(t *testing.T) {
 		if len(sessions) == 0 {
 			t.Fatal("No sessions found")
 		}
-		existingID := sessions[0].ID.String()
+		existingID := sessions[0].ID
 
 		reqBody := struct {
-			Id   string `json:"id"`
+			Id   int64  `json:"id"`
 			Name string `json:"name"`
 		}{
 			Id:   existingID,

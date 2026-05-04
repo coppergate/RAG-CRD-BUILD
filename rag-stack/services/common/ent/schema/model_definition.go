@@ -4,7 +4,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 	"time"
 )
 
@@ -16,8 +15,7 @@ type ModelDefinition struct {
 // Fields of the ModelDefinition.
 func (ModelDefinition) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.UUID{}).
-			Default(uuid.New).
+		field.Int64("id").
 			StorageKey("model_id"),
 		field.String("model_name").
 			Unique(),

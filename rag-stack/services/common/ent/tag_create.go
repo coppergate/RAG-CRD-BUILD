@@ -12,11 +12,9 @@ import (
 	"fmt"
 	"time"
 
-	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/google/uuid"
 )
 
 // TagCreate is the builder for creating a Tag entity.
@@ -48,28 +46,20 @@ func (_c *TagCreate) SetNillableCreatedAt(v *time.Time) *TagCreate {
 }
 
 // SetID sets the "id" field.
-func (_c *TagCreate) SetID(v uuid.UUID) *TagCreate {
+func (_c *TagCreate) SetID(v int64) *TagCreate {
 	_c.mutation.SetID(v)
 	return _c
 }
 
-// SetNillableID sets the "id" field if the given value is not nil.
-func (_c *TagCreate) SetNillableID(v *uuid.UUID) *TagCreate {
-	if v != nil {
-		_c.SetID(*v)
-	}
-	return _c
-}
-
 // AddSessionIDs adds the "sessions" edge to the Session entity by IDs.
-func (_c *TagCreate) AddSessionIDs(ids ...uuid.UUID) *TagCreate {
+func (_c *TagCreate) AddSessionIDs(ids ...int64) *TagCreate {
 	_c.mutation.AddSessionIDs(ids...)
 	return _c
 }
 
 // AddSessions adds the "sessions" edges to the Session entity.
 func (_c *TagCreate) AddSessions(v ...*Session) *TagCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -77,14 +67,14 @@ func (_c *TagCreate) AddSessions(v ...*Session) *TagCreate {
 }
 
 // AddIngestionIDs adds the "ingestions" edge to the CodeIngestion entity by IDs.
-func (_c *TagCreate) AddIngestionIDs(ids ...uuid.UUID) *TagCreate {
+func (_c *TagCreate) AddIngestionIDs(ids ...int64) *TagCreate {
 	_c.mutation.AddIngestionIDs(ids...)
 	return _c
 }
 
 // AddIngestions adds the "ingestions" edges to the CodeIngestion entity.
 func (_c *TagCreate) AddIngestions(v ...*CodeIngestion) *TagCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -92,14 +82,14 @@ func (_c *TagCreate) AddIngestions(v ...*CodeIngestion) *TagCreate {
 }
 
 // AddEmbeddingIDs adds the "embeddings" edge to the CodeEmbedding entity by IDs.
-func (_c *TagCreate) AddEmbeddingIDs(ids ...uuid.UUID) *TagCreate {
+func (_c *TagCreate) AddEmbeddingIDs(ids ...int64) *TagCreate {
 	_c.mutation.AddEmbeddingIDs(ids...)
 	return _c
 }
 
 // AddEmbeddings adds the "embeddings" edges to the CodeEmbedding entity.
 func (_c *TagCreate) AddEmbeddings(v ...*CodeEmbedding) *TagCreate {
-	ids := make([]uuid.UUID, len(v))
+	ids := make([]int64, len(v))
 	for i := range v {
 		ids[i] = v[i].ID
 	}
@@ -145,10 +135,6 @@ func (_c *TagCreate) defaults() {
 		v := tag.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
-	if _, ok := _c.mutation.ID(); !ok {
-		v := tag.DefaultID()
-		_c.mutation.SetID(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -173,12 +159,9 @@ func (_c *TagCreate) sqlSave(ctx context.Context) (*Tag, error) {
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
+	if _spec.ID.Value != _node.ID {
+		id := _spec.ID.Value.(int64)
+		_node.ID = int64(id)
 	}
 	_c.mutation.id = &_node.ID
 	_c.mutation.done = true
@@ -188,12 +171,12 @@ func (_c *TagCreate) sqlSave(ctx context.Context) (*Tag, error) {
 func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 	var (
 		_node = &Tag{config: _c.config}
-		_spec = sqlgraph.NewCreateSpec(tag.Table, sqlgraph.NewFieldSpec(tag.FieldID, field.TypeUUID))
+		_spec = sqlgraph.NewCreateSpec(tag.Table, sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt64))
 	)
 	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
-		_spec.ID.Value = &id
+		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(tag.FieldName, field.TypeString, value)
@@ -211,7 +194,7 @@ func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 			Columns: tag.SessionsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(session.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -227,7 +210,7 @@ func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 			Columns: tag.IngestionsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(codeingestion.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -243,7 +226,7 @@ func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 			Columns: tag.EmbeddingsPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeUUID),
+				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -396,12 +379,7 @@ func (u *TagUpsertOne) ExecX(ctx context.Context) {
 }
 
 // Exec executes the UPSERT query and returns the inserted/updated ID.
-func (u *TagUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
-	if u.create.driver.Dialect() == dialect.MySQL {
-		// In case of "ON CONFLICT", there is no way to get back non-numeric ID
-		// fields from the database since MySQL does not support the RETURNING clause.
-		return id, errors.New("ent: TagUpsertOne.ID is not supported by MySQL driver. Use TagUpsertOne.Exec instead")
-	}
+func (u *TagUpsertOne) ID(ctx context.Context) (id int64, err error) {
 	node, err := u.create.Save(ctx)
 	if err != nil {
 		return id, err
@@ -410,7 +388,7 @@ func (u *TagUpsertOne) ID(ctx context.Context) (id uuid.UUID, err error) {
 }
 
 // IDX is like ID, but panics if an error occurs.
-func (u *TagUpsertOne) IDX(ctx context.Context) uuid.UUID {
+func (u *TagUpsertOne) IDX(ctx context.Context) int64 {
 	id, err := u.ID(ctx)
 	if err != nil {
 		panic(err)
@@ -465,6 +443,10 @@ func (_c *TagCreateBulk) Save(ctx context.Context) ([]*Tag, error) {
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil && nodes[i].ID == 0 {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int64(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})

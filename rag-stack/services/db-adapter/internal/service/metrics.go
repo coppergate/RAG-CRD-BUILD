@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"app-builds/common/ent"
@@ -14,7 +15,6 @@ import (
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
-	"github.com/google/uuid"
 )
 
 type MetricsService struct {
@@ -26,7 +26,7 @@ func NewMetricsService(client *ent.Client) *MetricsService {
 }
 
 func (s *MetricsService) GetHealth(w http.ResponseWriter, r *http.Request, sessionIDStr string) {
-	sessionID, err := uuid.Parse(sessionIDStr)
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid session ID", http.StatusBadRequest)
 		return
@@ -87,7 +87,7 @@ func (s *MetricsService) calculateStatus(successRate float64) string {
 }
 
 func (s *MetricsService) GetAudit(w http.ResponseWriter, r *http.Request, sessionIDStr string) {
-	sessionID, err := uuid.Parse(sessionIDStr)
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid session ID", http.StatusBadRequest)
 		return
@@ -99,7 +99,7 @@ func (s *MetricsService) GetAudit(w http.ResponseWriter, r *http.Request, sessio
 		Limit(50).
 		All(r.Context())
 	if err != nil {
-		fmt.Printf("[ERROR] Failed to query retrieval logs for session %s: %v\n", sessionID, err)
+		fmt.Printf("[ERROR] Failed to query retrieval logs for session %d: %v\n", sessionID, err)
 		http.Error(w, "Failed to query retrieval logs: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

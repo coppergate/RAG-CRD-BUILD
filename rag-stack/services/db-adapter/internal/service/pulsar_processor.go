@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,10 +77,10 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 	attrs[0] = attribute.String("op", payload.Op)
 
 	if payload.Op == "delete_session" {
-		sessID, parseErr := uuid.Parse(payload.Id)
+		sessID, parseErr := strconv.ParseInt(payload.Id, 10, 64)
 		if parseErr != nil {
-			log.Printf("Invalid UUID for delete_session: %q", payload.Id)
-			return dlq.PermanentFailure, fmt.Errorf("invalid UUID in delete_session: %q: %w", payload.Id, parseErr)
+			log.Printf("Invalid ID for delete_session: %q", payload.Id)
+			return dlq.PermanentFailure, fmt.Errorf("invalid ID in delete_session: %q: %w", payload.Id, parseErr)
 		}
 
 		log.Printf("Attempting to delete session %s and its dependents", sessID)
@@ -136,8 +137,8 @@ func (p *PulsarProcessor) sanitizeString(s string) string {
 	return strings.ReplaceAll(s, "\x00", "")
 }
 
-func (p *PulsarProcessor) ensureSessionExists(ctx context.Context, sessionID uuid.UUID) error {
-	if sessionID == uuid.Nil {
+func (p *PulsarProcessor) ensureSessionExists(ctx context.Context, sessionID int64) error {
+	if sessionID == 0 {
 		return nil
 	}
 	// Upsert session to handle FK constraints for out-of-order messages
@@ -158,7 +159,7 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 
 	var payload struct {
 		Id        string `json:"id"`
-		SessionId string `json:"session_id"`
+		SessionId int64  `json:"session_id"`
 		Content   string `json:"content"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
@@ -169,10 +170,7 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 	if parseErr != nil {
 		return dlq.PermanentFailure, fmt.Errorf("invalid prompt UUID: %q: %w", payload.Id, parseErr)
 	}
-	sessID, parseErr := uuid.Parse(payload.SessionId)
-	if parseErr != nil {
-		return dlq.PermanentFailure, fmt.Errorf("invalid session UUID: %q: %w", payload.SessionId, parseErr)
-	}
+	sessID := payload.SessionId
 
 	content := p.sanitizeString(payload.Content)
 
@@ -239,9 +237,9 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 	}
 	respID := promptUUID
 
-	var sessID uuid.UUID
-	if payload.SessionId != "" {
-		sessID, _ = uuid.Parse(payload.SessionId)
+	var sessID int64
+	if payload.SessionId != 0 {
+		sessID = payload.SessionId
 	}
 
 	pr, err := p.client.Prompt.Query().
@@ -278,7 +276,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		}
 	}
 
-	if sessID == uuid.Nil {
+	if sessID == 0 {
 		sessID = pr.SessionID
 	}
 
@@ -406,8 +404,17 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 	}
 
 	m := payload.Metrics
-	sessID, _ := uuid.Parse(payload.SessionId)
+	sessID := payload.SessionId
 	respID, _ := uuid.Parse(payload.Id)
+
+	var dbResponseID *int64
+	res, err := p.client.Response.Query().
+		Where(response.ResponseID(respID)).
+		Order(ent.Desc(response.FieldID)).
+		First(ctx)
+	if err == nil {
+		dbResponseID = &res.ID
+	}
 
 	modelID, err := p.client.ModelDefinition.Create().
 		SetModelName(payload.Model).
@@ -437,7 +444,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 	}
 
 	_, err = p.client.ModelExecutionMetric.Create().
-		SetNillableResponseID(&respID).
+		SetNillableResponseID(dbResponseID).
 		SetNillableSessionID(&sessID).
 		SetNillableNodeID(&nodeID).
 		SetNillableModelID(&modelID).

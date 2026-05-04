@@ -8,7 +8,7 @@ import "google/protobuf/struct.proto";
 
 message InternalRequest {
   string id = 1;
-  string session_id = 2;
+  int64 session_id = 2;
   string session_name = 3;
   string prompt = 4;
   string system_prompt = 5;
@@ -22,7 +22,7 @@ message InternalRequest {
 
 message StreamChunk {
   string id = 1;
-  string session_id = 2;
+  int64 session_id = 2;
   string result = 3;
   int32 sequence_number = 4;
   bool is_last = 5;
@@ -35,7 +35,7 @@ message StreamChunk {
 
 message ResponseCompletion {
   string id = 1;
-  string session_id = 2;
+  int64 session_id = 2;
   string start_timestamp = 3;
   string model = 4;
   string status = 5;
@@ -56,9 +56,9 @@ message ExecutionMetrics {
 
 // Memory Contracts
 message MemoryScope {
-  string session_id = 1;
+  int64 session_id = 1;
   string user_id = 2;
-  string project_id = 3;
+  int64 project_id = 3;
   repeated string tags = 4;
 }
 
@@ -71,7 +71,7 @@ message MemorySourceRef {
 }
 
 message MemoryWriteItem {
-  string memory_id = 1;
+  int64 memory_id = 1;
   string memory_type = 2;
   string summary = 3;
   string content = 4;
@@ -105,17 +105,17 @@ message MemoryPack {
 
 message StatusMessage {
   string id = 1;
-  string session_id = 2;
+  int64 session_id = 2;
   string state = 3;
   string details = 4;
   string timestamp = 5;
 }
 
 message IngestRequest {
-  string ingestion_id = 1;
+  int64 ingestion_id = 1;
   repeated string tag_names = 2;
-  repeated string tag_ids = 3;
-  string session_id = 4;
+  repeated int64 tag_ids = 3;
+  int64 session_id = 4;
   int32 vector_size = 5;
   repeated string file_names = 6;
 }
@@ -135,7 +135,7 @@ message QdrantOp {
   repeated float vector = 6;
   int32 limit = 7;
   repeated string tags = 8;
-  string session_id = 9;
+  int64 session_id = 9;
   repeated string paths = 10;
   string source_tag = 11;
   string target_tag = 12;

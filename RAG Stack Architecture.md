@@ -13,7 +13,6 @@ graph TD
     end
 
     subgraph "Kubernetes: rag-system namespace: TLS-SSL"
-        UI[rag-web-ui]
         Flutter[rag-explorer]
         Admin[rag-admin-api]
         Gateway[llm-gateway]
@@ -71,7 +70,6 @@ graph TD
     end
 
     %% Interaction Flows: HTTPS
-    Browser <-->|HTTPS/443| UI
     Explorer <-->|HTTPS/443| Admin
     Admin <-->|Proxy| Gateway
     Admin <-->|Proxy| Ingestor
@@ -82,7 +80,7 @@ graph TD
     Gateway <-->|WS/HTTPS| Explorer
 
     %% Registry Flow
-    UI & Flutter & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
+    Flutter & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
     S3 & Qdrant & TDB & Ollama & OllamaCode -.->|Pull TLS| Reg
 
     %% Ingestion Flow
@@ -141,7 +139,7 @@ graph TD
     DBAdapter -->|Persist: TLS| TDB
 
     %% Observability Flow: OTLP & Logs over HTTPS
-    UI & Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|OTLP/HTTPS| Alloy
+    Gateway & Worker & DBAdapter & QAdapter & OSMgr -->|OTLP/HTTPS| Alloy
     Alloy -->|Metrics: HTTPS| Mimir
     Alloy -->|Logs: HTTPS| Loki
     Alloy -->|Traces: HTTPS/4318| Tempo
@@ -157,7 +155,6 @@ graph TD
 
 #### 2. Component Descriptions
 
-- `rag-web-ui`: Legacy front-end for data ingestion and interactive chat; secured via Traefik HTTPS.
 - `rag-explorer`: Advanced Flutter-based management UI for the RAG pipeline. Supports granular ingestion control, metadata inspection, and real-time session monitoring.
 - `rag-admin-api`: Management portal proxy and health aggregator; provides a unified API for `rag-explorer`.
 - `llm-gateway`: OpenAI-compatible entry point; manages session lifecycle and asynchronous task delegation. Now supports isolated session topics for streaming.

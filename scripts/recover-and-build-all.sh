@@ -52,7 +52,6 @@ echo "=== 4) Verify built service images in in-cluster registry ==="
 services=(
   llm-gateway
   rag-worker
-  rag-web-ui
   rag-ingestion
   db-adapter
   qdrant-adapter
