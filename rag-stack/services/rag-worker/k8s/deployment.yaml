@@ -81,6 +81,8 @@ spec:
           value: "30s"
         - name: RECURSION_BUDGET
           value: "2.0"
+        - name: MEMORY_CONTROLLER_URL
+          value: "http://memory-controller.rag-system.svc.cluster.local:8080"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OTEL_USE_TLS

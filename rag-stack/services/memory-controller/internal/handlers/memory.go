@@ -9,6 +9,8 @@ import (
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
 	"app-builds/common/ent/memoryitem"
+	"app-builds/common/ent/prompt"
+	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
 	"strings"
 	"time"
@@ -271,4 +273,118 @@ func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *MemoryHandler) HandleRetrieve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+	var req contracts.MemoryRetrieveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := req.Scope.SessionId
+	if sessionID == 0 {
+		http.Error(w, "Session ID required in scope", http.StatusBadRequest)
+		return
+	}
+
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+
+	// 1. Fetch relevant MemoryItems
+	mItems, err := h.client.MemoryItem.Query().
+		Where(memoryitem.SessionID(sessionID)).
+		Order(ent.Desc(memoryitem.FieldCreatedAt)).
+		Limit(int(limit)).
+		All(ctx)
+	if err != nil {
+		log.Printf("[MEMCTRL] Error fetching memory items: %v", err)
+	}
+
+	// 2. Fetch Chat History (Prompts and Responses)
+	prompts, err := h.client.Prompt.Query().
+		Where(prompt.SessionID(sessionID)).
+		Order(ent.Desc(prompt.FieldCreatedAt)).
+		Limit(int(limit)).
+		All(ctx)
+	if err != nil {
+		log.Printf("[MEMCTRL] Error fetching prompts: %v", err)
+	}
+
+	// Fetch responses for these prompts
+	var promptIDs []int64
+	for _, p := range prompts {
+		promptIDs = append(promptIDs, p.ID)
+	}
+
+	responses, err := h.client.Response.Query().
+		Where(response.PromptIDIn(promptIDs...)).
+		All(ctx)
+	if err != nil {
+		log.Printf("[MEMCTRL] Error fetching responses: %v", err)
+	}
+
+	respMap := make(map[int64]*ent.Response)
+	for _, res := range responses {
+		if res.PromptID != 0 {
+			respMap[res.PromptID] = res
+		}
+	}
+
+	// 3. Assemble MemoryPack
+	pack := &contracts.MemoryPack{
+		Items: []*contracts.MemoryWriteItem{},
+	}
+
+	// Add MemoryItems
+	for _, mi := range mItems {
+		pack.Items = append(pack.Items, &contracts.MemoryWriteItem{
+			MemoryId:      mi.ID,
+			MemoryType:    mi.MemoryType,
+			Summary:       mi.Summary,
+			Content:       mi.Content,
+			SalienceHint:  mi.Salience,
+			RetentionHint: mi.RetentionScore,
+			Pinned:        mi.Pinned,
+			Metadata:      contracts.ToStruct(mi.Metadata),
+		})
+	}
+
+	// Add History (interleaved if possible, but simplest is just pairs)
+	// We want to return them in chronological order for the LLM
+	for i := len(prompts) - 1; i >= 0; i-- {
+		p := prompts[i]
+		pack.Items = append(pack.Items, &contracts.MemoryWriteItem{
+			MemoryType: "chat_history",
+			Content:    p.Content,
+			Metadata: contracts.ToStruct(map[string]interface{}{
+				"role":      "user",
+				"timestamp": p.CreatedAt.Format(time.RFC3339),
+				"id":        p.PromptID.String(),
+			}),
+		})
+
+		if res, ok := respMap[p.ID]; ok {
+			pack.Items = append(pack.Items, &contracts.MemoryWriteItem{
+				MemoryType: "chat_history",
+				Content:    res.Content,
+				Metadata: contracts.ToStruct(map[string]interface{}{
+					"role":      "assistant",
+					"timestamp": res.CreatedAt.Format(time.RFC3339),
+					"id":        res.ResponseID.String(),
+				}),
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pack)
 }

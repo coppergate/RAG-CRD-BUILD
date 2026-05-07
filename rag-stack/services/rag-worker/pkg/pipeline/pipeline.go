@@ -20,6 +20,7 @@ import (
 	"app-builds/rag-worker/internal/models"
 	"app-builds/rag-worker/pkg/messaging"
 	"app-builds/rag-worker/pkg/search"
+	"app-builds/rag-worker/pkg/memory"
 )
 
 var (
@@ -57,19 +58,21 @@ func init() {
 
 // Handler processes RAG pipeline stage messages.
 type Handler struct {
-	cfg      *config.Config
-	msg      *messaging.Client
-	registry *models.ModelRegistry
-	searcher *search.QdrantSearcher
+	cfg          *config.Config
+	msg          *messaging.Client
+	registry     *models.ModelRegistry
+	searcher     *search.QdrantSearcher
+	memoryClient *memory.MemoryClient
 }
 
 // NewHandler creates a new pipeline stage handler.
-func NewHandler(cfg *config.Config, msg *messaging.Client, registry *models.ModelRegistry, searcher *search.QdrantSearcher) *Handler {
+func NewHandler(cfg *config.Config, msg *messaging.Client, registry *models.ModelRegistry, searcher *search.QdrantSearcher, mem *memory.MemoryClient) *Handler {
 	return &Handler{
-		cfg:      cfg,
-		msg:      msg,
-		registry: registry,
-		searcher: searcher,
+		cfg:          cfg,
+		msg:          msg,
+		registry:     registry,
+		searcher:     searcher,
+		memoryClient: mem,
 	}
 }
 
@@ -234,8 +237,14 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.Id, sq, vs, err)
 			continue
 		}
-		log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", req.Id, len(contexts), sq)
+ 	log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", req.Id, len(contexts), sq)
 		allContexts = append(allContexts, contexts...)
+	}
+
+	// Fetch Session History from Memory Controller
+	historyPack, err := h.memoryClient.Retrieve(ctx, req.SessionId, req.Prompt)
+	if err != nil {
+		log.Printf("[%s] Memory retrieval failed: %v", req.Id, err)
 	}
 
 	if req.Metadata == nil {
@@ -246,6 +255,9 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		metadataMap = make(map[string]interface{})
 	}
 	metadataMap["contexts"] = allContexts
+	if historyPack != nil {
+		metadataMap["history"] = historyPack.Items
+	}
 	if metadataMap["recursion_budget"] == nil {
 		metadataMap["recursion_budget"] = h.cfg.RecursionBudget
 	}
@@ -271,9 +283,13 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", "Generating response with specialized model")
 
 	var contexts []interface{}
+	var history []interface{}
 	metadata := contracts.FromStruct(req.Metadata)
 	if c, ok := metadata["contexts"].([]interface{}); ok {
 		contexts = c
+	}
+	if hist, ok := metadata["history"].([]interface{}); ok {
+		history = hist
 	}
 
 	modelID := req.ExecutorModel
@@ -290,7 +306,7 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 
 	if req.Stream {
 		startTime := time.Now().UTC().Format(time.RFC3339)
-		stream, metaCh, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts)
+		stream, metaCh, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts, history)
 		var fullResult string
 		var finalMetrics *contracts.ExecutionMetrics
 		seq := 0
@@ -343,7 +359,7 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	}
 
 	startTime := time.Now().UTC().Format(time.RFC3339)
-	result, rawMetrics, err := executor.Execute(ctx, req.Prompt, contexts)
+	result, rawMetrics, err := executor.Execute(ctx, req.Prompt, contexts, history)
 	if err != nil {
 		log.Printf("[%s] Execution failed: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Execution failed: %v", err), false)

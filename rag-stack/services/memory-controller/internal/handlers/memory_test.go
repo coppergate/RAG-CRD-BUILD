@@ -44,7 +44,7 @@ func TestMemoryHandler(t *testing.T) {
 			},
 		}
 		
-		body, _ := json.Marshal(reqBody)
+		body, _ := json.Marshal(&reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/items", bytes.NewReader(body))
 		w := httptest.NewRecorder()
 		

@@ -46,6 +46,7 @@ func main() {
 	
 	memoryHandler := handlers.NewMemoryHandler(entClient)
 	mux.HandleFunc("/items", memoryHandler.HandleItems)
+	mux.HandleFunc("/retrieve", memoryHandler.HandleRetrieve)
 	mux.HandleFunc("/sessions", memoryHandler.HandleSessions)
 	mux.HandleFunc("/sessions/", memoryHandler.HandleSessions)
 

@@ -612,3 +612,10 @@ To prevent duplicate "chunks" in chat history, the `db-adapter` consolidates mul
 - **Final Results**: Aggregated messages from `prompt-aggregator` (with `is_last=true`) overwrite the content to ensure accuracy.
 - **Planning Data**: Sub-queries from `rag-worker` are accumulated in the `planning_response` field.
 - **History**: `GetMessages` groups any legacy duplicate records by `prompt_id` before returning them to the UI.
+
+### 9.3 Session Context & Memory Controller (Iteration 7)
+Session context is managed by the `memory-controller` service and consumed by the `rag-worker`.
+- **Retrieval**: `rag-worker` calls `POST /retrieve` on `memory-controller` during the `search` stage.
+- **Assembly**: The `memory-controller` fetches the last 10 pairs of prompts and responses for a session and packages them into a `MemoryPack`.
+- **LLM Context**: `rag-worker` converts the `MemoryPack` into a list of messages (role/content) which are prepended to the final LLM prompt.
+- **Configuration**: `MEMORY_CONTROLLER_URL` environment variable must be set in `rag-worker`.

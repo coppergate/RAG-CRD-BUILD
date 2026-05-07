@@ -26,6 +26,7 @@ import (
 	"app-builds/rag-worker/pkg/messaging"
 	"app-builds/rag-worker/pkg/pipeline"
 	"app-builds/rag-worker/pkg/search"
+	"app-builds/rag-worker/pkg/memory"
 )
 
 // main is the entry point for the rag-worker service.
@@ -53,6 +54,8 @@ func main() {
 	defer dlqHandler.Close()
 
 	searcher := initQdrantSearcher(cfg, msgClient)
+
+	memoryClient := memory.NewMemoryClient(cfg.MemoryControllerURL)
 
 	consumer := subscribeToStageTopics(cfg, msgClient)
 	defer consumer.Close()
@@ -84,7 +87,7 @@ func main() {
 		return nil
 	})
 
-	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher)
+	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher, memoryClient)
 
 	log.Printf("RAG Worker started, listening on multiple stages")
 

@@ -14,7 +14,7 @@ func TestExecutor_Execute(t *testing.T) {
 		},
 	}
 	e := NewExecutor(mock)
-	got, _, err := e.Execute(context.Background(), "my question", []interface{}{"some context"})
+	got, _, err := e.Execute(context.Background(), "my question", []interface{}{"some context"}, nil)
 	if err != nil {
 		t.Fatalf("Executor.Execute() error = %v", err)
 	}
