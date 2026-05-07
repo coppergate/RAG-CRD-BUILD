@@ -57,7 +57,7 @@ func (s *SessionService) GetMessages(w http.ResponseWriter, r *http.Request, ses
 		return
 	}
 
-	var messages []ChatMessage
+	messages := make([]ChatMessage, 0)
 	for _, p := range prompts {
 		messages = append(messages, ChatMessage{
 			Role:      "user",
@@ -126,6 +126,9 @@ func (s *SessionService) ListSessions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if sessions == nil {
+		sessions = []*ent.Session{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sessions)

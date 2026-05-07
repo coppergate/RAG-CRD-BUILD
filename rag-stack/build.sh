@@ -348,11 +348,13 @@ main() {
 
 	if [[ ${#SELECTED_SERVICES[@]} -gt 0 ]]; then
 		log "Building selected services: ${SELECTED_SERVICES[*]} (Parallelism: $PARALLELISM)"
+		local pids=()
 		for svc in "${SELECTED_SERVICES[@]}"; do
-			build_service "$svc" &
+			build_service "$svc" 200>&- &
+			pids+=($!)
 			while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
 		done
-		wait
+		for pid in "${pids[@]}"; do wait "$pid"; done
 	else
 		log "Pre-build check and versioning..."
 		SERVICES_TO_BUILD=()
@@ -420,11 +422,13 @@ main() {
 		# 2. Parallel Skip-and-Deploy (Fast)
 		if [[ ${#SERVICES_TO_DEPLOY[@]} -gt 0 ]]; then
 			log "Starting parallel deployment update for existing images: ${SERVICES_TO_DEPLOY[*]} (Parallelism: $PARALLELISM)"
+			local dpids=()
 			for svc in "${SERVICES_TO_DEPLOY[@]}"; do
 				build_service "$svc" 200>&- &
+				dpids+=($!)
 				while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
 			done
-			wait
+			for pid in "${dpids[@]}"; do wait "$pid"; done
 		fi
 
 		# 3. Parallel Build (Slow)
@@ -438,12 +442,14 @@ main() {
 			fi
 
 			log "Starting parallel build of remaining services: ${SERVICES_TO_BUILD[*]:-none} (Parallelism: $PARALLELISM)"
+			local bpids=()
 			for svc in "${SERVICES_TO_BUILD[@]}"; do
 				# Explicitly close lock FD in background processes to prevent lock inheritance
 				build_service "$svc" 200>&- &
+				bpids+=($!)
 				while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
 			done
-			wait
+			for pid in "${bpids[@]}"; do wait "$pid"; done
 		fi
 	fi
 

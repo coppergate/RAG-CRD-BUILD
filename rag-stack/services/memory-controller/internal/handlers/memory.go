@@ -52,6 +52,9 @@ func (h *MemoryHandler) listItems(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if items == nil {
+		items = []*ent.MemoryItem{}
+	}
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
@@ -153,6 +156,9 @@ func (h *MemoryHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if sessions == nil {
+		sessions = []*ent.Session{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sessions)

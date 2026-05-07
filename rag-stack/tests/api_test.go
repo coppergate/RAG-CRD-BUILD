@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -129,7 +130,7 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Errorf("Created session %d not found in list", id)
 	}
 
-	// 3. Get Messages (should be empty but succeed)
+	// 3. Get Messages (should be empty [] but succeed)
 	resp, err = client.Get(fmt.Sprintf("%s/api/db/sessions/%d/messages", adminAPIURL, id))
 	if err != nil {
 		t.Fatalf("Failed to get messages: %v", err)
@@ -137,6 +138,16 @@ func TestSessionLifecycle(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status OK for messages, got %v", resp.Status)
+	}
+
+	var msgs []map[string]interface{}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	t.Logf("Messages body: %s", string(bodyBytes))
+	if string(bodyBytes) == "null" {
+		t.Errorf("Messages response is 'null', expected '[]'")
+	}
+	if err := json.Unmarshal(bodyBytes, &msgs); err != nil {
+		t.Fatalf("Failed to decode messages: %v, body: %s", err, string(bodyBytes))
 	}
 
 	// 4. Update Session Tags
