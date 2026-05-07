@@ -571,6 +571,18 @@ The `db-adapter` service includes a comprehensive unit test suite using an in-me
     ```
 - **Coverage**: Includes `handleCompletion`, `handleGetSessionHealth`, `handleGetSessionAudit`, `handleGetSessionMessages`, `handleGetFiles`, and `handleMaintenanceTagMerge`.
 
+### 7.6 Memory Controller Unit Tests (Ent/SQLite)
+The `memory-controller` service includes a comprehensive unit test suite and a separate `MemoryManager` logic test suite. These verify session lifecycle, memory item persistence, and context retrieval assembly.
+- **Location**: 
+    - Logic: `rag-stack/services/memory-controller/internal/logic/manager_test.go`
+    - Handlers: `rag-stack/services/memory-controller/internal/handlers/memory_test.go`
+- **Execution**:
+    ```bash
+    cd rag-stack/services/memory-controller
+    go test -v ./internal/...
+    ```
+- **Coverage**: Includes session creation/deletion, memory item listing/writing, and full `Retrieve` pack assembly (combining chat history and memory items).
+
 ## 8. RAG Explorer & Metrics (Iteration 6b)
 ### 8.1 Model Execution Metrics (3NF)
 Model performance is tracked in the `model_execution_metrics` hypertable in TimescaleDB. 
