@@ -33,6 +33,10 @@ acquire_lock() {
     local elapsed=0
     local wait_step=10
     
+    # Ensure lock file is accessible to the group
+    (umask 000; touch "$LOCK_FILE" 2>/dev/null || true)
+    chmod 666 "$LOCK_FILE" 2>/dev/null || true
+
     # We use a non-inherited FD for the lock check
     log "Attempting to acquire build lock..."
     
@@ -131,25 +135,24 @@ update_svc_info() {
     local tmp=$(mktemp)
     local lockfile="/tmp/rag-stack-version-shared.lock"
     
-    # Ensure lock file is accessible to the group
-    (umask 000; touch "$lockfile" 2>/dev/null || true)
-    chmod 666 "$lockfile" 2>/dev/null || true
+    (
+        # Ensure lock file is accessible to the group
+        umask 000
+        touch "$lockfile" 2>/dev/null || true
+        chmod 666 "$lockfile" 2>/dev/null || true
 
-    exec 200>"$lockfile"
-    if ! flock -x -w 10 200; then
-        log "ERROR: Failed to acquire lock on $lockfile after 10s"
-        rm -f "$tmp"
-        exit 1
-    fi
+        if ! flock -x -w 10 201; then
+            log "ERROR: Failed to acquire lock on $lockfile after 10s"
+            exit 1
+        fi
 
-    if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
-    if jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" 2>/dev/null; then
-        cat "$tmp" > "$VERSION_FILE" || log "WARN: Failed to update $VERSION_FILE (Permissions?)"
-    else
-        log "WARN: Failed to generate updated version JSON"
-    fi
-    
-    flock -u 200
+        if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
+        if jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" 2>/dev/null; then
+            cat "$tmp" > "$VERSION_FILE" || log "WARN: Failed to update $VERSION_FILE (Permissions?)"
+        else
+            log "WARN: Failed to generate updated version JSON"
+        fi
+    ) 201>"$lockfile"
     rm -f "$tmp"
 }
 
