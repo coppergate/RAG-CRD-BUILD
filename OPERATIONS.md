@@ -601,6 +601,7 @@ The Chat Panel in RAG Explorer supports associating multiple existing tags with 
 The `CURRENT_VERSION` file tracks service versions across all environments.
 - **Location**: Project root (`/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`).
 - **Permissions**: Should be `664` or `666` to allow both `wjones` and `junie` to update it.
+- **DANGER**: DO NOT use `mv` to update this file. Using `mv` replaces the file and resets permissions to the user's default umask (usually `644`), which breaks the build pipeline for other users. ALWAYS use redirection (e.g., `cat tmp > CURRENT_VERSION` or `jq ... > tmp && cat tmp > CURRENT_VERSION`) to preserve existing permissions.
 - **Workaround**: If `Permission denied` occurs on `hierophant`, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
 - **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.
 ### 9.2 Response Aggregation
