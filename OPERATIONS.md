@@ -617,7 +617,17 @@ The `CURRENT_VERSION` file tracks service versions across all environments.
 - **Workaround**: If `Permission denied` occurs on `hierophant`, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
 - **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.
 - **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock to avoid collisions. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666 for multi-user support.
-### 9.2 Response Aggregation
+### 9.2 Protobuf Generation
+To regenerate Go bindings for the `rag_stack.proto` contract:
+```bash
+PATH=$PATH:/home/wjones/go/bin protoc \
+  --proto_path=rag-stack/contracts \
+  --go_out=rag-stack/services \
+  --go_opt=module=app-builds \
+  rag-stack/contracts/rag_stack.proto
+```
+
+### 9.3 Response Aggregation
 To prevent duplicate "chunks" in chat history, the `db-adapter` consolidates multiple Pulsar messages for the same prompt into a single database record.
 - **Aggregation**: `HandleResponse` uses a transaction to find an existing record by `prompt_id`.
 - **Deltas**: Content chunks are appended to the existing record.

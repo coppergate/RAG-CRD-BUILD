@@ -64,6 +64,7 @@ type ChatCompletionRequest struct {
 	SessionId   int64    `json:"session_id,omitempty"`   // Changed to int64
 	SessionName string   `json:"session_name,omitempty"` // Added for friendly name
 	Tags        []int64  `json:"tags,omitempty"`         // Changed to int64
+	IncludeGlobal bool     `json:"include_global,omitempty"`
 	Messages    []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
@@ -77,6 +78,7 @@ type GenericChatRequest struct {
 	Planner     string   `json:"planner"`
 	Executor    string   `json:"executor"`
 	Tags        []int64  `json:"tags"` // Changed to int64
+	IncludeGlobal bool     `json:"include_global,omitempty"`
 }
 
 func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sessionName string) (int64, error) {
@@ -174,6 +176,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		PlannerModel:  req.Model,
 		ExecutorModel: req.Model,
 		Tags:          req.Tags,
+		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source": "openai-api",
@@ -253,6 +256,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
 		Tags:          req.Tags,
+		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Stream:        true,
 		Metadata: contracts.ToStruct(map[string]interface{}{
@@ -360,6 +364,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
 		Tags:          req.Tags,
+		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source": "generic-api",

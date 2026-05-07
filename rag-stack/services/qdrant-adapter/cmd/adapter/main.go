@@ -269,7 +269,7 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 
 	switch action {
 	case "search":
-		res, err := a.qdrant.Search(collection, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId)
+		res, err := a.qdrant.Search(collection, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId, data.IncludeGlobal)
 		if err == nil {
 			log.Printf("[%s] Qdrant search returned %d results", opID, len(res))
 		}

@@ -80,7 +80,7 @@ func (s *QdrantSearcher) StartResultConsumer(consumer pulsar.Consumer) {
 }
 
 // Search sends a search request to Qdrant via Pulsar and waits for the result.
-func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64) ([]string, error) {
+func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool) ([]string, error) {
 	if len(vector) == 0 {
 		log.Printf("DEBUG: Skipping Qdrant search for session %d - empty vector", sessionID)
 		return nil, nil
@@ -91,14 +91,15 @@ func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []in
 	defer s.pending.Delete(id)
 
 	op := contracts.QdrantOp{
-		Id:         id,
-		Action:     "search",
-		Collection: s.cfg.QdrantCollection,
-		VectorSize: int32(len(vector)),
-		Vector:     vector,
-		Limit:      int32(s.cfg.QdrantSearchLimit),
-		Tags:       tags,
-		SessionId:  sessionID,
+		Id:            id,
+		Action:        "search",
+		Collection:    s.cfg.QdrantCollection,
+		VectorSize:    int32(len(vector)),
+		Vector:        vector,
+		Limit:         int32(s.cfg.QdrantSearchLimit),
+		Tags:          tags,
+		SessionId:     sessionID,
+		IncludeGlobal: includeGlobal,
 	}
 	marshaller := protojson.MarshalOptions{
 		UseProtoNames: true,

@@ -94,7 +94,7 @@ func TestMemoryHandler(t *testing.T) {
 			Name: "test session",
 		}
 
-		body, _ := json.Marshal(reqBody)
+		body, _ := json.Marshal(&reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/sessions", bytes.NewReader(body))
 		w := httptest.NewRecorder()
 
@@ -115,7 +115,7 @@ func TestMemoryHandler(t *testing.T) {
 			Name: "test session", // Same name as before
 		}
 
-		body, _ := json.Marshal(reqBody)
+		body, _ := json.Marshal(&reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/sessions", bytes.NewReader(body))
 		w := httptest.NewRecorder()
 
@@ -143,7 +143,7 @@ func TestMemoryHandler(t *testing.T) {
 			Name: "updated session name",
 		}
 
-		body, _ := json.Marshal(reqBody)
+		body, _ := json.Marshal(&reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/sessions", bytes.NewReader(body))
 		w := httptest.NewRecorder()
 
@@ -172,7 +172,7 @@ func TestMemoryHandler(t *testing.T) {
 			Limit: 5,
 		}
 
-		body, _ := json.Marshal(reqBody)
+		body, _ := json.Marshal(&reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/retrieve", bytes.NewReader(body))
 		w := httptest.NewRecorder()
 

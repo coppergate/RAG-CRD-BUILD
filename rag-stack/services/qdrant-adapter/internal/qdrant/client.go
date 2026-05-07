@@ -30,11 +30,11 @@ func NewClient(cfg *config.Config) *QdrantClient {
 	}
 }
 
-func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64) ([]string, error) {
-	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, true)
+func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool) ([]string, error) {
+	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
 }
 
-func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, retry bool) ([]string, error) {
+func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]string, error) {
 	if len(vector) == 0 {
 		return nil, nil // Cannot search with empty vector
 	}
@@ -70,20 +70,37 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 	}
 
 	if sessionID > 0 {
-		// Allow points that match the session ID OR have no session ID (global context)
-		mustFilters = append(mustFilters, map[string]interface{}{
-			"should": []map[string]interface{}{
-				{
-					"key": "session_id",
-					"match": map[string]interface{}{
-						"value": sessionID,
-					},
-				},
-				{
-					"is_empty": map[string]interface{}{
+		if includeGlobal {
+			// Allow points that match the session ID OR have no session ID (global context)
+			mustFilters = append(mustFilters, map[string]interface{}{
+				"should": []map[string]interface{}{
+					{
 						"key": "session_id",
+						"match": map[string]interface{}{
+							"value": sessionID,
+						},
+					},
+					{
+						"is_empty": map[string]interface{}{
+							"key": "session_id",
+						},
 					},
 				},
+			})
+		} else {
+			// Strict session matching
+			mustFilters = append(mustFilters, map[string]interface{}{
+				"key": "session_id",
+				"match": map[string]interface{}{
+					"value": sessionID,
+				},
+			})
+		}
+	} else {
+		// If no session ID, we only want global context (session_id is null)
+		mustFilters = append(mustFilters, map[string]interface{}{
+			"is_empty": map[string]interface{}{
+				"key": "session_id",
 			},
 		})
 	}
@@ -110,7 +127,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		if err := q.CreateCollection(collection, vs); err != nil {
 			return nil, fmt.Errorf("failed to auto-create collection %s: %v", effectiveColl, err)
 		}
-		return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, false)
+		return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, includeGlobal, false)
 	}
 
 	if resp.StatusCode != http.StatusOK {
