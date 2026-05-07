@@ -240,7 +240,7 @@ Every new session for the **Junie** agent MUST establish the operational context
 5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
 ### 2.2 Current Focus (Iteration 7)
-As of version 2.10.x, the project is focusing on **Iteration 7: Local Prompt Memory + Recall (Miras/Titans-Inspired)**.
+As of version 2.11.x, the project is focusing on **Iteration 7: Local Prompt Memory + Recall (Miras/Titans-Inspired)**.
 1.  **Memory Data Model**: Implementing structured memory types (`short_term`, `long_term`, `persistent`) in TimescaleDB.
 2.  **Memory Controller**: A dedicated service for salience scoring, retention/decay logic, and MemoryPack assembly.
 3.  **Pulsar Integration**: Asynchronous memory operations via `rag.memory.*` topics.
@@ -341,7 +341,7 @@ Use this only for bootstrapping or when the cluster-native pipeline is unavailab
     ```
 
 ### 3.5 Concurrency and Locking in Build System
-As of version `2.10.x`, the build system supports hardened parallel execution to improve speed and prevent race conditions.
+As of version `2.11.x`, the build system supports hardened parallel execution to improve speed and prevent race conditions.
 
 #### Build Orchestrator Hardening (Double-Launching Fix)
 1.  **Deterministic Job Naming**: The `build-orchestrator` now uses a deterministic naming scheme for Kaniko jobs: `kaniko-build-<service>-<version>`. 
