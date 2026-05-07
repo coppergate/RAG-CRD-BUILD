@@ -42,7 +42,7 @@ func (_c *MemoryLinkCreate) SetIngestionIds(v []int64) *MemoryLinkCreate {
 }
 
 // SetTags sets the "tags" field.
-func (_c *MemoryLinkCreate) SetTags(v []string) *MemoryLinkCreate {
+func (_c *MemoryLinkCreate) SetTags(v []int64) *MemoryLinkCreate {
 	_c.mutation.SetTags(v)
 	return _c
 }
@@ -301,7 +301,7 @@ func (u *MemoryLinkUpsert) ClearIngestionIds() *MemoryLinkUpsert {
 }
 
 // SetTags sets the "tags" field.
-func (u *MemoryLinkUpsert) SetTags(v []string) *MemoryLinkUpsert {
+func (u *MemoryLinkUpsert) SetTags(v []int64) *MemoryLinkUpsert {
 	u.Set(memorylink.FieldTags, v)
 	return u
 }
@@ -453,7 +453,7 @@ func (u *MemoryLinkUpsertOne) ClearIngestionIds() *MemoryLinkUpsertOne {
 }
 
 // SetTags sets the "tags" field.
-func (u *MemoryLinkUpsertOne) SetTags(v []string) *MemoryLinkUpsertOne {
+func (u *MemoryLinkUpsertOne) SetTags(v []int64) *MemoryLinkUpsertOne {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.SetTags(v)
 	})
@@ -779,7 +779,7 @@ func (u *MemoryLinkUpsertBulk) ClearIngestionIds() *MemoryLinkUpsertBulk {
 }
 
 // SetTags sets the "tags" field.
-func (u *MemoryLinkUpsertBulk) SetTags(v []string) *MemoryLinkUpsertBulk {
+func (u *MemoryLinkUpsertBulk) SetTags(v []int64) *MemoryLinkUpsertBulk {
 	return u.Update(func(s *MemoryLinkUpsert) {
 		s.SetTags(v)
 	})

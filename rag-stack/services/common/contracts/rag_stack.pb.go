@@ -32,7 +32,7 @@ type InternalRequest struct {
 	PlannerModel  string                 `protobuf:"bytes,6,opt,name=planner_model,json=plannerModel,proto3" json:"planner_model,omitempty"`
 	ExecutorModel string                 `protobuf:"bytes,7,opt,name=executor_model,json=executorModel,proto3" json:"executor_model,omitempty"`
 	Metadata      *structpb.Struct       `protobuf:"bytes,8,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	Tags          []string               `protobuf:"bytes,9,rep,name=tags,proto3" json:"tags,omitempty"`
+	Tags          []int64                `protobuf:"varint,9,rep,packed,name=tags,proto3" json:"tags,omitempty"`
 	Timestamp     string                 `protobuf:"bytes,10,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Stream        bool                   `protobuf:"varint,11,opt,name=stream,proto3" json:"stream,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -125,7 +125,7 @@ func (x *InternalRequest) GetMetadata() *structpb.Struct {
 	return nil
 }
 
-func (x *InternalRequest) GetTags() []string {
+func (x *InternalRequest) GetTags() []int64 {
 	if x != nil {
 		return x.Tags
 	}
@@ -460,7 +460,7 @@ type MemoryScope struct {
 	SessionId     int64                  `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	ProjectId     int64                  `protobuf:"varint,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Tags          []string               `protobuf:"bytes,4,rep,name=tags,proto3" json:"tags,omitempty"`
+	Tags          []int64                `protobuf:"varint,4,rep,packed,name=tags,proto3" json:"tags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -516,7 +516,7 @@ func (x *MemoryScope) GetProjectId() int64 {
 	return 0
 }
 
-func (x *MemoryScope) GetTags() []string {
+func (x *MemoryScope) GetTags() []int64 {
 	if x != nil {
 		return x.Tags
 	}
@@ -1140,11 +1140,11 @@ type QdrantOp struct {
 	Points        []*QdrantPoint         `protobuf:"bytes,5,rep,name=points,proto3" json:"points,omitempty"`
 	Vector        []float32              `protobuf:"fixed32,6,rep,packed,name=vector,proto3" json:"vector,omitempty"`
 	Limit         int32                  `protobuf:"varint,7,opt,name=limit,proto3" json:"limit,omitempty"`
-	Tags          []string               `protobuf:"bytes,8,rep,name=tags,proto3" json:"tags,omitempty"`
+	Tags          []int64                `protobuf:"varint,8,rep,packed,name=tags,proto3" json:"tags,omitempty"`
 	SessionId     int64                  `protobuf:"varint,9,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Paths         []string               `protobuf:"bytes,10,rep,name=paths,proto3" json:"paths,omitempty"`
-	SourceTag     string                 `protobuf:"bytes,11,opt,name=source_tag,json=sourceTag,proto3" json:"source_tag,omitempty"`
-	TargetTag     string                 `protobuf:"bytes,12,opt,name=target_tag,json=targetTag,proto3" json:"target_tag,omitempty"`
+	SourceTag     int64                  `protobuf:"varint,11,opt,name=source_tag,json=sourceTag,proto3" json:"source_tag,omitempty"`
+	TargetTag     int64                  `protobuf:"varint,12,opt,name=target_tag,json=targetTag,proto3" json:"target_tag,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1228,7 +1228,7 @@ func (x *QdrantOp) GetLimit() int32 {
 	return 0
 }
 
-func (x *QdrantOp) GetTags() []string {
+func (x *QdrantOp) GetTags() []int64 {
 	if x != nil {
 		return x.Tags
 	}
@@ -1249,18 +1249,18 @@ func (x *QdrantOp) GetPaths() []string {
 	return nil
 }
 
-func (x *QdrantOp) GetSourceTag() string {
+func (x *QdrantOp) GetSourceTag() int64 {
 	if x != nil {
 		return x.SourceTag
 	}
-	return ""
+	return 0
 }
 
-func (x *QdrantOp) GetTargetTag() string {
+func (x *QdrantOp) GetTargetTag() int64 {
 	if x != nil {
 		return x.TargetTag
 	}
-	return ""
+	return 0
 }
 
 type QdrantResponse struct {
@@ -1362,7 +1362,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\rplanner_model\x18\x06 \x01(\tR\fplannerModel\x12%\n" +
 	"\x0eexecutor_model\x18\a \x01(\tR\rexecutorModel\x123\n" +
 	"\bmetadata\x18\b \x01(\v2\x17.google.protobuf.StructR\bmetadata\x12\x12\n" +
-	"\x04tags\x18\t \x03(\tR\x04tags\x12\x1c\n" +
+	"\x04tags\x18\t \x03(\x03R\x04tags\x12\x1c\n" +
 	"\ttimestamp\x18\n" +
 	" \x01(\tR\ttimestamp\x12\x16\n" +
 	"\x06stream\x18\v \x01(\bR\x06stream\"\xcd\x02\n" +
@@ -1403,7 +1403,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x03 \x01(\x03R\tprojectId\x12\x12\n" +
-	"\x04tags\x18\x04 \x03(\tR\x04tags\"\xc1\x01\n" +
+	"\x04tags\x18\x04 \x03(\x03R\x04tags\"\xc1\x01\n" +
 	"\x0fMemorySourceRef\x12\x1f\n" +
 	"\vsource_kind\x18\x01 \x01(\tR\n" +
 	"sourceKind\x12\x1b\n" +
@@ -1475,15 +1475,15 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x06points\x18\x05 \x03(\v2\x16.rag_stack.QdrantPointR\x06points\x12\x16\n" +
 	"\x06vector\x18\x06 \x03(\x02R\x06vector\x12\x14\n" +
 	"\x05limit\x18\a \x01(\x05R\x05limit\x12\x12\n" +
-	"\x04tags\x18\b \x03(\tR\x04tags\x12\x1d\n" +
+	"\x04tags\x18\b \x03(\x03R\x04tags\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\t \x01(\x03R\tsessionId\x12\x14\n" +
 	"\x05paths\x18\n" +
 	" \x03(\tR\x05paths\x12\x1d\n" +
 	"\n" +
-	"source_tag\x18\v \x01(\tR\tsourceTag\x12\x1d\n" +
+	"source_tag\x18\v \x01(\x03R\tsourceTag\x12\x1d\n" +
 	"\n" +
-	"target_tag\x18\f \x01(\tR\ttargetTag\"\xbc\x01\n" +
+	"target_tag\x18\f \x01(\x03R\ttargetTag\"\xbc\x01\n" +
 	"\x0eQdrantResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1e\n" +

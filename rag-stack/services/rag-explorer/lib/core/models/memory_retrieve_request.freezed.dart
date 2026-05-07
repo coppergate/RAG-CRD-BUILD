@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$MemoryRetrieveRequest {
 
- String get query; String? get sessionId; String? get userId; int get limit; Map<String, dynamic>? get filters;
+ String get query; int? get sessionId; String? get userId; int get limit; Map<String, dynamic>? get filters;
 /// Create a copy of MemoryRetrieveRequest
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $MemoryRetrieveRequestCopyWith<$Res>  {
   factory $MemoryRetrieveRequestCopyWith(MemoryRetrieveRequest value, $Res Function(MemoryRetrieveRequest) _then) = _$MemoryRetrieveRequestCopyWithImpl;
 @useResult
 $Res call({
- String query, String? sessionId, String? userId, int limit, Map<String, dynamic>? filters
+ String query, int? sessionId, String? userId, int limit, Map<String, dynamic>? filters
 });
 
 
@@ -69,7 +69,7 @@ class _$MemoryRetrieveRequestCopyWithImpl<$Res>
   return _then(_self.copyWith(
 query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
 as String,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String?,userId: freezed == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
+as int?,userId: freezed == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
 as String?,limit: null == limit ? _self.limit : limit // ignore: cast_nullable_to_non_nullable
 as int,filters: freezed == filters ? _self.filters : filters // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,
@@ -157,7 +157,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String query,  String? sessionId,  String? userId,  int limit,  Map<String, dynamic>? filters)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String query,  int? sessionId,  String? userId,  int limit,  Map<String, dynamic>? filters)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _MemoryRetrieveRequest() when $default != null:
 return $default(_that.query,_that.sessionId,_that.userId,_that.limit,_that.filters);case _:
@@ -178,7 +178,7 @@ return $default(_that.query,_that.sessionId,_that.userId,_that.limit,_that.filte
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String query,  String? sessionId,  String? userId,  int limit,  Map<String, dynamic>? filters)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String query,  int? sessionId,  String? userId,  int limit,  Map<String, dynamic>? filters)  $default,) {final _that = this;
 switch (_that) {
 case _MemoryRetrieveRequest():
 return $default(_that.query,_that.sessionId,_that.userId,_that.limit,_that.filters);case _:
@@ -198,7 +198,7 @@ return $default(_that.query,_that.sessionId,_that.userId,_that.limit,_that.filte
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String query,  String? sessionId,  String? userId,  int limit,  Map<String, dynamic>? filters)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String query,  int? sessionId,  String? userId,  int limit,  Map<String, dynamic>? filters)?  $default,) {final _that = this;
 switch (_that) {
 case _MemoryRetrieveRequest() when $default != null:
 return $default(_that.query,_that.sessionId,_that.userId,_that.limit,_that.filters);case _:
@@ -217,7 +217,7 @@ class _MemoryRetrieveRequest implements MemoryRetrieveRequest {
   factory _MemoryRetrieveRequest.fromJson(Map<String, dynamic> json) => _$MemoryRetrieveRequestFromJson(json);
 
 @override final  String query;
-@override final  String? sessionId;
+@override final  int? sessionId;
 @override final  String? userId;
 @override@JsonKey() final  int limit;
  final  Map<String, dynamic>? _filters;
@@ -263,7 +263,7 @@ abstract mixin class _$MemoryRetrieveRequestCopyWith<$Res> implements $MemoryRet
   factory _$MemoryRetrieveRequestCopyWith(_MemoryRetrieveRequest value, $Res Function(_MemoryRetrieveRequest) _then) = __$MemoryRetrieveRequestCopyWithImpl;
 @override @useResult
 $Res call({
- String query, String? sessionId, String? userId, int limit, Map<String, dynamic>? filters
+ String query, int? sessionId, String? userId, int limit, Map<String, dynamic>? filters
 });
 
 
@@ -284,7 +284,7 @@ class __$MemoryRetrieveRequestCopyWithImpl<$Res>
   return _then(_MemoryRetrieveRequest(
 query: null == query ? _self.query : query // ignore: cast_nullable_to_non_nullable
 as String,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String?,userId: freezed == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
+as int?,userId: freezed == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
 as String?,limit: null == limit ? _self.limit : limit // ignore: cast_nullable_to_non_nullable
 as int,filters: freezed == filters ? _self._filters : filters // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,

@@ -43,7 +43,7 @@ Map<String, dynamic> _$ModelPerformanceToJson(_ModelPerformance instance) =>
 
 _SessionHealth _$SessionHealthFromJson(Map<String, dynamic> json) =>
     _SessionHealth(
-      sessionId: json['session_id'] as String,
+      sessionId: (json['session_id'] as num).toInt(),
       totalRequests: (json['total_requests'] as num).toInt(),
       successfulRequests: (json['successful_requests'] as num).toInt(),
       successRate: (json['success_rate'] as num).toDouble(),
@@ -69,6 +69,23 @@ Map<String, dynamic> _$SessionHealthToJson(_SessionHealth instance) =>
       'memory_count': instance.memoryCount,
       'tag_count': instance.tagCount,
       'status': instance.status,
+    };
+
+_CodeVector _$CodeVectorFromJson(Map<String, dynamic> json) => _CodeVector(
+  id: (json['id'] as num).toInt(),
+  ingestionId: (json['ingestion_id'] as num?)?.toInt(),
+  metadata: json['metadata'] as Map<String, dynamic>?,
+  createdAt: DateTime.parse(json['created_at'] as String),
+  tags: (json['tags'] as List<dynamic>).map((e) => e as String).toList(),
+);
+
+Map<String, dynamic> _$CodeVectorToJson(_CodeVector instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'ingestion_id': instance.ingestionId,
+      'metadata': instance.metadata,
+      'created_at': instance.createdAt.toIso8601String(),
+      'tags': instance.tags,
     };
 
 _VirtualFile _$VirtualFileFromJson(Map<String, dynamic> json) => _VirtualFile(

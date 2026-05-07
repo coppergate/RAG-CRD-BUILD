@@ -9,7 +9,7 @@ part of 'response_message.dart';
 _ResponseMessage _$ResponseMessageFromJson(Map<String, dynamic> json) =>
     _ResponseMessage(
       content: json['content'] as String,
-      sessionId: json['sessionId'] as String?,
+      sessionId: (json['sessionId'] as num?)?.toInt(),
       messageId: json['messageId'] as String?,
       role: json['role'] as String?,
       metadata: json['metadata'] as Map<String, dynamic>?,

@@ -58,6 +58,23 @@ spec:
           value: "test-tag-,iso-test-"
         - name: DRY_RUN
           value: "false"
+        - name: S3_ENDPOINT
+          value: "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc"
+        - name: BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: rag-codebase-bucket
+              key: BUCKET_NAME
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: rag-codebase-bucket
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: rag-codebase-bucket
+              key: AWS_SECRET_ACCESS_KEY
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
         volumeMounts:

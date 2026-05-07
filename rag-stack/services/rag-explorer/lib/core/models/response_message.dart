@@ -7,7 +7,7 @@ part 'response_message.g.dart';
 abstract class ResponseMessage with _$ResponseMessage {
   const factory ResponseMessage({
     required String content,
-    String? sessionId,
+    int? sessionId,
     String? messageId,
     String? role,
     Map<String, dynamic>? metadata,

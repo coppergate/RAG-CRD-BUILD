@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -115,7 +114,8 @@ func (h *Handler) HandleStageMessage(ctx context.Context, stage string, msg puls
 func (h *Handler) handleIngress(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "INGRESS_RECEIVED", "Initial request received")
 
-	payload, err := protojson.Marshal(req)
+	marshaller := protojson.MarshalOptions{UseProtoNames: true}
+	payload, err := marshaller.Marshal(req)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal ingress data: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)
@@ -173,7 +173,8 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	metadata["sub_queries"] = subQueries
 	req.Metadata = contracts.ToStruct(metadata)
 
-	payload, err := protojson.Marshal(req)
+	marshaller := protojson.MarshalOptions{UseProtoNames: true}
+	payload, err := marshaller.Marshal(req)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal plan data: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)
@@ -227,7 +228,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 			continue
 		}
 		vs := len(vector)
-		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, session=%s, query='%s'", req.Id, h.cfg.QdrantCollection, vs, tags, req.SessionId, sq)
+		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, session=%d, query='%s'", req.Id, h.cfg.QdrantCollection, vs, tags, req.SessionId, sq)
 		contexts, err := h.searcher.Search(ctx, vector, tags, req.SessionId)
 		if err != nil {
 			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.Id, sq, vs, err)
@@ -250,7 +251,8 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	}
 	req.Metadata = contracts.ToStruct(metadataMap)
 
-	payload, err := protojson.Marshal(req)
+	marshaller := protojson.MarshalOptions{UseProtoNames: true}
+	payload, err := marshaller.Marshal(req)
 	if err != nil {
 		log.Printf("[%s] Failed to marshal search result data: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, "Internal serialization error", false)
@@ -359,7 +361,8 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			h.msg.SendStatus(ctx, req.Id, req.SessionId, "REFINING_PLAN", "Context insufficient, triggering recursion")
 			currentMeta["recursion_budget"] = budget - 1
 			req.Metadata = contracts.ToStruct(currentMeta)
-			payload, err := json.Marshal(req)
+			marshaller := protojson.MarshalOptions{UseProtoNames: true}
+			payload, err := marshaller.Marshal(req)
 			if err != nil {
 				log.Printf("[%s] Failed to marshal recursion data: %v", req.Id, err)
 				h.msg.SendError(ctx, req.Id, "Internal serialization error during recursion", false)

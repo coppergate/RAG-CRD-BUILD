@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ResponseMessage {
 
- String get content; String? get sessionId; String? get messageId; String? get role; Map<String, dynamic>? get metadata; DateTime? get timestamp; bool get isLast; bool get inConversation; String? get planningResponse;
+ String get content; int? get sessionId; String? get messageId; String? get role; Map<String, dynamic>? get metadata; DateTime? get timestamp; bool get isLast; bool get inConversation; String? get planningResponse;
 /// Create a copy of ResponseMessage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $ResponseMessageCopyWith<$Res>  {
   factory $ResponseMessageCopyWith(ResponseMessage value, $Res Function(ResponseMessage) _then) = _$ResponseMessageCopyWithImpl;
 @useResult
 $Res call({
- String content, String? sessionId, String? messageId, String? role, Map<String, dynamic>? metadata, DateTime? timestamp, bool isLast, bool inConversation, String? planningResponse
+ String content, int? sessionId, String? messageId, String? role, Map<String, dynamic>? metadata, DateTime? timestamp, bool isLast, bool inConversation, String? planningResponse
 });
 
 
@@ -69,7 +69,7 @@ class _$ResponseMessageCopyWithImpl<$Res>
   return _then(_self.copyWith(
 content: null == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
 as String,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String?,messageId: freezed == messageId ? _self.messageId : messageId // ignore: cast_nullable_to_non_nullable
+as int?,messageId: freezed == messageId ? _self.messageId : messageId // ignore: cast_nullable_to_non_nullable
 as String?,role: freezed == role ? _self.role : role // ignore: cast_nullable_to_non_nullable
 as String?,metadata: freezed == metadata ? _self.metadata : metadata // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,timestamp: freezed == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable
@@ -161,7 +161,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String content,  int? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ResponseMessage() when $default != null:
 return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation,_that.planningResponse);case _:
@@ -182,7 +182,7 @@ return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.m
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String content,  int? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)  $default,) {final _that = this;
 switch (_that) {
 case _ResponseMessage():
 return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation,_that.planningResponse);case _:
@@ -202,7 +202,7 @@ return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.m
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String content,  String? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String content,  int? sessionId,  String? messageId,  String? role,  Map<String, dynamic>? metadata,  DateTime? timestamp,  bool isLast,  bool inConversation,  String? planningResponse)?  $default,) {final _that = this;
 switch (_that) {
 case _ResponseMessage() when $default != null:
 return $default(_that.content,_that.sessionId,_that.messageId,_that.role,_that.metadata,_that.timestamp,_that.isLast,_that.inConversation,_that.planningResponse);case _:
@@ -221,7 +221,7 @@ class _ResponseMessage implements ResponseMessage {
   factory _ResponseMessage.fromJson(Map<String, dynamic> json) => _$ResponseMessageFromJson(json);
 
 @override final  String content;
-@override final  String? sessionId;
+@override final  int? sessionId;
 @override final  String? messageId;
 @override final  String? role;
  final  Map<String, dynamic>? _metadata;
@@ -271,7 +271,7 @@ abstract mixin class _$ResponseMessageCopyWith<$Res> implements $ResponseMessage
   factory _$ResponseMessageCopyWith(_ResponseMessage value, $Res Function(_ResponseMessage) _then) = __$ResponseMessageCopyWithImpl;
 @override @useResult
 $Res call({
- String content, String? sessionId, String? messageId, String? role, Map<String, dynamic>? metadata, DateTime? timestamp, bool isLast, bool inConversation, String? planningResponse
+ String content, int? sessionId, String? messageId, String? role, Map<String, dynamic>? metadata, DateTime? timestamp, bool isLast, bool inConversation, String? planningResponse
 });
 
 
@@ -292,7 +292,7 @@ class __$ResponseMessageCopyWithImpl<$Res>
   return _then(_ResponseMessage(
 content: null == content ? _self.content : content // ignore: cast_nullable_to_non_nullable
 as String,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String?,messageId: freezed == messageId ? _self.messageId : messageId // ignore: cast_nullable_to_non_nullable
+as int?,messageId: freezed == messageId ? _self.messageId : messageId // ignore: cast_nullable_to_non_nullable
 as String?,role: freezed == role ? _self.role : role // ignore: cast_nullable_to_non_nullable
 as String?,metadata: freezed == metadata ? _self._metadata : metadata // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,timestamp: freezed == timestamp ? _self.timestamp : timestamp // ignore: cast_nullable_to_non_nullable

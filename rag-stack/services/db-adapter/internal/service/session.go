@@ -133,8 +133,10 @@ func (s *SessionService) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Request) {
 	sessionIDStr := r.URL.Query().Get("session_id")
+	log.Printf("DEBUG: UpdateSessionTags session_id=%s", sessionIDStr)
 	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil {
+		log.Printf("DEBUG: Invalid session ID: %v", err)
 		http.Error(w, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
@@ -143,9 +145,11 @@ func (s *SessionService) UpdateSessionTags(w http.ResponseWriter, r *http.Reques
 		TagIDs []int64 `json:"tag_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Printf("DEBUG: Failed to decode payload: %v", err)
 		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
+	log.Printf("DEBUG: UpdateSessionTags TagIDs=%v", payload.TagIDs)
 
 	tagIDs := payload.TagIDs
 

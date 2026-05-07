@@ -269,29 +269,21 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 
 	switch action {
 	case "search":
-		result, opErr = a.qdrant.Search(collection, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId)
+		res, err := a.qdrant.Search(collection, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId)
+		if err == nil {
+			log.Printf("[%s] Qdrant search returned %d results", opID, len(res))
+		}
+		result, opErr = res, err
 	case "delete":
 		log.Printf("[%s] Deleting points from collection %s with tags %v, paths %v", opID, collection, data.Tags, data.Paths)
 		opErr = a.qdrant.DeleteByFilter(collection, vs, data.Tags, data.Paths)
-		if opErr == nil {
-			result = map[string]any{"ok": true}
-		}
 	case "upsert":
 		log.Printf("[%s] Upserting %d points into collection %s", opID, len(data.Points), collection)
 		opErr = a.qdrant.UpsertProto(collection, vs, data.Points)
-		if opErr == nil {
-			result = map[string]any{"ok": true, "count": len(data.Points)}
-		}
 	case "create_collection":
 		opErr = a.qdrant.CreateCollection(collection, vs)
-		if opErr == nil {
-			result = map[string]any{"ok": true}
-		}
 	case "merge_tags":
 		opErr = a.qdrant.MergeTags(collection, vs, data.SourceTag, data.TargetTag)
-		if opErr == nil {
-			result = map[string]any{"ok": true}
-		}
 	default:
 		return dlq.PermanentFailure, fmt.Errorf("unsupported action: %s", action)
 	}
@@ -310,7 +302,10 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 		resp.Result = contracts.ToValue(result)
 	}
 
-	payload, err := protojson.Marshal(resp)
+	marshaller := protojson.MarshalOptions{
+		UseProtoNames: true,
+	}
+	payload, err := marshaller.Marshal(resp)
 	if err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("marshal Qdrant result: %w", err)
 	}

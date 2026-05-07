@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$MemoryWriteRequest {
 
- String get content; String get type; double? get salience; String? get sessionId; String? get userId; Map<String, dynamic>? get metadata;
+ String get content; String get type; double? get salience; int? get sessionId; String? get userId; Map<String, dynamic>? get metadata;
 /// Create a copy of MemoryWriteRequest
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $MemoryWriteRequestCopyWith<$Res>  {
   factory $MemoryWriteRequestCopyWith(MemoryWriteRequest value, $Res Function(MemoryWriteRequest) _then) = _$MemoryWriteRequestCopyWithImpl;
 @useResult
 $Res call({
- String content, String type, double? salience, String? sessionId, String? userId, Map<String, dynamic>? metadata
+ String content, String type, double? salience, int? sessionId, String? userId, Map<String, dynamic>? metadata
 });
 
 
@@ -71,7 +71,7 @@ content: null == content ? _self.content : content // ignore: cast_nullable_to_n
 as String,type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as String,salience: freezed == salience ? _self.salience : salience // ignore: cast_nullable_to_non_nullable
 as double?,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String?,userId: freezed == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
+as int?,userId: freezed == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
 as String?,metadata: freezed == metadata ? _self.metadata : metadata // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,
   ));
@@ -158,7 +158,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String content,  String type,  double? salience,  String? sessionId,  String? userId,  Map<String, dynamic>? metadata)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String content,  String type,  double? salience,  int? sessionId,  String? userId,  Map<String, dynamic>? metadata)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _MemoryWriteRequest() when $default != null:
 return $default(_that.content,_that.type,_that.salience,_that.sessionId,_that.userId,_that.metadata);case _:
@@ -179,7 +179,7 @@ return $default(_that.content,_that.type,_that.salience,_that.sessionId,_that.us
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String content,  String type,  double? salience,  String? sessionId,  String? userId,  Map<String, dynamic>? metadata)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String content,  String type,  double? salience,  int? sessionId,  String? userId,  Map<String, dynamic>? metadata)  $default,) {final _that = this;
 switch (_that) {
 case _MemoryWriteRequest():
 return $default(_that.content,_that.type,_that.salience,_that.sessionId,_that.userId,_that.metadata);case _:
@@ -199,7 +199,7 @@ return $default(_that.content,_that.type,_that.salience,_that.sessionId,_that.us
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String content,  String type,  double? salience,  String? sessionId,  String? userId,  Map<String, dynamic>? metadata)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String content,  String type,  double? salience,  int? sessionId,  String? userId,  Map<String, dynamic>? metadata)?  $default,) {final _that = this;
 switch (_that) {
 case _MemoryWriteRequest() when $default != null:
 return $default(_that.content,_that.type,_that.salience,_that.sessionId,_that.userId,_that.metadata);case _:
@@ -220,7 +220,7 @@ class _MemoryWriteRequest implements MemoryWriteRequest {
 @override final  String content;
 @override@JsonKey() final  String type;
 @override final  double? salience;
-@override final  String? sessionId;
+@override final  int? sessionId;
 @override final  String? userId;
  final  Map<String, dynamic>? _metadata;
 @override Map<String, dynamic>? get metadata {
@@ -265,7 +265,7 @@ abstract mixin class _$MemoryWriteRequestCopyWith<$Res> implements $MemoryWriteR
   factory _$MemoryWriteRequestCopyWith(_MemoryWriteRequest value, $Res Function(_MemoryWriteRequest) _then) = __$MemoryWriteRequestCopyWithImpl;
 @override @useResult
 $Res call({
- String content, String type, double? salience, String? sessionId, String? userId, Map<String, dynamic>? metadata
+ String content, String type, double? salience, int? sessionId, String? userId, Map<String, dynamic>? metadata
 });
 
 
@@ -288,7 +288,7 @@ content: null == content ? _self.content : content // ignore: cast_nullable_to_n
 as String,type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as String,salience: freezed == salience ? _self.salience : salience // ignore: cast_nullable_to_non_nullable
 as double?,sessionId: freezed == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String?,userId: freezed == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
+as int?,userId: freezed == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
 as String?,metadata: freezed == metadata ? _self._metadata : metadata // ignore: cast_nullable_to_non_nullable
 as Map<String, dynamic>?,
   ));

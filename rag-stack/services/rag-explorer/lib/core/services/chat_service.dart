@@ -40,12 +40,12 @@ class ChatService {
     }
   }
 
-  Future<Session?> createSession(String id, String name) async {
-    _logger.info('Creating session: $name (id: $id)');
+  Future<Session?> createSession(String name) async {
+    _logger.info('Creating session: $name');
     try {
       final response = await _dio.post(
         '${_config.ragAdminApiUrl}/api/memory/sessions',
-        data: {'id': id, 'name': name},
+        data: {'name': name},
       );
       if (response.statusCode == 201 || response.statusCode == 200) {
         _logger.info('Session created successfully');
@@ -59,7 +59,7 @@ class ChatService {
     }
   }
 
-  Future<bool> deleteSession(String sessionId) async {
+  Future<bool> deleteSession(int sessionId) async {
     _logger.info('Deleting session: $sessionId');
     try {
       final response = await _dio.delete('${_config.ragAdminApiUrl}/api/memory/sessions/$sessionId');
@@ -76,7 +76,7 @@ class ChatService {
     }
   }
 
-  Future<List<ResponseMessage>> getMessages(String sessionId) async {
+  Future<List<ResponseMessage>> getMessages(int sessionId) async {
     _logger.debug('Fetching messages for session: $sessionId');
     try {
       final response = await _dio.get('${_config.ragAdminApiUrl}/api/db/sessions/$sessionId/messages');
@@ -120,11 +120,11 @@ class ChatService {
 
   Stream<ResponseMessage> streamChat({
     required String prompt,
-    required String sessionId,
+    required int sessionId,
     String? sessionName,
     required String planner,
     required String executor,
-    required List<String> tags,
+    required List<int> tags,
   }) {
     _logger.info('Starting streamChat for session: $sessionId');
     _logger.debug('Prompt: $prompt');
@@ -186,7 +186,7 @@ class ChatService {
     }
   }
 
-  Future<bool> updateSessionTags(String sessionId, List<String> tagIds) async {
+  Future<bool> updateSessionTags(int sessionId, List<int> tagIds) async {
     _logger.info('Updating tags for session $sessionId: $tagIds');
     try {
       final response = await _dio.post(

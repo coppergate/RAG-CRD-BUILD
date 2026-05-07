@@ -110,15 +110,33 @@ def test_qdrant_ops():
     assert results[0].payload["text"] == "Test vector search"
     print("  - Verified search result")
 
+def get_tag_id(name):
+    # Try to get existing tag
+    try:
+        # Use full URL to admin-api for tag resolution
+        resp = requests.get("https://rag-admin-api.rag.hierocracy.home/api/db/tags", timeout=10, verify=False)
+        if resp.status_code == 200:
+            tags = resp.json()
+            for t in tags:
+                if t['name'] == name:
+                    return t['id']
+    except Exception as e:
+        print(f"  - [WARN] Failed to resolve tag name '{name}': {e}")
+    
+    return 1001 # Fallback to a common test tag ID
+
 def test_rag_retrieval():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing RAG Retrieval via Gateway...")
     print(f"  - GATEWAY_URL={GATEWAY_URL}")
     test_file_base = "e2e-test-file-"
     session_name = f"test-session-{int(time.time())}"
+    tag_id = get_tag_id("test-tag")
+    
     payload = {
         "model": OLLAMA_MODEL,
         "planner": OLLAMA_MODEL,
         "session_name": session_name,
+        "tags": [tag_id],
         "messages": [{"role": "user", "content": f"Retrieve the secret code from the {test_file_base} documents."}]
     }
     try:
@@ -169,13 +187,29 @@ def cleanup_test_data():
     # 1. S3 Cleanup
     try:
         s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT)
-        # Delete test file
-        test_file = f"{S3_INDEX.strip('/')}/test_file.txt"
-        print(f"  - Deleting S3 file: {test_file}")
-        s3.delete_object(Bucket=BUCKET_NAME, Key=test_file)
+        # List all objects in the test index prefix and delete them
+        prefix = S3_INDEX.strip('/') + "/"
+        print(f"  - Cleaning up S3 prefix: {prefix} in bucket {BUCKET_NAME}")
         
+        paginator = s3.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=BUCKET_NAME, Prefix=prefix)
+        
+        delete_keys = []
+        for page in pages:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    delete_keys.append({'Key': obj['Key']})
+        
+        if delete_keys:
+            print(f"  - Deleting {len(delete_keys)} objects from S3...")
+            for i in range(0, len(delete_keys), 1000):
+                batch = delete_keys[i:i + 1000]
+                s3.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': batch})
+            print(f"  - Successfully deleted {len(delete_keys)} objects.")
+        else:
+            print(f"  - No objects found to clean up in S3 prefix {prefix}")
+
         # If bucket is empty, we could delete it, but let's just leave it for now if it's a shared test bucket
-        # Actually, let's try to delete it if it's specifically for this test
         if BUCKET_NAME == "e2eTestBucket":
              print(f"  - Note: Leaving bucket {BUCKET_NAME} in place for other tests.")
     except Exception as e:

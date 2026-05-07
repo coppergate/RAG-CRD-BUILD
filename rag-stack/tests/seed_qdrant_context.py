@@ -72,7 +72,8 @@ def seed_data():
             
             payload = item.copy()
             # The stack expects 'text' and 'tags' in the top-level payload for search
-            payload["tags"] = ["test-tag"] 
+            # We use a fixed integer ID for "test-tag" to match BIGINT refactor
+            payload["tags"] = [999] 
             
             points.append(models.PointStruct(
                 id=item["id"],

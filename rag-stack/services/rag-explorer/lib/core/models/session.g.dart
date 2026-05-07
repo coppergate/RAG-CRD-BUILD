@@ -7,7 +7,7 @@ part of 'session.dart';
 // **************************************************************************
 
 _Session _$SessionFromJson(Map<String, dynamic> json) => _Session(
-  id: json['id'] as String,
+  id: (json['id'] as num).toInt(),
   name: json['name'] as String?,
   description: json['description'] as String?,
   createdAt: DateTime.parse(json['created_at'] as String),

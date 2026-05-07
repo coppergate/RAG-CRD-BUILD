@@ -9,16 +9,16 @@ import (
 
 func TestExecutor_Execute(t *testing.T) {
 	mock := &models.MockChatClient{
-		ChatFunc: func(messages []map[string]string) (string, error) {
+		ChatFunc: func(messages []map[string]string) (string, interface{}, error) {
 			content := messages[0]["content"]
 			if strings.Contains(content, "Query: my question") {
-				return "my answer", nil
+				return "my answer", nil, nil
 			}
-			return "wrong answer", nil
+			return "wrong answer", nil, nil
 		},
 	}
 	e := NewExecutor(mock)
-	got, err := e.Execute(context.Background(), "my question", []interface{}{"some context"})
+	got, _, err := e.Execute(context.Background(), "my question", []interface{}{"some context"})
 	if err != nil {
 		t.Fatalf("Executor.Execute() error = %v", err)
 	}

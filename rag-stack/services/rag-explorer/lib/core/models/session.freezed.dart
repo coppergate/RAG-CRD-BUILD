@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Session {
 
- String get id; String? get name; String? get description;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'last_active_at') DateTime get lastActiveAt; List<Tag>? get tags; Map<String, dynamic>? get metadata;
+ int get id; String? get name; String? get description;@JsonKey(name: 'created_at') DateTime get createdAt;@JsonKey(name: 'last_active_at') DateTime get lastActiveAt; List<Tag>? get tags; Map<String, dynamic>? get metadata;
 /// Create a copy of Session
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $SessionCopyWith<$Res>  {
   factory $SessionCopyWith(Session value, $Res Function(Session) _then) = _$SessionCopyWithImpl;
 @useResult
 $Res call({
- String id, String? name, String? description,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'last_active_at') DateTime lastActiveAt, List<Tag>? tags, Map<String, dynamic>? metadata
+ int id, String? name, String? description,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'last_active_at') DateTime lastActiveAt, List<Tag>? tags, Map<String, dynamic>? metadata
 });
 
 
@@ -68,7 +68,7 @@ class _$SessionCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = freezed,Object? description = freezed,Object? createdAt = null,Object? lastActiveAt = null,Object? tags = freezed,Object? metadata = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as int,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String?,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,lastActiveAt: null == lastActiveAt ? _self.lastActiveAt : lastActiveAt // ignore: cast_nullable_to_non_nullable
@@ -159,7 +159,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String? name,  String? description, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'last_active_at')  DateTime lastActiveAt,  List<Tag>? tags,  Map<String, dynamic>? metadata)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String? name,  String? description, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'last_active_at')  DateTime lastActiveAt,  List<Tag>? tags,  Map<String, dynamic>? metadata)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Session() when $default != null:
 return $default(_that.id,_that.name,_that.description,_that.createdAt,_that.lastActiveAt,_that.tags,_that.metadata);case _:
@@ -180,7 +180,7 @@ return $default(_that.id,_that.name,_that.description,_that.createdAt,_that.last
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String? name,  String? description, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'last_active_at')  DateTime lastActiveAt,  List<Tag>? tags,  Map<String, dynamic>? metadata)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String? name,  String? description, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'last_active_at')  DateTime lastActiveAt,  List<Tag>? tags,  Map<String, dynamic>? metadata)  $default,) {final _that = this;
 switch (_that) {
 case _Session():
 return $default(_that.id,_that.name,_that.description,_that.createdAt,_that.lastActiveAt,_that.tags,_that.metadata);case _:
@@ -200,7 +200,7 @@ return $default(_that.id,_that.name,_that.description,_that.createdAt,_that.last
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String? name,  String? description, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'last_active_at')  DateTime lastActiveAt,  List<Tag>? tags,  Map<String, dynamic>? metadata)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String? name,  String? description, @JsonKey(name: 'created_at')  DateTime createdAt, @JsonKey(name: 'last_active_at')  DateTime lastActiveAt,  List<Tag>? tags,  Map<String, dynamic>? metadata)?  $default,) {final _that = this;
 switch (_that) {
 case _Session() when $default != null:
 return $default(_that.id,_that.name,_that.description,_that.createdAt,_that.lastActiveAt,_that.tags,_that.metadata);case _:
@@ -218,7 +218,7 @@ class _Session implements Session {
   const _Session({required this.id, this.name, this.description, @JsonKey(name: 'created_at') required this.createdAt, @JsonKey(name: 'last_active_at') required this.lastActiveAt, final  List<Tag>? tags, final  Map<String, dynamic>? metadata}): _tags = tags,_metadata = metadata;
   factory _Session.fromJson(Map<String, dynamic> json) => _$SessionFromJson(json);
 
-@override final  String id;
+@override final  int id;
 @override final  String? name;
 @override final  String? description;
 @override@JsonKey(name: 'created_at') final  DateTime createdAt;
@@ -275,7 +275,7 @@ abstract mixin class _$SessionCopyWith<$Res> implements $SessionCopyWith<$Res> {
   factory _$SessionCopyWith(_Session value, $Res Function(_Session) _then) = __$SessionCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String? name, String? description,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'last_active_at') DateTime lastActiveAt, List<Tag>? tags, Map<String, dynamic>? metadata
+ int id, String? name, String? description,@JsonKey(name: 'created_at') DateTime createdAt,@JsonKey(name: 'last_active_at') DateTime lastActiveAt, List<Tag>? tags, Map<String, dynamic>? metadata
 });
 
 
@@ -295,7 +295,7 @@ class __$SessionCopyWithImpl<$Res>
 @override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = freezed,Object? description = freezed,Object? createdAt = null,Object? lastActiveAt = null,Object? tags = freezed,Object? metadata = freezed,}) {
   return _then(_Session(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as int,name: freezed == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String?,description: freezed == description ? _self.description : description // ignore: cast_nullable_to_non_nullable
 as String?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime,lastActiveAt: null == lastActiveAt ? _self.lastActiveAt : lastActiveAt // ignore: cast_nullable_to_non_nullable

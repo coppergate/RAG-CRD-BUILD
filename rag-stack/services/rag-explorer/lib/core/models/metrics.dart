@@ -32,7 +32,7 @@ abstract class ModelPerformance with _$ModelPerformance {
 @freezed
 abstract class SessionHealth with _$SessionHealth {
   const factory SessionHealth({
-    @JsonKey(name: 'session_id') required String sessionId,
+    @JsonKey(name: 'session_id') required int sessionId,
     @JsonKey(name: 'total_requests') required int totalRequests,
     @JsonKey(name: 'successful_requests') required int successfulRequests,
     @JsonKey(name: 'success_rate') required double successRate,
@@ -46,6 +46,19 @@ abstract class SessionHealth with _$SessionHealth {
   }) = _SessionHealth;
 
   factory SessionHealth.fromJson(Map<String, dynamic> json) => _$SessionHealthFromJson(json);
+}
+
+@freezed
+abstract class CodeVector with _$CodeVector {
+  const factory CodeVector({
+    required int id,
+    @JsonKey(name: 'ingestion_id') int? ingestionId,
+    Map<String, dynamic>? metadata,
+    @JsonKey(name: 'created_at') required DateTime createdAt,
+    required List<String> tags,
+  }) = _CodeVector;
+
+  factory CodeVector.fromJson(Map<String, dynamic> json) => _$CodeVectorFromJson(json);
 }
 
 @freezed

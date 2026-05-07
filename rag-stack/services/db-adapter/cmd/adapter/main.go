@@ -211,7 +211,7 @@ func main() {
 				op := &contracts.QdrantOp{
 					Action:     "delete",
 					Collection: "vectors",
-					Tags:       []string{idStr},
+					Tags:       []int64{tagID},
 				}
 				p, _ := protojson.Marshal(op)
 				qdrantProducer.Send(r.Context(), &pulsar.ProducerMessage{Payload: p})
@@ -231,6 +231,7 @@ func main() {
 	mux.HandleFunc("/stats", metricsSvc.GetStats)
 	mux.HandleFunc("/metrics/summary", metricsSvc.GetMetricsSummary)
 	mux.HandleFunc("/storage/files", storageSvc.GetFiles)
+	mux.HandleFunc("/storage/vectors", storageSvc.GetFileVectors)
 
 	otelHandler := otelhttp.NewHandler(loggingMux, "db-adapter")
 	server := &http.Server{

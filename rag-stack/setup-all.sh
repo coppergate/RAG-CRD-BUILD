@@ -45,6 +45,13 @@ apply_manifest() {
               ver="$svc_ver"
           fi
       fi
+  elif [[ "$manifest" == *"build-pipeline/orchestrator-deployment.yaml" ]]; then
+      if [[ -f "$VERSION_FILE" ]] && jq . "$VERSION_FILE" >/dev/null 2>&1; then
+          local svc_ver=$(jq -r ".\"build-orchestrator\".version // empty" "$VERSION_FILE")
+          if [[ -n "$svc_ver" ]]; then
+              ver="$svc_ver"
+          fi
+      fi
   fi
 
   sed -e "s#__VERSION__#${ver}#g" -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" "$manifest" | "$KUBECTL" apply -f -

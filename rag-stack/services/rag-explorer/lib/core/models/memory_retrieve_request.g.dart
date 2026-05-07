@@ -10,7 +10,7 @@ _MemoryRetrieveRequest _$MemoryRetrieveRequestFromJson(
   Map<String, dynamic> json,
 ) => _MemoryRetrieveRequest(
   query: json['query'] as String,
-  sessionId: json['sessionId'] as String?,
+  sessionId: (json['sessionId'] as num?)?.toInt(),
   userId: json['userId'] as String?,
   limit: (json['limit'] as num?)?.toInt() ?? 10,
   filters: json['filters'] as Map<String, dynamic>?,

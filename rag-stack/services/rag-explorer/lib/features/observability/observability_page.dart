@@ -36,19 +36,19 @@ class ObservabilityPage extends ConsumerWidget {
             _buildGrafanaPanel(
               title: 'GPU Utilization',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2',
-              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2&width=1000&height=500',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2&scale=2&width=2000&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
             ),
             const SizedBox(height: 16),
             _buildGrafanaPanel(
               title: 'GPU Memory Usage',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4',
-              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4&width=1000&height=500',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4&scale=2&width=2000&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
             ),
             const SizedBox(height: 16),
             _buildGrafanaPanel(
               title: 'CPU & System Load',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6',
-              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6&width=1000&height=500',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6&scale=2&width=2000&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
             ),
             
             const SizedBox(height: 40),
@@ -103,7 +103,7 @@ class ObservabilityPage extends ConsumerWidget {
             color: Colors.grey.shade100,
             child: Image.network(
               renderUrl,
-              fit: BoxFit.fill,
+              fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) => Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,

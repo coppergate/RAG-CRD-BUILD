@@ -573,7 +573,7 @@ as int,
 /// @nodoc
 mixin _$SessionHealth {
 
-@JsonKey(name: 'session_id') String get sessionId;@JsonKey(name: 'total_requests') int get totalRequests;@JsonKey(name: 'successful_requests') int get successfulRequests;@JsonKey(name: 'success_rate') double get successRate;@JsonKey(name: 'avg_latency_ms') double? get avgLatencyMs;@JsonKey(name: 'total_tokens') int? get totalTokens;@JsonKey(name: 'prompt_count') int? get promptCount;@JsonKey(name: 'response_count') int? get responseCount;@JsonKey(name: 'memory_count') int? get memoryCount;@JsonKey(name: 'tag_count') int? get tagCount; String get status;
+@JsonKey(name: 'session_id') int get sessionId;@JsonKey(name: 'total_requests') int get totalRequests;@JsonKey(name: 'successful_requests') int get successfulRequests;@JsonKey(name: 'success_rate') double get successRate;@JsonKey(name: 'avg_latency_ms') double? get avgLatencyMs;@JsonKey(name: 'total_tokens') int? get totalTokens;@JsonKey(name: 'prompt_count') int? get promptCount;@JsonKey(name: 'response_count') int? get responseCount;@JsonKey(name: 'memory_count') int? get memoryCount;@JsonKey(name: 'tag_count') int? get tagCount; String get status;
 /// Create a copy of SessionHealth
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -606,7 +606,7 @@ abstract mixin class $SessionHealthCopyWith<$Res>  {
   factory $SessionHealthCopyWith(SessionHealth value, $Res Function(SessionHealth) _then) = _$SessionHealthCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'session_id') String sessionId,@JsonKey(name: 'total_requests') int totalRequests,@JsonKey(name: 'successful_requests') int successfulRequests,@JsonKey(name: 'success_rate') double successRate,@JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,@JsonKey(name: 'total_tokens') int? totalTokens,@JsonKey(name: 'prompt_count') int? promptCount,@JsonKey(name: 'response_count') int? responseCount,@JsonKey(name: 'memory_count') int? memoryCount,@JsonKey(name: 'tag_count') int? tagCount, String status
+@JsonKey(name: 'session_id') int sessionId,@JsonKey(name: 'total_requests') int totalRequests,@JsonKey(name: 'successful_requests') int successfulRequests,@JsonKey(name: 'success_rate') double successRate,@JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,@JsonKey(name: 'total_tokens') int? totalTokens,@JsonKey(name: 'prompt_count') int? promptCount,@JsonKey(name: 'response_count') int? responseCount,@JsonKey(name: 'memory_count') int? memoryCount,@JsonKey(name: 'tag_count') int? tagCount, String status
 });
 
 
@@ -626,7 +626,7 @@ class _$SessionHealthCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') @override $Res call({Object? sessionId = null,Object? totalRequests = null,Object? successfulRequests = null,Object? successRate = null,Object? avgLatencyMs = freezed,Object? totalTokens = freezed,Object? promptCount = freezed,Object? responseCount = freezed,Object? memoryCount = freezed,Object? tagCount = freezed,Object? status = null,}) {
   return _then(_self.copyWith(
 sessionId: null == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String,totalRequests: null == totalRequests ? _self.totalRequests : totalRequests // ignore: cast_nullable_to_non_nullable
+as int,totalRequests: null == totalRequests ? _self.totalRequests : totalRequests // ignore: cast_nullable_to_non_nullable
 as int,successfulRequests: null == successfulRequests ? _self.successfulRequests : successfulRequests // ignore: cast_nullable_to_non_nullable
 as int,successRate: null == successRate ? _self.successRate : successRate // ignore: cast_nullable_to_non_nullable
 as double,avgLatencyMs: freezed == avgLatencyMs ? _self.avgLatencyMs : avgLatencyMs // ignore: cast_nullable_to_non_nullable
@@ -721,7 +721,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  int sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SessionHealth() when $default != null:
 return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.promptCount,_that.responseCount,_that.memoryCount,_that.tagCount,_that.status);case _:
@@ -742,7 +742,7 @@ return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'session_id')  int sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)  $default,) {final _that = this;
 switch (_that) {
 case _SessionHealth():
 return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.promptCount,_that.responseCount,_that.memoryCount,_that.tagCount,_that.status);case _:
@@ -762,7 +762,7 @@ return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'session_id')  String sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'session_id')  int sessionId, @JsonKey(name: 'total_requests')  int totalRequests, @JsonKey(name: 'successful_requests')  int successfulRequests, @JsonKey(name: 'success_rate')  double successRate, @JsonKey(name: 'avg_latency_ms')  double? avgLatencyMs, @JsonKey(name: 'total_tokens')  int? totalTokens, @JsonKey(name: 'prompt_count')  int? promptCount, @JsonKey(name: 'response_count')  int? responseCount, @JsonKey(name: 'memory_count')  int? memoryCount, @JsonKey(name: 'tag_count')  int? tagCount,  String status)?  $default,) {final _that = this;
 switch (_that) {
 case _SessionHealth() when $default != null:
 return $default(_that.sessionId,_that.totalRequests,_that.successfulRequests,_that.successRate,_that.avgLatencyMs,_that.totalTokens,_that.promptCount,_that.responseCount,_that.memoryCount,_that.tagCount,_that.status);case _:
@@ -780,7 +780,7 @@ class _SessionHealth implements SessionHealth {
   const _SessionHealth({@JsonKey(name: 'session_id') required this.sessionId, @JsonKey(name: 'total_requests') required this.totalRequests, @JsonKey(name: 'successful_requests') required this.successfulRequests, @JsonKey(name: 'success_rate') required this.successRate, @JsonKey(name: 'avg_latency_ms') this.avgLatencyMs, @JsonKey(name: 'total_tokens') this.totalTokens, @JsonKey(name: 'prompt_count') this.promptCount, @JsonKey(name: 'response_count') this.responseCount, @JsonKey(name: 'memory_count') this.memoryCount, @JsonKey(name: 'tag_count') this.tagCount, required this.status});
   factory _SessionHealth.fromJson(Map<String, dynamic> json) => _$SessionHealthFromJson(json);
 
-@override@JsonKey(name: 'session_id') final  String sessionId;
+@override@JsonKey(name: 'session_id') final  int sessionId;
 @override@JsonKey(name: 'total_requests') final  int totalRequests;
 @override@JsonKey(name: 'successful_requests') final  int successfulRequests;
 @override@JsonKey(name: 'success_rate') final  double successRate;
@@ -825,7 +825,7 @@ abstract mixin class _$SessionHealthCopyWith<$Res> implements $SessionHealthCopy
   factory _$SessionHealthCopyWith(_SessionHealth value, $Res Function(_SessionHealth) _then) = __$SessionHealthCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'session_id') String sessionId,@JsonKey(name: 'total_requests') int totalRequests,@JsonKey(name: 'successful_requests') int successfulRequests,@JsonKey(name: 'success_rate') double successRate,@JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,@JsonKey(name: 'total_tokens') int? totalTokens,@JsonKey(name: 'prompt_count') int? promptCount,@JsonKey(name: 'response_count') int? responseCount,@JsonKey(name: 'memory_count') int? memoryCount,@JsonKey(name: 'tag_count') int? tagCount, String status
+@JsonKey(name: 'session_id') int sessionId,@JsonKey(name: 'total_requests') int totalRequests,@JsonKey(name: 'successful_requests') int successfulRequests,@JsonKey(name: 'success_rate') double successRate,@JsonKey(name: 'avg_latency_ms') double? avgLatencyMs,@JsonKey(name: 'total_tokens') int? totalTokens,@JsonKey(name: 'prompt_count') int? promptCount,@JsonKey(name: 'response_count') int? responseCount,@JsonKey(name: 'memory_count') int? memoryCount,@JsonKey(name: 'tag_count') int? tagCount, String status
 });
 
 
@@ -845,7 +845,7 @@ class __$SessionHealthCopyWithImpl<$Res>
 @override @pragma('vm:prefer-inline') $Res call({Object? sessionId = null,Object? totalRequests = null,Object? successfulRequests = null,Object? successRate = null,Object? avgLatencyMs = freezed,Object? totalTokens = freezed,Object? promptCount = freezed,Object? responseCount = freezed,Object? memoryCount = freezed,Object? tagCount = freezed,Object? status = null,}) {
   return _then(_SessionHealth(
 sessionId: null == sessionId ? _self.sessionId : sessionId // ignore: cast_nullable_to_non_nullable
-as String,totalRequests: null == totalRequests ? _self.totalRequests : totalRequests // ignore: cast_nullable_to_non_nullable
+as int,totalRequests: null == totalRequests ? _self.totalRequests : totalRequests // ignore: cast_nullable_to_non_nullable
 as int,successfulRequests: null == successfulRequests ? _self.successfulRequests : successfulRequests // ignore: cast_nullable_to_non_nullable
 as int,successRate: null == successRate ? _self.successRate : successRate // ignore: cast_nullable_to_non_nullable
 as double,avgLatencyMs: freezed == avgLatencyMs ? _self.avgLatencyMs : avgLatencyMs // ignore: cast_nullable_to_non_nullable
@@ -856,6 +856,295 @@ as int?,memoryCount: freezed == memoryCount ? _self.memoryCount : memoryCount //
 as int?,tagCount: freezed == tagCount ? _self.tagCount : tagCount // ignore: cast_nullable_to_non_nullable
 as int?,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as String,
+  ));
+}
+
+
+}
+
+
+/// @nodoc
+mixin _$CodeVector {
+
+ int get id;@JsonKey(name: 'ingestion_id') int? get ingestionId; Map<String, dynamic>? get metadata;@JsonKey(name: 'created_at') DateTime get createdAt; List<String> get tags;
+/// Create a copy of CodeVector
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$CodeVectorCopyWith<CodeVector> get copyWith => _$CodeVectorCopyWithImpl<CodeVector>(this as CodeVector, _$identity);
+
+  /// Serializes this CodeVector to a JSON map.
+  Map<String, dynamic> toJson();
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CodeVector&&(identical(other.id, id) || other.id == id)&&(identical(other.ingestionId, ingestionId) || other.ingestionId == ingestionId)&&const DeepCollectionEquality().equals(other.metadata, metadata)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other.tags, tags));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,id,ingestionId,const DeepCollectionEquality().hash(metadata),createdAt,const DeepCollectionEquality().hash(tags));
+
+@override
+String toString() {
+  return 'CodeVector(id: $id, ingestionId: $ingestionId, metadata: $metadata, createdAt: $createdAt, tags: $tags)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $CodeVectorCopyWith<$Res>  {
+  factory $CodeVectorCopyWith(CodeVector value, $Res Function(CodeVector) _then) = _$CodeVectorCopyWithImpl;
+@useResult
+$Res call({
+ int id,@JsonKey(name: 'ingestion_id') int? ingestionId, Map<String, dynamic>? metadata,@JsonKey(name: 'created_at') DateTime createdAt, List<String> tags
+});
+
+
+
+
+}
+/// @nodoc
+class _$CodeVectorCopyWithImpl<$Res>
+    implements $CodeVectorCopyWith<$Res> {
+  _$CodeVectorCopyWithImpl(this._self, this._then);
+
+  final CodeVector _self;
+  final $Res Function(CodeVector) _then;
+
+/// Create a copy of CodeVector
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? ingestionId = freezed,Object? metadata = freezed,Object? createdAt = null,Object? tags = null,}) {
+  return _then(_self.copyWith(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int,ingestionId: freezed == ingestionId ? _self.ingestionId : ingestionId // ignore: cast_nullable_to_non_nullable
+as int?,metadata: freezed == metadata ? _self.metadata : metadata // ignore: cast_nullable_to_non_nullable
+as Map<String, dynamic>?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime,tags: null == tags ? _self.tags : tags // ignore: cast_nullable_to_non_nullable
+as List<String>,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [CodeVector].
+extension CodeVectorPatterns on CodeVector {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _CodeVector value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _CodeVector() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _CodeVector value)  $default,){
+final _that = this;
+switch (_that) {
+case _CodeVector():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _CodeVector value)?  $default,){
+final _that = this;
+switch (_that) {
+case _CodeVector() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id, @JsonKey(name: 'ingestion_id')  int? ingestionId,  Map<String, dynamic>? metadata, @JsonKey(name: 'created_at')  DateTime createdAt,  List<String> tags)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _CodeVector() when $default != null:
+return $default(_that.id,_that.ingestionId,_that.metadata,_that.createdAt,_that.tags);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id, @JsonKey(name: 'ingestion_id')  int? ingestionId,  Map<String, dynamic>? metadata, @JsonKey(name: 'created_at')  DateTime createdAt,  List<String> tags)  $default,) {final _that = this;
+switch (_that) {
+case _CodeVector():
+return $default(_that.id,_that.ingestionId,_that.metadata,_that.createdAt,_that.tags);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id, @JsonKey(name: 'ingestion_id')  int? ingestionId,  Map<String, dynamic>? metadata, @JsonKey(name: 'created_at')  DateTime createdAt,  List<String> tags)?  $default,) {final _that = this;
+switch (_that) {
+case _CodeVector() when $default != null:
+return $default(_that.id,_that.ingestionId,_that.metadata,_that.createdAt,_that.tags);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+@JsonSerializable()
+
+class _CodeVector implements CodeVector {
+  const _CodeVector({required this.id, @JsonKey(name: 'ingestion_id') this.ingestionId, final  Map<String, dynamic>? metadata, @JsonKey(name: 'created_at') required this.createdAt, required final  List<String> tags}): _metadata = metadata,_tags = tags;
+  factory _CodeVector.fromJson(Map<String, dynamic> json) => _$CodeVectorFromJson(json);
+
+@override final  int id;
+@override@JsonKey(name: 'ingestion_id') final  int? ingestionId;
+ final  Map<String, dynamic>? _metadata;
+@override Map<String, dynamic>? get metadata {
+  final value = _metadata;
+  if (value == null) return null;
+  if (_metadata is EqualUnmodifiableMapView) return _metadata;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableMapView(value);
+}
+
+@override@JsonKey(name: 'created_at') final  DateTime createdAt;
+ final  List<String> _tags;
+@override List<String> get tags {
+  if (_tags is EqualUnmodifiableListView) return _tags;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_tags);
+}
+
+
+/// Create a copy of CodeVector
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$CodeVectorCopyWith<_CodeVector> get copyWith => __$CodeVectorCopyWithImpl<_CodeVector>(this, _$identity);
+
+@override
+Map<String, dynamic> toJson() {
+  return _$CodeVectorToJson(this, );
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CodeVector&&(identical(other.id, id) || other.id == id)&&(identical(other.ingestionId, ingestionId) || other.ingestionId == ingestionId)&&const DeepCollectionEquality().equals(other._metadata, _metadata)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&const DeepCollectionEquality().equals(other._tags, _tags));
+}
+
+@JsonKey(includeFromJson: false, includeToJson: false)
+@override
+int get hashCode => Object.hash(runtimeType,id,ingestionId,const DeepCollectionEquality().hash(_metadata),createdAt,const DeepCollectionEquality().hash(_tags));
+
+@override
+String toString() {
+  return 'CodeVector(id: $id, ingestionId: $ingestionId, metadata: $metadata, createdAt: $createdAt, tags: $tags)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$CodeVectorCopyWith<$Res> implements $CodeVectorCopyWith<$Res> {
+  factory _$CodeVectorCopyWith(_CodeVector value, $Res Function(_CodeVector) _then) = __$CodeVectorCopyWithImpl;
+@override @useResult
+$Res call({
+ int id,@JsonKey(name: 'ingestion_id') int? ingestionId, Map<String, dynamic>? metadata,@JsonKey(name: 'created_at') DateTime createdAt, List<String> tags
+});
+
+
+
+
+}
+/// @nodoc
+class __$CodeVectorCopyWithImpl<$Res>
+    implements _$CodeVectorCopyWith<$Res> {
+  __$CodeVectorCopyWithImpl(this._self, this._then);
+
+  final _CodeVector _self;
+  final $Res Function(_CodeVector) _then;
+
+/// Create a copy of CodeVector
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? ingestionId = freezed,Object? metadata = freezed,Object? createdAt = null,Object? tags = null,}) {
+  return _then(_CodeVector(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as int,ingestionId: freezed == ingestionId ? _self.ingestionId : ingestionId // ignore: cast_nullable_to_non_nullable
+as int?,metadata: freezed == metadata ? _self._metadata : metadata // ignore: cast_nullable_to_non_nullable
+as Map<String, dynamic>?,createdAt: null == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
+as DateTime,tags: null == tags ? _self._tags : tags // ignore: cast_nullable_to_non_nullable
+as List<String>,
   ));
 }
 

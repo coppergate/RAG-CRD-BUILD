@@ -26,7 +26,7 @@ func (MemoryLink) Fields() []ent.Field {
 		field.JSON("ingestion_ids", []int64{}).
 			Optional().
 			Comment("Provenance from ingested data"),
-		field.JSON("tags", []string{}).
+		field.JSON("tags", []int64{}).
 			Optional(),
 		field.JSON("metadata", map[string]interface{}{}).
 			Optional(),

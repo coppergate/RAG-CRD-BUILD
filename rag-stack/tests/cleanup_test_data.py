@@ -2,6 +2,7 @@ import os
 import sys
 import psycopg2
 import requests
+import boto3
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
@@ -15,6 +16,10 @@ DB_CONN_STRING = os.getenv("DB_CONN_STRING", "")
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 QDRANT_USE_TLS = os.getenv("QDRANT_USE_TLS", "true").lower() == "true"
+
+S3_ENDPOINT = os.getenv("S3_ENDPOINT", "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
+BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase")
+S3_TEST_PREFIX = os.getenv("S3_TEST_PREFIX", "e2eTestBucket/")
 
 RETAIN_RUNS = int(os.getenv("RETAIN_RUNS", "2"))
 TEST_TAG_PREFIXES = os.getenv("TEST_TAG_PREFIXES", "test-tag-,iso-test-").split(",")
@@ -92,6 +97,42 @@ def cleanup_qdrant(client, tag_id, tag_name):
     except Exception as e:
         print(f"  Error cleaning up Qdrant for tag {tag_name}: {e}")
 
+def cleanup_s3():
+    print(f"Checking S3 prefix: {S3_TEST_PREFIX} in bucket {BUCKET_NAME}")
+    try:
+        s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT)
+        
+        # List objects with prefix
+        paginator = s3.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=BUCKET_NAME, Prefix=S3_TEST_PREFIX)
+        
+        delete_keys = []
+        for page in pages:
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    delete_keys.append({'Key': obj['Key']})
+        
+        if not delete_keys:
+            print(f"  No S3 objects found with prefix {S3_TEST_PREFIX}")
+            return
+
+        if DRY_RUN:
+            print(f"  [DRY-RUN] Would delete {len(delete_keys)} objects from S3 bucket {BUCKET_NAME} with prefix {S3_TEST_PREFIX}")
+            for k in delete_keys[:5]:
+                print(f"    - {k['Key']}")
+            if len(delete_keys) > 5:
+                print(f"    ... and {len(delete_keys) - 5} more")
+        else:
+            print(f"  Deleting {len(delete_keys)} objects from S3...")
+            # S3 delete_objects can handle up to 1000 keys at a time
+            for i in range(0, len(delete_keys), 1000):
+                batch = delete_keys[i:i + 1000]
+                s3.delete_objects(Bucket=BUCKET_NAME, Delete={'Objects': batch})
+            print(f"  Successfully deleted {len(delete_keys)} objects.")
+            
+    except Exception as e:
+        print(f"  Error cleaning up S3: {e}")
+
 def main():
     print(f"--- RAG Test Data Cleanup (Retain: {RETAIN_RUNS}, Dry Run: {DRY_RUN}) ---")
     
@@ -126,6 +167,9 @@ def main():
                 print(f"  [DRY-RUN] Would delete session {sess_id} from database")
             else:
                 cur.execute("DELETE FROM sessions WHERE session_id = %s", (sess_id,))
+
+        # 3. Cleanup S3 Assets
+        cleanup_s3()
 
         if not DRY_RUN:
             conn.commit()

@@ -6,7 +6,7 @@ part 'tag.g.dart';
 @freezed
 abstract class Tag with _$Tag {
   const factory Tag({
-    required String id,
+    required int id,
     required String name,
     @JsonKey(name: 'created_at') DateTime? createdAt,
   }) = _Tag;

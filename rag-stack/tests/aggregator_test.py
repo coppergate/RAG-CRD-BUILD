@@ -51,13 +51,13 @@ def test_aggregator_flow():
         for i, text in enumerate(chunks):
             chunk_payload = {
                 "id": request_id,
-                "sessionId": session_id,
+                "session_id": session_id,
                 "result": text,
-                "sequenceNumber": i,
-                "isLast": (i == len(chunks) - 1),
+                "sequence_number": i,
+                "is_last": (i == len(chunks) - 1),
                 "model": "test-aggregator-model",
                 "metadata": {"test_source": "aggregator_test.py"},
-                "inConversation": True
+                "in_conversation": True
             }
             session_producer.send(json.dumps(chunk_payload).encode('utf-8'))
         
@@ -66,8 +66,8 @@ def test_aggregator_flow():
         # 4. Trigger Aggregation with Completion Event
         completion_payload = {
             "id": request_id,
-            "sessionId": session_id,
-            "startTimestamp": datetime.utcnow().isoformat() + "Z",
+            "session_id": session_id,
+            "start_timestamp": datetime.utcnow().isoformat() + "Z",
             "model": "test-aggregator-model",
             "status": "COMPLETED"
         }
@@ -88,16 +88,33 @@ def test_aggregator_flow():
                 if res_data.get("id") == request_id:
                     result_text = res_data.get("result")
                     print(f"    [OK] Received result for {request_id}")
+                    print(f"    [DEBUG] Full Payload: {json.dumps(res_data)}")
                     
                     expected_text = "".join(chunks)
-                    assert result_text == expected_text, f"Result mismatch! Expected '{expected_text}', got '{result_text}'"
-                    assert res_data.get("sessionId") == session_id
-                    assert res_data.get("metadata", {}).get("test_source") == "aggregator_test.py"
+                    print(f"    [DEBUG] Validating result text: '{result_text[:20]}...' vs '{expected_text[:20]}...'")
+                    if result_text != expected_text:
+                         print(f"    [FAIL] Result mismatch! Expected '{expected_text}', got '{result_text}'")
                     
-                    print(f"    [SUCCESS] Aggregation verified correctly!")
-                    consumer.acknowledge(msg)
-                    found_result = True
-                    break
+                    received_sid = res_data.get("session_id")
+                    print(f"    [DEBUG] Validating session_id: {received_sid} (type: {type(received_sid)}) vs {session_id} (type: {type(session_id)})")
+                    if str(received_sid) != str(session_id):
+                         print(f"    [FAIL] SessionID mismatch! Expected {session_id}, got {received_sid}")
+                    
+                    metadata = res_data.get("metadata", {})
+                    found_source = metadata.get("test_source")
+                    print(f"    [DEBUG] Validating metadata source: '{found_source}'")
+                    if found_source != "aggregator_test.py":
+                         print(f"    [FAIL] Metadata mismatch! Expected 'aggregator_test.py', got '{found_source}'")
+
+                    if result_text == expected_text and str(received_sid) == str(session_id) and found_source == "aggregator_test.py":
+                        print(f"    [SUCCESS] Aggregation verified correctly!")
+                        consumer.acknowledge(msg)
+                        found_result = True
+                        break
+                    else:
+                        print(f"    [FAIL] Validation failed for {request_id}")
+                        consumer.acknowledge(msg)
+                        break
                 else:
                     consumer.acknowledge(msg)
             except Exception as e:

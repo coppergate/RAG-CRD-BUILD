@@ -9,7 +9,7 @@ abstract class MemoryWriteRequest with _$MemoryWriteRequest {
     required String content,
     @Default('short') String type,
     double? salience,
-    String? sessionId,
+    int? sessionId,
     String? userId,
     Map<String, dynamic>? metadata,
   }) = _MemoryWriteRequest;

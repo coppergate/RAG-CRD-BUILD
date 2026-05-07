@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:rag_explorer/app_config_provider.dart';
-import 'package:uuid/uuid.dart';
 import '../../core/models/response_message.dart';
 import '../../core/models/session.dart';
 import '../../core/models/tag.dart';
@@ -22,8 +21,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   List<ResponseMessage> _messages = [];
   List<Session> _sessions = [];
-  final Set<String> _selectedSessionIds = {};
-  String? _currentSessionId;
+  final Set<int> _selectedSessionIds = {};
+  int? _currentSessionId;
   String? _currentSessionName;
   String _selectedPlanner = 'llama3.1:latest';
   String _selectedExecutor = 'llama3.1:latest';
@@ -83,7 +82,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
-  Future<void> _deleteSession(String sessionId) async {
+  Future<void> _deleteSession(int sessionId) async {
     final chatService = ref.read(chatServiceProvider);
     final success = await chatService.deleteSession(sessionId);
     if (success) {
@@ -133,19 +132,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     Future<void> handleCreate(BuildContext dialogContext) async {
       final name = nameController.text.trim();
       if (name.isNotEmpty) {
-        final newId = const Uuid().v4();
         final chatService = ref.read(chatServiceProvider);
 
         // Create session in backend
-        final session = await chatService.createSession(newId, name);
+        final session = await chatService.createSession(name);
 
         if (mounted) {
           if (session != null) {
             setState(() {
-              _currentSessionId = newId;
+              _currentSessionId = session.id;
               _currentSessionName = name;
               _messages.clear();
               _tags.clear();
+              // Clear previous selection and select the new session
+              _selectedSessionIds.clear();
+              _selectedSessionIds.add(session.id);
               // Re-apply default tags if needed
               if (_availableTags.isNotEmpty) {
                 try {
@@ -282,7 +283,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   return ListTile(
                     leading: Icon(isSelected ? Icons.check_box : Icons.chat_bubble_outline, 
                       color: isSelected ? Colors.blue : null),
-                    title: Text(session.name ?? 'Session ${session.id.substring(0, 8)}'),
+                    title: Text(session.name ?? 'Session ${session.id}'),
                     subtitle: Text('Last active: ${_formatTime(session.lastActiveAt)}'),
                     selected: isCurrent || isSelected,
                     onTap: () async {
@@ -842,9 +843,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               onTap: () {
                                 final newTagName = tagController.text.trim();
                                 if (!tempSelected.any((t) => t.name == newTagName)) {
-                                  // Create a temporary tag object for new tags
-                                  final newTag = Tag(id: newTagName, name: newTagName);
-                                  setDialogState(() => tempSelected.add(newTag));
+                                  // Note: In BIGINT schema, tags must exist or be created by backend.
+                                  // For now, we'll just ignore new tag creation from UI if not in availableTags.
+                                  try {
+                                    final existing = _availableTags.firstWhere((t) => t.name == newTagName);
+                                    setDialogState(() => tempSelected.add(existing));
+                                  } catch (_) {
+                                    ref.read(logProvider.notifier).warn('Tag "$newTagName" does not exist and cannot be created from UI');
+                                  }
                                 }
                                 tagController.clear();
                               },
@@ -908,7 +914,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   void _sendMessage() {
-    if (_messageController.text.isEmpty || _isStreaming || _currentSessionId == null) return;
+    if (_messageController.text.isEmpty || _isStreaming) return;
 
     final userPrompt = _messageController.text;
     final logger = ref.read(logProvider.notifier);
@@ -939,7 +945,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _chatSubscription?.cancel();
     final stream = chatService.streamChat(
       prompt: userPrompt,
-      sessionId: _currentSessionId!,
+      sessionId: _currentSessionId ?? 0,
       sessionName: _currentSessionName,
       planner: _selectedPlanner,
       executor: _selectedExecutor,

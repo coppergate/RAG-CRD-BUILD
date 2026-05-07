@@ -33,7 +33,7 @@ final class IngestionServiceProvider
   IngestionService create() => IngestionService();
 }
 
-String _$ingestionServiceHash() => r'6eb2f1ad33d0d6e69c37d3815e9d3466cd808c5b';
+String _$ingestionServiceHash() => r'6917fe9cb8fa6b33c7f163d7b6c5c60979f165b4';
 
 abstract class _$IngestionService extends $AsyncNotifier<void> {
   FutureOr<void> build();

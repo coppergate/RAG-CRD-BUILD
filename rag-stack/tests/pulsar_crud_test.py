@@ -198,8 +198,8 @@ def test_pulsar_db_crud():
                     res_data = json.loads(msg.data())
                     if res_data.get('id') == correlation_id:
                         # Collect planning data if present
-                        if res_data.get('planningResponse'):
-                            print(f"    [PLAN] {res_data.get('planningResponse')[:50]}...")
+                        if res_data.get('planning_response'):
+                            print(f"    [PLAN] {res_data.get('planning_response')[:50]}...")
                         
                         # Collect result chunk
                         chunk_result = res_data.get('result')
@@ -208,8 +208,13 @@ def test_pulsar_db_crud():
                                 final_response = ""
                             final_response += chunk_result
                         
-                        is_last = res_data.get('isLast', False)
+                        is_last = res_data.get('is_last', False)
                         if is_last:
+                            # Verify session_id in response if present
+                            received_sid = res_data.get('session_id')
+                            if received_sid is not None:
+                                print(f"    [DEBUG] Received Session ID: {received_sid} (Type: {type(received_sid)})")
+                            
                             print(f"    [OK] Received final response from Pulsar. Total length: {len(final_response) if final_response else 0}")
                             consumer.acknowledge(msg)
                             break
@@ -229,10 +234,11 @@ def test_pulsar_db_crud():
     print("  - Verifying response in TimescaleDB 'responses' table...", end="", flush=True)
     found_response = False
     for i in range(10):
-        cur.execute("SELECT content FROM responses WHERE prompt_id = (SELECT id FROM prompts WHERE prompt_id = %s LIMIT 1)", (correlation_id,))
+        # session_id is a BIGINT now
+        cur.execute("SELECT content FROM responses WHERE session_id = %s", (session_id,))
         row = cur.fetchone()
         if row:
-            print(" [OK] Response found.")
+            print(f" [OK] Response found for session {session_id}.")
             found_response = True
             break
         print(".", end="", flush=True)
@@ -249,7 +255,7 @@ def test_pulsar_db_crud():
     print(f"  - Sending delete session op via Pulsar for {session_id}...")
     delete_payload = {
         "op": "delete_session",
-        "id": session_id
+        "id": str(session_id)
     }
     ops_producer.send(json.dumps(delete_payload).encode('utf-8'), properties=headers)
     
@@ -300,7 +306,7 @@ def test_pulsar_qdrant_ops():
         "vector": [0.1] * vector_size,
         "limit": 5,
         "session_id": session_id,
-        "tags": ["test-tag-" + op_id[:8]]
+        "tags": [1001]
     }
 
     print(f"  - Sending Qdrant search op to Pulsar topic {QDRANT_OPS_TOPIC} (ID: {op_id})")

@@ -8,7 +8,7 @@ part 'session.g.dart';
 @freezed
 abstract class Session with _$Session {
   const factory Session({
-    required String id,
+    required int id,
     String? name,
     String? description,
     @JsonKey(name: 'created_at') required DateTime createdAt,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../config/service_endpoints.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
@@ -30,6 +31,7 @@ class _TimescalePageState extends ConsumerState<TimescalePage> {
     final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
     final response = await client.get('${ServiceEndpoints.dbAdapter}/sessions');
+    if (response.data == null) return [];
     return (response.data as List).map((e) => Session.fromJson(e)).toList();
   }
 
@@ -110,7 +112,7 @@ class _TimescalePageState extends ConsumerState<TimescalePage> {
             final s = sessions[index];
             return ListTile(
               selected: _selectedSession?.id == s.id,
-              title: Text('Session ${s.id.substring(0, 8)}'),
+              title: Text('Session ${s.id}'),
               subtitle: Text(s.createdAt.toString().split(' ')[0]),
               onTap: () => _loadSessionDetails(s),
             );
@@ -135,11 +137,39 @@ class _TimescalePageState extends ConsumerState<TimescalePage> {
         children: [
           _buildHealthCard(),
           const SizedBox(height: 24),
+          _buildTagsSection(),
+          const SizedBox(height: 24),
           const Text('Audit Log', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           _buildAuditTable(),
         ],
       ),
+    );
+  }
+
+  Widget _buildTagsSection() {
+    final tags = _selectedSession?.tags ?? [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Session Tags', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        if (tags.isEmpty)
+          const Text('No tags associated with this session.', style: TextStyle(fontStyle: FontStyle.italic))
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: tags.map((t) => ActionChip(
+              avatar: const Icon(Icons.tag, size: 16),
+              label: Text(t.name),
+              onPressed: () {
+                context.go('/s3?tag=${Uri.encodeComponent(t.name)}');
+              },
+              tooltip: 'View files in S3 Browser for this tag',
+            )).toList(),
+          ),
+      ],
     );
   }
 

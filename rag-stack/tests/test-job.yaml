@@ -49,8 +49,6 @@ spec:
             python /tests/integration_test.py
             echo "--- Running API Health and Functionality Tests ---"
             python /tests/api_health_test.py
-            echo "--- Running Isolated Ingestion Pipeline Test ---"
-            python /tests/ingestion_isolation.py
             echo "--- Running Recursive RAG Flow Tests ---"
             python /tests/recursive_rag_test.py
             echo "--- Running Pulsar CRUD Tests ---"

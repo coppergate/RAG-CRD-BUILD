@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -94,10 +95,15 @@ func SendJSON(ctx context.Context, producer pulsar.Producer, payload interface{}
 
 // SendProto marshals the Protobuf payload using protojson and sends it with tracing context.
 func SendProto(ctx context.Context, producer pulsar.Producer, payload proto.Message) (pulsar.MessageID, error) {
-	data, err := protojson.Marshal(payload)
+	marshaller := protojson.MarshalOptions{
+		UseProtoNames: true,
+	}
+	data, err := marshaller.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal proto payload: %w", err)
 	}
+
+	log.Printf("[PULSAR] Sending marshaled proto: %s", string(data))
 
 	msg := &pulsar.ProducerMessage{
 		Payload:    data,

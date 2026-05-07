@@ -242,7 +242,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
         op.action = "create_collection"
         op.collection = COLLECTION_NAME
         op.vector_size = current_vs
-        q_prod.send(json_format.MessageToJson(op).encode('utf-8'))
+        q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
 
         # List files
         files = []
@@ -265,19 +265,12 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
 
         conn = pool.getconn()
 
-        # Ensure ingestion entry exists to satisfy FK for code_embedding
+        # Ingestion entry is now created in trigger_ingest, but we ensure it here just in case
         with conn.cursor() as cur:
-            if ingestion_id > 0:
-                cur.execute(
-                    "INSERT INTO code_ingestion (id, s3_bucket_id) VALUES (%s, %s) ON CONFLICT (id) DO NOTHING",
-                    (ingestion_id, effective_bucket)
-                )
-            else:
-                cur.execute(
-                    "INSERT INTO code_ingestion (s3_bucket_id) VALUES (%s) RETURNING id",
-                    (effective_bucket,)
-                )
-                ingestion_id = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO code_ingestion (ingestion_id, s3_bucket_id) VALUES (%s, %s) ON CONFLICT (ingestion_id) DO NOTHING",
+                (ingestion_id, effective_bucket)
+            )
             conn.commit()
 
         points = []
@@ -325,7 +318,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                     # TimescaleDB Backup
                     with conn.cursor() as cur:
                         cur.execute(
-                            "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata) VALUES (%s, %s, %s) RETURNING id",
+                            "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata) VALUES (%s, %s, %s) RETURNING embedding_id",
                             (ingestion_id, json.dumps(vector), json.dumps({"path": s3_key, "chunk": i}))
                         )
                         emb_id = cur.fetchone()[0]
@@ -340,7 +333,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         op.collection = COLLECTION_NAME
                         op.vector_size = current_vs
                         op.points.extend(points)
-                        q_prod.send(json_format.MessageToJson(op).encode('utf-8'))
+                        q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
                         points = []
                         conn.commit()
                         logger.info(f"Ingested {idx} chunks...")
@@ -355,7 +348,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
             op.collection = COLLECTION_NAME
             op.vector_size = current_vs
             op.points.extend(points)
-            q_prod.send(json_format.MessageToJson(op).encode('utf-8'))
+            q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
             conn.commit()
 
         if failed_chunks:
@@ -377,11 +370,31 @@ async def get_extensions():
 
 @app.post("/ingest")
 async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
-    # If ingestion_id is 0 or None, the task will generate it in DB
     ingestion_id = req.ingestion_id or 0
     tag_names = req.tag_names or []
+    effective_bucket = req.bucket_name or BUCKET_NAME
+
+    # Ensure ingestion entry exists to satisfy FK and return a real ID
+    if ingestion_id == 0:
+        try:
+            pool = get_db_pool()
+            conn = pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO code_ingestion (s3_bucket_id) VALUES (%s) RETURNING ingestion_id",
+                        (effective_bucket,)
+                    )
+                    ingestion_id = cur.fetchone()[0]
+                    conn.commit()
+                    logger.info(f"Created new ingestion record: {ingestion_id}")
+            finally:
+                pool.putconn(conn)
+        except Exception as e:
+            logger.error(f"Failed to create ingestion record: {e}")
+            # Fallback to 0 if DB fails, though task might fail too
     
-    logger.info(f"Received ingestion request for ID: {ingestion_id} (bucket: {req.bucket_name}, index/prefix: {req.index or req.prefix}, files: {req.file_names})")
+    logger.info(f"Received ingestion request for ID: {ingestion_id} (bucket: {effective_bucket}, index/prefix: {req.index or req.prefix}, files: {req.file_names})")
     background_tasks.add_task(
         run_ingestion, 
         ingestion_id, 

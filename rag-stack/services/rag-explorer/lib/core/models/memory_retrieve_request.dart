@@ -7,7 +7,7 @@ part 'memory_retrieve_request.g.dart';
 abstract class MemoryRetrieveRequest with _$MemoryRetrieveRequest {
   const factory MemoryRetrieveRequest({
     required String query,
-    String? sessionId,
+    int? sessionId,
     String? userId,
     @Default(10) int limit,
     Map<String, dynamic>? filters,

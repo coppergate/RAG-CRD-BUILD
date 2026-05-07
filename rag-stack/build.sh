@@ -22,44 +22,75 @@ WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
 OVERRIDE_VERSION="${OVERRIDE_VERSION:-}"
 PARALLELISM="${PARALLELISM:-4}"
 
-LOCKDIR="/tmp/rag-stack-build.lock"
+# --- Locking Configuration ---
+LOCK_FILE="/tmp/rag-stack-build.lock"
+LOCK_LEDGER="/tmp/rag-stack-build-ledger.json"
+LOCK_HEARTBEAT="/tmp/rag-stack-build-heartbeat"
 mkdir -p "$JOURNAL_DIR"
 
 acquire_lock() {
-    local max_retries=5
-    local retry_count=0
-    while [[ $retry_count -lt $max_retries ]]; do
-        if mkdir "$LOCKDIR" 2>/dev/null; then
-            echo $$ > "$LOCKDIR/pid"
-            return 0
+    local timeout_seconds=900 # 15 minutes
+    local elapsed=0
+    local wait_step=10
+    
+    # We use a non-inherited FD for the lock check
+    log "Attempting to acquire build lock..."
+    
+    # We'll use a simpler loop that doesn't keep the FD open until we actually get the lock
+    while true; do
+        if exec 200>"$LOCK_FILE" && flock -x -n 200; then
+             # Lock acquired!
+             break
         fi
         
-        # Check if the process holding the lock is still alive
-        if [[ -f "$LOCKDIR/pid" ]]; then
-            local pid=$(cat "$LOCKDIR/pid" 2>/dev/null || echo "")
-            if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
-                log "Found stale lock from PID $pid. Cleaning up..."
-                rm -rf "$LOCKDIR"
-                continue
+        if [[ $elapsed -ge $timeout_seconds ]]; then
+            log "ERROR: Could not acquire build lock after ${timeout_seconds}s."
+            if [[ -f "$LOCK_LEDGER" ]]; then
+                log "Current lock owner details: $(cat "$LOCK_LEDGER")"
+            fi
+            exit 1
+        fi
+        
+        if [[ $((elapsed % 30)) -eq 0 ]]; then
+            log "Waiting for build lock... (elapsed: ${elapsed}s)"
+            if [[ -f "$LOCK_LEDGER" ]]; then
+                local owner_info=$(jq -r '.user + "@" + .host + " (PID " + (.pid|tostring) + ") started at " + .start' "$LOCK_LEDGER" 2>/dev/null || cat "$LOCK_LEDGER")
+                log "Current Owner: $owner_info"
             fi
         fi
         
-        log "Waiting for build lock (held by $(cat $LOCKDIR/pid 2>/dev/null || echo 'unknown'))..."
-        sleep 2
-        retry_count=$((retry_count + 1))
+        sleep "$wait_step"
+        elapsed=$((elapsed + wait_step))
     done
     
-    log "ERROR: Could not acquire build lock after $max_retries attempts."
-    exit 1
+    # Write to ledger
+    local start_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    echo "{\"pid\": $$, \"user\": \"$(id -un)\", \"host\": \"${HOSTNAME:-unknown}\", \"start\": \"$start_time\"}" > "$LOCK_LEDGER"
+    
+    # Start heartbeat in background (make sure it DOES NOT inherit FD 200)
+    ( 
+        while [[ -f "$LOCK_LEDGER" ]]; do 
+            date -u +'%Y-%m-%dT%H:%M:%SZ' > "$LOCK_HEARTBEAT"
+            sleep 15
+        done 
+    ) 200>&- &
+    HB_PID=$!
+    
+    log "Build lock acquired (Start: $start_time)."
 }
 
 release_lock() {
-    if [[ -f "$LOCKDIR/pid" ]]; then
-        local pid=$(cat "$LOCKDIR/pid" 2>/dev/null || echo "")
-        if [[ "$pid" == "$$" ]]; then
-            rm -rf "$LOCKDIR"
-        fi
+    # Stop heartbeat
+    if [[ -n "${HB_PID:-}" ]]; then
+        kill "$HB_PID" 2>/dev/null || true
     fi
+    
+    # Clean up ledger
+    rm -f "$LOCK_LEDGER" "$LOCK_HEARTBEAT"
+    
+    # Release flock (Closing FD 200)
+    exec 200>&-
+    log "Build lock released."
 }
 trap release_lock EXIT
 
@@ -387,7 +418,7 @@ main() {
 		if [[ ${#SERVICES_TO_DEPLOY[@]} -gt 0 ]]; then
 			log "Starting parallel deployment update for existing images: ${SERVICES_TO_DEPLOY[*]} (Parallelism: $PARALLELISM)"
 			for svc in "${SERVICES_TO_DEPLOY[@]}"; do
-				build_service "$svc" &
+				build_service "$svc" 200>&- &
 				while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
 			done
 			wait
@@ -405,7 +436,8 @@ main() {
 
 			log "Starting parallel build of remaining services: ${SERVICES_TO_BUILD[*]:-none} (Parallelism: $PARALLELISM)"
 			for svc in "${SERVICES_TO_BUILD[@]}"; do
-				build_service "$svc" &
+				# Explicitly close lock FD in background processes to prevent lock inheritance
+				build_service "$svc" 200>&- &
 				while [[ $(jobs -r | wc -l) -ge $PARALLELISM ]]; do sleep 1; done
 			done
 			wait

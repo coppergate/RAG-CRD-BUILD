@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
 import '../../core/models/tag.dart';
@@ -29,6 +30,32 @@ class _S3PageState extends ConsumerState<S3Page> {
   void initState() {
     super.initState();
     _refresh();
+    
+    // Check for tag filter in query params after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final tagFilter = GoRouterState.of(context).uri.queryParameters['tag'];
+        if (tagFilter != null) {
+          _applyTagFilter(tagFilter);
+        }
+      }
+    });
+  }
+
+  void _applyTagFilter(String tagName) async {
+    try {
+      final tags = await _tagsFuture;
+      final tag = tags.firstWhere((t) => t.name == tagName);
+      if (!_selectedTags.contains(tag)) {
+        setState(() {
+          _selectedTags.clear();
+          _selectedTags.add(tag);
+          _filesFuture = _fetchFiles();
+        });
+      }
+    } catch (_) {
+      // Tag not found or error fetching
+    }
   }
 
   void _refresh() {
@@ -125,6 +152,81 @@ class _S3PageState extends ConsumerState<S3Page> {
     final response = await client.get('${config.ragAdminApiUrl}/api/s3/buckets/${file.bucket}/${file.path}');
     if (response.data is String) return response.data;
     return response.data.toString();
+  }
+
+  Future<List<CodeVector>> _fetchFileVectors(String path) async {
+    final config = ref.read(appConfigProvider);
+    final client = ApiClient(config);
+    final response = await client.get('${config.ragAdminApiUrl}/api/db/storage/vectors?path=${Uri.encodeComponent(path)}');
+    if (response.data == null) return [];
+    return (response.data as List).map((e) => CodeVector.fromJson(e)).toList();
+  }
+
+  Future<void> _viewFileVectors(VirtualFile file) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Associated Vectors: ${file.path}', style: const TextStyle(fontSize: 14)),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 500,
+          child: FutureBuilder<List<CodeVector>>(
+            future: _fetchFileVectors(file.path),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              final vectors = snapshot.data ?? [];
+              if (vectors.isEmpty) return const Center(child: Text('No vectors found associated with this file path.'));
+              
+              return ListView.builder(
+                itemCount: vectors.length,
+                itemBuilder: (context, index) {
+                  final v = vectors[index];
+                  final chunk = v.metadata?['chunk'] ?? 'N/A';
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Vector ID: ${v.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Chip(label: Text('Chunk $chunk', style: const TextStyle(fontSize: 10))),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if (v.tags.isNotEmpty)
+                            Wrap(
+                              spacing: 4,
+                              children: v.tags.map((t) => Chip(
+                                label: Text(t, style: const TextStyle(fontSize: 10)),
+                                padding: EdgeInsets.zero,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              )).toList(),
+                            ),
+                          const SizedBox(height: 8),
+                          Text('Created: ${v.createdAt.toLocal().toString().split('.')[0]}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
   }
 
   Future<List<VirtualFile>> _fetchFiles() async {
@@ -285,6 +387,7 @@ class _S3PageState extends ConsumerState<S3Page> {
                         trailing: PopupMenuButton<String>(
                           onSelected: (val) {
                             if (val == 'view') _viewFileContent(file);
+                            if (val == 'vectors') _viewFileVectors(file);
                             if (val == 'delete') {
                               setState(() => _selectedFiles.add(file.path));
                               _deleteSelectedFiles();
@@ -292,6 +395,7 @@ class _S3PageState extends ConsumerState<S3Page> {
                           },
                           itemBuilder: (context) => [
                             const PopupMenuItem(value: 'view', child: Text('View Content')),
+                            const PopupMenuItem(value: 'vectors', child: Text('View Associated Vectors')),
                             const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
                           ],
                           child: Chip(
@@ -369,7 +473,7 @@ class _S3PageState extends ConsumerState<S3Page> {
                       value: _selectedSession,
                       items: [
                         const DropdownMenuItem(value: null, child: Text('All Sessions')),
-                        ...?snapshot.data?.map((s) => DropdownMenuItem(value: s, child: Text(s.id.substring(0, 8)))),
+                        ...?snapshot.data?.map((s) => DropdownMenuItem(value: s, child: Text('Session ${s.id}'))),
                       ],
                       onChanged: (val) {
                         setState(() {

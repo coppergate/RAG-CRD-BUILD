@@ -83,7 +83,7 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 			return dlq.PermanentFailure, fmt.Errorf("invalid ID in delete_session: %q: %w", payload.Id, parseErr)
 		}
 
-		log.Printf("Attempting to delete session %s and its dependents", sessID)
+		log.Printf("Attempting to delete session %d and its dependents", sessID)
 
 		tx, err := p.client.Tx(msgCtx)
 		if err != nil {
@@ -98,34 +98,34 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 
 		// Delete metrics
 		_, err = tx.ModelExecutionMetric.Delete().Where(modelexecutionmetric.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { log.Printf("Warning: failed to delete metrics for session %s: %v", sessID, err) }
+		if err != nil { log.Printf("Warning: failed to delete metrics for session %d: %v", sessID, err) }
 
 		// Delete retrieval logs
 		_, err = tx.RetrievalLog.Delete().Where(retrievallog.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { log.Printf("Warning: failed to delete retrieval logs for session %s: %v", sessID, err) }
+		if err != nil { log.Printf("Warning: failed to delete retrieval logs for session %d: %v", sessID, err) }
 
 		// Delete prompts & responses (using raw SQL as they don't have edges in Ent)
 		// Assuming 'prompts' and 'responses' are the table names.
 		// Note: Ent might use singular/plural names.
 		_, err = tx.Prompt.Delete().Where(prompt.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { log.Printf("Warning: failed to delete prompts for session %s: %v", sessID, err) }
+		if err != nil { log.Printf("Warning: failed to delete prompts for session %d: %v", sessID, err) }
 
 		_, err = tx.Response.Delete().Where(response.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { log.Printf("Warning: failed to delete responses for session %s: %v", sessID, err) }
+		if err != nil { log.Printf("Warning: failed to delete responses for session %d: %v", sessID, err) }
 
 		// Finally delete the session
 		_, err = tx.Session.Delete().Where(session.ID(sessID)).Exec(msgCtx)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("Error deleting session %s: %v", sessID, err)
-			return dlq.TransientFailure, fmt.Errorf("delete session %s: %w", payload.Id, err)
+			log.Printf("Error deleting session %d: %v", sessID, err)
+			return dlq.TransientFailure, fmt.Errorf("delete session %d: %w", sessID, err)
 		}
 
 		if err := tx.Commit(); err != nil {
-			return dlq.TransientFailure, fmt.Errorf("commit delete session %s: %w", sessID, err)
+			return dlq.TransientFailure, fmt.Errorf("commit delete session %d: %w", sessID, err)
 		}
 
-		log.Printf("Successfully deleted session %s and dependents via Pulsar op", sessID)
+		log.Printf("Successfully deleted session %d and dependents via Pulsar op", sessID)
 	} else {
 		log.Printf("Unknown DB op: %s", payload.Op)
 	}
@@ -206,11 +206,11 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 		SetContent(content).
 		Save(msgCtx)
 	if err != nil {
-		log.Printf("Failed to insert prompt %s for session %s: %v", payload.Id, payload.SessionId, err)
+		log.Printf("Failed to insert prompt %s for session %d: %v", payload.Id, payload.SessionId, err)
 		return dlq.TransientFailure, fmt.Errorf("insert prompt: %w", err)
 	}
 
-	log.Printf("Inserted prompt %s for session %s", payload.Id, payload.SessionId)
+	log.Printf("Inserted prompt %s for session %d", payload.Id, payload.SessionId)
 	return dlq.Success, nil
 }
 
@@ -229,7 +229,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.Success, nil
 	}
 
-	log.Printf("Processing response: ID=%s, SessionID=%s, Model=%s", payload.Id, payload.SessionId, payload.Model)
+	log.Printf("Processing response: ID=%s, SessionID=%d, Model=%s", payload.Id, payload.SessionId, payload.Model)
 
 	promptUUID, parseErr := uuid.Parse(payload.Id)
 	if parseErr != nil {
@@ -379,7 +379,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 						Save(msgCtx)
 				}
 			}
-			log.Printf("Stored %d retrieval logs for session %s", len(contexts), sessID)
+			log.Printf("Stored %d retrieval logs for session %d", len(contexts), sessID)
 		}
 	}
 

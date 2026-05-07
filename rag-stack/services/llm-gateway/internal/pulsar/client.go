@@ -27,7 +27,7 @@ type pulsarClient struct {
 	requestTimeout time.Duration
 }
 
-type response = contracts.StreamChunk
+type response = *contracts.StreamChunk
 
 func NewPulsarClient(cfg *config.Config) (Client, error) {
 	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
@@ -77,8 +77,8 @@ func (pc *pulsarClient) consumeResults() {
 			continue
 		}
 
-		var resp response
-		if err := protojson.Unmarshal(msg.Payload(), &resp); err == nil {
+		resp := &contracts.StreamChunk{}
+		if err := protojson.Unmarshal(msg.Payload(), resp); err == nil {
 			if ch, ok := pc.pending.Load(resp.Id); ok {
 				ch.(chan response) <- resp
 			}
@@ -110,7 +110,7 @@ func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload prot
 			}
 			if finalRes == nil {
 				// Clone the first response
-				finalRes = proto.Clone(&res).(*contracts.StreamChunk)
+				finalRes = proto.Clone(res).(*contracts.StreamChunk)
 			} else {
 				// Accumulate
 				finalRes.Result += res.Result
@@ -143,7 +143,7 @@ func (pc *pulsarClient) SessionTopic(id string) string {
 	return fmt.Sprintf("persistent://rag-pipeline/sessions/%s", id)
 }
 
-func (pc *pulsarClient) SubscribeStream(id string, ch chan contracts.StreamChunk) {
+func (pc *pulsarClient) SubscribeStream(id string, ch chan *contracts.StreamChunk) {
 	ctx, cancel := context.WithCancel(context.Background())
 	pc.streams.Store(id, cancel)
 
@@ -171,8 +171,8 @@ func (pc *pulsarClient) SubscribeStream(id string, ch chan contracts.StreamChunk
 				return
 			}
 
-			var chunk contracts.StreamChunk
-			if err := protojson.Unmarshal(msg.Payload(), &chunk); err == nil {
+			chunk := &contracts.StreamChunk{}
+			if err := protojson.Unmarshal(msg.Payload(), chunk); err == nil {
 				ch <- chunk
 				if chunk.IsLast {
 					consumer.Ack(msg)

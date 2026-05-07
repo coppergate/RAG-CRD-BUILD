@@ -15,7 +15,7 @@ message InternalRequest {
   string planner_model = 6;
   string executor_model = 7;
   google.protobuf.Struct metadata = 8;
-  repeated string tags = 9;
+  repeated int64 tags = 9;
   string timestamp = 10;
   bool stream = 11;
 }
@@ -59,7 +59,7 @@ message MemoryScope {
   int64 session_id = 1;
   string user_id = 2;
   int64 project_id = 3;
-  repeated string tags = 4;
+  repeated int64 tags = 4;
 }
 
 message MemorySourceRef {
@@ -134,11 +134,11 @@ message QdrantOp {
   repeated QdrantPoint points = 5;
   repeated float vector = 6;
   int32 limit = 7;
-  repeated string tags = 8;
+  repeated int64 tags = 8;
   int64 session_id = 9;
   repeated string paths = 10;
-  string source_tag = 11;
-  string target_tag = 12;
+  int64 source_tag = 11;
+  int64 target_tag = 12;
 }
 
 message QdrantResponse {

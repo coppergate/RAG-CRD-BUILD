@@ -26,7 +26,7 @@ type MemoryLink struct {
 	// Provenance from ingested data
 	IngestionIds []int64 `json:"ingestion_ids,omitempty"`
 	// Tags holds the value of the "tags" field.
-	Tags []string `json:"tags,omitempty"`
+	Tags []int64 `json:"tags,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.

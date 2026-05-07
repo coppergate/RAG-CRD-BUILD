@@ -63,7 +63,7 @@ type ChatCompletionRequest struct {
 	Model       string   `json:"model"`
 	SessionId   int64    `json:"session_id,omitempty"`   // Changed to int64
 	SessionName string   `json:"session_name,omitempty"` // Added for friendly name
-	Tags        []string `json:"tags,omitempty"`         // Added for RAG isolation
+	Tags        []int64  `json:"tags,omitempty"`         // Changed to int64
 	Messages    []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
@@ -76,7 +76,7 @@ type GenericChatRequest struct {
 	Prompt      string   `json:"prompt"`
 	Planner     string   `json:"planner"`
 	Executor    string   `json:"executor"`
-	Tags        []string `json:"tags"`
+	Tags        []int64  `json:"tags"` // Changed to int64
 }
 
 func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sessionName string) (int64, error) {
@@ -157,7 +157,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	if len(req.Messages) > 0 {
 		userMsg := req.Messages[len(req.Messages)-1].Content
 		if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, userMsg); err != nil {
-			log.Printf("[%s] Failed to send prompt event for session %s: %v", correlationID, sessionID, err)
+			log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 		}
 	}
 
@@ -183,7 +183,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)
 	if err != nil {
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "pulsar_send")))
-		log.Printf("[%s] Pulsar request failed for session %s: %v", correlationID, sessionID, err)
+		log.Printf("[%s] Pulsar request failed for session %d: %v", correlationID, sessionID, err)
 		http.Error(w, "Service unavailable: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
@@ -242,7 +242,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 
 	// Save user message to DB via Pulsar event
 	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt); err != nil {
-		log.Printf("[%s] Failed to send prompt event for session %s: %v", correlationID, sessionID, err)
+		log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 	}
 
 	internalReq := &contracts.InternalRequest{
@@ -261,7 +261,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Channel to receive chunks from Pulsar
-	chunkChan := make(chan contracts.StreamChunk, 10)
+	chunkChan := make(chan *contracts.StreamChunk, 10)
 	h.Pulsar.SubscribeStream(correlationID, chunkChan)
 	defer h.Pulsar.UnsubscribeStream(correlationID)
 
@@ -341,7 +341,14 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 
 	// Save user message to DB via Pulsar event
 	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt); err != nil {
-		log.Printf("[%s] Failed to send prompt event for session %s: %v", correlationID, sessionID, err)
+		log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
+	}
+
+	if req.Planner == "" {
+		req.Planner = "llama3.1:latest"
+	}
+	if req.Executor == "" {
+		req.Executor = "llama3.1:latest"
 	}
 
 	// Direct mapping to InternalRequest

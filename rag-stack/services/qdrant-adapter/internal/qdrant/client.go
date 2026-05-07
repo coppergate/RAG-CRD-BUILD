@@ -30,11 +30,11 @@ func NewClient(cfg *config.Config) *QdrantClient {
 	}
 }
 
-func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID int64) ([]string, error) {
+func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64) ([]string, error) {
 	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, true)
 }
 
-func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []string, sessionID int64, retry bool) ([]string, error) {
+func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, retry bool) ([]string, error) {
 	if len(vector) == 0 {
 		return nil, nil // Cannot search with empty vector
 	}
@@ -185,7 +185,7 @@ func (q *QdrantClient) CreateCollection(collection string, vectorSize int) error
 	return nil
 }
 
-func (q *QdrantClient) DeleteByFilter(collection string, vectorSize int, tags []string, paths []string) error {
+func (q *QdrantClient) DeleteByFilter(collection string, vectorSize int, tags []int64, paths []string) error {
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
@@ -351,7 +351,7 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 	return nil
 }
 
-func (q *QdrantClient) MergeTags(collection string, vectorSize int, sourceTag, targetTag string) error {
+func (q *QdrantClient) MergeTags(collection string, vectorSize int, sourceTag, targetTag int64) error {
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
@@ -397,7 +397,7 @@ func (q *QdrantClient) MergeTags(collection string, vectorSize int, sourceTag, t
 	// If the user wants to merge tags, they likely want to unify them.
 	
 	payload := map[string]interface{}{
-		"tags": []string{targetTag}, 
+		"tags": []int64{targetTag}, 
 	}
 
 	body, err := json.Marshal(map[string]interface{}{

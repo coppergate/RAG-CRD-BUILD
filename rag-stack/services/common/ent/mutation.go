@@ -4316,8 +4316,8 @@ type MemoryLinkMutation struct {
 	appendsource_message_ids []int64
 	ingestion_ids            *[]int64
 	appendingestion_ids      []int64
-	tags                     *[]string
-	appendtags               []string
+	tags                     *[]int64
+	appendtags               []int64
 	metadata                 *map[string]interface{}
 	created_at               *time.Time
 	clearedFields            map[string]struct{}
@@ -4599,13 +4599,13 @@ func (m *MemoryLinkMutation) ResetIngestionIds() {
 }
 
 // SetTags sets the "tags" field.
-func (m *MemoryLinkMutation) SetTags(s []string) {
-	m.tags = &s
+func (m *MemoryLinkMutation) SetTags(i []int64) {
+	m.tags = &i
 	m.appendtags = nil
 }
 
 // Tags returns the value of the "tags" field in the mutation.
-func (m *MemoryLinkMutation) Tags() (r []string, exists bool) {
+func (m *MemoryLinkMutation) Tags() (r []int64, exists bool) {
 	v := m.tags
 	if v == nil {
 		return
@@ -4616,7 +4616,7 @@ func (m *MemoryLinkMutation) Tags() (r []string, exists bool) {
 // OldTags returns the old "tags" field's value of the MemoryLink entity.
 // If the MemoryLink object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *MemoryLinkMutation) OldTags(ctx context.Context) (v []string, err error) {
+func (m *MemoryLinkMutation) OldTags(ctx context.Context) (v []int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTags is only allowed on UpdateOne operations")
 	}
@@ -4630,13 +4630,13 @@ func (m *MemoryLinkMutation) OldTags(ctx context.Context) (v []string, err error
 	return oldValue.Tags, nil
 }
 
-// AppendTags adds s to the "tags" field.
-func (m *MemoryLinkMutation) AppendTags(s []string) {
-	m.appendtags = append(m.appendtags, s...)
+// AppendTags adds i to the "tags" field.
+func (m *MemoryLinkMutation) AppendTags(i []int64) {
+	m.appendtags = append(m.appendtags, i...)
 }
 
 // AppendedTags returns the list of values that were appended to the "tags" field in this mutation.
-func (m *MemoryLinkMutation) AppendedTags() ([]string, bool) {
+func (m *MemoryLinkMutation) AppendedTags() ([]int64, bool) {
 	if len(m.appendtags) == 0 {
 		return nil, false
 	}
@@ -4900,7 +4900,7 @@ func (m *MemoryLinkMutation) SetField(name string, value ent.Value) error {
 		m.SetIngestionIds(v)
 		return nil
 	case memorylink.FieldTags:
-		v, ok := value.([]string)
+		v, ok := value.([]int64)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

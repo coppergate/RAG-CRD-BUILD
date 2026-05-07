@@ -54,6 +54,13 @@ func (s *QdrantSearcher) StartResultConsumer(consumer pulsar.Consumer) {
 						for _, it := range res {
 							if s, ok := it.(string); ok {
 								stringRes = append(stringRes, s)
+							} else if m, ok := it.(map[string]interface{}); ok {
+								// Support case where the result is a list of points/payloads
+								if text, ok := m["text"].(string); ok {
+									stringRes = append(stringRes, text)
+								} else if text, ok := m["content"].(string); ok {
+									stringRes = append(stringRes, text)
+								}
 							}
 						}
 						log.Printf("[%s] Qdrant search returned %d contexts", resp.Id, len(stringRes))
@@ -73,9 +80,9 @@ func (s *QdrantSearcher) StartResultConsumer(consumer pulsar.Consumer) {
 }
 
 // Search sends a search request to Qdrant via Pulsar and waits for the result.
-func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []string, sessionID int64) ([]string, error) {
+func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64) ([]string, error) {
 	if len(vector) == 0 {
-		log.Printf("DEBUG: Skipping Qdrant search for session %s - empty vector", sessionID)
+		log.Printf("DEBUG: Skipping Qdrant search for session %d - empty vector", sessionID)
 		return nil, nil
 	}
 	id := fmt.Sprintf("search-%d", time.Now().UnixNano())
@@ -93,7 +100,10 @@ func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []st
 		Tags:       tags,
 		SessionId:  sessionID,
 	}
-	payload, err := protojson.Marshal(&op)
+	marshaller := protojson.MarshalOptions{
+		UseProtoNames: true,
+	}
+	payload, err := marshaller.Marshal(&op)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal search request: %w", err)
 	}

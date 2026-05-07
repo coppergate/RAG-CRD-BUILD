@@ -111,7 +111,7 @@ class IngestionService extends _$IngestionService {
     }
   }
 
-  Future<bool> deleteTag(String id) async {
+  Future<bool> deleteTag(int id) async {
     _logger.warn('Deleting tag: $id');
     try {
       final response = await _dio.delete('${_config.ragAdminApiUrl}/api/db/tags/$id');
@@ -163,7 +163,7 @@ class IngestionService extends _$IngestionService {
 
   Future<Map<String, dynamic>> triggerIngest({
     required String bucketName,
-    required List<String> tagIds,
+    required List<int> tagIds,
     String prefix = '',
     bool forceReingest = false,
   }) async {

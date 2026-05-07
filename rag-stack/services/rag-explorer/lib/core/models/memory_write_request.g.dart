@@ -11,7 +11,7 @@ _MemoryWriteRequest _$MemoryWriteRequestFromJson(Map<String, dynamic> json) =>
       content: json['content'] as String,
       type: json['type'] as String? ?? 'short',
       salience: (json['salience'] as num?)?.toDouble(),
-      sessionId: json['sessionId'] as String?,
+      sessionId: (json['sessionId'] as num?)?.toInt(),
       userId: json['userId'] as String?,
       metadata: json['metadata'] as Map<String, dynamic>?,
     );

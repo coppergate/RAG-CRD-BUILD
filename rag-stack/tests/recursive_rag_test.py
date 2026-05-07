@@ -97,8 +97,8 @@ def test_recursive_rag_flow():
                 res_data = json.loads(msg.data())
                 if res_data.get('id') == correlation_id:
                     # Collect planning data if present
-                    if res_data.get('planningResponse'):
-                        print(f"    [PLAN] {res_data.get('planningResponse')[:50]}...")
+                    if res_data.get('planning_response'):
+                        print(f"    [PLAN] {res_data.get('planning_response')[:50]}...")
                         planning_received = True
                     
                     # Collect result chunk
@@ -108,7 +108,7 @@ def test_recursive_rag_flow():
                             final_response = ""
                         final_response += chunk_result
                     
-                    is_last = res_data.get('isLast', False)
+                    is_last = res_data.get('is_last', False)
                     if is_last:
                         print(f"    [OK] Received final chunk. Total length: {len(final_response) if final_response else 0}")
                         result_consumer.acknowledge(msg)

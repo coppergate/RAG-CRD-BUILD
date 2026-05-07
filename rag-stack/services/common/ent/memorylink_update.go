@@ -81,13 +81,13 @@ func (_u *MemoryLinkUpdate) ClearIngestionIds() *MemoryLinkUpdate {
 }
 
 // SetTags sets the "tags" field.
-func (_u *MemoryLinkUpdate) SetTags(v []string) *MemoryLinkUpdate {
+func (_u *MemoryLinkUpdate) SetTags(v []int64) *MemoryLinkUpdate {
 	_u.mutation.SetTags(v)
 	return _u
 }
 
 // AppendTags appends value to the "tags" field.
-func (_u *MemoryLinkUpdate) AppendTags(v []string) *MemoryLinkUpdate {
+func (_u *MemoryLinkUpdate) AppendTags(v []int64) *MemoryLinkUpdate {
 	_u.mutation.AppendTags(v)
 	return _u
 }
@@ -329,13 +329,13 @@ func (_u *MemoryLinkUpdateOne) ClearIngestionIds() *MemoryLinkUpdateOne {
 }
 
 // SetTags sets the "tags" field.
-func (_u *MemoryLinkUpdateOne) SetTags(v []string) *MemoryLinkUpdateOne {
+func (_u *MemoryLinkUpdateOne) SetTags(v []int64) *MemoryLinkUpdateOne {
 	_u.mutation.SetTags(v)
 	return _u
 }
 
 // AppendTags appends value to the "tags" field.
-func (_u *MemoryLinkUpdateOne) AppendTags(v []string) *MemoryLinkUpdateOne {
+func (_u *MemoryLinkUpdateOne) AppendTags(v []int64) *MemoryLinkUpdateOne {
 	_u.mutation.AppendTags(v)
 	return _u
 }

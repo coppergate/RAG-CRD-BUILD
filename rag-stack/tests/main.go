@@ -131,9 +131,13 @@ func main() {
 		// --- Iteration 6b Extended Tests ---
 		testExtendedVerification(sessionID, tagID, tagName, fileName, vectorSize)
 	} else {
-		fmt.Printf("FAILURE: Secret code not found in answer after 5 minutes. Last answer: %q\n", lastAnswer)
+		fmt.Printf("FAILURE: Secret code not found in answer after 1 minute. Last answer: %q\n", lastAnswer)
 	}
 
+	runCleanup(tagID, sessionID, fileName)
+}
+
+func runCleanup(tagID, sessionID int64, fileName string) {
 	// 7. Cleanup (Delete Data)
 	fmt.Println("[STEP 7] Cleaning up data by tag, session and S3...")
 	if err := deleteData(tagID); err != nil {
@@ -151,6 +155,9 @@ func main() {
 	// Wait a few seconds for S3 eventual consistency
 	time.Sleep(5 * time.Second)
 	files, err := getFiles()
+	if err != nil {
+		fmt.Printf("Warning: Failed to verify S3 cleanup: %v\n", err)
+	}
 	found := false
 	for _, f := range files {
 		if f == fileName {

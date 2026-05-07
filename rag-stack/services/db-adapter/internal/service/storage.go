@@ -11,6 +11,7 @@ import (
 	"app-builds/common/ent/codeembedding"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
+	"entgo.io/ent/dialect/sql"
 )
 
 type StorageService struct {
@@ -114,4 +115,31 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(files)
+}
+
+func (s *StorageService) GetFileVectors(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		http.Error(w, "Path is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	// Query embeddings where metadata->'path' matches the given path
+	embeddings, err := s.client.CodeEmbedding.Query().
+		Where(func(sq *sql.Selector) {
+			sq.Where(sql.ExprP("metadata->>'path' = ?", path))
+		}).
+		WithIngestion().
+		WithTags().
+		Order(ent.Asc(codeembedding.FieldID)).
+		All(ctx)
+
+	if err != nil {
+		http.Error(w, "Failed to query vectors: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(embeddings)
 }

@@ -7,34 +7,35 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"google.golang.org/protobuf/proto"
 
+	"app-builds/common/contracts"
 	"app-builds/common/ent/enttest"
-	"app-builds/llm-gateway/internal/pulsar"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type mockPulsarClient struct {
-	SendRequestFunc     func(ctx context.Context, id string, payload interface{}) (string, error)
+	SendRequestFunc     func(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error)
 	SendPromptEventFunc func(ctx context.Context, id string, sessionID int64, content string) error
-	SubscribeStreamFunc func(id string, ch chan pulsar.StreamChunk)
+	SubscribeStreamFunc func(id string, ch chan *contracts.StreamChunk)
 	UnsubscribeStreamFunc func(id string)
-	SendRawRequestFunc  func(ctx context.Context, payload interface{}) error
+	SendRawRequestFunc  func(ctx context.Context, payload proto.Message) error
 }
 
-func (m *mockPulsarClient) SendRequest(ctx context.Context, id string, payload interface{}) (string, error) {
+func (m *mockPulsarClient) SendRequest(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error) {
 	return m.SendRequestFunc(ctx, id, payload)
 }
 func (m *mockPulsarClient) SendPromptEvent(ctx context.Context, id string, sessionID int64, content string) error {
 	return m.SendPromptEventFunc(ctx, id, sessionID, content)
 }
-func (m *mockPulsarClient) SubscribeStream(id string, ch chan pulsar.StreamChunk) {
+func (m *mockPulsarClient) SubscribeStream(id string, ch chan *contracts.StreamChunk) {
 	m.SubscribeStreamFunc(id, ch)
 }
 func (m *mockPulsarClient) UnsubscribeStream(id string) {
 	m.UnsubscribeStreamFunc(id)
 }
-func (m *mockPulsarClient) SendRawRequest(ctx context.Context, payload interface{}) error {
+func (m *mockPulsarClient) SendRawRequest(ctx context.Context, payload proto.Message) error {
 	return m.SendRawRequestFunc(ctx, payload)
 }
 func (m *mockPulsarClient) Close() {}
@@ -45,8 +46,8 @@ func TestHandleChatCompletions(t *testing.T) {
 	defer client.Close()
 
 	mockPulsar := &mockPulsarClient{
-		SendRequestFunc: func(ctx context.Context, id string, payload interface{}) (string, error) {
-			return "Hello from mock", nil
+		SendRequestFunc: func(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error) {
+			return &contracts.StreamChunk{Result: "Hello from mock"}, nil
 		},
 		SendPromptEventFunc: func(ctx context.Context, id string, sessionID int64, content string) error {
 			return nil
@@ -94,8 +95,8 @@ func TestHandleGenericChat(t *testing.T) {
 	defer client.Close()
 
 	mockPulsar := &mockPulsarClient{
-		SendRequestFunc: func(ctx context.Context, id string, payload interface{}) (string, error) {
-			return "Generic answer", nil
+		SendRequestFunc: func(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error) {
+			return &contracts.StreamChunk{Result: "Generic answer"}, nil
 		},
 	}
 
