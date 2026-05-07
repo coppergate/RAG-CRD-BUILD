@@ -132,7 +132,7 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 func (h *MemoryHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[MEMCTRL] %s %s", r.Method, r.URL.Path)
+	log.Printf("[MEMCTRL] %s %s (session.FieldID=%s)", r.Method, r.URL.Path, session.FieldID)
 	switch r.Method {
 	case http.MethodGet:
 		h.listSessions(w, r)
