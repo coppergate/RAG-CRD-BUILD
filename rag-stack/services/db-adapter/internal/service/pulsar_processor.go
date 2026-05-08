@@ -236,7 +236,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
 	}
 
-	if payload.Result == "" && payload.PlanningResponse == "" && payload.Metadata == nil {
+	if payload.Result == "" && payload.PlanningResponse == "" && payload.Metadata == nil && payload.SequenceNumber != 0 {
 		return dlq.Success, nil
 	}
 
@@ -377,29 +377,48 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.TransientFailure, fmt.Errorf("transactional upsert response for prompt %s: %w", payload.Id, err)
 	}
 
-	// Persist retrieval logs if metadata contains contexts
+	// Persist retrieval logs if metadata contains contexts or sub-queries
 	metadataMap := contracts.FromStruct(payload.Metadata)
 	if metadataMap != nil {
-		log.Printf("[%s] Metadata received: %v", payload.Id, metadataMap)
-	}
-	if contexts, ok := metadataMap["contexts"].([]interface{}); ok && len(contexts) > 0 {
 		// Check if we already persisted logs for this prompt to avoid duplicates from seq 0 and aggregator final chunk
 		exists, _ := p.client.RetrievalLog.Query().
 			Where(retrievallog.MessageIDEQ(promptUUID)).
 			Exist(msgCtx)
 
 		if !exists {
-			for _, c := range contexts {
-				if ctxStr, ok := c.(string); ok && ctxStr != "" {
-					_, _ = p.client.RetrievalLog.Create().
-						SetMessageID(promptUUID).
-						SetSessionID(sessID).
-						SetType("RETRIEVAL").
-						SetDetail(ctxStr).
-						Save(msgCtx)
+			logCount := 0
+			// 1. Log Sub-queries
+			if subQueries, ok := metadataMap["sub_queries"].([]interface{}); ok && len(subQueries) > 0 {
+				for _, q := range subQueries {
+					if qStr, ok := q.(string); ok && qStr != "" {
+						_, _ = p.client.RetrievalLog.Create().
+							SetMessageID(promptUUID).
+							SetSessionID(sessID).
+							SetType("QUERY").
+							SetQuery(qStr).
+							Save(msgCtx)
+						logCount++
+					}
 				}
 			}
-			log.Printf("Stored %d retrieval logs for session %d", len(contexts), sessID)
+
+			// 2. Log Retrieved Contexts
+			if contexts, ok := metadataMap["contexts"].([]interface{}); ok && len(contexts) > 0 {
+				for _, c := range contexts {
+					if ctxStr, ok := c.(string); ok && ctxStr != "" {
+						_, _ = p.client.RetrievalLog.Create().
+							SetMessageID(promptUUID).
+							SetSessionID(sessID).
+							SetType("RETRIEVAL").
+							SetDetail(ctxStr).
+							Save(msgCtx)
+						logCount++
+					}
+				}
+			}
+			if logCount > 0 {
+				log.Printf("Stored %d retrieval logs (queries/contexts) for session %d", logCount, sessID)
+			}
 		}
 	}
 

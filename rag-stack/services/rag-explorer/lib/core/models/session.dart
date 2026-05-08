@@ -8,13 +8,13 @@ part 'session.g.dart';
 @freezed
 abstract class Session with _$Session {
   const factory Session({
-    @Default(0) int id,
-    String? name,
-    String? description,
     @JsonKey(name: 'created_at') required DateTime createdAt,
+    String? description,
+    @Default(0) required int id,
     @JsonKey(name: 'last_active_at') required DateTime lastActiveAt,
-    List<Tag>? tags,
     Map<String, dynamic>? metadata,
+    String? name,
+    List<Tag>? tags,
   }) = _Session;
 
   factory Session.fromJson(Map<String, dynamic> json) => _$SessionFromJson(json);

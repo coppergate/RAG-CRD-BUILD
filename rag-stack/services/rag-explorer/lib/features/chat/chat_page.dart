@@ -965,22 +965,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         setState(() {
           _inConversation = chunk.inConversation;
           final lastIndex = _messages.length - 1;
+          if (lastIndex < 0) return;
           
           String? currentPlanning = _messages[lastIndex].planningResponse;
           String? newPlanning = chunk.planningResponse;
           String? updatedPlanning = currentPlanning;
           
-          if (newPlanning != null) {
+          if (newPlanning != null && newPlanning.isNotEmpty) {
             updatedPlanning = (currentPlanning ?? '') + newPlanning;
           }
 
+          final Map<String, dynamic>? updatedMetadata = (chunk.metadata != null && chunk.metadata!.isNotEmpty)
+              ? chunk.metadata
+              : _messages[lastIndex].metadata;
+
           _messages[lastIndex] = _messages[lastIndex].copyWith(
             content: _messages[lastIndex].content + chunk.content,
-            metadata: (chunk.metadata != null && chunk.metadata!.isNotEmpty)
-                ? chunk.metadata
-                : _messages[lastIndex].metadata,
+            metadata: updatedMetadata,
             planningResponse: updatedPlanning,
           );
+          
           if (chunk.isLast) {
             _isStreaming = false;
             logger.info('Received last chunk from LLM via isLast flag');
