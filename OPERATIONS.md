@@ -229,9 +229,9 @@ Every new session for the **Junie** agent MUST establish the operational context
    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
    - Rebase with autosquash: Run `git rebase -i --autosquash main` before pushing.
    - Push safely: Use `git push --force-with-lease origin <branch>`.
-   - **Daily Push**: Every day, make a new push to GIT with the current committed code.
-   - **Pull Requests**: Create a pull request for each day's branch.
+   - **Daily Push & Merge**: Every day, make a new push to GIT with the current committed code, create a pull request/merge request, and then merge it into the main branch.
    - **Merge Policy**: When merging, create an appropriate summary of the work contained in the commits.
+   - **Pull Requests**: Create a pull request for each day's branch.
 3. **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project.
     - Verify the current project version in `CURRENT_VERSION`.
     - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
