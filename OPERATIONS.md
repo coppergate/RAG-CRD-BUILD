@@ -340,6 +340,22 @@ Use this only for bootstrapping or when the cluster-native pipeline is unavailab
     ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z FORCE_BUILD=true ./build-and-push.sh"
     ```
 
+### 3.4 UI API Verification (E2E Tests)
+To ensure stability between the Flutter UI and the backend stack, you MUST run the Go-based API test suite whenever you modify `rag-admin-api` or any core services it proxies (e.g., `db-adapter`, `memory-controller`, `object-store-mgr`).
+
+1.  **Requirement**: The services must be deployed and running on the cluster.
+2.  **Test Location**: `rag-stack/tests/api_test.go`.
+3.  **Execution**:
+    ```bash
+    # From the project root:
+    go test -v rag-stack/tests/api_test.go
+    ```
+4.  **What it covers**:
+    - Health checks for all proxied services.
+    - Full session lifecycle (Create, List, Get Messages, Tag Update, Delete).
+    - Tag management.
+    - S3 bucket and object listing.
+
 ### 3.5 Concurrency and Locking in Build System
 As of version `2.11.x`, the build system supports hardened parallel execution to improve speed and prevent race conditions.
 

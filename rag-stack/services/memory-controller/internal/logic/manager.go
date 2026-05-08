@@ -108,6 +108,7 @@ func (m *MemoryManager) WriteItems(ctx context.Context, req *contracts.MemoryWri
 func (m *MemoryManager) ListSessions(ctx context.Context) ([]*ent.Session, error) {
 	sessions, err := m.client.Session.Query().
 		Order(ent.Desc(session.FieldLastActiveAt)).
+		WithTags().
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -150,7 +151,10 @@ func (m *MemoryManager) CreateSession(ctx context.Context, id int64, name string
 		return nil, err
 	}
 
-	return m.client.Session.Get(ctx, sID)
+	return m.client.Session.Query().
+		Where(session.ID(sID)).
+		WithTags().
+		Only(ctx)
 }
 
 func (m *MemoryManager) DeleteSession(ctx context.Context, id int64) error {

@@ -9,15 +9,15 @@
   },
   "llm-gateway": {
     "version": "2.11.30",
-    "last_build": "2026-05-08T20:09:44Z"
+    "last_build": null
   },
   "db-adapter": {
     "version": "2.11.30",
-    "last_build": "2026-05-08T20:09:44Z"
+    "last_build": null
   },
   "qdrant-adapter": {
     "version": "2.11.31",
-    "last_build": "2026-05-08T20:09:44Z"
+    "last_build": null
   },
   "object-store-mgr": {
     "version": "2.11.26",
@@ -32,8 +32,8 @@
     "last_build": null
   },
   "memory-controller": {
-    "version": "2.11.9",
-    "last_build": null
+    "version": "2.11.36",
+    "last_build": "2026-05-08T20:28:10Z"
   },
   "build-orchestrator": {
     "version": "2.11.8",

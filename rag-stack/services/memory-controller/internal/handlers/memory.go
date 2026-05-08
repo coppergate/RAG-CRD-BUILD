@@ -11,7 +11,44 @@ import (
 	"app-builds/common/ent/session"
 	"app-builds/memory-controller/internal/logic"
 	"strings"
+	"time"
 )
+
+type SessionResponse struct {
+	ID           int64                  `json:"id"`
+	Name         string                 `json:"name,omitempty"`
+	Description  string                 `json:"description,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt    time.Time              `json:"created_at"`
+	LastActiveAt time.Time              `json:"last_active_at"`
+	Tags         []TagResponse          `json:"tags,omitempty"`
+}
+
+type TagResponse struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+func toSessionResponse(s *ent.Session) SessionResponse {
+	resp := SessionResponse{
+		ID:           s.ID,
+		Name:         s.Name,
+		Description:  s.Description,
+		Metadata:     s.Metadata,
+		CreatedAt:    s.CreatedAt,
+		LastActiveAt: s.LastActiveAt,
+		Tags:         []TagResponse{},
+	}
+	if s.Edges.Tags != nil {
+		for _, t := range s.Edges.Tags {
+			resp.Tags = append(resp.Tags, TagResponse{
+				ID:   t.ID,
+				Name: t.Name,
+			})
+		}
+	}
+	return resp
+}
 
 type MemoryHandler struct {
 	client  *ent.Client
@@ -95,8 +132,14 @@ func (h *MemoryHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	
+	resp := make([]SessionResponse, 0, len(sessions))
+	for _, s := range sessions {
+		resp = append(resp, toSessionResponse(s))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sessions)
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +166,7 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(s)
+	json.NewEncoder(w).Encode(toSessionResponse(s))
 }
 
 func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {
