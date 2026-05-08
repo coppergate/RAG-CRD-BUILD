@@ -177,6 +177,9 @@ func main() {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			if tags == nil {
+				tags = []*ent.Tag{}
+			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(tags)
 		case http.MethodPost:

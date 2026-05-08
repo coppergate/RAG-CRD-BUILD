@@ -351,7 +351,7 @@ func askRAG(query string, tags []int64) (string, error) {
 		return "", fmt.Errorf("failed to decode RAG response: %v", err)
 	}
 	if result.Error != "" {
-		return "", fmt.Errorf(result.Error)
+		return "", fmt.Errorf("%s", result.Error)
 	}
 	return result.Result, nil
 }

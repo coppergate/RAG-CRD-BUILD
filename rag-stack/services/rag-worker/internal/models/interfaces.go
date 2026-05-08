@@ -16,7 +16,7 @@ type Planner interface {
 }
 
 type Executor interface {
-	Execute(ctx context.Context, prompt string, contexts []interface{}) (string, interface{}, error)
-	ExecuteStream(ctx context.Context, prompt string, contexts []interface{}) (<-chan string, <-chan interface{}, <-chan error)
+	Execute(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) (string, interface{}, error)
+	ExecuteStream(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) (<-chan string, <-chan interface{}, <-chan error)
 	IsInsufficientContext(result string) bool
 }

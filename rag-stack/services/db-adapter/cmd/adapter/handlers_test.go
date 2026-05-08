@@ -73,7 +73,7 @@ func TestHandleCompletion(t *testing.T) {
 			ModelFamily:       "llama",
 		},
 	}
-	data, _ := json.Marshal(payload)
+	data, _ := json.Marshal(&payload)
 	msg := &mockMessage{payload: data}
 
 	processor := service.NewPulsarProcessor(client, nil, nil, nil)
@@ -107,7 +107,7 @@ func TestHandleResponseGhostPrompt(t *testing.T) {
 		},
 		Result: "Test result",
 	}
-	data, _ := json.Marshal(payload)
+	data, _ := json.Marshal(&payload)
 	msg := &mockMessage{payload: data}
 
 	processor := service.NewPulsarProcessor(client, nil, nil, nil)

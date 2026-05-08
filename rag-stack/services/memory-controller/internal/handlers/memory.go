@@ -8,18 +8,58 @@ import (
 
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
-	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/session"
+	"app-builds/memory-controller/internal/logic"
 	"strings"
 	"time"
 )
 
+type SessionResponse struct {
+	ID           int64                  `json:"id"`
+	Name         string                 `json:"name,omitempty"`
+	Description  string                 `json:"description,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt    time.Time              `json:"created_at"`
+	LastActiveAt time.Time              `json:"last_active_at"`
+	Tags         []TagResponse          `json:"tags,omitempty"`
+}
+
+type TagResponse struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+func toSessionResponse(s *ent.Session) SessionResponse {
+	resp := SessionResponse{
+		ID:           s.ID,
+		Name:         s.Name,
+		Description:  s.Description,
+		Metadata:     s.Metadata,
+		CreatedAt:    s.CreatedAt,
+		LastActiveAt: s.LastActiveAt,
+		Tags:         []TagResponse{},
+	}
+	if s.Edges.Tags != nil {
+		for _, t := range s.Edges.Tags {
+			resp.Tags = append(resp.Tags, TagResponse{
+				ID:   t.ID,
+				Name: t.Name,
+			})
+		}
+	}
+	return resp
+}
+
 type MemoryHandler struct {
-	client *ent.Client
+	client  *ent.Client
+	manager *logic.MemoryManager
 }
 
 func NewMemoryHandler(client *ent.Client) *MemoryHandler {
-	return &MemoryHandler{client: client}
+	return &MemoryHandler{
+		client:  client,
+		manager: logic.NewMemoryManager(client),
+	}
 }
 
 func (h *MemoryHandler) HandleItems(w http.ResponseWriter, r *http.Request) {
@@ -37,16 +77,12 @@ func (h *MemoryHandler) listItems(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	
 	sessionIDStr := r.URL.Query().Get("session_id")
-	query := h.client.MemoryItem.Query()
-	
+	var sessionID int64
 	if sessionIDStr != "" {
-		sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
-		if err == nil {
-			query = query.Where(memoryitem.SessionID(sessionID))
-		}
+		sessionID, _ = strconv.ParseInt(sessionIDStr, 10, 64)
 	}
-	
-	items, err := query.All(ctx)
+
+	items, err := h.manager.ListItems(ctx, sessionID)
 	if err != nil {
 		log.Printf("[MEMCTRL] Error listing items: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -65,65 +101,9 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	tx, err := h.client.Tx(ctx)
-	if err != nil {
-		http.Error(w, "Failed to start transaction", http.StatusInternalServerError)
-		return
-	}
-	
-	for _, item := range req.Writes {
-		builder := tx.MemoryItem.Create().
-			SetMemoryType(item.MemoryType).
-			SetSummary(item.Summary).
-			SetContent(item.Content).
-			SetSalience(item.SalienceHint).
-			SetRetentionScore(item.RetentionHint).
-			SetPinned(item.Pinned).
-			SetMetadata(contracts.FromStruct(item.Metadata))
-		
-		if req.Scope.SessionId > 0 {
-			builder = builder.SetSessionID(req.Scope.SessionId)
-		}
-
-		if req.Scope.ProjectId > 0 {
-			builder = builder.SetProjectID(req.Scope.ProjectId)
-		}
-		
-		mi, err := builder.Save(ctx)
-		if err != nil {
-			log.Printf("[MEMCTRL] Failed to save memory item: %v", err)
-			tx.Rollback()
-			http.Error(w, "Failed to save memory item: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		
-		// Create links
-		for _, ref := range item.SourceRefs {
-			tx.MemoryLink.Create().
-				SetMemoryItemID(mi.ID).
-				SetTags(req.Scope.Tags).
-				// Store extra data in Metadata if needed
-				SetMetadata(map[string]interface{}{
-					"source_kind":   ref.SourceKind,
-					"source_id":     ref.SourceId,
-					"relation_type": ref.RelationType,
-				}).
-				SaveX(ctx)
-		}
-		
-		// Log event
-		tx.MemoryEvent.Create().
-			SetMemoryItemID(mi.ID).
-			SetEventType("write").
-			SetEventData(map[string]interface{}{
-				"request_id":     req.RequestId,
-				"correlation_id": req.CorrelationId,
-			}).
-			SaveX(ctx)
-	}
-	
-	if err := tx.Commit(); err != nil {
-		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+	if err := h.manager.WriteItems(ctx, &req); err != nil {
+		log.Printf("[MEMCTRL] Failed to write items: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	
@@ -132,7 +112,7 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 func (h *MemoryHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[MEMCTRL] %s %s", r.Method, r.URL.Path)
+	log.Printf("[MEMCTRL] %s %s (session.FieldID=%s)", r.Method, r.URL.Path, session.FieldID)
 	switch r.Method {
 	case http.MethodGet:
 		h.listSessions(w, r)
@@ -147,15 +127,19 @@ func (h *MemoryHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
 
 func (h *MemoryHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sessions, err := h.client.Session.Query().
-		Order(ent.Desc(session.FieldLastActiveAt)).
-		All(ctx)
+	sessions, err := h.manager.ListSessions(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	
+	resp := make([]SessionResponse, 0, len(sessions))
+	for _, s := range sessions {
+		resp = append(resp, toSessionResponse(s))
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sessions)
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
@@ -169,53 +153,20 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if name already exists for a DIFFERENT session ID
-	if req.Name != "" {
-		existing, err := h.client.Session.Query().
-			Where(session.Name(req.Name)).
-			First(ctx)
-		if err == nil && existing != nil {
-			// If name exists and ID is either not provided or different from existing
-			if req.Id == 0 || existing.ID != req.Id {
-				http.Error(w, "Session name already exists", http.StatusConflict)
-				return
-			}
-		}
-	}
-
-	builder := h.client.Session.Create().
-		SetName(req.Name).
-		SetLastActiveAt(time.Now())
-
-	if req.Id > 0 {
-		builder.SetID(req.Id)
-	}
-
-	// Use upsert to be safe for ID conflict
-	s, err := builder.OnConflictColumns(session.FieldID).
-		UpdateLastActiveAt().
-		UpdateName().
-		ID(ctx)
+	s, err := h.manager.CreateSession(ctx, req.Id, req.Name)
 	if err != nil {
 		log.Printf("[MEMCTRL] Error creating/updating session: %v", err)
-		if strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "duplicate key") {
-			http.Error(w, "Session name already exists", http.StatusConflict)
+		if strings.Contains(err.Error(), "already exists") {
+			http.Error(w, err.Error(), http.StatusConflict)
 		} else {
 			http.Error(w, "Failed to create/update session: "+err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
 
-	// Fetch the full session to return
-	fullSession, err := h.client.Session.Get(ctx, s)
-	if err != nil {
-		http.Error(w, "Failed to fetch created session: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(fullSession)
+	json.NewEncoder(w).Encode(toSessionResponse(s))
 }
 
 func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {
@@ -236,33 +187,34 @@ func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete session and its items
-	tx, err := h.client.Tx(ctx)
-	if err != nil {
-		http.Error(w, "Failed to start transaction", http.StatusInternalServerError)
-		return
-	}
-
-	_, err = tx.MemoryItem.Delete().
-		Where(memoryitem.SessionID(id)).
-		Exec(ctx)
-	if err != nil {
-		tx.Rollback()
-		http.Error(w, "Failed to delete memory items: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = tx.Session.DeleteOneID(id).Exec(ctx)
-	if err != nil {
-		tx.Rollback()
-		http.Error(w, "Failed to delete session: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		http.Error(w, "Failed to commit transaction", http.StatusInternalServerError)
+	if err := h.manager.DeleteSession(ctx, id); err != nil {
+		log.Printf("[MEMCTRL] Error deleting session: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *MemoryHandler) HandleRetrieve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+	var req contracts.MemoryRetrieveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	pack, err := h.manager.Retrieve(ctx, &req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pack)
 }

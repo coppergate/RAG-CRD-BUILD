@@ -18,6 +18,7 @@ message InternalRequest {
   repeated int64 tags = 9;
   string timestamp = 10;
   bool stream = 11;
+  bool include_global = 12;
 }
 
 message StreamChunk {
@@ -139,6 +140,7 @@ message QdrantOp {
   repeated string paths = 10;
   int64 source_tag = 11;
   int64 target_tag = 12;
+  bool include_global = 13;
 }
 
 message QdrantResponse {

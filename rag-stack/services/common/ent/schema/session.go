@@ -17,7 +17,8 @@ type Session struct {
 func (Session) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id").
-			StorageKey("session_id"),
+			StorageKey("session_id").
+			StructTag(`json:"id"`),
 		field.Int64("project_id").
 			Optional(),
 		field.String("name").

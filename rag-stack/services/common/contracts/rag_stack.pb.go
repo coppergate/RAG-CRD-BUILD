@@ -35,6 +35,7 @@ type InternalRequest struct {
 	Tags          []int64                `protobuf:"varint,9,rep,packed,name=tags,proto3" json:"tags,omitempty"`
 	Timestamp     string                 `protobuf:"bytes,10,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Stream        bool                   `protobuf:"varint,11,opt,name=stream,proto3" json:"stream,omitempty"`
+	IncludeGlobal bool                   `protobuf:"varint,12,opt,name=include_global,json=includeGlobal,proto3" json:"include_global,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -142,6 +143,13 @@ func (x *InternalRequest) GetTimestamp() string {
 func (x *InternalRequest) GetStream() bool {
 	if x != nil {
 		return x.Stream
+	}
+	return false
+}
+
+func (x *InternalRequest) GetIncludeGlobal() bool {
+	if x != nil {
+		return x.IncludeGlobal
 	}
 	return false
 }
@@ -1145,6 +1153,7 @@ type QdrantOp struct {
 	Paths         []string               `protobuf:"bytes,10,rep,name=paths,proto3" json:"paths,omitempty"`
 	SourceTag     int64                  `protobuf:"varint,11,opt,name=source_tag,json=sourceTag,proto3" json:"source_tag,omitempty"`
 	TargetTag     int64                  `protobuf:"varint,12,opt,name=target_tag,json=targetTag,proto3" json:"target_tag,omitempty"`
+	IncludeGlobal bool                   `protobuf:"varint,13,opt,name=include_global,json=includeGlobal,proto3" json:"include_global,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1263,6 +1272,13 @@ func (x *QdrantOp) GetTargetTag() int64 {
 	return 0
 }
 
+func (x *QdrantOp) GetIncludeGlobal() bool {
+	if x != nil {
+		return x.IncludeGlobal
+	}
+	return false
+}
+
 type QdrantResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1351,7 +1367,7 @@ var File_rag_stack_proto protoreflect.FileDescriptor
 
 const file_rag_stack_proto_rawDesc = "" +
 	"\n" +
-	"\x0frag_stack.proto\x12\trag_stack\x1a\x1cgoogle/protobuf/struct.proto\"\xeb\x02\n" +
+	"\x0frag_stack.proto\x12\trag_stack\x1a\x1cgoogle/protobuf/struct.proto\"\x92\x03\n" +
 	"\x0fInternalRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1365,7 +1381,8 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x04tags\x18\t \x03(\x03R\x04tags\x12\x1c\n" +
 	"\ttimestamp\x18\n" +
 	" \x01(\tR\ttimestamp\x12\x16\n" +
-	"\x06stream\x18\v \x01(\bR\x06stream\"\xcd\x02\n" +
+	"\x06stream\x18\v \x01(\bR\x06stream\x12%\n" +
+	"\x0einclude_global\x18\f \x01(\bR\rincludeGlobal\"\xcd\x02\n" +
 	"\vStreamChunk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1463,7 +1480,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\vQdrantPoint\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06vector\x18\x02 \x03(\x02R\x06vector\x121\n" +
-	"\apayload\x18\x03 \x01(\v2\x17.google.protobuf.StructR\apayload\"\xd8\x02\n" +
+	"\apayload\x18\x03 \x01(\v2\x17.google.protobuf.StructR\apayload\"\xff\x02\n" +
 	"\bQdrantOp\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1e\n" +
@@ -1483,7 +1500,8 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\n" +
 	"source_tag\x18\v \x01(\x03R\tsourceTag\x12\x1d\n" +
 	"\n" +
-	"target_tag\x18\f \x01(\x03R\ttargetTag\"\xbc\x01\n" +
+	"target_tag\x18\f \x01(\x03R\ttargetTag\x12%\n" +
+	"\x0einclude_global\x18\r \x01(\bR\rincludeGlobal\"\xbc\x01\n" +
 	"\x0eQdrantResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1e\n" +

@@ -158,9 +158,10 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 	defer span.End()
 
 	var payload struct {
-		Id        string `json:"id"`
-		SessionId int64  `json:"session_id"`
-		Content   string `json:"content"`
+		Id        string  `json:"id"`
+		SessionId int64   `json:"session_id"`
+		Content   string  `json:"content"`
+		Tags      []int64 `json:"tags"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal prompt payload: %w", err)
@@ -176,6 +177,16 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 
 	if err := p.ensureSessionExists(msgCtx, sessID); err != nil {
 		return dlq.TransientFailure, fmt.Errorf("ensure session exists: %w", err)
+	}
+
+	// Update session tags if provided in prompt
+	if len(payload.Tags) > 0 {
+		err := p.client.Session.UpdateOneID(sessID).
+			AddTagIDs(payload.Tags...).
+			Exec(msgCtx)
+		if err != nil {
+			log.Printf("Warning: failed to associate tags with session %d from prompt: %v", sessID, err)
+		}
 	}
 
 	// Try to find if a ghost prompt already exists for this ID
@@ -225,7 +236,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
 	}
 
-	if payload.Result == "" && payload.PlanningResponse == "" {
+	if payload.Result == "" && payload.PlanningResponse == "" && payload.Metadata == nil && payload.SequenceNumber != 0 {
 		return dlq.Success, nil
 	}
 
@@ -350,7 +361,9 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 			u.SetNillableModelName(modelName)
 		}
 		u.SetSequenceNumber(int(payload.SequenceNumber))
-		u.SetMetadata(contracts.FromStruct(payload.Metadata))
+		if payload.Metadata != nil {
+			u.SetMetadata(contracts.FromStruct(payload.Metadata))
+		}
 		if err := u.Exec(msgCtx); err != nil {
 			tx.Rollback()
 			return dlq.TransientFailure, fmt.Errorf("update response in tx: %w", err)
@@ -364,22 +377,48 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.TransientFailure, fmt.Errorf("transactional upsert response for prompt %s: %w", payload.Id, err)
 	}
 
-	log.Printf("Aggregated response for prompt %s (seq %d, last=%v)", payload.Id, payload.SequenceNumber, payload.IsLast)
+	// Persist retrieval logs if metadata contains contexts or sub-queries
+	metadataMap := contracts.FromStruct(payload.Metadata)
+	if metadataMap != nil {
+		// Check if we already persisted logs for this prompt to avoid duplicates from seq 0 and aggregator final chunk
+		exists, _ := p.client.RetrievalLog.Query().
+			Where(retrievallog.MessageIDEQ(promptUUID)).
+			Exist(msgCtx)
 
-	// Process retrieval logs if it's the last chunk and metadata has contexts
-	if payload.IsLast {
-		metadataMap := contracts.FromStruct(payload.Metadata)
-		if contexts, ok := metadataMap["contexts"].([]interface{}); ok && len(contexts) > 0 {
-			for _, c := range contexts {
-				if ctxStr, ok := c.(string); ok && ctxStr != "" {
-					_, _ = p.client.RetrievalLog.Create().
-						SetSessionID(sessID).
-						SetType("RETRIEVAL").
-						SetDetail(ctxStr).
-						Save(msgCtx)
+		if !exists {
+			logCount := 0
+			// 1. Log Sub-queries
+			if subQueries, ok := metadataMap["sub_queries"].([]interface{}); ok && len(subQueries) > 0 {
+				for _, q := range subQueries {
+					if qStr, ok := q.(string); ok && qStr != "" {
+						_, _ = p.client.RetrievalLog.Create().
+							SetMessageID(promptUUID).
+							SetSessionID(sessID).
+							SetType("QUERY").
+							SetQuery(qStr).
+							Save(msgCtx)
+						logCount++
+					}
 				}
 			}
-			log.Printf("Stored %d retrieval logs for session %d", len(contexts), sessID)
+
+			// 2. Log Retrieved Contexts
+			if contexts, ok := metadataMap["contexts"].([]interface{}); ok && len(contexts) > 0 {
+				for _, c := range contexts {
+					if ctxStr, ok := c.(string); ok && ctxStr != "" {
+						_, _ = p.client.RetrievalLog.Create().
+							SetMessageID(promptUUID).
+							SetSessionID(sessID).
+							SetType("RETRIEVAL").
+							SetDetail(ctxStr).
+							Save(msgCtx)
+						logCount++
+					}
+				}
+			}
+			if logCount > 0 {
+				log.Printf("Stored %d retrieval logs (queries/contexts) for session %d", logCount, sessID)
+			}
 		}
 	}
 

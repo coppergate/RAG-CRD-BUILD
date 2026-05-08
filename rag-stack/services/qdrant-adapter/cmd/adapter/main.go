@@ -269,9 +269,15 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 
 	switch action {
 	case "search":
-		res, err := a.qdrant.Search(collection, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId)
+		res, err := a.qdrant.Search(collection, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId, data.IncludeGlobal)
 		if err == nil {
 			log.Printf("[%s] Qdrant search returned %d results", opID, len(res))
+		}
+		result, opErr = res, err
+	case "retrieve_paths":
+		res, err := a.qdrant.RetrieveByPaths(collection, vs, data.Paths)
+		if err == nil {
+			log.Printf("[%s] Qdrant retrieve_paths returned %d results", opID, len(res))
 		}
 		result, opErr = res, err
 	case "delete":

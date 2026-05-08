@@ -191,7 +191,7 @@ func (s *MetricsService) GetMetricsSummary(w http.ResponseWriter, r *http.Reques
 		agg[key].Count++
 	}
 
-	var results []map[string]interface{}
+	results := make([]map[string]interface{}, 0)
 	for k, st := range agg {
 		results = append(results, map[string]interface{}{
 			"model_name":         k.Model,

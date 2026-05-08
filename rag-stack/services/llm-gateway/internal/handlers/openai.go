@@ -64,6 +64,7 @@ type ChatCompletionRequest struct {
 	SessionId   int64    `json:"session_id,omitempty"`   // Changed to int64
 	SessionName string   `json:"session_name,omitempty"` // Added for friendly name
 	Tags        []int64  `json:"tags,omitempty"`         // Changed to int64
+	IncludeGlobal bool     `json:"include_global,omitempty"`
 	Messages    []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
@@ -77,11 +78,16 @@ type GenericChatRequest struct {
 	Planner     string   `json:"planner"`
 	Executor    string   `json:"executor"`
 	Tags        []int64  `json:"tags"` // Changed to int64
+	IncludeGlobal bool     `json:"include_global,omitempty"`
 }
 
-func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sessionName string) (int64, error) {
-	if sessionName == "" && sessionID > 0 {
-		sessionName = fmt.Sprintf("Session %d", sessionID)
+func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sessionName string, tags []int64) (*ent.Session, error) {
+	if sessionName == "" {
+		if sessionID > 0 {
+			sessionName = fmt.Sprintf("Session %d", sessionID)
+		} else {
+			sessionName = fmt.Sprintf("Chat %s %s", time.Now().Format("15:04:05"), uuid.New().String()[:4])
+		}
 	}
 
 	builder := h.Ent.Session.Create().
@@ -92,15 +98,30 @@ func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sess
 		builder.SetID(sessionID)
 	}
 
-	s, err := builder.OnConflictColumns(session.FieldID).
+	id, err := builder.OnConflictColumns(session.FieldID).
 		UpdateLastActiveAt().
 		UpdateName().
 		ID(ctx)
 
 	if err != nil {
-		return sessionID, err
+		return nil, err
 	}
-	return s, nil
+
+	// If tags provided, associate them with the session
+	if len(tags) > 0 {
+		err = h.Ent.Session.UpdateOneID(id).
+			AddTagIDs(tags...).
+			Exec(ctx)
+		if err != nil {
+			log.Printf("Warning: failed to associate tags with session %d: %v", id, err)
+		}
+	}
+
+	// Return session with tags
+	return h.Ent.Session.Query().
+		Where(session.ID(id)).
+		WithTags().
+		Only(ctx)
 }
 
 func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -136,12 +157,19 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	// 1. Session tracking
-	sessionID, err := h.ensureSession(ctx, req.SessionId, req.SessionName)
+	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
 		http.Error(w, fmt.Sprintf("Failed to ensure session: %v", err), http.StatusInternalServerError)
 		return
+	}
+	sessionID := sess.ID
+
+	// Fetch all tags for the session
+	var sessionTags []int64
+	for _, t := range sess.Edges.Tags {
+		sessionTags = append(sessionTags, t.ID)
 	}
 
 	// Record prompt size
@@ -156,7 +184,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	// Save user message to DB via Pulsar event
 	if len(req.Messages) > 0 {
 		userMsg := req.Messages[len(req.Messages)-1].Content
-		if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, userMsg); err != nil {
+		if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, userMsg, sessionTags); err != nil {
 			log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 		}
 	}
@@ -173,7 +201,8 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		Prompt:        prompt,
 		PlannerModel:  req.Model,
 		ExecutorModel: req.Model,
-		Tags:          req.Tags,
+		Tags:          sessionTags,
+		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source": "openai-api",
@@ -229,10 +258,17 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	sessionID, err := h.ensureSession(ctx, req.SessionId, req.SessionName)
+	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
 		log.Printf("Failed to ensure session: %v", err)
 		return
+	}
+	sessionID := sess.ID
+
+	// Fetch all tags for the session
+	var sessionTags []int64
+	for _, t := range sess.Edges.Tags {
+		sessionTags = append(sessionTags, t.ID)
 	}
 
 	// Record prompt size
@@ -241,7 +277,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	correlationID := uuid.New().String()
 
 	// Save user message to DB via Pulsar event
-	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt); err != nil {
+	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt, sessionTags); err != nil {
 		log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 	}
 
@@ -252,7 +288,8 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
-		Tags:          req.Tags,
+		Tags:          sessionTags,
+		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Stream:        true,
 		Metadata: contracts.ToStruct(map[string]interface{}{
@@ -278,6 +315,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		case chunk, ok := <-chunkChan:
 			if !ok {
 				return
+			}
+			if chunk.SequenceNumber == 0 {
+				log.Printf("[%s] Forwarding Seq 0, has metadata: %v", correlationID, chunk.Metadata != nil)
 			}
 			if err := conn.WriteJSON(chunk); err != nil {
 				log.Printf("Failed to write to WebSocket: %v", err)
@@ -326,12 +366,19 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 
 	// 1. Session tracking
-	sessionID, err := h.ensureSession(ctx, req.SessionId, req.SessionName)
+	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
 		log.Printf("Failed to ensure session exists: %v", err)
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
 		http.Error(w, fmt.Sprintf("Failed to ensure session: %v", err), http.StatusInternalServerError)
 		return
+	}
+	sessionID := sess.ID
+
+	// Fetch all tags for the session
+	var sessionTags []int64
+	for _, t := range sess.Edges.Tags {
+		sessionTags = append(sessionTags, t.ID)
 	}
 
 	// Record prompt size
@@ -340,7 +387,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	correlationID := uuid.New().String()
 
 	// Save user message to DB via Pulsar event
-	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt); err != nil {
+	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt, sessionTags); err != nil {
 		log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 	}
 
@@ -359,7 +406,8 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
-		Tags:          req.Tags,
+		Tags:          sessionTags,
+		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source": "generic-api",

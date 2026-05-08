@@ -35,6 +35,10 @@ type Config struct {
 	RecursionBudget    float64
 	ShutdownTimeout    time.Duration
 
+	StreamAccumulationCount int
+
+	MemoryControllerURL string
+
 	TLSCert            string
 	TLSKey             string
 }
@@ -77,6 +81,9 @@ func LoadConfig() *Config {
 		QdrantSearchTimeout: envutil.GetEnvDuration("QDRANT_SEARCH_TIMEOUT", 30*time.Second),
 		RecursionBudget:     envutil.GetEnvFloat("RECURSION_BUDGET", 2.0),
 		ShutdownTimeout:     envutil.GetEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
+		StreamAccumulationCount: envutil.GetEnvInt("STREAM_ACCUMULATION_COUNT", 10),
+
+		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "http://memory-controller.rag-system.svc.cluster.local:8080"),
 
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:              envutil.GetEnv("TLS_KEY", ""),

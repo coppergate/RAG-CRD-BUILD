@@ -219,12 +219,10 @@ Every new session for the **Junie** agent MUST establish the operational context
     - If the current branch is `main`, pull the latest changes from origin.
     - If on a work branch:
         - Commit all pending changes.
-        - Rename the branch to a descriptive name reflecting the changes (e.g., `fix-ui-tls`).
         - Push the branch to origin.
-        - Create a merge request and merge the branch into `main`.
-        - Switch to `main` and pull latest changes.
-    - Create a new session branch named `Work-YYYYMMDD` (e.g., `Work-20260429`).
-    - During the session, commit with short, meaningful messages.
+        - Create a merge request (if applicable) and ensure it's ready for merge.
+    - Create a new session branch named `work-YYYY-MM-DD` (e.g., `work-2026-03-02`).
+    - During the session, commit with timestamp messages (e.g., `2026-03-02 08:30`).
 2. **File Size Limit**: Do not commit any files larger than 1MB without asking first.
    - **Clean History (Rebase & Squash)**:
    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
@@ -240,7 +238,7 @@ Every new session for the **Junie** agent MUST establish the operational context
 5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
 ### 2.2 Current Focus (Iteration 7)
-As of version 2.10.x, the project is focusing on **Iteration 7: Local Prompt Memory + Recall (Miras/Titans-Inspired)**.
+As of version 2.11.x, the project is focusing on **Iteration 7: Local Prompt Memory + Recall (Miras/Titans-Inspired)**.
 1.  **Memory Data Model**: Implementing structured memory types (`short_term`, `long_term`, `persistent`) in TimescaleDB.
 2.  **Memory Controller**: A dedicated service for salience scoring, retention/decay logic, and MemoryPack assembly.
 3.  **Pulsar Integration**: Asynchronous memory operations via `rag.memory.*` topics.
@@ -340,8 +338,24 @@ Use this only for bootstrapping or when the cluster-native pipeline is unavailab
     ./run-on-hierophant.sh "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && VERSION=X.Y.Z FORCE_BUILD=true ./build-and-push.sh"
     ```
 
+### 3.4 UI API Verification (E2E Tests)
+To ensure stability between the Flutter UI and the backend stack, you MUST run the Go-based API test suite whenever you modify `rag-admin-api` or any core services it proxies (e.g., `db-adapter`, `memory-controller`, `object-store-mgr`).
+
+1.  **Requirement**: The services must be deployed and running on the cluster.
+2.  **Test Location**: `rag-stack/tests/api_test.go`.
+3.  **Execution**:
+    ```bash
+    # From the project root:
+    go test -v rag-stack/tests/api_test.go
+    ```
+4.  **What it covers**:
+    - Health checks for all proxied services.
+    - Full session lifecycle (Create, List, Get Messages, Tag Update, Delete).
+    - Tag management.
+    - S3 bucket and object listing.
+
 ### 3.5 Concurrency and Locking in Build System
-As of version `2.10.x`, the build system supports hardened parallel execution to improve speed and prevent race conditions.
+As of version `2.11.x`, the build system supports hardened parallel execution to improve speed and prevent race conditions.
 
 #### Build Orchestrator Hardening (Double-Launching Fix)
 1.  **Deterministic Job Naming**: The `build-orchestrator` now uses a deterministic naming scheme for Kaniko jobs: `kaniko-build-<service>-<version>`. 
@@ -571,6 +585,35 @@ The `db-adapter` service includes a comprehensive unit test suite using an in-me
     ```
 - **Coverage**: Includes `handleCompletion`, `handleGetSessionHealth`, `handleGetSessionAudit`, `handleGetSessionMessages`, `handleGetFiles`, and `handleMaintenanceTagMerge`.
 
+### 7.6 Memory Controller Unit Tests (Ent/SQLite)
+The `memory-controller` service includes a comprehensive unit test suite and a separate `MemoryManager` logic test suite. These verify session lifecycle, memory item persistence, and context retrieval assembly.
+- **Location**: 
+    - Logic: `rag-stack/services/memory-controller/internal/logic/manager_test.go`
+    - Handlers: `rag-stack/services/memory-controller/internal/handlers/memory_test.go`
+- **Execution**:
+    ```bash
+    cd rag-stack/services/memory-controller
+    go test -v ./internal/...
+    ```
+- **Coverage**: Includes session creation/deletion, memory item listing/writing, and full `Retrieve` pack assembly (combining chat history and memory items).
+
+### 7.7 Code Quality & Linting
+All Go services and tests should pass `go vet`.
+
+#### Running Lint on all Services
+A script is provided in the project root to vet all Go services in the project.
+```bash
+./vet-all.sh
+```
+
+#### Running Lint on Tests
+Go tests and utilities in `rag-stack/tests` are not covered by `vet-all.sh` and should be checked manually:
+```bash
+cd rag-stack/tests
+go vet ./...
+```
+*Note: Standalone test utilities like `verify_tiered` are located in subdirectories and are included in the `./...` glob when run from `rag-stack/tests`.*
+
 ## 8. RAG Explorer & Metrics (Iteration 6b)
 ### 8.1 Model Execution Metrics (3NF)
 Model performance is tracked in the `model_execution_metrics` hypertable in TimescaleDB. 
@@ -601,12 +644,37 @@ The Chat Panel in RAG Explorer supports associating multiple existing tags with 
 The `CURRENT_VERSION` file tracks service versions across all environments.
 - **Location**: Project root (`/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`).
 - **Permissions**: Should be `664` or `666` to allow both `wjones` and `junie` to update it.
+- **DANGER**: DO NOT use `mv` to update this file. Using `mv` replaces the file and resets permissions to the user's default umask (usually `644`), which breaks the build pipeline for other users. ALWAYS use redirection (e.g., `cat tmp > CURRENT_VERSION` or `jq ... > tmp && cat tmp > CURRENT_VERSION`) to preserve existing permissions.
 - **Workaround**: If `Permission denied` occurs on `hierophant`, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
 - **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.
-### 9.2 Response Aggregation
+- **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock to avoid collisions. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666 for multi-user support.
+### 9.2 Protobuf Generation
+To regenerate Go bindings for the `rag_stack.proto` contract:
+```bash
+PATH=$PATH:/home/wjones/go/bin protoc \
+  --proto_path=rag-stack/contracts \
+  --go_out=rag-stack/services \
+  --go_opt=module=app-builds \
+  rag-stack/contracts/rag_stack.proto
+```
+
+### 9.3 Tiered Streaming Response
+- **Metadata (Seq 0)**: Contains the grounding context (`contexts`) and recursion info.
+- **Content (Seq 1..N)**: Contains LLM tokens accumulated based on `STREAM_ACCUMULATION_COUNT` (default: 10).
+- **Final (Seq N+1)**: Empty chunk with `is_last: true` to signal completion.
+- **Planning (Seq -1)**: Intermediate planning responses.
+
+### 9.4 Response Aggregation
 To prevent duplicate "chunks" in chat history, the `db-adapter` consolidates multiple Pulsar messages for the same prompt into a single database record.
 - **Aggregation**: `HandleResponse` uses a transaction to find an existing record by `prompt_id`.
 - **Deltas**: Content chunks are appended to the existing record.
-- **Final Results**: Aggregated messages from `prompt-aggregator` (with `is_last=true`) overwrite the content to ensure accuracy.
-- **Planning Data**: Sub-queries from `rag-worker` are accumulated in the `planning_response` field.
-- **History**: `GetMessages` groups any legacy duplicate records by `prompt_id` before returning them to the UI.
+- **Final Results**: Messages with `Metadata` or `IsLast=true` are used to finalize state.
+- **Retrieval Logs**: Persisted immediately upon receipt of a chunk containing `contexts` (typically Seq 0).
+- **Planning Data**: Responses with `SequenceNumber: -1` are accumulated in the `planning_response` field.
+
+### 9.5 Session Context & Memory Controller (Iteration 7)
+Session context is managed by the `memory-controller` service and consumed by the `rag-worker`.
+- **Retrieval**: `rag-worker` calls `POST /retrieve` on `memory-controller` during the `search` stage.
+- **Assembly**: The `memory-controller` fetches the last 10 pairs of prompts and responses for a session and packages them into a `MemoryPack`.
+- **LLM Context**: `rag-worker` converts the `MemoryPack` into a list of messages (role/content) which are prepended to the final LLM prompt.
+- **Configuration**: `MEMORY_CONTROLLER_URL` environment variable must be set in `rag-worker`.

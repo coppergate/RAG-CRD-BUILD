@@ -40,32 +40,47 @@ func (m *GenericModel) Plan(ctx context.Context, prompt string) ([]string, inter
 }
 
 // Execute performs the augmented query with provided contexts using configured templates
-func (m *GenericModel) Execute(ctx context.Context, prompt string, contexts []interface{}) (string, interface{}, error) {
-	augmentedPrompt := m.Config.ExecutionHeader
-	for _, c := range contexts {
-		augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
-	}
-	augmentedPrompt += m.Config.ExecutionFooter + prompt + m.Config.ExecutionSuffix
-
-	result, metrics, err := m.ChatSingleTurn(ctx, augmentedPrompt)
-	if err != nil {
-		return "", nil, fmt.Errorf("execution Chat failed: %w", err)
-	}
-	return result, metrics, nil
+func (m *GenericModel) Execute(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) (string, interface{}, error) {
+	messages := m.assembleMessages(prompt, contexts, history)
+	return m.Client.Chat(messages)
 }
 
 // ExecuteStream performs the augmented query with provided contexts and returns a stream of results
-func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, contexts []interface{}) (<-chan string, <-chan interface{}, <-chan error) {
+func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) (<-chan string, <-chan interface{}, <-chan error) {
+	messages := m.assembleMessages(prompt, contexts, history)
+	return m.Client.ChatStream(messages)
+}
+
+func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, history []interface{}) []map[string]string {
+	var messages []map[string]string
+
+	// 1. Add History
+	for _, h := range history {
+		hMap, ok := h.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		content, _ := hMap["content"].(string)
+		var role string
+		if meta, ok := hMap["metadata"].(map[string]interface{}); ok {
+			role, _ = meta["role"].(string)
+		}
+
+		if role != "" && content != "" {
+			messages = append(messages, map[string]string{"role": role, "content": content})
+		}
+	}
+
+	// 2. Add current augmented prompt
 	augmentedPrompt := m.Config.ExecutionHeader
 	for _, c := range contexts {
 		augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
 	}
 	augmentedPrompt += m.Config.ExecutionFooter + prompt + m.Config.ExecutionSuffix
 
-	messages := []map[string]string{
-		{"role": "user", "content": augmentedPrompt},
-	}
-	return m.Client.ChatStream(messages)
+	messages = append(messages, map[string]string{"role": "user", "content": augmentedPrompt})
+	return messages
 }
 
 // IsInsufficientContext checks if the model result indicates missing information based on configured phrases

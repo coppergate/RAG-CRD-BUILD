@@ -51,11 +51,11 @@ psql_pg app "GRANT USAGE, CREATE ON SCHEMA public TO app;"
 log "Removing Timescale job for expire_old_sessions if present"
 psql_pg app "SELECT delete_job(job_id) FROM timescaledb_information.jobs WHERE proc_name = 'expire_old_sessions';" || true
 
-log "Dropping mapping tables (session_tag, code_embedding_tag) if exist"
-psql_pg app "DROP TABLE IF EXISTS session_tag, code_embedding_tag CASCADE;" || true
+log "Dropping mapping tables (session_tag, code_embedding_tag, code_ingestion_tag) if exist"
+psql_pg app "DROP TABLE IF EXISTS session_tag, code_embedding_tag, code_ingestion_tag CASCADE;" || true
 
 log "Dropping main app tables if exist (this deletes data)"
-psql_pg app "DROP TABLE IF EXISTS responses, prompts, retrieval_logs, code_embedding, code_ingestion, tag, sessions, projects CASCADE;" || true
+psql_pg app "DROP TABLE IF EXISTS model_execution_metrics, responses, prompts, retrieval_logs, memory_events, memory_links, memory_items, code_embedding, code_ingestion, tag, sessions, model_definitions, inference_nodes, projects CASCADE;" || true
 
 log "Dropping app procedure expire_old_sessions if exists"
 psql_pg app "DROP PROCEDURE IF EXISTS expire_old_sessions(int, jsonb);" || true

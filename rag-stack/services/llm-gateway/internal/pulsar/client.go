@@ -129,11 +129,12 @@ func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload prot
 	}
 }
 
-func (pc *pulsarClient) SendPromptEvent(ctx context.Context, id string, sessionID int64, content string) error {
+func (pc *pulsarClient) SendPromptEvent(ctx context.Context, id string, sessionID int64, content string, tags []int64) error {
 	payload := map[string]interface{}{
 		"id":         id,
 		"session_id": sessionID,
 		"content":    content,
+		"tags":       tags,
 	}
 	_, err := pulsarCommon.SendJSON(ctx, pc.promptProducer, payload)
 	return err
