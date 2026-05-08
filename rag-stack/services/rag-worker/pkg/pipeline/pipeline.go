@@ -307,9 +307,22 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	if req.Stream {
 		startTime := time.Now().UTC().Format(time.RFC3339)
 		stream, metaCh, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts, history)
+
+		// Stage 1: Metadata Message (Sequence 0)
+		// This chunk contains grounding contexts and recursion info but no content yet.
+		currentMeta := contracts.FromStruct(req.Metadata)
+		if currentMeta == nil {
+			currentMeta = make(map[string]interface{})
+		}
+		currentMeta["contexts"] = contexts
+		log.Printf("[%s] Sending Seq 0 with %d contexts", req.Id, len(contexts))
+		h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", 0, false, modelID, false, currentMeta)
+
 		var fullResult string
+		var chunkBuffer string
+		var chunkCount int
 		var finalMetrics *contracts.ExecutionMetrics
-		seq := 0
+		seq := 1 // Content sequences start from 1
 		inConversation := false
 		for {
 			if stream == nil && metaCh == nil && errCh == nil {
@@ -322,9 +335,17 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 					continue
 				}
 				fullResult += chunk
+				chunkBuffer += chunk
+				chunkCount++
 				inConversation = true
-				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunk, seq, false, modelID, inConversation, contracts.FromStruct(req.Metadata))
-				seq++
+
+				// Send accumulated chunks to the UI based on configuration
+				if chunkCount >= h.cfg.StreamAccumulationCount {
+					h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, seq, false, modelID, inConversation, nil)
+					seq++
+					chunkBuffer = ""
+					chunkCount = 0
+				}
 			case rawMeta, ok := <-metaCh:
 				if !ok {
 					metaCh = nil
@@ -349,11 +370,42 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 		}
 
 	endStream:
+		// Grounding Guard / Recursion Check for streaming mode
+		if executor.IsInsufficientContext(fullResult) {
+			currentMeta := contracts.FromStruct(req.Metadata)
+			budget, _ := currentMeta["recursion_budget"].(float64)
+			if budget > 0 {
+				h.msg.SendStatus(ctx, req.Id, req.SessionId, "REFINING_PLAN", "Context insufficient, triggering recursion")
+				currentMeta["recursion_budget"] = budget - 1
+				req.Metadata = contracts.ToStruct(currentMeta)
+				marshaller := protojson.MarshalOptions{UseProtoNames: true}
+				payload, err := marshaller.Marshal(req)
+				if err != nil {
+					log.Printf("[%s] Failed to marshal recursion data: %v", req.Id, err)
+					h.msg.SendError(ctx, req.Id, "Internal serialization error during recursion", false)
+					return dlq.PermanentFailure, fmt.Errorf("marshal recursion data: %w", err)
+				}
+				if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
+					log.Printf("[%s] Failed to send recursion to plan topic: %v", req.Id, err)
+					h.msg.SendError(ctx, req.Id, "Internal messaging error during recursion", false)
+					return dlq.TransientFailure, fmt.Errorf("send recursion to plan: %w", err)
+				}
+				return dlq.Success, nil
+			}
+		}
+
+		// Send any remaining buffered text before final completion
+		if chunkBuffer != "" {
+			h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, seq, false, modelID, inConversation, nil)
+			seq++
+		}
+
 		// Record response size
 		responseSizeHist.Record(ctx, int64(len(fullResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
 
 		h.msg.SendStatus(ctx, req.Id, req.SessionId, "COMPLETED", "Response generated")
-		h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", seq, true, modelID, inConversation, contracts.FromStruct(req.Metadata))
+		// Final chunk signals the end of the message (is_last = true)
+		h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", seq, true, modelID, inConversation, nil)
 		h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "COMPLETED", finalMetrics)
 		return dlq.Success, nil
 	}

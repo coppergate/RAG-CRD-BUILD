@@ -225,7 +225,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal response payload: %w", err)
 	}
 
-	if payload.Result == "" && payload.PlanningResponse == "" {
+	if payload.Result == "" && payload.PlanningResponse == "" && payload.Metadata == nil {
 		return dlq.Success, nil
 	}
 
@@ -350,7 +350,9 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 			u.SetNillableModelName(modelName)
 		}
 		u.SetSequenceNumber(int(payload.SequenceNumber))
-		u.SetMetadata(contracts.FromStruct(payload.Metadata))
+		if payload.Metadata != nil {
+			u.SetMetadata(contracts.FromStruct(payload.Metadata))
+		}
 		if err := u.Exec(msgCtx); err != nil {
 			tx.Rollback()
 			return dlq.TransientFailure, fmt.Errorf("update response in tx: %w", err)
@@ -364,15 +366,22 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.TransientFailure, fmt.Errorf("transactional upsert response for prompt %s: %w", payload.Id, err)
 	}
 
-	log.Printf("Aggregated response for prompt %s (seq %d, last=%v)", payload.Id, payload.SequenceNumber, payload.IsLast)
+	// Persist retrieval logs if metadata contains contexts
+	metadataMap := contracts.FromStruct(payload.Metadata)
+	if metadataMap != nil {
+		log.Printf("[%s] Metadata received: %v", payload.Id, metadataMap)
+	}
+	if contexts, ok := metadataMap["contexts"].([]interface{}); ok && len(contexts) > 0 {
+		// Check if we already persisted logs for this prompt to avoid duplicates from seq 0 and aggregator final chunk
+		exists, _ := p.client.RetrievalLog.Query().
+			Where(retrievallog.MessageIDEQ(promptUUID)).
+			Exist(msgCtx)
 
-	// Process retrieval logs if it's the last chunk and metadata has contexts
-	if payload.IsLast {
-		metadataMap := contracts.FromStruct(payload.Metadata)
-		if contexts, ok := metadataMap["contexts"].([]interface{}); ok && len(contexts) > 0 {
+		if !exists {
 			for _, c := range contexts {
 				if ctxStr, ok := c.(string); ok && ctxStr != "" {
 					_, _ = p.client.RetrievalLog.Create().
+						SetMessageID(promptUUID).
 						SetSessionID(sessID).
 						SetType("RETRIEVAL").
 						SetDetail(ctxStr).

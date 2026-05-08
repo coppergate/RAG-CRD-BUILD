@@ -223,6 +223,7 @@ func (c *Client) SendPlanningResponse(ctx context.Context, id string, sessionID 
 		Id:               id,
 		SessionId:        sessionID,
 		PlanningResponse: planningResponse,
+		SequenceNumber:   -1, // Planning responses use negative sequence to avoid collision with execution
 		IsLast:           false,
 	}
 

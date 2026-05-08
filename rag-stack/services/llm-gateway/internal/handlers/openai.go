@@ -82,8 +82,12 @@ type GenericChatRequest struct {
 }
 
 func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sessionName string) (int64, error) {
-	if sessionName == "" && sessionID > 0 {
-		sessionName = fmt.Sprintf("Session %d", sessionID)
+	if sessionName == "" {
+		if sessionID > 0 {
+			sessionName = fmt.Sprintf("Session %d", sessionID)
+		} else {
+			sessionName = fmt.Sprintf("Chat %s %s", time.Now().Format("15:04:05"), uuid.New().String()[:4])
+		}
 	}
 
 	builder := h.Ent.Session.Create().
@@ -282,6 +286,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		case chunk, ok := <-chunkChan:
 			if !ok {
 				return
+			}
+			if chunk.SequenceNumber == 0 {
+				log.Printf("[%s] Forwarding Seq 0, has metadata: %v", correlationID, chunk.Metadata != nil)
 			}
 			if err := conn.WriteJSON(chunk); err != nil {
 				log.Printf("Failed to write to WebSocket: %v", err)

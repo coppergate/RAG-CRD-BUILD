@@ -95,11 +95,13 @@ func main() {
 
 		if len(parts) == 1 { // List objects
 			prefix := r.URL.Query().Get("prefix")
+			log.Printf("[S3] ListObjectsV2: bucket=%s, prefix=%s", bucketName, prefix)
 			resp, err := client.ListObjectsV2(r.Context(), &s3.ListObjectsV2Input{
 				Bucket: aws.String(bucketName),
 				Prefix: aws.String(prefix),
 			})
 			if err != nil {
+				log.Printf("[S3] Error listing objects: %v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -107,6 +109,7 @@ func main() {
 			if contents == nil {
 				contents = []types.Object{}
 			}
+			log.Printf("[S3] Returning %d objects", len(contents))
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(contents)
 			return
@@ -127,12 +130,14 @@ func main() {
 			defer resp.Body.Close()
 			io.Copy(w, resp.Body)
 		case http.MethodPut:
+			log.Printf("[S3] PutObject: bucket=%s, key=%s", bucketName, objectKey)
 			_, err = client.PutObject(r.Context(), &s3.PutObjectInput{
 				Bucket: aws.String(bucketName),
 				Key:    aws.String(objectKey),
 				Body:   r.Body,
 			})
 			if err != nil {
+				log.Printf("[S3] Error putting object: %v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

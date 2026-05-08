@@ -1,0 +1,10 @@
+2026/05/08 17:54:38 [PROXY] GET /api/db/storage/files -> https://db-adapter.rag-system.svc.cluster.local
+2026/05/08 17:54:38 [PROXY] Stripped prefix /api/db: /api/db/storage/files -> /storage/files
+2026/05/08 17:54:40 [PROXY] GET /api/db/storage/files -> https://db-adapter.rag-system.svc.cluster.local
+2026/05/08 17:54:40 [PROXY] Stripped prefix /api/db: /api/db/storage/files -> /storage/files
+2026/05/08 17:54:55 [PROXY] GET /api/db/sessions -> https://db-adapter.rag-system.svc.cluster.local
+2026/05/08 17:54:55 [PROXY] Stripped prefix /api/db: /api/db/sessions -> /sessions
+2026/05/08 17:54:57 [PROXY] GET /api/db/sessions/55/health -> https://db-adapter.rag-system.svc.cluster.local
+2026/05/08 17:54:57 [PROXY] Stripped prefix /api/db: /api/db/sessions/55/health -> /sessions/55/health
+2026/05/08 17:54:57 [PROXY] GET /api/db/audit/sessions/55 -> https://db-adapter.rag-system.svc.cluster.local
+2026/05/08 17:54:57 [PROXY] Stripped prefix /api/db: /api/db/audit/sessions/55 -> /audit/sessions/55

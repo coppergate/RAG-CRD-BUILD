@@ -169,7 +169,7 @@ class ChatService {
               sessionId: data['session_id'],
               messageId: data['id'],
               role: 'assistant',
-              metadata: data['metadata'] ?? {},
+              metadata: data['metadata'],
               timestamp: DateTime.now(),
               isLast: data['is_last'] ?? false,
               inConversation: data['in_conversation'] ?? false,

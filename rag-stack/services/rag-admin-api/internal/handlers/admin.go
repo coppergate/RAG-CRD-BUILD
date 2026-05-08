@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"log"
@@ -52,8 +53,46 @@ func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.Hand
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[PROXY] %s %s -> %s", r.Method, r.URL.Path, targetURL)
-		proxy.ServeHTTP(w, r)
+		
+		// For WebSockets or other protocols that need hijacking, do not wrap the response writer
+		// as httputil.ReverseProxy needs the original hijacker.
+		if r.Header.Get("Upgrade") == "websocket" {
+			proxy.ServeHTTP(w, r)
+			return
+		}
+
+		// Capture response status and body for non-hijacked requests
+		buf := &bytes.Buffer{}
+		srw := &statusResponseWriter{ResponseWriter: w, status: http.StatusOK, body: buf}
+		proxy.ServeHTTP(srw, r)
+		
+		log.Printf("[PROXY] %s %s completed with status %d", r.Method, r.URL.Path, srw.status)
+		if srw.status == http.StatusOK && buf.Len() > 0 {
+			displayBody := buf.String()
+			if len(displayBody) > 200 {
+				displayBody = displayBody[:200] + "..."
+			}
+			log.Printf("[PROXY] Response body: %s", displayBody)
+		}
 	}
+}
+
+type statusResponseWriter struct {
+	http.ResponseWriter
+	status int
+	body   *bytes.Buffer
+}
+
+func (w *statusResponseWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusResponseWriter) Write(b []byte) (int, error) {
+	if w.body != nil {
+		w.body.Write(b)
+	}
+	return w.ResponseWriter.Write(b)
 }
 
 func (h *AdminHandler) HandleHealthAggregation(w http.ResponseWriter, r *http.Request) {

@@ -976,7 +976,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
           _messages[lastIndex] = _messages[lastIndex].copyWith(
             content: _messages[lastIndex].content + chunk.content,
-            metadata: chunk.metadata,
+            metadata: (chunk.metadata != null && chunk.metadata!.isNotEmpty)
+                ? chunk.metadata
+                : _messages[lastIndex].metadata,
             planningResponse: updatedPlanning,
           );
           if (chunk.isLast) {

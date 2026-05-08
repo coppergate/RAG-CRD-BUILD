@@ -627,15 +627,21 @@ PATH=$PATH:/home/wjones/go/bin protoc \
   rag-stack/contracts/rag_stack.proto
 ```
 
-### 9.3 Response Aggregation
+### 9.3 Tiered Streaming Response
+- **Metadata (Seq 0)**: Contains the grounding context (`contexts`) and recursion info.
+- **Content (Seq 1..N)**: Contains LLM tokens accumulated based on `STREAM_ACCUMULATION_COUNT` (default: 10).
+- **Final (Seq N+1)**: Empty chunk with `is_last: true` to signal completion.
+- **Planning (Seq -1)**: Intermediate planning responses.
+
+### 9.4 Response Aggregation
 To prevent duplicate "chunks" in chat history, the `db-adapter` consolidates multiple Pulsar messages for the same prompt into a single database record.
 - **Aggregation**: `HandleResponse` uses a transaction to find an existing record by `prompt_id`.
 - **Deltas**: Content chunks are appended to the existing record.
-- **Final Results**: Aggregated messages from `prompt-aggregator` (with `is_last=true`) overwrite the content to ensure accuracy.
-- **Planning Data**: Sub-queries from `rag-worker` are accumulated in the `planning_response` field.
-- **History**: `GetMessages` groups any legacy duplicate records by `prompt_id` before returning them to the UI.
+- **Final Results**: Messages with `Metadata` or `IsLast=true` are used to finalize state.
+- **Retrieval Logs**: Persisted immediately upon receipt of a chunk containing `contexts` (typically Seq 0).
+- **Planning Data**: Responses with `SequenceNumber: -1` are accumulated in the `planning_response` field.
 
-### 9.3 Session Context & Memory Controller (Iteration 7)
+### 9.5 Session Context & Memory Controller (Iteration 7)
 Session context is managed by the `memory-controller` service and consumed by the `rag-worker`.
 - **Retrieval**: `rag-worker` calls `POST /retrieve` on `memory-controller` during the `search` stage.
 - **Assembly**: The `memory-controller` fetches the last 10 pairs of prompts and responses for a session and packages them into a `MemoryPack`.
