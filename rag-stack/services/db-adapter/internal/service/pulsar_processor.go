@@ -158,9 +158,10 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 	defer span.End()
 
 	var payload struct {
-		Id        string `json:"id"`
-		SessionId int64  `json:"session_id"`
-		Content   string `json:"content"`
+		Id        string  `json:"id"`
+		SessionId int64   `json:"session_id"`
+		Content   string  `json:"content"`
+		Tags      []int64 `json:"tags"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("unmarshal prompt payload: %w", err)
@@ -176,6 +177,16 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 
 	if err := p.ensureSessionExists(msgCtx, sessID); err != nil {
 		return dlq.TransientFailure, fmt.Errorf("ensure session exists: %w", err)
+	}
+
+	// Update session tags if provided in prompt
+	if len(payload.Tags) > 0 {
+		err := p.client.Session.UpdateOneID(sessID).
+			AddTagIDs(payload.Tags...).
+			Exec(msgCtx)
+		if err != nil {
+			log.Printf("Warning: failed to associate tags with session %d from prompt: %v", sessID, err)
+		}
 	}
 
 	// Try to find if a ghost prompt already exists for this ID

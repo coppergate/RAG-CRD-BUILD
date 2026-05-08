@@ -70,8 +70,9 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 	}
 
 	if sessionID > 0 {
-		if includeGlobal {
+		if includeGlobal || len(tags) > 0 {
 			// Allow points that match the session ID OR have no session ID (global context)
+			// We allow global context automatically if specific tags are requested.
 			mustFilters = append(mustFilters, map[string]interface{}{
 				"should": []map[string]interface{}{
 					{
