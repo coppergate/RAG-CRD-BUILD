@@ -223,14 +223,16 @@ Every new session for the **Junie** agent MUST establish the operational context
         - Create a merge request (if applicable) and ensure it's ready for merge.
     - Create a new session branch named `work-YYYY-MM-DD` (e.g., `work-2026-03-02`).
     - During the session, commit with timestamp messages (e.g., `2026-03-02 08:30`).
+    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies"`.
 2. **File Size Limit**: Do not commit any files larger than 1MB without asking first.
    - **Clean History (Rebase & Squash)**:
    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
    - Rebase with autosquash: Run `git rebase -i --autosquash main` before pushing.
    - Push safely: Use `git push --force-with-lease origin <branch>`.
-   - **Daily Push**: Every day, make a new push to GIT with the current committed code.
+   - **Daily Push & Merge**: Every day, make a new push to GIT with the current committed code, create a pull request/merge request, and then merge it into the main branch.
+   - **Merge Policy**: When merging, create an appropriate summary of the work contained in the commits.
    - **Pull Requests**: Create a pull request for each day's branch.
-3. **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project. 
+3. **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project.
     - Verify the current project version in `CURRENT_VERSION`.
     - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
     - `build.sh` performs automatic version incrementing when code changes are detected via hashing.
