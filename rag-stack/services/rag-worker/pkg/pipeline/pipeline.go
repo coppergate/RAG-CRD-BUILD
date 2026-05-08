@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -223,7 +224,18 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	}
 
 	tags := req.Tags
-	var allContexts []string
+	var allRawResults []interface{}
+
+	// 1. Tag-only search (to ensure all info under a tag is retrieved)
+	if len(tags) > 0 {
+		h.msg.SendStatus(ctx, req.Id, req.SessionId, "RETRIEVING_CONTEXT", "Retrieving all items for tags")
+		tagResults, err := h.searcher.Search(ctx, nil, tags, req.SessionId, req.IncludeGlobal)
+		if err == nil {
+			allRawResults = append(allRawResults, tagResults...)
+		}
+	}
+
+	// 2. Vector search for each sub-query
 	for _, sq := range subQueries {
 		vector, err := planner.GetEmbeddings(ctx, sq)
 		if err != nil {
@@ -232,17 +244,20 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		}
 		vs := len(vector)
 		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, session=%d, global=%v, query='%s'", req.Id, h.cfg.QdrantCollection, vs, tags, req.SessionId, req.IncludeGlobal, sq)
-		contexts, err := h.searcher.Search(ctx, vector, tags, req.SessionId, req.IncludeGlobal)
+		results, err := h.searcher.Search(ctx, vector, tags, req.SessionId, req.IncludeGlobal)
 		if err != nil {
 			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.Id, sq, vs, err)
 			continue
 		}
- 	log.Printf("[%s] Retrieved %d contexts for sub-query '%s'", req.Id, len(contexts), sq)
-		allContexts = append(allContexts, contexts...)
+		log.Printf("[%s] Retrieved %d items for sub-query '%s'", req.Id, len(results), sq)
+		allRawResults = append(allRawResults, results...)
 	}
 
+	// 3. Deduplicate and re-assemble files
+	allContexts := h.reassembleFiles(ctx, allRawResults)
+
 	// Fetch Session History from Memory Controller
-	historyPack, err := h.memoryClient.Retrieve(ctx, req.SessionId, req.Prompt)
+	historyPack, err := h.memoryClient.Retrieve(ctx, req.SessionId, req.Tags, req.Prompt)
 	if err != nil {
 		log.Printf("[%s] Memory retrieval failed: %v", req.Id, err)
 	}
@@ -277,6 +292,121 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	}
 
 	return dlq.Success, nil
+}
+
+func (h *Handler) reassembleFiles(ctx context.Context, rawResults []interface{}) []string {
+	seenIDs := make(map[string]bool)
+	type chunkInfo struct {
+		content string
+		index   int
+	}
+	files := make(map[string][]chunkInfo)
+	var nonFileContexts []string
+	pathsToFetch := make(map[string]bool)
+
+	for _, it := range rawResults {
+		m, ok := it.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Deduplicate by Qdrant ID if available
+		id, _ := m["_qdrant_id"].(string)
+		if id != "" {
+			if seenIDs[id] {
+				continue
+			}
+			seenIDs[id] = true
+		}
+
+		content, _ := m["content"].(string)
+		if content == "" {
+			content, _ = m["text"].(string)
+		}
+		if content == "" {
+			continue
+		}
+
+		path, _ := m["path"].(string)
+		if path != "" {
+			idxVal, _ := m["chunk"].(float64)
+			idx := int(idxVal)
+			files[path] = append(files[path], chunkInfo{content: content, index: idx})
+			pathsToFetch[path] = true
+		} else {
+			nonFileContexts = append(nonFileContexts, content)
+		}
+	}
+
+	// If we have paths, we should fetch ALL chunks for those paths to ensure "full files"
+	if len(pathsToFetch) > 0 {
+		pathList := make([]string, 0, len(pathsToFetch))
+		for p := range pathsToFetch {
+			pathList = append(pathList, p)
+		}
+
+		log.Printf("Reassembling %d files from paths: %v", len(pathList), pathList)
+		fullFileChunks, err := h.searcher.RetrieveByPaths(ctx, pathList)
+		if err == nil {
+			for _, it := range fullFileChunks {
+				m, ok := it.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				id, _ := m["_qdrant_id"].(string)
+				if id != "" && seenIDs[id] {
+					continue
+				}
+				if id != "" {
+					seenIDs[id] = true
+				}
+
+				path, _ := m["path"].(string)
+				content, _ := m["content"].(string)
+				if content == "" {
+					content, _ = m["text"].(string)
+				}
+				idxVal, _ := m["chunk"].(float64)
+				idx := int(idxVal)
+
+				if path != "" && content != "" {
+					files[path] = append(files[path], chunkInfo{content: content, index: idx})
+				}
+			}
+		} else {
+			log.Printf("Failed to fetch full file chunks: %v", err)
+		}
+	}
+
+	var allContexts []string
+	// Add reassembled files
+	pathKeys := make([]string, 0, len(files))
+	for p := range files {
+		pathKeys = append(pathKeys, p)
+	}
+	sort.Strings(pathKeys)
+
+	for _, p := range pathKeys {
+		chunks := files[p]
+		sort.Slice(chunks, func(i, j int) bool {
+			return chunks[i].index < chunks[j].index
+		})
+
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("--- File: %s ---\n", p))
+		for _, c := range chunks {
+			sb.WriteString(c.content)
+			if !strings.HasSuffix(c.content, "\n") {
+				sb.WriteString("\n")
+			}
+		}
+		allContexts = append(allContexts, sb.String())
+	}
+
+	// Add non-file contexts
+	allContexts = append(allContexts, nonFileContexts...)
+
+	return allContexts
 }
 
 func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {

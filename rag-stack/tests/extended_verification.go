@@ -54,7 +54,7 @@ func testExtendedVerification(sessionID int64, tagID int64, tagName string, file
 		fmt.Println("SUCCESS: Qdrant Stats verification passed.")
 	}
 
-	fmt.Println("--- Iteration 6b Extended Tests Completed ---\n")
+	fmt.Println("--- Iteration 6b Extended Tests Completed ---")
 }
 
 func verifyVirtualFS(sessionID int64, expectedFile string) error {
@@ -89,7 +89,7 @@ func verifyVirtualFS(sessionID int64, expectedFile string) error {
 	}
 
 	if !found {
-		return fmt.Errorf("expected file %s not found in virtual FS for session %s", expectedFile, sessionID)
+		return fmt.Errorf("expected file %s not found in virtual FS for session %d", expectedFile, sessionID)
 	}
 	return nil
 }
@@ -129,7 +129,7 @@ func verifySessionHealth(sessionID int64) error {
 		time.Sleep(3 * time.Second)
 	}
 
-	return fmt.Errorf("health report shows %d requests for session %s", health.TotalRequests, sessionID)
+	return fmt.Errorf("health report shows %d requests for session %d", health.TotalRequests, sessionID)
 }
 
 func verifyAuditLogs(sessionID int64) error {
@@ -170,7 +170,7 @@ func verifyAuditLogs(sessionID int64) error {
 		time.Sleep(3 * time.Second)
 	}
 
-	return fmt.Errorf("no RETRIEVAL logs found for session %s", sessionID)
+	return fmt.Errorf("no RETRIEVAL logs found for session %d", sessionID)
 }
 
 func verifyModelMetrics() error {

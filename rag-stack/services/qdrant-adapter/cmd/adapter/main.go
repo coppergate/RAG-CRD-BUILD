@@ -274,6 +274,12 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 			log.Printf("[%s] Qdrant search returned %d results", opID, len(res))
 		}
 		result, opErr = res, err
+	case "retrieve_paths":
+		res, err := a.qdrant.RetrieveByPaths(collection, vs, data.Paths)
+		if err == nil {
+			log.Printf("[%s] Qdrant retrieve_paths returned %d results", opID, len(res))
+		}
+		result, opErr = res, err
 	case "delete":
 		log.Printf("[%s] Deleting points from collection %s with tags %v, paths %v", opID, collection, data.Tags, data.Paths)
 		opErr = a.qdrant.DeleteByFilter(collection, vs, data.Tags, data.Paths)

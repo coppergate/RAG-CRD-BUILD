@@ -25,15 +25,19 @@ func NewMemoryClient(url string) *MemoryClient {
 	}
 }
 
-func (m *MemoryClient) Retrieve(ctx context.Context, sessionID int64, query string) (*contracts.MemoryPack, error) {
+func (m *MemoryClient) Retrieve(ctx context.Context, sessionID int64, tags []int64, query string) (*contracts.MemoryPack, error) {
 	req := contracts.MemoryRetrieveRequest{
 		RequestId:     fmt.Sprintf("ret-%d", time.Now().UnixNano()),
 		CorrelationId: fmt.Sprintf("corr-%d", time.Now().UnixNano()),
 		Scope: &contracts.MemoryScope{
 			SessionId: sessionID,
+			Tags:      tags,
 		},
 		Query: query,
-		Limit: 5,
+		Limit: 10,
+	}
+	if len(tags) > 0 {
+		req.Limit = 100
 	}
 
 	body, err := json.Marshal(&req)

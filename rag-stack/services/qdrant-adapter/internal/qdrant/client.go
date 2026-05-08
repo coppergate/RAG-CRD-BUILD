@@ -30,13 +30,17 @@ func NewClient(cfg *config.Config) *QdrantClient {
 	}
 }
 
-func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool) ([]string, error) {
+func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error) {
 	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
 }
 
-func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]string, error) {
+func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]interface{}, error) {
 	if len(vector) == 0 {
-		return nil, nil // Cannot search with empty vector
+		if len(tags) > 0 {
+			log.Printf("Empty vector but tags provided, falling back to filter-only retrieval")
+			return q.RetrieveByFilter(collection, vectorSize, tags, sessionID, includeGlobal, limit)
+		}
+		return nil, nil // Cannot search with empty vector and no tags
 	}
 
 	vs := vectorSize
@@ -137,6 +141,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 
 	var result struct {
 		Result []struct {
+			Id      interface{}            `json:"id"`
 			Payload map[string]interface{} `json:"payload"`
 		} `json:"result"`
 	}
@@ -145,17 +150,184 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		return nil, err
 	}
 
-	var contexts []string
+	var contexts []interface{}
 	for _, r := range result.Result {
-		// Support both "text" and "content" fields
-		if text, ok := r.Payload["content"].(string); ok {
-			contexts = append(contexts, text)
-		} else if text, ok := r.Payload["text"].(string); ok {
-			contexts = append(contexts, text)
+		payload := r.Payload
+		if payload == nil {
+			payload = make(map[string]interface{})
 		}
+		payload["_qdrant_id"] = fmt.Sprintf("%v", r.Id)
+		contexts = append(contexts, payload)
 	}
 
 	return contexts, nil
+}
+
+func (q *QdrantClient) RetrieveByFilter(collection string, vectorSize int, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
+	vs := vectorSize
+	if vs <= 0 {
+		vs = q.cfg.DefaultVectorSize
+	}
+
+	effectiveColl := collection
+	if vs > 0 {
+		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
+	}
+
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
+	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/scroll", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
+
+	if limit <= 0 {
+		limit = 100 // Default limit for scroll
+	}
+
+	query := map[string]interface{}{
+		"limit":        limit,
+		"with_payload": true,
+	}
+
+	var mustFilters []map[string]interface{}
+	if len(tags) > 0 {
+		mustFilters = append(mustFilters, map[string]interface{}{
+			"key": "tags",
+			"match": map[string]interface{}{
+				"any": tags,
+			},
+		})
+	}
+
+	// Session filtering (copied from Search)
+	if sessionID > 0 {
+		if includeGlobal || len(tags) > 0 {
+			mustFilters = append(mustFilters, map[string]interface{}{
+				"should": []map[string]interface{}{
+					{"key": "session_id", "match": map[string]interface{}{"value": sessionID}},
+					{"is_empty": map[string]interface{}{"key": "session_id"}},
+				},
+			})
+		} else {
+			mustFilters = append(mustFilters, map[string]interface{}{
+				"key": "session_id",
+				"match": map[string]interface{}{"value": sessionID},
+			})
+		}
+	}
+
+	if len(mustFilters) > 0 {
+		query["filter"] = map[string]interface{}{
+			"must": mustFilters,
+		}
+	}
+
+	body, _ := json.Marshal(query)
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := q.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("qdrant scroll returned %d", resp.StatusCode)
+	}
+
+	var scrollResp struct {
+		Result struct {
+			Points []struct {
+				Id      interface{}            `json:"id"`
+				Payload map[string]interface{} `json:"payload"`
+			} `json:"points"`
+		} `json:"result"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&scrollResp); err != nil {
+		return nil, err
+	}
+
+	var results []interface{}
+	for _, p := range scrollResp.Result.Points {
+		payload := p.Payload
+		if payload == nil {
+			payload = make(map[string]interface{})
+		}
+		payload["_qdrant_id"] = fmt.Sprintf("%v", p.Id)
+		results = append(results, payload)
+	}
+	return results, nil
+}
+
+func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths []string) ([]interface{}, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+
+	vs := vectorSize
+	if vs <= 0 {
+		vs = q.cfg.DefaultVectorSize
+	}
+
+	effectiveColl := collection
+	if vs > 0 {
+		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
+	}
+
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
+	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/scroll", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
+
+	query := map[string]interface{}{
+		"limit":        1000, // Large limit for full files
+		"with_payload": true,
+		"filter": map[string]interface{}{
+			"must": []map[string]interface{}{
+				{
+					"key": "path",
+					"match": map[string]interface{}{
+						"any": paths,
+					},
+				},
+			},
+		},
+	}
+
+	body, _ := json.Marshal(query)
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := q.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("qdrant scroll by paths returned %d", resp.StatusCode)
+	}
+
+	var scrollResp struct {
+		Result struct {
+			Points []struct {
+				Id      interface{}            `json:"id"`
+				Payload map[string]interface{} `json:"payload"`
+			} `json:"points"`
+		} `json:"result"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&scrollResp); err != nil {
+		return nil, err
+	}
+
+	var results []interface{}
+	for _, p := range scrollResp.Result.Points {
+		payload := p.Payload
+		if payload == nil {
+			payload = make(map[string]interface{})
+		}
+		payload["_qdrant_id"] = fmt.Sprintf("%v", p.Id)
+		results = append(results, payload)
+	}
+	return results, nil
 }
 
 func (q *QdrantClient) CreateCollection(collection string, vectorSize int) error {

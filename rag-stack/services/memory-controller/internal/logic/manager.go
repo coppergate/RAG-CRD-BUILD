@@ -15,6 +15,9 @@ import (
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
+
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 )
 
 type MemoryManager struct {
@@ -71,6 +74,18 @@ func (m *MemoryManager) WriteItems(ctx context.Context, req *contracts.MemoryWri
 		}
 
 		// Create links
+		if len(item.SourceRefs) == 0 && len(req.Scope.Tags) > 0 {
+			// Create a default link for tags if no source refs are provided
+			err = tx.MemoryLink.Create().
+				SetMemoryItemID(mi.ID).
+				SetTags(req.Scope.Tags).
+				Exec(ctx)
+			if err != nil {
+				tx.Rollback()
+				return fmt.Errorf("failed to create tag-only memory link: %w", err)
+			}
+		}
+
 		for _, ref := range item.SourceRefs {
 			err = tx.MemoryLink.Create().
 				SetMemoryItemID(mi.ID).
@@ -228,8 +243,26 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 	}
 
 	// 1. Fetch relevant MemoryItems
-	mItems, err := m.client.MemoryItem.Query().
-		Where(memoryitem.SessionID(sessionID)).
+	query := m.client.MemoryItem.Query().
+		Where(memoryitem.SessionID(sessionID))
+
+	// Filter by tags if provided
+	if len(req.Scope.Tags) > 0 {
+		query = query.Where(memoryitem.HasLinksWith(func(s *sql.Selector) {
+			var ps []*sql.Predicate
+			for _, tag := range req.Scope.Tags {
+				ps = append(ps, sqljson.ValueContains(memorylink.FieldTags, tag))
+			}
+			s.Where(sql.Or(ps...))
+		}))
+		// If tags are provided, we assume the user wants everything for that tag
+		// so we increase the limit significantly unless a limit was explicitly provided
+		if req.Limit <= 0 {
+			limit = 1000
+		}
+	}
+
+	mItems, err := query.
 		Order(ent.Desc(memoryitem.FieldCreatedAt)).
 		Limit(int(limit)).
 		All(ctx)

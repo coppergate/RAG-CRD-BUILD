@@ -219,12 +219,10 @@ Every new session for the **Junie** agent MUST establish the operational context
     - If the current branch is `main`, pull the latest changes from origin.
     - If on a work branch:
         - Commit all pending changes.
-        - Rename the branch to a descriptive name reflecting the changes (e.g., `fix-ui-tls`).
         - Push the branch to origin.
-        - Create a merge request and merge the branch into `main`.
-        - Switch to `main` and pull latest changes.
-    - Create a new session branch named `Work-YYYYMMDD` (e.g., `Work-20260429`).
-    - During the session, commit with short, meaningful messages.
+        - Create a merge request (if applicable) and ensure it's ready for merge.
+    - Create a new session branch named `work-YYYY-MM-DD` (e.g., `work-2026-03-02`).
+    - During the session, commit with timestamp messages (e.g., `2026-03-02 08:30`).
 2. **File Size Limit**: Do not commit any files larger than 1MB without asking first.
    - **Clean History (Rebase & Squash)**:
    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
@@ -598,6 +596,23 @@ The `memory-controller` service includes a comprehensive unit test suite and a s
     go test -v ./internal/...
     ```
 - **Coverage**: Includes session creation/deletion, memory item listing/writing, and full `Retrieve` pack assembly (combining chat history and memory items).
+
+### 7.7 Code Quality & Linting
+All Go services and tests should pass `go vet`.
+
+#### Running Lint on all Services
+A script is provided in the project root to vet all Go services in the project.
+```bash
+./vet-all.sh
+```
+
+#### Running Lint on Tests
+Go tests and utilities in `rag-stack/tests` are not covered by `vet-all.sh` and should be checked manually:
+```bash
+cd rag-stack/tests
+go vet ./...
+```
+*Note: Standalone test utilities like `verify_tiered` are located in subdirectories and are included in the `./...` glob when run from `rag-stack/tests`.*
 
 ## 8. RAG Explorer & Metrics (Iteration 6b)
 ### 8.1 Model Execution Metrics (3NF)
