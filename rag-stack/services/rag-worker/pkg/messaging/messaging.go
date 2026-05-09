@@ -36,6 +36,12 @@ func (c *Client) SessionTopic(id string) string {
 	return fmt.Sprintf("persistent://rag-pipeline/sessions/%s", id)
 }
 
+// SetSessionProducer manually sets a producer for a session topic.
+// Primarily used for testing.
+func (c *Client) SetSessionProducer(topic string, producer pulsar.Producer) {
+	c.sessionProducers.Store(topic, producer)
+}
+
 // NewClient creates a Pulsar client and all required producers.
 func NewClient(cfg *config.Config) (*Client, error) {
 	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})

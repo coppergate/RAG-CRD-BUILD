@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -22,8 +23,8 @@ type MockSearcher struct {
 	mock.Mock
 }
 
-func (m *MockSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error) {
-	args := m.Called(ctx, vector, tags, sessionID, includeGlobal)
+func (m *MockSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
+	args := m.Called(ctx, vector, tags, sessionID, includeGlobal, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -77,8 +78,8 @@ type MockPlanner struct {
 	mock.Mock
 }
 
-func (m *MockPlanner) Plan(ctx context.Context, prompt string) ([]string, interface{}, error) {
-	args := m.Called(ctx, prompt)
+func (m *MockPlanner) Plan(ctx context.Context, prompt string, contexts []interface{}) ([]string, interface{}, error) {
+	args := m.Called(ctx, prompt, contexts)
 	return args.Get(0).([]string), args.Get(1), args.Error(2)
 }
 
@@ -122,10 +123,13 @@ func (m *MockProducer) Close() {
 	m.Called()
 }
 
-func TestReassembleFiles(t *testing.T) {
+func TestChunkResults(t *testing.T) {
 	mockSearcher := new(MockSearcher)
 	h := &Handler{
 		searcher: mockSearcher,
+		cfg: &config.Config{
+			ChunkVectorLimit: 50,
+		},
 	}
 
 	rawResults := []interface{}{
@@ -174,26 +178,31 @@ func TestReassembleFiles(t *testing.T) {
 		},
 	}, nil)
 
-	contexts := h.reassembleFiles(context.Background(), rawResults)
+	chunks := h.chunkResults(context.Background(), rawResults)
 
-	assert.Len(t, contexts, 2)
+	// One chunk containing both the reassembled file and non-file content
+	assert.Len(t, chunks, 1)
+	chunk := chunks[0]
+	assert.Len(t, chunk, 2)
 	
 	// Sort to ensure stable order for comparison
-	sort.Strings(contexts)
+	sort.Strings(chunk)
 	
-	assert.Contains(t, contexts[0], "--- File: file1.txt ---")
-	assert.Contains(t, contexts[0], "chunk 0")
-	assert.Contains(t, contexts[0], "chunk 1")
-	assert.Contains(t, contexts[0], "chunk 2")
-	assert.Equal(t, "non-file content", contexts[1])
+	assert.Contains(t, chunk[0], "--- File: file1.txt ---")
+	assert.Contains(t, chunk[0], "chunk 0")
+	assert.Contains(t, chunk[0], "chunk 1")
+	assert.Contains(t, chunk[0], "chunk 2")
+	assert.Equal(t, "non-file content", chunk[1])
 	
 	mockSearcher.AssertExpectations(t)
 }
 
-func TestReassembleFiles_Empty(t *testing.T) {
-	h := &Handler{}
-	contexts := h.reassembleFiles(context.Background(), nil)
-	assert.Empty(t, contexts)
+func TestChunkResults_Empty(t *testing.T) {
+	h := &Handler{
+		cfg: &config.Config{},
+	}
+	chunks := h.chunkResults(context.Background(), nil)
+	assert.Empty(t, chunks)
 }
 
 // MockMessage is a simple mock for pulsar.Message
@@ -247,7 +256,7 @@ func TestHandleSearch(t *testing.T) {
 	})).Return(nil, nil)
 
 	// Mock search
-	mockSearcher.On("Search", mock.Anything, []float32{0.1, 0.2}, []int64(nil), int64(1), false).Return([]interface{}{
+	mockSearcher.On("Search", mock.Anything, []float32{0.1, 0.2}, []int64(nil), int64(1), false, mock.Anything).Return([]interface{}{
 		map[string]interface{}{"content": "found context"},
 	}, nil)
 
@@ -282,6 +291,7 @@ func TestHandleExec_Recursion(t *testing.T) {
 
 	cfg := &config.Config{
 		ExecutorModel: "default-executor",
+		PlannerModel:  "default-planner",
 	}
 
 	h := &Handler{
@@ -307,12 +317,13 @@ func TestHandleExec_Recursion(t *testing.T) {
 	}
 
 	mockRegistry.On("GetExecutor", "default-executor").Return(mockExecutor, nil)
+	mockRegistry.On("GetPlanner", "default-planner").Return(nil, fmt.Errorf("not needed"))
 	
 	// Mock non-streaming execution
 	mockExecutor.On("Execute", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return("I don't know enough", nil, nil)
 	
 	// Crucial part: mock insufficient context check
-	mockExecutor.On("IsInsufficientContext", "I don't know enough").Return(true)
+	mockExecutor.On("IsInsufficientContext", "I don't know enough\n").Return(true)
 	
 	// Mock status updates
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)

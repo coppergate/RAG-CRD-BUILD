@@ -56,7 +56,7 @@ func init() {
 }
 
 type QdrantSearcher interface {
-	Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error)
+	Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error)
 	RetrieveByPaths(ctx context.Context, paths []string) ([]interface{}, error)
 }
 
@@ -161,7 +161,7 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 		return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
 	}
 
-	subQueries, metrics, err := planner.Plan(ctx, req.Prompt)
+	subQueries, metrics, err := planner.Plan(ctx, req.Prompt, nil)
 	if err != nil {
 		log.Printf("[%s] Planning failed: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Planning failed: %v", err), false)
@@ -241,7 +241,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	// 1. Tag-only search (to ensure all info under a tag is retrieved)
 	if len(tags) > 0 {
 		h.msg.SendStatus(ctx, req.Id, req.SessionId, "RETRIEVING_CONTEXT", "Retrieving all items for tags")
-		tagResults, err := h.searcher.Search(ctx, nil, tags, req.SessionId, req.IncludeGlobal)
+		tagResults, err := h.searcher.Search(ctx, nil, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantRetrievalLimit)
 		if err == nil {
 			allRawResults = append(allRawResults, tagResults...)
 		}
@@ -256,7 +256,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		}
 		vs := len(vector)
 		log.Printf("[%s] Searching Qdrant: collection=%s, dims=%d, tags=%v, session=%d, global=%v, query='%s'", req.Id, h.cfg.QdrantCollection, vs, tags, req.SessionId, req.IncludeGlobal, sq)
-		results, err := h.searcher.Search(ctx, vector, tags, req.SessionId, req.IncludeGlobal)
+		results, err := h.searcher.Search(ctx, vector, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantSearchLimit)
 		if err != nil {
 			log.Printf("[%s] Qdrant search failed for sub-query '%s' (dims: %d): %v", req.Id, sq, vs, err)
 			continue
@@ -265,8 +265,8 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		allRawResults = append(allRawResults, results...)
 	}
 
-	// 3. Deduplicate and re-assemble files
-	allContexts := h.reassembleFiles(ctx, allRawResults)
+	// 3. Deduplicate and chunk context
+	allChunks := h.chunkResults(ctx, allRawResults)
 
 	// Fetch Session History from Memory Controller
 	historyPack, err := h.memoryClient.Retrieve(ctx, req.SessionId, req.Tags, req.Prompt)
@@ -281,7 +281,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	if metadataMap == nil {
 		metadataMap = make(map[string]interface{})
 	}
-	metadataMap["contexts"] = allContexts
+	metadataMap["chunks"] = allChunks
 	if historyPack != nil {
 		metadataMap["history"] = historyPack.Items
 	}
@@ -306,7 +306,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	return dlq.Success, nil
 }
 
-func (h *Handler) reassembleFiles(ctx context.Context, rawResults []interface{}) []string {
+func (h *Handler) chunkResults(ctx context.Context, rawResults []interface{}) [][]string {
 	seenIDs := make(map[string]bool)
 	type chunkInfo struct {
 		content string
@@ -390,48 +390,139 @@ func (h *Handler) reassembleFiles(ctx context.Context, rawResults []interface{})
 		}
 	}
 
-	var allContexts []string
-	// Add reassembled files
+	var chunks [][]string
+	currentChunk := []string{}
+	currentChunkSize := 0
+	limit := h.cfg.ChunkVectorLimit
+	if limit <= 0 {
+		limit = 50
+	}
+
+	// Sort paths
 	pathKeys := make([]string, 0, len(files))
 	for p := range files {
 		pathKeys = append(pathKeys, p)
 	}
 	sort.Strings(pathKeys)
 
+	// Process files
 	for _, p := range pathKeys {
-		chunks := files[p]
-		sort.Slice(chunks, func(i, j int) bool {
-			return chunks[i].index < chunks[j].index
+		fChunks := files[p]
+		sort.Slice(fChunks, func(i, j int) bool {
+			return fChunks[i].index < fChunks[j].index
 		})
 
-		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("--- File: %s ---\n", p))
-		for _, c := range chunks {
-			sb.WriteString(c.content)
-			if !strings.HasSuffix(c.content, "\n") {
-				sb.WriteString("\n")
+		numVectors := len(fChunks)
+		if numVectors > limit {
+			log.Printf("ERROR: File %s too large (%d vectors), splitting into chunks of %d", p, numVectors, limit)
+			// Close current chunk if not empty
+			if len(currentChunk) > 0 {
+				chunks = append(chunks, currentChunk)
+				currentChunk = []string{}
+				currentChunkSize = 0
+			}
+			// Split file
+			for i := 0; i < numVectors; i += limit {
+				end := i + limit
+				if end > numVectors {
+					end = numVectors
+				}
+				var sb strings.Builder
+				sb.WriteString(fmt.Sprintf("--- File: %s (Part %d) ---\n", p, (i/limit)+1))
+				for _, c := range fChunks[i:end] {
+					sb.WriteString(c.content)
+					if !strings.HasSuffix(c.content, "\n") {
+						sb.WriteString("\n")
+					}
+				}
+				if (end - i) == limit {
+					chunks = append(chunks, []string{sb.String()})
+				} else {
+					// Last bit of the file starts the next currentChunk
+					currentChunk = []string{sb.String()}
+					currentChunkSize = (end - i)
+				}
+			}
+		} else {
+			if currentChunkSize+numVectors > limit {
+				// New chunk
+				if len(currentChunk) > 0 {
+					chunks = append(chunks, currentChunk)
+				}
+				var sb strings.Builder
+				sb.WriteString(fmt.Sprintf("--- File: %s ---\n", p))
+				for _, c := range fChunks {
+					sb.WriteString(c.content)
+					if !strings.HasSuffix(c.content, "\n") {
+						sb.WriteString("\n")
+					}
+				}
+				currentChunk = []string{sb.String()}
+				currentChunkSize = numVectors
+			} else {
+				// Append to current
+				var sb strings.Builder
+				sb.WriteString(fmt.Sprintf("--- File: %s ---\n", p))
+				for _, c := range fChunks {
+					sb.WriteString(c.content)
+					if !strings.HasSuffix(c.content, "\n") {
+						sb.WriteString("\n")
+					}
+				}
+				currentChunk = append(currentChunk, sb.String())
+				currentChunkSize += numVectors
 			}
 		}
-		allContexts = append(allContexts, sb.String())
 	}
 
-	// Add non-file contexts
-	allContexts = append(allContexts, nonFileContexts...)
+	// Process non-file contexts (each counts as 1 vector)
+	for _, nfc := range nonFileContexts {
+		if currentChunkSize+1 > limit {
+			if len(currentChunk) > 0 {
+				chunks = append(chunks, currentChunk)
+			}
+			currentChunk = []string{nfc}
+			currentChunkSize = 1
+		} else {
+			currentChunk = append(currentChunk, nfc)
+			currentChunkSize += 1
+		}
+	}
 
-	return allContexts
+	if len(currentChunk) > 0 {
+		chunks = append(chunks, currentChunk)
+	}
+
+	return chunks
 }
 
 func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", "Generating response with specialized model")
 
-	var contexts []interface{}
 	var history []interface{}
 	metadata := contracts.FromStruct(req.Metadata)
-	if c, ok := metadata["contexts"].([]interface{}); ok {
-		contexts = c
-	}
 	if hist, ok := metadata["history"].([]interface{}); ok {
 		history = hist
+	}
+
+	// Get chunks from metadata
+	var chunks [][]interface{}
+	if c, ok := metadata["chunks"].([]interface{}); ok {
+		for _, chunk := range c {
+			if chunkList, ok := chunk.([]interface{}); ok {
+				chunks = append(chunks, chunkList)
+			}
+		}
+	}
+	// Fallback to "contexts" (old format)
+	if len(chunks) == 0 {
+		if c, ok := metadata["contexts"].([]interface{}); ok {
+			chunks = append(chunks, c)
+		}
+	}
+	// Ensure at least one execution loop if no chunks are found
+	if len(chunks) == 0 {
+		chunks = append(chunks, []interface{}{})
 	}
 
 	modelID := req.ExecutorModel
@@ -446,153 +537,162 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 		return dlq.PermanentFailure, fmt.Errorf("executor resolution: %w", err)
 	}
 
-	if req.Stream {
-		startTime := time.Now().UTC().Format(time.RFC3339)
-		stream, metaCh, errCh := executor.ExecuteStream(ctx, req.Prompt, contexts, history)
-
-		// Stage 1: Metadata Message (Sequence 0)
-		// This chunk contains grounding contexts and recursion info but no content yet.
-		currentMeta := contracts.FromStruct(req.Metadata)
-		if currentMeta == nil {
-			currentMeta = make(map[string]interface{})
-		}
-		currentMeta["contexts"] = contexts
-		log.Printf("[%s] Sending Seq 0 with %d contexts", req.Id, len(contexts))
-		h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", 0, false, modelID, false, currentMeta)
-
-		var fullResult string
-		var chunkBuffer string
-		var chunkCount int
-		var finalMetrics *contracts.ExecutionMetrics
-		seq := 1 // Content sequences start from 1
-		inConversation := false
-		for {
-			if stream == nil && metaCh == nil && errCh == nil {
-				goto endStream
-			}
-			select {
-			case chunk, ok := <-stream:
-				if !ok {
-					stream = nil
-					continue
-				}
-				fullResult += chunk
-				chunkBuffer += chunk
-				chunkCount++
-				inConversation = true
-
-				// Send accumulated chunks to the UI based on configuration
-				if chunkCount >= h.cfg.StreamAccumulationCount {
-					h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, seq, false, modelID, inConversation, nil)
-					seq++
-					chunkBuffer = ""
-					chunkCount = 0
-				}
-			case rawMeta, ok := <-metaCh:
-				if !ok {
-					metaCh = nil
-					continue
-				}
-				finalMetrics = h.mapMetrics(rawMeta, modelID)
-			case err, ok := <-errCh:
-				if !ok {
-					errCh = nil
-					continue
-				}
-				if err != nil {
-					log.Printf("[%s] Execution stream failed: %v", req.Id, err)
-					h.msg.SendError(ctx, req.Id, fmt.Sprintf("Execution stream failed: %v", err), inConversation)
-					h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
-					return dlq.TransientFailure, fmt.Errorf("execution stream: %w", err)
-				}
-			case <-ctx.Done():
-				h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
-				return dlq.TransientFailure, ctx.Err()
-			}
-		}
-
-	endStream:
-		// Grounding Guard / Recursion Check for streaming mode
-		if executor.IsInsufficientContext(fullResult) {
-			currentMeta := contracts.FromStruct(req.Metadata)
-			budget, _ := currentMeta["recursion_budget"].(float64)
-			if budget > 0 {
-				h.msg.SendStatus(ctx, req.Id, req.SessionId, "REFINING_PLAN", "Context insufficient, triggering recursion")
-				currentMeta["recursion_budget"] = budget - 1
-				req.Metadata = contracts.ToStruct(currentMeta)
-				marshaller := protojson.MarshalOptions{UseProtoNames: true}
-				payload, err := marshaller.Marshal(req)
-				if err != nil {
-					log.Printf("[%s] Failed to marshal recursion data: %v", req.Id, err)
-					h.msg.SendError(ctx, req.Id, "Internal serialization error during recursion", false)
-					return dlq.PermanentFailure, fmt.Errorf("marshal recursion data: %w", err)
-				}
-				if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
-					log.Printf("[%s] Failed to send recursion to plan topic: %v", req.Id, err)
-					h.msg.SendError(ctx, req.Id, "Internal messaging error during recursion", false)
-					return dlq.TransientFailure, fmt.Errorf("send recursion to plan: %w", err)
-				}
-				return dlq.Success, nil
-			}
-		}
-
-		// Send any remaining buffered text before final completion
-		if chunkBuffer != "" {
-			h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, seq, false, modelID, inConversation, nil)
-			seq++
-		}
-
-		// Record response size
-		responseSizeHist.Record(ctx, int64(len(fullResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
-
-		h.msg.SendStatus(ctx, req.Id, req.SessionId, "COMPLETED", "Response generated")
-		// Final chunk signals the end of the message (is_last = true)
-		h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", seq, true, modelID, inConversation, nil)
-		h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "COMPLETED", finalMetrics)
-		return dlq.Success, nil
+	plannerModelID := req.PlannerModel
+	if plannerModelID == "" {
+		plannerModelID = h.cfg.PlannerModel
+	}
+	planner, err := h.registry.GetPlanner(plannerModelID)
+	if err != nil {
+		log.Printf("[%s] Planner resolution error in exec: %v", req.Id, err)
 	}
 
 	startTime := time.Now().UTC().Format(time.RFC3339)
-	result, rawMetrics, err := executor.Execute(ctx, req.Prompt, contexts, history)
-	if err != nil {
-		log.Printf("[%s] Execution failed: %v", req.Id, err)
-		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Execution failed: %v", err), false)
-		h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
-		return dlq.TransientFailure, fmt.Errorf("execution: %w", err)
+	var fullAccumulatedResult string
+	var finalMetrics *contracts.ExecutionMetrics
+	seq := 1
+	inConversation := false
+
+	for i, chunk := range chunks {
+		h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", fmt.Sprintf("Processing context chunk %d/%d", i+1, len(chunks)))
+
+		// 1. Refine Plan with chunk context
+		if planner != nil {
+			refinedQueries, _, err := planner.Plan(ctx, req.Prompt, chunk)
+			if err == nil && len(refinedQueries) > 0 && h.cfg.StreamIntermediate {
+				planningText := fmt.Sprintf("Refined sub-queries for chunk %d:\n", i+1)
+				for _, sq := range refinedQueries {
+					planningText += fmt.Sprintf("- %s\n", sq)
+				}
+				h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, planningText)
+			}
+		}
+
+		// 2. Execute
+		if req.Stream {
+			if i == 0 {
+				// Send Seq 0 with metadata only on first chunk
+				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", 0, false, modelID, false, metadata)
+			}
+
+			stream, metaCh, errCh := executor.ExecuteStream(ctx, req.Prompt, chunk, history)
+			var chunkBuffer string
+			var chunkCount int
+
+			loop := true
+			for loop {
+				select {
+				case c, ok := <-stream:
+					if !ok {
+						stream = nil
+						if metaCh == nil && errCh == nil {
+							loop = false
+						}
+						continue
+					}
+					fullAccumulatedResult += c
+					chunkBuffer += c
+					chunkCount++
+					inConversation = true
+
+					if chunkCount >= h.cfg.StreamAccumulationCount {
+						h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, seq, false, modelID, inConversation, nil)
+						seq++
+						chunkBuffer = ""
+						chunkCount = 0
+					}
+				case rawMeta, ok := <-metaCh:
+					if !ok {
+						metaCh = nil
+						if stream == nil && errCh == nil {
+							loop = false
+						}
+						continue
+					}
+					m := h.mapMetrics(rawMeta, modelID)
+					if finalMetrics == nil {
+						finalMetrics = m
+					} else if m != nil {
+						finalMetrics.PromptTokens += m.PromptTokens
+						finalMetrics.CompletionTokens += m.CompletionTokens
+						finalMetrics.TotalDurationUsec += m.TotalDurationUsec
+					}
+				case err, ok := <-errCh:
+					if !ok {
+						errCh = nil
+						if stream == nil && metaCh == nil {
+							loop = false
+						}
+						continue
+					}
+					if err != nil {
+						log.Printf("[%s] Execution stream failed on chunk %d: %v", req.Id, i+1, err)
+						h.msg.SendError(ctx, req.Id, fmt.Sprintf("Chunk %d failed: %v", i+1, err), inConversation)
+					}
+				case <-ctx.Done():
+					h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
+					return dlq.TransientFailure, ctx.Err()
+				}
+			}
+			if chunkBuffer != "" {
+				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, seq, false, modelID, inConversation, nil)
+				seq++
+			}
+			fullAccumulatedResult += "\n"
+		} else {
+			res, rawMeta, err := executor.Execute(ctx, req.Prompt, chunk, history)
+			if err != nil {
+				log.Printf("[%s] Execution failed on chunk %d: %v", req.Id, i+1, err)
+				h.msg.SendError(ctx, req.Id, fmt.Sprintf("Chunk %d failed: %v", i+1, err), inConversation)
+				continue
+			}
+			fullAccumulatedResult += res + "\n"
+			inConversation = true
+
+			m := h.mapMetrics(rawMeta, modelID)
+			if finalMetrics == nil {
+				finalMetrics = m
+			} else if m != nil {
+				finalMetrics.PromptTokens += m.PromptTokens
+				finalMetrics.CompletionTokens += m.CompletionTokens
+				finalMetrics.TotalDurationUsec += m.TotalDurationUsec
+			}
+
+			if h.cfg.StreamIntermediate {
+				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, res+"\n", seq, false, modelID, inConversation, nil)
+				seq++
+			}
+		}
 	}
 
-	metrics := h.mapMetrics(rawMetrics, modelID)
+	// Record response size
+	if responseSizeHist != nil {
+		responseSizeHist.Record(ctx, int64(len(fullAccumulatedResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
+	}
 
-	// Grounding Guard / Recursion Check
-	if executor.IsInsufficientContext(result) {
-		currentMeta := contracts.FromStruct(req.Metadata)
-		budget, _ := currentMeta["recursion_budget"].(float64)
+	// Final grounding check
+	if executor.IsInsufficientContext(fullAccumulatedResult) {
+		budget, _ := metadata["recursion_budget"].(float64)
 		if budget > 0 {
 			h.msg.SendStatus(ctx, req.Id, req.SessionId, "REFINING_PLAN", "Context insufficient, triggering recursion")
-			currentMeta["recursion_budget"] = budget - 1
-			req.Metadata = contracts.ToStruct(currentMeta)
+			metadata["recursion_budget"] = budget - 1
+			req.Metadata = contracts.ToStruct(metadata)
 			marshaller := protojson.MarshalOptions{UseProtoNames: true}
 			payload, err := marshaller.Marshal(req)
-			if err != nil {
-				log.Printf("[%s] Failed to marshal recursion data: %v", req.Id, err)
-				h.msg.SendError(ctx, req.Id, "Internal serialization error during recursion", false)
-				return dlq.PermanentFailure, fmt.Errorf("marshal recursion data: %w", err)
+			if err == nil {
+				if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err == nil {
+					return dlq.Success, nil
+				}
 			}
-			if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
-				log.Printf("[%s] Failed to send recursion to plan topic: %v", req.Id, err)
-				h.msg.SendError(ctx, req.Id, "Internal messaging error during recursion", false)
-				return dlq.TransientFailure, fmt.Errorf("send recursion to plan: %w", err)
-			}
-			return dlq.Success, nil
 		}
 	}
 
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "COMPLETED", "Response generated")
-	h.msg.SendResult(ctx, req.Id, req.SessionId, result, modelID, contracts.FromStruct(req.Metadata))
-	h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "COMPLETED", metrics)
-
-	// Record response size
-	responseSizeHist.Record(ctx, int64(len(result)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
+	if req.Stream {
+		h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", seq, true, modelID, inConversation, nil)
+	} else {
+		h.msg.SendResult(ctx, req.Id, req.SessionId, fullAccumulatedResult, modelID, metadata)
+	}
+	h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "COMPLETED", finalMetrics)
 
 	return dlq.Success, nil
 }

@@ -67,7 +67,7 @@ func (s *QdrantSearcher) StartResultConsumer(consumer pulsar.Consumer) {
 }
 
 // Search sends a search request to Qdrant via Pulsar and waits for the result.
-func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error) {
+func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
 	if len(vector) == 0 && len(tags) == 0 {
 		log.Printf("DEBUG: Skipping Qdrant search for session %d - empty vector and no tags", sessionID)
 		return nil, nil
@@ -77,13 +77,18 @@ func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []in
 	s.pending.Store(id, resChan)
 	defer s.pending.Delete(id)
 
+	effectiveLimit := limit
+	if effectiveLimit <= 0 {
+		effectiveLimit = s.cfg.QdrantSearchLimit
+	}
+
 	op := contracts.QdrantOp{
 		Id:            id,
 		Action:        "search",
 		Collection:    s.cfg.QdrantCollection,
 		VectorSize:    int32(len(vector)),
 		Vector:        vector,
-		Limit:         int32(s.cfg.QdrantSearchLimit),
+		Limit:         int32(effectiveLimit),
 		Tags:          tags,
 		SessionId:     sessionID,
 		IncludeGlobal: includeGlobal,
@@ -125,6 +130,7 @@ func (s *QdrantSearcher) RetrieveByPaths(ctx context.Context, paths []string) ([
 		Action:     "retrieve_paths",
 		Collection: s.cfg.QdrantCollection,
 		Paths:      paths,
+		Limit:      int32(1000), // Default limit for full files
 	}
 	marshaller := protojson.MarshalOptions{
 		UseProtoNames: true,

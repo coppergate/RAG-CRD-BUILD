@@ -24,8 +24,21 @@ type GenericModel struct {
 }
 
 // Plan decomposes a user query into specific search queries using the configured template
-func (m *GenericModel) Plan(ctx context.Context, prompt string) ([]string, interface{}, error) {
-	planningPrompt := fmt.Sprintf(m.Config.PlanningPromptTemplate, prompt)
+func (m *GenericModel) Plan(ctx context.Context, prompt string, contexts []interface{}) ([]string, interface{}, error) {
+	var planningPrompt string
+	if len(contexts) > 0 {
+		var sb strings.Builder
+		sb.WriteString("Use the following context to refine your search queries for the user query:\n\nContext:\n")
+		for _, c := range contexts {
+			sb.WriteString(fmt.Sprintf("- %v\n", c))
+		}
+		sb.WriteString("\n\n")
+		sb.WriteString(fmt.Sprintf(m.Config.PlanningPromptTemplate, prompt))
+		planningPrompt = sb.String()
+	} else {
+		planningPrompt = fmt.Sprintf(m.Config.PlanningPromptTemplate, prompt)
+	}
+
 	planResult, metrics, err := m.ChatSingleTurn(ctx, planningPrompt)
 	if err != nil {
 		return nil, nil, fmt.Errorf("planning Chat failed: %w", err)
