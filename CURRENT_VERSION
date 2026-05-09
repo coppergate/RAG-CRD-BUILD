@@ -8,8 +8,8 @@
     "last_build": "2026-05-09T14:15:54Z"
   },
   "llm-gateway": {
-    "version": "2.12.0",
-    "last_build": "2026-05-09T01:53:27Z"
+    "version": "2.12.3",
+    "last_build": "2026-05-09T14:31:04Z"
   },
   "db-adapter": {
     "version": "2.12.0",

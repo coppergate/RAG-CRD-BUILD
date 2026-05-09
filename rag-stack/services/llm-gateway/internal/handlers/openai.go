@@ -194,6 +194,12 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		prompt = req.Messages[len(req.Messages)-1].Content
 	}
 
+	// Use tags from request if session tags are empty (e.g. if DB association failed)
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
+	}
+
 	internalReq := &contracts.InternalRequest{
 		Id:            correlationID,
 		SessionId:     sessionID,
@@ -201,7 +207,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		Prompt:        prompt,
 		PlannerModel:  req.Model,
 		ExecutorModel: req.Model,
-		Tags:          sessionTags,
+		Tags:          effectiveTags,
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
@@ -281,6 +287,12 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 	}
 
+	// Use tags from request if session tags are empty
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
+	}
+
 	internalReq := &contracts.InternalRequest{
 		Id:            correlationID,
 		SessionId:     sessionID,
@@ -288,7 +300,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
-		Tags:          sessionTags,
+		Tags:          effectiveTags,
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Stream:        true,
@@ -399,6 +411,12 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 
 	// Direct mapping to InternalRequest
+	// Use tags from request if session tags are empty
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
+	}
+
 	internalReq := &contracts.InternalRequest{
 		Id:            correlationID,
 		SessionId:     sessionID,
@@ -406,7 +424,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
-		Tags:          sessionTags,
+		Tags:          effectiveTags,
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
