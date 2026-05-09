@@ -20,8 +20,6 @@ import (
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/models"
 	"app-builds/rag-worker/pkg/messaging"
-	"app-builds/rag-worker/pkg/search"
-	"app-builds/rag-worker/pkg/memory"
 )
 
 var (
@@ -57,17 +55,31 @@ func init() {
 	}
 }
 
+type QdrantSearcher interface {
+	Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error)
+	RetrieveByPaths(ctx context.Context, paths []string) ([]interface{}, error)
+}
+
+type MemoryClient interface {
+	Retrieve(ctx context.Context, sessionID int64, tags []int64, query string) (*contracts.MemoryPack, error)
+}
+
+type ModelRegistry interface {
+	GetPlanner(modelID string) (models.Planner, error)
+	GetExecutor(modelID string) (models.Executor, error)
+}
+
 // Handler processes RAG pipeline stage messages.
 type Handler struct {
 	cfg          *config.Config
 	msg          *messaging.Client
-	registry     *models.ModelRegistry
-	searcher     *search.QdrantSearcher
-	memoryClient *memory.MemoryClient
+	registry     ModelRegistry
+	searcher     QdrantSearcher
+	memoryClient MemoryClient
 }
 
 // NewHandler creates a new pipeline stage handler.
-func NewHandler(cfg *config.Config, msg *messaging.Client, registry *models.ModelRegistry, searcher *search.QdrantSearcher, mem *memory.MemoryClient) *Handler {
+func NewHandler(cfg *config.Config, msg *messaging.Client, registry ModelRegistry, searcher QdrantSearcher, mem MemoryClient) *Handler {
 	return &Handler{
 		cfg:          cfg,
 		msg:          msg,
