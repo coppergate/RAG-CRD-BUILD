@@ -666,11 +666,12 @@ PATH=$PATH:/home/wjones/go/bin protoc \
   rag-stack/contracts/rag_stack.proto
 ```
 
-### 9.3 Tiered Streaming Response
+### 9.3 Tiered Streaming Response & Waiting Notations
 - **Metadata (Seq 0)**: Contains the grounding context (`contexts`) and recursion info.
 - **Content (Seq 1..N)**: Contains LLM tokens accumulated based on `STREAM_ACCUMULATION_COUNT` (default: 10).
 - **Final (Seq N+1)**: Empty chunk with `is_last: true` to signal completion.
 - **Planning (Seq -1)**: Intermediate planning responses.
+- **Waiting Notations**: During long-running tasks (planning, searching, multi-chunk execution), the `rag-worker` sends periodic updates with `SequenceNumber: -1` and the `planning_response` field populated with a waiting notation (e.g., `⌛ *Status message*...`). These are displayed in the UI's Planner box to provide visual feedback while the main response is "developing".
 
 ### 9.4 Response Aggregation
 To prevent duplicate "chunks" in chat history, the `db-adapter` consolidates multiple Pulsar messages for the same prompt into a single database record.

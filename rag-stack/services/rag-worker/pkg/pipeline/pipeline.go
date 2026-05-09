@@ -147,6 +147,9 @@ func (h *Handler) handleIngress(ctx context.Context, req *contracts.InternalRequ
 }
 
 func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
+	if req.Stream {
+		h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, "\n\u231B *Decomposing prompt into sub-tasks*...")
+	}
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "PLANNING_TASK", "Decomposing prompt into sub-tasks")
 
 	modelID := req.PlannerModel
@@ -221,6 +224,9 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		subQueries = []string{req.Prompt}
 	}
 
+	if req.Stream {
+		h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, "\n\u231B *Retrieving context from vector store*...")
+	}
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "RETRIEVING_CONTEXT", fmt.Sprintf("Executing %d sub-queries", len(subQueries)))
 
 	modelID := req.PlannerModel
@@ -267,6 +273,10 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 
 	// 3. Deduplicate and chunk context
 	allChunks := h.chunkResults(ctx, allRawResults)
+
+	if req.Stream {
+		h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, fmt.Sprintf(" (Found %d vectors in %d groups)", len(allRawResults), len(allChunks)))
+	}
 
 	// Fetch Session History from Memory Controller
 	historyPack, err := h.memoryClient.Retrieve(ctx, req.SessionId, req.Tags, req.Prompt)
@@ -554,6 +564,9 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 
 	for i, chunk := range chunks {
 		h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", fmt.Sprintf("Processing context chunk %d/%d", i+1, len(chunks)))
+		if req.Stream {
+			h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, fmt.Sprintf("\n\u231B *Generating response (Context chunk %d/%d)*...", i+1, len(chunks)))
+		}
 
 		// 1. Refine Plan with chunk context
 		if planner != nil {
