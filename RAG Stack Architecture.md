@@ -1,4 +1,4 @@
-Based on the current implementation of the RAG stack (Iteration 7), here is a refreshed architecture representation of components, build flow, and asynchronous interconnections.
+Based on the current implementation of the RAG stack (Iteration 8), here is a refreshed architecture representation of components, build flow, and asynchronous interconnections (v2.12.0).
 
 #### 1. Architecture & Message Interconnections - Mermaid Diagram -
 

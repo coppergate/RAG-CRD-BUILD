@@ -239,13 +239,12 @@ Every new session for the **Junie** agent MUST establish the operational context
 4. **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
-### 2.2 Current Focus (Iteration 7)
-As of version 2.11.x, the project is focusing on **Iteration 7: Local Prompt Memory + Recall (Miras/Titans-Inspired)**.
-1.  **Memory Data Model**: Implementing structured memory types (`short_term`, `long_term`, `persistent`) in TimescaleDB.
-2.  **Memory Controller**: A dedicated service for salience scoring, retention/decay logic, and MemoryPack assembly.
-3.  **Pulsar Integration**: Asynchronous memory operations via `rag.memory.*` topics.
-4.  **Retrieval Composition**: Context-aware recall in `rag-worker` using strict token budgeting and salience ranking.
-5.  **Memory Tracing**: Real-time observability of the memory recall process in the RAG Explorer UI.
+### 2.2 Current Focus (Iteration 8)
+As of version 2.12.0, the project is focusing on **Iteration 8: Advanced Reasoning, Verification, and Self-Correction**.
+1.  **Refiner/Critic Phase**: Implementing a multi-stage reasoning process in the `rag-worker`.
+2.  **Verification Contracts**: Extending `InternalRequest` to include `verification_mode` and `critic_model`.
+3.  **Self-Correction**: Enabling autonomous re-plan/re-search loops for inconsistent outputs.
+4.  **Audit Trails**: Capturing verification results in TimescaleDB.
 
 ### 2.3 Change Logs
 - **Location**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json`
@@ -527,7 +526,7 @@ flutter run -d chrome # Web browser
 Before executing any integration or E2E tests, you MUST verify that the cluster state is stable at the pod level. Simply checking that a Deployment is "Ready" or has "Available" replicas is insufficient, as it may be in the middle of a rolling update or have stale replicas from a previous version.
 
 **Verification Steps**:
-1.  **Version Check**: Ensure all pods in the `rag-system` namespace are using the target image version (e.g., `2.10.1`).
+1.  **Version Check**: Ensure all pods in the `rag-system` namespace are using the target image version (e.g., `2.12.0`).
 2.  **Pod Health**: Verify that NO pods are in `Pending`, `ImagePullBackOff`, `CrashLoopBackOff`, or `Error` states.
 3.  **Replica Set Cleanliness**: Ensure there are no stale pods from previous ReplicaSets hanging around.
 4.  **Command**:

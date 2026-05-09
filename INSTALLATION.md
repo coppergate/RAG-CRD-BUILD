@@ -47,7 +47,7 @@ The master script orchestrates the following major steps:
 3. **NVIDIA stack**: Configures GPU support for inference nodes.
 4. **Local Registry**: Sets up the internal container registry.
 5. **Build Pipeline**: Configures the Kaniko + S3 cluster-native build system.
-6. **RAG Images**: Builds all Go and Python services (v2.10.x) and pushes them to the registry.
+6. **RAG Images**: Builds all Go and Python services (v2.12.0) and pushes them to the registry.
 7. **RAG Stack**: Deploys all services (LLM Gateway, Worker, Adapters, Memory Controller, etc.) to the `rag-system` namespace.
 8. **Post-Deployment**: Applies TimescaleDB schema migrations for the memory system and initializes Pulsar topics.
 

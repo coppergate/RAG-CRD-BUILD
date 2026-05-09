@@ -1,4 +1,4 @@
-## Iteration 8: Advanced Reasoning, Verification, and Self-Correction
+## Iteration 8: Advanced Reasoning, Verification, and Self-Correction - CURRENT
 
 ### Objective
 Enhance the reliability and accuracy of the RAG stack by introducing a multi-stage reasoning process that includes response verification, hallucination detection, and autonomous self-correction.

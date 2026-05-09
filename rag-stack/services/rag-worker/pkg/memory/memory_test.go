@@ -31,7 +31,7 @@ func TestRetrieve_Success(t *testing.T) {
 					{Content: "memory 2"},
 				},
 			}
-			body, _ := json.Marshal(resp)
+			body, _ := json.Marshal(&resp)
 			return &http.Response{
 				StatusCode: 200,
 				Body:       io.NopCloser(bytes.NewBuffer(body)),

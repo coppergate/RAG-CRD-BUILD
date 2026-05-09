@@ -1,6 +1,6 @@
 # RAG Pipeline Usage Guide
 
-This document provides a step-by-step guide for using the RAG (Retrieval-Augmented Generation) system.
+This document provides a step-by-step guide for using the RAG (Retrieval-Augmented Generation) system (v2.12.0).
 
 ## 1. Environment Preparation
 All system-wide operations, builds, and cluster management are performed on the **hierophant** host.
