@@ -641,14 +641,21 @@ The Chat Panel in RAG Explorer supports associating multiple existing tags with 
 
 ## 9. Cluster Build System
 
-### 9.1 Shared Build State (CURRENT_VERSION)
-The `CURRENT_VERSION` file tracks service versions across all environments.
-- **Location**: Project root (`/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`).
-- **Permissions**: Should be `664` or `666` to allow both `wjones` and `junie` to update it.
-- **DANGER**: DO NOT use `mv` to update this file. Using `mv` replaces the file and resets permissions to the user's default umask (usually `644`), which breaks the build pipeline for other users. ALWAYS use redirection (e.g., `cat tmp > CURRENT_VERSION` or `jq ... > tmp && cat tmp > CURRENT_VERSION`) to preserve existing permissions.
-- **Workaround**: If `Permission denied` occurs on `hierophant`, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
+### 9.1 Shared Build State (CURRENT_VERSION & Locks)
+The `CURRENT_VERSION` file and build lock files track state across multiple users and environments.
+- **Location**:
+    - Version: `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`
+    - Locks: `/tmp/rag-stack-build.*`
+    - Journals: `/tmp/.build_journal_junie/`
+- **Permissions (Pinning)**: To avoid recurrent permission issues when files are recreated, we use a combination of SELinux `fcontext` and Default ACLs on **hierophant**.
+- **Setup**: Run the following script as **root** on hierophant to 'pin' these permissions:
+    ```bash
+    sudo /mnt/hegemon-share/share/code/complete-build/scripts/setup-selinux-permissions.sh
+    ```
+- **DANGER**: DO NOT use `mv` to update `CURRENT_VERSION`. ALWAYS use redirection to preserve the 'pinned' permissions and contexts.
+- **Workaround**: If `Permission denied` occurs and the setup script cannot be run, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
 - **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.
-- **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock to avoid collisions. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666 for multi-user support.
+- **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666, but should be managed by the pinning script for maximum reliability.
 ### 9.2 Protobuf Generation
 To regenerate Go bindings for the `rag_stack.proto` contract:
 ```bash
