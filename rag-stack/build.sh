@@ -371,7 +371,7 @@ main() {
 				needs_build=true
 			elif ! is_unchanged "$svc" "$current_hash"; then
 				needs_build=true
-			elif [[ "$last_build" == "null" || -z "$last_build" ]]; then
+			elif [[ "$last_build" == "null" || -z "$last_build" || "$last_build" == *"(triggered)"* ]]; then
 				needs_build=true
 			fi
 
