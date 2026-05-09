@@ -31,6 +31,9 @@ func NewClient(cfg *config.Config) *QdrantClient {
 }
 
 func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error) {
+	if limit <= 0 {
+		limit = 20 // Default limit
+	}
 	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
 }
 
@@ -258,7 +261,7 @@ func (q *QdrantClient) RetrieveByFilter(collection string, vectorSize int, tags 
 	return results, nil
 }
 
-func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths []string) ([]interface{}, error) {
+func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths []string, limit int) ([]interface{}, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
@@ -276,8 +279,12 @@ func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/scroll", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
 
+	if limit <= 0 {
+		limit = 1000 // Large default for full files
+	}
+
 	query := map[string]interface{}{
-		"limit":        1000, // Large limit for full files
+		"limit":        limit,
 		"with_payload": true,
 		"filter": map[string]interface{}{
 			"must": []map[string]interface{}{

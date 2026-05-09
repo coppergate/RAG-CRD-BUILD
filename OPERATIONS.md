@@ -686,3 +686,40 @@ Session context is managed by the `memory-controller` service and consumed by th
 - **Assembly**: The `memory-controller` fetches the last 10 pairs of prompts and responses for a session and packages them into a `MemoryPack`.
 - **LLM Context**: `rag-worker` converts the `MemoryPack` into a list of messages (role/content) which are prepended to the final LLM prompt.
 - **Configuration**: `MEMORY_CONTROLLER_URL` environment variable must be set in `rag-worker`.
+
+## 8. RAG Pipeline Testing & Validation
+
+### 8.1 Context Paging and Chunking Verification
+The RAG pipeline supports exhaustive context retrieval (up to 10,000 vectors) and partitioning into 50-vector chunks for LLM processing. This ensures that large tag-based collections can be processed within the model's context window.
+
+#### Automated Test Suite
+- **Location**: `rag-stack/services/rag-worker/pkg/pipeline/chunking_test.go`
+- **Execution**:
+  ```bash
+  cd rag-stack/services/rag-worker
+  go test -v ./pkg/pipeline/...
+  ```
+
+#### Test Scenarios Covered:
+1.  **Exhaustive Retrieval (`TestHandleSearch_LargeVectorStore`)**: 
+    - Simulates a tag-based search returning >100 vectors across multiple files.
+    - Verifies that files larger than the `ChunkVectorLimit` (50) are correctly split.
+    - Verifies that small files are grouped together to fill the 50-vector capacity.
+    - Confirms that the resulting `InternalRequest` contains the expected metadata structure for the execution stage.
+2.  **Sequential Chunk Execution (`TestHandleExec_MultiChunk`)**:
+    - Verifies that `handleExec` iterates through each context chunk sequentially.
+    - Confirms that the `Planner.Plan` method is called for each chunk to "refine" the response based on that specific context.
+    - Verifies that intermediate results are accumulated and correctly formatted with newlines.
+    - Confirms that the final response is stored and completion metrics are emitted.
+3.  **Boundary Logic (`TestChunkResults`)**:
+    - Verifies that reassembled files are kept together in chunks when possible.
+    - Verifies that non-file context (e.g., from prompt search) is correctly integrated into the chunks.
+
+### 8.2 Testing with Mock Messaging
+When writing unit tests for the pipeline that involve session-specific topics (e.g., `SendResult`), use the `SetSessionProducer` helper to avoid dependency on a running Pulsar cluster:
+
+```go
+msgClient := &messaging.Client{}
+topic := msgClient.SessionTopic("test-id")
+msgClient.SetSessionProducer(topic, mockProducer)
+```

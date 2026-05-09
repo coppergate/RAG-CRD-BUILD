@@ -275,7 +275,7 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 		}
 		result, opErr = res, err
 	case "retrieve_paths":
-		res, err := a.qdrant.RetrieveByPaths(collection, vs, data.Paths)
+		res, err := a.qdrant.RetrieveByPaths(collection, vs, data.Paths, int(data.Limit))
 		if err == nil {
 			log.Printf("[%s] Qdrant retrieve_paths returned %d results", opID, len(res))
 		}
