@@ -76,7 +76,7 @@ func TestSearch_Success(t *testing.T) {
 		}
 	}()
 
-	res, err := s.Search(context.Background(), []float32{0.1}, nil, 1, false)
+	res, err := s.Search(context.Background(), []float32{0.1}, nil, 1, false, 0)
 	assert.NoError(t, err)
 	assert.Len(t, res, 1)
 }
@@ -92,7 +92,7 @@ func TestSearch_Timeout(t *testing.T) {
 	mockProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 
 	// Don't populate resChan, let it timeout
-	res, err := s.Search(context.Background(), []float32{0.1}, nil, 1, false)
+	res, err := s.Search(context.Background(), []float32{0.1}, nil, 1, false, 0)
 	
 	assert.Error(t, err)
 	assert.Nil(t, res)
@@ -101,7 +101,7 @@ func TestSearch_Timeout(t *testing.T) {
 
 func TestSearch_Empty(t *testing.T) {
 	s := &QdrantSearcher{}
-	res, err := s.Search(context.Background(), nil, nil, 1, false)
+	res, err := s.Search(context.Background(), nil, nil, 1, false, 0)
 	assert.NoError(t, err)
 	assert.Nil(t, res)
 }
