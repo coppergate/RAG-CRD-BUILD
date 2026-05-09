@@ -36,8 +36,8 @@
     "last_build": "2026-05-09T01:53:32Z"
   },
   "build-orchestrator": {
-    "version": "2.12.0",
-    "last_build": null
+    "version": "2.12.1",
+    "last_build": "2026-05-09T15:01:26Z"
   },
   "prompt-aggregator": {
     "version": "2.12.1",

@@ -3,6 +3,9 @@
 package ent
 
 import (
+	"app-builds/common/ent/buildjournal"
+	"app-builds/common/ent/buildlock"
+	"app-builds/common/ent/buildversion"
 	"app-builds/common/ent/codeembedding"
 	"app-builds/common/ent/codeingestion"
 	"app-builds/common/ent/inferencenode"
@@ -85,6 +88,9 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			buildjournal.Table:         buildjournal.ValidColumn,
+			buildlock.Table:            buildlock.ValidColumn,
+			buildversion.Table:         buildversion.ValidColumn,
 			codeembedding.Table:        codeembedding.ValidColumn,
 			codeingestion.Table:        codeingestion.ValidColumn,
 			inferencenode.Table:        inferencenode.ValidColumn,

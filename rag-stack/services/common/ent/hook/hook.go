@@ -8,6 +8,42 @@ import (
 	"fmt"
 )
 
+// The BuildJournalFunc type is an adapter to allow the use of ordinary
+// function as BuildJournal mutator.
+type BuildJournalFunc func(context.Context, *ent.BuildJournalMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BuildJournalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BuildJournalMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BuildJournalMutation", m)
+}
+
+// The BuildLockFunc type is an adapter to allow the use of ordinary
+// function as BuildLock mutator.
+type BuildLockFunc func(context.Context, *ent.BuildLockMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BuildLockFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BuildLockMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BuildLockMutation", m)
+}
+
+// The BuildVersionFunc type is an adapter to allow the use of ordinary
+// function as BuildVersion mutator.
+type BuildVersionFunc func(context.Context, *ent.BuildVersionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BuildVersionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BuildVersionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BuildVersionMutation", m)
+}
+
 // The CodeEmbeddingFunc type is an adapter to allow the use of ordinary
 // function as CodeEmbedding mutator.
 type CodeEmbeddingFunc func(context.Context, *ent.CodeEmbeddingMutation) (ent.Value, error)

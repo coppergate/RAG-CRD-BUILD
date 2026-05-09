@@ -6,6 +6,15 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// BuildJournal is the predicate function for buildjournal builders.
+type BuildJournal func(*sql.Selector)
+
+// BuildLock is the predicate function for buildlock builders.
+type BuildLock func(*sql.Selector)
+
+// BuildVersion is the predicate function for buildversion builders.
+type BuildVersion func(*sql.Selector)
+
 // CodeEmbedding is the predicate function for codeembedding builders.
 type CodeEmbedding func(*sql.Selector)
 

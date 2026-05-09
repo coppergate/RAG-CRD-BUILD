@@ -9,6 +9,48 @@ import (
 )
 
 var (
+	// BuildJournalsColumns holds the columns for the "build_journals" table.
+	BuildJournalsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "service_name", Type: field.TypeString, Unique: true},
+		{Name: "last_hash", Type: field.TypeString},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// BuildJournalsTable holds the schema information for the "build_journals" table.
+	BuildJournalsTable = &schema.Table{
+		Name:       "build_journals",
+		Columns:    BuildJournalsColumns,
+		PrimaryKey: []*schema.Column{BuildJournalsColumns[0]},
+	}
+	// BuildLocksColumns holds the columns for the "build_locks" table.
+	BuildLocksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "service_name", Type: field.TypeString, Unique: true},
+		{Name: "lock_owner", Type: field.TypeString},
+		{Name: "lock_pid", Type: field.TypeInt},
+		{Name: "lock_host", Type: field.TypeString},
+		{Name: "acquired_at", Type: field.TypeTime},
+		{Name: "heartbeat", Type: field.TypeTime},
+	}
+	// BuildLocksTable holds the schema information for the "build_locks" table.
+	BuildLocksTable = &schema.Table{
+		Name:       "build_locks",
+		Columns:    BuildLocksColumns,
+		PrimaryKey: []*schema.Column{BuildLocksColumns[0]},
+	}
+	// BuildVersionsColumns holds the columns for the "build_versions" table.
+	BuildVersionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "service_name", Type: field.TypeString, Unique: true},
+		{Name: "version", Type: field.TypeString},
+		{Name: "last_build", Type: field.TypeTime},
+	}
+	// BuildVersionsTable holds the schema information for the "build_versions" table.
+	BuildVersionsTable = &schema.Table{
+		Name:       "build_versions",
+		Columns:    BuildVersionsColumns,
+		PrimaryKey: []*schema.Column{BuildVersionsColumns[0]},
+	}
 	// CodeEmbeddingColumns holds the columns for the "code_embedding" table.
 	CodeEmbeddingColumns = []*schema.Column{
 		{Name: "embedding_id", Type: field.TypeInt64, Increment: true},
@@ -432,6 +474,9 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		BuildJournalsTable,
+		BuildLocksTable,
+		BuildVersionsTable,
 		CodeEmbeddingTable,
 		CodeIngestionTable,
 		InferenceNodesTable,

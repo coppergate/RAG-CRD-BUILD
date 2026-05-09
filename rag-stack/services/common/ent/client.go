@@ -11,6 +11,9 @@ import (
 
 	"app-builds/common/ent/migrate"
 
+	"app-builds/common/ent/buildjournal"
+	"app-builds/common/ent/buildlock"
+	"app-builds/common/ent/buildversion"
 	"app-builds/common/ent/codeembedding"
 	"app-builds/common/ent/codeingestion"
 	"app-builds/common/ent/inferencenode"
@@ -36,6 +39,12 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// BuildJournal is the client for interacting with the BuildJournal builders.
+	BuildJournal *BuildJournalClient
+	// BuildLock is the client for interacting with the BuildLock builders.
+	BuildLock *BuildLockClient
+	// BuildVersion is the client for interacting with the BuildVersion builders.
+	BuildVersion *BuildVersionClient
 	// CodeEmbedding is the client for interacting with the CodeEmbedding builders.
 	CodeEmbedding *CodeEmbeddingClient
 	// CodeIngestion is the client for interacting with the CodeIngestion builders.
@@ -73,6 +82,9 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.BuildJournal = NewBuildJournalClient(c.config)
+	c.BuildLock = NewBuildLockClient(c.config)
+	c.BuildVersion = NewBuildVersionClient(c.config)
 	c.CodeEmbedding = NewCodeEmbeddingClient(c.config)
 	c.CodeIngestion = NewCodeIngestionClient(c.config)
 	c.InferenceNode = NewInferenceNodeClient(c.config)
@@ -178,6 +190,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:                  ctx,
 		config:               cfg,
+		BuildJournal:         NewBuildJournalClient(cfg),
+		BuildLock:            NewBuildLockClient(cfg),
+		BuildVersion:         NewBuildVersionClient(cfg),
 		CodeEmbedding:        NewCodeEmbeddingClient(cfg),
 		CodeIngestion:        NewCodeIngestionClient(cfg),
 		InferenceNode:        NewInferenceNodeClient(cfg),
@@ -210,6 +225,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:                  ctx,
 		config:               cfg,
+		BuildJournal:         NewBuildJournalClient(cfg),
+		BuildLock:            NewBuildLockClient(cfg),
+		BuildVersion:         NewBuildVersionClient(cfg),
 		CodeEmbedding:        NewCodeEmbeddingClient(cfg),
 		CodeIngestion:        NewCodeIngestionClient(cfg),
 		InferenceNode:        NewInferenceNodeClient(cfg),
@@ -229,7 +247,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		CodeEmbedding.
+//		BuildJournal.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -252,9 +270,9 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.CodeEmbedding, c.CodeIngestion, c.InferenceNode, c.MemoryEvent, c.MemoryItem,
-		c.MemoryLink, c.ModelDefinition, c.ModelExecutionMetric, c.Prompt, c.Response,
-		c.RetrievalLog, c.Session, c.Tag,
+		c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding, c.CodeIngestion,
+		c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.ModelDefinition,
+		c.ModelExecutionMetric, c.Prompt, c.Response, c.RetrievalLog, c.Session, c.Tag,
 	} {
 		n.Use(hooks...)
 	}
@@ -264,9 +282,9 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.CodeEmbedding, c.CodeIngestion, c.InferenceNode, c.MemoryEvent, c.MemoryItem,
-		c.MemoryLink, c.ModelDefinition, c.ModelExecutionMetric, c.Prompt, c.Response,
-		c.RetrievalLog, c.Session, c.Tag,
+		c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding, c.CodeIngestion,
+		c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.ModelDefinition,
+		c.ModelExecutionMetric, c.Prompt, c.Response, c.RetrievalLog, c.Session, c.Tag,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -275,6 +293,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *BuildJournalMutation:
+		return c.BuildJournal.mutate(ctx, m)
+	case *BuildLockMutation:
+		return c.BuildLock.mutate(ctx, m)
+	case *BuildVersionMutation:
+		return c.BuildVersion.mutate(ctx, m)
 	case *CodeEmbeddingMutation:
 		return c.CodeEmbedding.mutate(ctx, m)
 	case *CodeIngestionMutation:
@@ -303,6 +327,405 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Tag.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// BuildJournalClient is a client for the BuildJournal schema.
+type BuildJournalClient struct {
+	config
+}
+
+// NewBuildJournalClient returns a client for the BuildJournal from the given config.
+func NewBuildJournalClient(c config) *BuildJournalClient {
+	return &BuildJournalClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `buildjournal.Hooks(f(g(h())))`.
+func (c *BuildJournalClient) Use(hooks ...Hook) {
+	c.hooks.BuildJournal = append(c.hooks.BuildJournal, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `buildjournal.Intercept(f(g(h())))`.
+func (c *BuildJournalClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BuildJournal = append(c.inters.BuildJournal, interceptors...)
+}
+
+// Create returns a builder for creating a BuildJournal entity.
+func (c *BuildJournalClient) Create() *BuildJournalCreate {
+	mutation := newBuildJournalMutation(c.config, OpCreate)
+	return &BuildJournalCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BuildJournal entities.
+func (c *BuildJournalClient) CreateBulk(builders ...*BuildJournalCreate) *BuildJournalCreateBulk {
+	return &BuildJournalCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BuildJournalClient) MapCreateBulk(slice any, setFunc func(*BuildJournalCreate, int)) *BuildJournalCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BuildJournalCreateBulk{err: fmt.Errorf("calling to BuildJournalClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BuildJournalCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BuildJournalCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BuildJournal.
+func (c *BuildJournalClient) Update() *BuildJournalUpdate {
+	mutation := newBuildJournalMutation(c.config, OpUpdate)
+	return &BuildJournalUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BuildJournalClient) UpdateOne(_m *BuildJournal) *BuildJournalUpdateOne {
+	mutation := newBuildJournalMutation(c.config, OpUpdateOne, withBuildJournal(_m))
+	return &BuildJournalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BuildJournalClient) UpdateOneID(id int) *BuildJournalUpdateOne {
+	mutation := newBuildJournalMutation(c.config, OpUpdateOne, withBuildJournalID(id))
+	return &BuildJournalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BuildJournal.
+func (c *BuildJournalClient) Delete() *BuildJournalDelete {
+	mutation := newBuildJournalMutation(c.config, OpDelete)
+	return &BuildJournalDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BuildJournalClient) DeleteOne(_m *BuildJournal) *BuildJournalDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BuildJournalClient) DeleteOneID(id int) *BuildJournalDeleteOne {
+	builder := c.Delete().Where(buildjournal.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BuildJournalDeleteOne{builder}
+}
+
+// Query returns a query builder for BuildJournal.
+func (c *BuildJournalClient) Query() *BuildJournalQuery {
+	return &BuildJournalQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBuildJournal},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BuildJournal entity by its id.
+func (c *BuildJournalClient) Get(ctx context.Context, id int) (*BuildJournal, error) {
+	return c.Query().Where(buildjournal.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BuildJournalClient) GetX(ctx context.Context, id int) *BuildJournal {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BuildJournalClient) Hooks() []Hook {
+	return c.hooks.BuildJournal
+}
+
+// Interceptors returns the client interceptors.
+func (c *BuildJournalClient) Interceptors() []Interceptor {
+	return c.inters.BuildJournal
+}
+
+func (c *BuildJournalClient) mutate(ctx context.Context, m *BuildJournalMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BuildJournalCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BuildJournalUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BuildJournalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BuildJournalDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BuildJournal mutation op: %q", m.Op())
+	}
+}
+
+// BuildLockClient is a client for the BuildLock schema.
+type BuildLockClient struct {
+	config
+}
+
+// NewBuildLockClient returns a client for the BuildLock from the given config.
+func NewBuildLockClient(c config) *BuildLockClient {
+	return &BuildLockClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `buildlock.Hooks(f(g(h())))`.
+func (c *BuildLockClient) Use(hooks ...Hook) {
+	c.hooks.BuildLock = append(c.hooks.BuildLock, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `buildlock.Intercept(f(g(h())))`.
+func (c *BuildLockClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BuildLock = append(c.inters.BuildLock, interceptors...)
+}
+
+// Create returns a builder for creating a BuildLock entity.
+func (c *BuildLockClient) Create() *BuildLockCreate {
+	mutation := newBuildLockMutation(c.config, OpCreate)
+	return &BuildLockCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BuildLock entities.
+func (c *BuildLockClient) CreateBulk(builders ...*BuildLockCreate) *BuildLockCreateBulk {
+	return &BuildLockCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BuildLockClient) MapCreateBulk(slice any, setFunc func(*BuildLockCreate, int)) *BuildLockCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BuildLockCreateBulk{err: fmt.Errorf("calling to BuildLockClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BuildLockCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BuildLockCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BuildLock.
+func (c *BuildLockClient) Update() *BuildLockUpdate {
+	mutation := newBuildLockMutation(c.config, OpUpdate)
+	return &BuildLockUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BuildLockClient) UpdateOne(_m *BuildLock) *BuildLockUpdateOne {
+	mutation := newBuildLockMutation(c.config, OpUpdateOne, withBuildLock(_m))
+	return &BuildLockUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BuildLockClient) UpdateOneID(id int) *BuildLockUpdateOne {
+	mutation := newBuildLockMutation(c.config, OpUpdateOne, withBuildLockID(id))
+	return &BuildLockUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BuildLock.
+func (c *BuildLockClient) Delete() *BuildLockDelete {
+	mutation := newBuildLockMutation(c.config, OpDelete)
+	return &BuildLockDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BuildLockClient) DeleteOne(_m *BuildLock) *BuildLockDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BuildLockClient) DeleteOneID(id int) *BuildLockDeleteOne {
+	builder := c.Delete().Where(buildlock.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BuildLockDeleteOne{builder}
+}
+
+// Query returns a query builder for BuildLock.
+func (c *BuildLockClient) Query() *BuildLockQuery {
+	return &BuildLockQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBuildLock},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BuildLock entity by its id.
+func (c *BuildLockClient) Get(ctx context.Context, id int) (*BuildLock, error) {
+	return c.Query().Where(buildlock.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BuildLockClient) GetX(ctx context.Context, id int) *BuildLock {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BuildLockClient) Hooks() []Hook {
+	return c.hooks.BuildLock
+}
+
+// Interceptors returns the client interceptors.
+func (c *BuildLockClient) Interceptors() []Interceptor {
+	return c.inters.BuildLock
+}
+
+func (c *BuildLockClient) mutate(ctx context.Context, m *BuildLockMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BuildLockCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BuildLockUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BuildLockUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BuildLockDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BuildLock mutation op: %q", m.Op())
+	}
+}
+
+// BuildVersionClient is a client for the BuildVersion schema.
+type BuildVersionClient struct {
+	config
+}
+
+// NewBuildVersionClient returns a client for the BuildVersion from the given config.
+func NewBuildVersionClient(c config) *BuildVersionClient {
+	return &BuildVersionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `buildversion.Hooks(f(g(h())))`.
+func (c *BuildVersionClient) Use(hooks ...Hook) {
+	c.hooks.BuildVersion = append(c.hooks.BuildVersion, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `buildversion.Intercept(f(g(h())))`.
+func (c *BuildVersionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BuildVersion = append(c.inters.BuildVersion, interceptors...)
+}
+
+// Create returns a builder for creating a BuildVersion entity.
+func (c *BuildVersionClient) Create() *BuildVersionCreate {
+	mutation := newBuildVersionMutation(c.config, OpCreate)
+	return &BuildVersionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BuildVersion entities.
+func (c *BuildVersionClient) CreateBulk(builders ...*BuildVersionCreate) *BuildVersionCreateBulk {
+	return &BuildVersionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BuildVersionClient) MapCreateBulk(slice any, setFunc func(*BuildVersionCreate, int)) *BuildVersionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BuildVersionCreateBulk{err: fmt.Errorf("calling to BuildVersionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BuildVersionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BuildVersionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BuildVersion.
+func (c *BuildVersionClient) Update() *BuildVersionUpdate {
+	mutation := newBuildVersionMutation(c.config, OpUpdate)
+	return &BuildVersionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BuildVersionClient) UpdateOne(_m *BuildVersion) *BuildVersionUpdateOne {
+	mutation := newBuildVersionMutation(c.config, OpUpdateOne, withBuildVersion(_m))
+	return &BuildVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BuildVersionClient) UpdateOneID(id int) *BuildVersionUpdateOne {
+	mutation := newBuildVersionMutation(c.config, OpUpdateOne, withBuildVersionID(id))
+	return &BuildVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BuildVersion.
+func (c *BuildVersionClient) Delete() *BuildVersionDelete {
+	mutation := newBuildVersionMutation(c.config, OpDelete)
+	return &BuildVersionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BuildVersionClient) DeleteOne(_m *BuildVersion) *BuildVersionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BuildVersionClient) DeleteOneID(id int) *BuildVersionDeleteOne {
+	builder := c.Delete().Where(buildversion.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BuildVersionDeleteOne{builder}
+}
+
+// Query returns a query builder for BuildVersion.
+func (c *BuildVersionClient) Query() *BuildVersionQuery {
+	return &BuildVersionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBuildVersion},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BuildVersion entity by its id.
+func (c *BuildVersionClient) Get(ctx context.Context, id int) (*BuildVersion, error) {
+	return c.Query().Where(buildversion.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BuildVersionClient) GetX(ctx context.Context, id int) *BuildVersion {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BuildVersionClient) Hooks() []Hook {
+	return c.hooks.BuildVersion
+}
+
+// Interceptors returns the client interceptors.
+func (c *BuildVersionClient) Interceptors() []Interceptor {
+	return c.inters.BuildVersion
+}
+
+func (c *BuildVersionClient) mutate(ctx context.Context, m *BuildVersionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BuildVersionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BuildVersionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BuildVersionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BuildVersionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BuildVersion mutation op: %q", m.Op())
 	}
 }
 
@@ -2422,13 +2845,14 @@ func (c *TagClient) mutate(ctx context.Context, m *TagMutation) (Value, error) {
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		CodeEmbedding, CodeIngestion, InferenceNode, MemoryEvent, MemoryItem,
-		MemoryLink, ModelDefinition, ModelExecutionMetric, Prompt, Response,
-		RetrievalLog, Session, Tag []ent.Hook
+		BuildJournal, BuildLock, BuildVersion, CodeEmbedding, CodeIngestion,
+		InferenceNode, MemoryEvent, MemoryItem, MemoryLink, ModelDefinition,
+		ModelExecutionMetric, Prompt, Response, RetrievalLog, Session, Tag []ent.Hook
 	}
 	inters struct {
-		CodeEmbedding, CodeIngestion, InferenceNode, MemoryEvent, MemoryItem,
-		MemoryLink, ModelDefinition, ModelExecutionMetric, Prompt, Response,
-		RetrievalLog, Session, Tag []ent.Interceptor
+		BuildJournal, BuildLock, BuildVersion, CodeEmbedding, CodeIngestion,
+		InferenceNode, MemoryEvent, MemoryItem, MemoryLink, ModelDefinition,
+		ModelExecutionMetric, Prompt, Response, RetrievalLog, Session,
+		Tag []ent.Interceptor
 	}
 )

@@ -12,6 +12,12 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// BuildJournal is the client for interacting with the BuildJournal builders.
+	BuildJournal *BuildJournalClient
+	// BuildLock is the client for interacting with the BuildLock builders.
+	BuildLock *BuildLockClient
+	// BuildVersion is the client for interacting with the BuildVersion builders.
+	BuildVersion *BuildVersionClient
 	// CodeEmbedding is the client for interacting with the CodeEmbedding builders.
 	CodeEmbedding *CodeEmbeddingClient
 	// CodeIngestion is the client for interacting with the CodeIngestion builders.
@@ -169,6 +175,9 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.BuildJournal = NewBuildJournalClient(tx.config)
+	tx.BuildLock = NewBuildLockClient(tx.config)
+	tx.BuildVersion = NewBuildVersionClient(tx.config)
 	tx.CodeEmbedding = NewCodeEmbeddingClient(tx.config)
 	tx.CodeIngestion = NewCodeIngestionClient(tx.config)
 	tx.InferenceNode = NewInferenceNodeClient(tx.config)
@@ -191,7 +200,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: CodeEmbedding.QueryXXX(), the query will be executed
+// applies a query, for example: BuildJournal.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

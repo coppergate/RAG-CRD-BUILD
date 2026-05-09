@@ -60,6 +60,9 @@ spec:
         - name: http
           containerPort: 8080
           protocol: TCP
+        - name: insecure-http
+          containerPort: 8082
+          protocol: TCP
         - name: health
           containerPort: 8081
           protocol: TCP
@@ -91,6 +94,13 @@ spec:
           value: ":8080"
         - name: HEALTH_ADDR
           value: ":8081"
+        - name: INSECURE_HTTP_ADDR
+          value: ":8082"
+        - name: DB_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-secret
+              key: url
         - name: FAILED_TASK_TOPIC
           value: "persistent://public/default/build-tasks-deadletter"
         - name: TLS_CERT
@@ -191,3 +201,26 @@ spec:
   - name: https
     port: 443
     targetPort: http
+  - name: http
+    port: 80
+    targetPort: insecure-http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: build-orchestrator-insecure
+  namespace: build-pipeline
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+  - host: build-orchestrator.hierocracy.home
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: build-orchestrator
+            port:
+              name: http

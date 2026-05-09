@@ -16,11 +16,14 @@ import (
 	"syscall"
 	"time"
 
+	"app-builds/common/ent"
 	"app-builds/common/health"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/common/telemetry"
+	"build-orchestrator/internal/metadata"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"github.com/apache/pulsar-client-go/pulsar"
+	_ "github.com/lib/pq"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -217,6 +220,23 @@ func main() {
 		defer shutdown(context.Background())
 	}
 
+	dbConnString := os.Getenv("DB_CONN_STRING")
+	if dbConnString == "" {
+		log.Fatal("DB_CONN_STRING must be set")
+	}
+
+	entClient, err := ent.Open("postgres", dbConnString)
+	if err != nil {
+		log.Fatalf("Failed to connect to DB: %v", err)
+	}
+	defer entClient.Close()
+
+	if err := entClient.Schema.Create(context.Background()); err != nil {
+		log.Printf("Warning: failed to create schema: %v", err)
+	}
+
+	metadataSvc := metadata.NewService(entClient)
+
 	pulsarURL := os.Getenv("PULSAR_URL")
 	topic := os.Getenv("BUILD_TOPIC")
 	if pulsarURL == "" || topic == "" {
@@ -360,7 +380,7 @@ func main() {
 		}()
 	}
 
-	go runStatusServer(ctx, httpAddr, hub, &activeBuilds, maxConcurrent)
+	go runStatusServer(ctx, httpAddr, hub, &activeBuilds, maxConcurrent, metadataSvc)
 	go runHealthServer(ctx, healthAddr)
 
 	go func() {
@@ -523,12 +543,16 @@ var (
 	k8sClientset *kubernetes.Clientset
 )
 
-func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int) {
+func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int, metadataSvc *metadata.Service) {
 	certFile := os.Getenv("TLS_CERT")
 	keyFile := os.Getenv("TLS_KEY")
 	log.Printf("Starting status dashboard server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
 
 	mux := http.NewServeMux()
+
+	if metadataSvc != nil {
+		metadataSvc.RegisterHandlers(mux)
+	}
 
 	mux.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -583,6 +607,23 @@ func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBui
 
 	otelHandler := otelhttp.NewHandler(mux, "build-orchestrator-status")
 	srv := &http.Server{Addr: addr, Handler: otelHandler}
+
+	insecureAddr := os.Getenv("INSECURE_HTTP_ADDR")
+	if insecureAddr != "" {
+		insecureSrv := &http.Server{Addr: insecureAddr, Handler: otelHandler}
+		go func() {
+			log.Printf("Starting insecure HTTP server on %s", insecureAddr)
+			if err := insecureSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Printf("Insecure HTTP server error: %v", err)
+			}
+		}()
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = insecureSrv.Shutdown(shutdownCtx)
+		}()
+	}
 
 	go func() {
 		<-ctx.Done()

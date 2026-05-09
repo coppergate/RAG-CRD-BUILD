@@ -3,6 +3,9 @@
 package ent
 
 import (
+	"app-builds/common/ent/buildjournal"
+	"app-builds/common/ent/buildlock"
+	"app-builds/common/ent/buildversion"
 	"app-builds/common/ent/codeembedding"
 	"app-builds/common/ent/codeingestion"
 	"app-builds/common/ent/inferencenode"
@@ -26,6 +29,54 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	buildjournalFields := schema.BuildJournal{}.Fields()
+	_ = buildjournalFields
+	// buildjournalDescServiceName is the schema descriptor for service_name field.
+	buildjournalDescServiceName := buildjournalFields[0].Descriptor()
+	// buildjournal.ServiceNameValidator is a validator for the "service_name" field. It is called by the builders before save.
+	buildjournal.ServiceNameValidator = buildjournalDescServiceName.Validators[0].(func(string) error)
+	// buildjournalDescLastHash is the schema descriptor for last_hash field.
+	buildjournalDescLastHash := buildjournalFields[1].Descriptor()
+	// buildjournal.LastHashValidator is a validator for the "last_hash" field. It is called by the builders before save.
+	buildjournal.LastHashValidator = buildjournalDescLastHash.Validators[0].(func(string) error)
+	// buildjournalDescUpdatedAt is the schema descriptor for updated_at field.
+	buildjournalDescUpdatedAt := buildjournalFields[2].Descriptor()
+	// buildjournal.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	buildjournal.DefaultUpdatedAt = buildjournalDescUpdatedAt.Default.(func() time.Time)
+	// buildjournal.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	buildjournal.UpdateDefaultUpdatedAt = buildjournalDescUpdatedAt.UpdateDefault.(func() time.Time)
+	buildlockFields := schema.BuildLock{}.Fields()
+	_ = buildlockFields
+	// buildlockDescServiceName is the schema descriptor for service_name field.
+	buildlockDescServiceName := buildlockFields[0].Descriptor()
+	// buildlock.ServiceNameValidator is a validator for the "service_name" field. It is called by the builders before save.
+	buildlock.ServiceNameValidator = buildlockDescServiceName.Validators[0].(func(string) error)
+	// buildlockDescLockOwner is the schema descriptor for lock_owner field.
+	buildlockDescLockOwner := buildlockFields[1].Descriptor()
+	// buildlock.LockOwnerValidator is a validator for the "lock_owner" field. It is called by the builders before save.
+	buildlock.LockOwnerValidator = buildlockDescLockOwner.Validators[0].(func(string) error)
+	// buildlockDescAcquiredAt is the schema descriptor for acquired_at field.
+	buildlockDescAcquiredAt := buildlockFields[4].Descriptor()
+	// buildlock.DefaultAcquiredAt holds the default value on creation for the acquired_at field.
+	buildlock.DefaultAcquiredAt = buildlockDescAcquiredAt.Default.(func() time.Time)
+	// buildlockDescHeartbeat is the schema descriptor for heartbeat field.
+	buildlockDescHeartbeat := buildlockFields[5].Descriptor()
+	// buildlock.DefaultHeartbeat holds the default value on creation for the heartbeat field.
+	buildlock.DefaultHeartbeat = buildlockDescHeartbeat.Default.(func() time.Time)
+	buildversionFields := schema.BuildVersion{}.Fields()
+	_ = buildversionFields
+	// buildversionDescServiceName is the schema descriptor for service_name field.
+	buildversionDescServiceName := buildversionFields[0].Descriptor()
+	// buildversion.ServiceNameValidator is a validator for the "service_name" field. It is called by the builders before save.
+	buildversion.ServiceNameValidator = buildversionDescServiceName.Validators[0].(func(string) error)
+	// buildversionDescVersion is the schema descriptor for version field.
+	buildversionDescVersion := buildversionFields[1].Descriptor()
+	// buildversion.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	buildversion.VersionValidator = buildversionDescVersion.Validators[0].(func(string) error)
+	// buildversionDescLastBuild is the schema descriptor for last_build field.
+	buildversionDescLastBuild := buildversionFields[2].Descriptor()
+	// buildversion.DefaultLastBuild holds the default value on creation for the last_build field.
+	buildversion.DefaultLastBuild = buildversionDescLastBuild.Default.(func() time.Time)
 	codeembeddingFields := schema.CodeEmbedding{}.Fields()
 	_ = codeembeddingFields
 	// codeembeddingDescCreatedAt is the schema descriptor for created_at field.
