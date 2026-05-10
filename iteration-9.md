@@ -35,27 +35,28 @@ The following Action Types have been identified for immediate support:
 - Create `BehavioralLog` entity:
     - Audit trail of which rules were applied to which `prompt_id`.
 
-#### Phase 2: Management API (rag-admin-api)
-- Extend `rag-admin-api` with REST endpoints:
-    - `GET /api/behavior/rules/{action_type}`: Fetch rules for a type.
-    - `POST /api/behavior/rules`: Add or update rules.
-    - `POST /api/behavior/audit`: Log rule application.
+#### Phase 2: Management Gateway (rag-admin-api)
+- Extend `rag-admin-api` as a transparent gateway for behavioral requests:
+    - Proxy traffic for rule management and auditing to the `memory-controller`.
+    - Handle authentication and routing without implementing core business logic.
 
-#### Phase 3: Memory Orchestration (memory-controller)
-- Integrate behavioral memory into the `memory-controller`:
-    - The `memory-controller` becomes the central hub for assembling the `MemoryPack`.
-    - It will fetch behavioral rules from `rag-admin-api` and session context from the database.
-    - It delivers the combined context to the `rag-worker` via the existing `/retrieve` endpoint.
+#### Phase 3: Behavioral Memory Hub (memory-controller)
+- Implement core behavioral logic within the `memory-controller`:
+    - **Rule Persistence**: Handle CRUD operations for the Action Taxonomy and Behavioral Rules.
+    - **Learning Loop**: Implement the logic to categorize and persist "Learned Behaviors" from user corrections.
+    - **Context Orchestration**: Combine episodic session history with semantic behavioral rules into a unified `MemoryPack`.
+    - **Isolation**: Ensure modular design by isolating the `behavioral` package from the `episodic` history package.
 
 #### Phase 4: Pipeline Integration (rag-worker)
 - Update `handlePlan` and `handleSearch` in `rag-worker`:
-    - The `rag-worker` requests a `MemoryPack` from the `memory-controller`.
-    - This pack now includes "Behavioral Context" based on the identified `ActionType` of the current prompt/task.
+    - The `rag-worker` requests a `MemoryPack` from the `memory-controller` via the `/retrieve` endpoint.
+    - This pack now includes "Behavioral Context" based on the identified `ActionType`.
     - Rules are injected into the "System Instructions" for the sub-task execution.
 
 #### Phase 5: Feedback and Self-Correction
-- Implement a "Learning" step:
-    - When a user provides a correction (e.g., "Don't use Horizontal Scrolling"), the `rag-admin-api` handles the categorization and persistence of this new rule.
+- Implement the "Learning" step in the `memory-controller`:
+    - Expose endpoints to record feedback and corrections.
+    - Implement logic to refine behavioral rules based on this feedback, ensuring persistence in TimescaleDB.
 
 ### Deliverables
 - Ent schema migrations for behavioral tables.
