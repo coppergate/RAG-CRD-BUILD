@@ -35,21 +35,27 @@ The following Action Types have been identified for immediate support:
 - Create `BehavioralLog` entity:
     - Audit trail of which rules were applied to which `prompt_id`.
 
-#### Phase 2: Management API (build-orchestrator)
-- Extend `build-orchestrator` (or create `behavior-mgr`) with REST endpoints:
+#### Phase 2: Management API (rag-admin-api)
+- Extend `rag-admin-api` with REST endpoints:
     - `GET /api/behavior/rules/{action_type}`: Fetch rules for a type.
     - `POST /api/behavior/rules`: Add or update rules.
     - `POST /api/behavior/audit`: Log rule application.
 
-#### Phase 3: Planner Integration (rag-worker)
-- Update `handlePlan` in `rag-worker`:
-    - After decomposing the prompt into sub-tasks, the Planner identifies the `ActionType` for each task.
-    - The worker fetches associated rules from the Behavior API.
+#### Phase 3: Memory Orchestration (memory-controller)
+- Integrate behavioral memory into the `memory-controller`:
+    - The `memory-controller` becomes the central hub for assembling the `MemoryPack`.
+    - It will fetch behavioral rules from `rag-admin-api` and session context from the database.
+    - It delivers the combined context to the `rag-worker` via the existing `/retrieve` endpoint.
+
+#### Phase 4: Pipeline Integration (rag-worker)
+- Update `handlePlan` and `handleSearch` in `rag-worker`:
+    - The `rag-worker` requests a `MemoryPack` from the `memory-controller`.
+    - This pack now includes "Behavioral Context" based on the identified `ActionType` of the current prompt/task.
     - Rules are injected into the "System Instructions" for the sub-task execution.
 
-#### Phase 4: Feedback and Self-Correction
+#### Phase 5: Feedback and Self-Correction
 - Implement a "Learning" step:
-    - When a user provides a correction (e.g., "Don't use Horizontal Scrolling"), the agent can categorize this as a rule update for a specific Action Type and persist it.
+    - When a user provides a correction (e.g., "Don't use Horizontal Scrolling"), the `rag-admin-api` handles the categorization and persistence of this new rule.
 
 ### Deliverables
 - Ent schema migrations for behavioral tables.
