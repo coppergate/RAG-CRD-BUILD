@@ -64,6 +64,11 @@ func RuleID(v int64) predicate.BehavioralLog {
 	return predicate.BehavioralLog(sql.FieldEQ(FieldRuleID, v))
 }
 
+// ActionType applies equality check predicate on the "action_type" field. It's identical to ActionTypeEQ.
+func ActionType(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldEQ(FieldActionType, v))
+}
+
 // AppliedAt applies equality check predicate on the "applied_at" field. It's identical to AppliedAtEQ.
 func AppliedAt(v time.Time) predicate.BehavioralLog {
 	return predicate.BehavioralLog(sql.FieldEQ(FieldAppliedAt, v))
@@ -175,23 +180,68 @@ func RuleIDLTE(v int64) predicate.BehavioralLog {
 }
 
 // ActionTypeEQ applies the EQ predicate on the "action_type" field.
-func ActionTypeEQ(v ActionType) predicate.BehavioralLog {
+func ActionTypeEQ(v string) predicate.BehavioralLog {
 	return predicate.BehavioralLog(sql.FieldEQ(FieldActionType, v))
 }
 
 // ActionTypeNEQ applies the NEQ predicate on the "action_type" field.
-func ActionTypeNEQ(v ActionType) predicate.BehavioralLog {
+func ActionTypeNEQ(v string) predicate.BehavioralLog {
 	return predicate.BehavioralLog(sql.FieldNEQ(FieldActionType, v))
 }
 
 // ActionTypeIn applies the In predicate on the "action_type" field.
-func ActionTypeIn(vs ...ActionType) predicate.BehavioralLog {
+func ActionTypeIn(vs ...string) predicate.BehavioralLog {
 	return predicate.BehavioralLog(sql.FieldIn(FieldActionType, vs...))
 }
 
 // ActionTypeNotIn applies the NotIn predicate on the "action_type" field.
-func ActionTypeNotIn(vs ...ActionType) predicate.BehavioralLog {
+func ActionTypeNotIn(vs ...string) predicate.BehavioralLog {
 	return predicate.BehavioralLog(sql.FieldNotIn(FieldActionType, vs...))
+}
+
+// ActionTypeGT applies the GT predicate on the "action_type" field.
+func ActionTypeGT(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldGT(FieldActionType, v))
+}
+
+// ActionTypeGTE applies the GTE predicate on the "action_type" field.
+func ActionTypeGTE(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldGTE(FieldActionType, v))
+}
+
+// ActionTypeLT applies the LT predicate on the "action_type" field.
+func ActionTypeLT(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldLT(FieldActionType, v))
+}
+
+// ActionTypeLTE applies the LTE predicate on the "action_type" field.
+func ActionTypeLTE(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldLTE(FieldActionType, v))
+}
+
+// ActionTypeContains applies the Contains predicate on the "action_type" field.
+func ActionTypeContains(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldContains(FieldActionType, v))
+}
+
+// ActionTypeHasPrefix applies the HasPrefix predicate on the "action_type" field.
+func ActionTypeHasPrefix(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldHasPrefix(FieldActionType, v))
+}
+
+// ActionTypeHasSuffix applies the HasSuffix predicate on the "action_type" field.
+func ActionTypeHasSuffix(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldHasSuffix(FieldActionType, v))
+}
+
+// ActionTypeEqualFold applies the EqualFold predicate on the "action_type" field.
+func ActionTypeEqualFold(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldEqualFold(FieldActionType, v))
+}
+
+// ActionTypeContainsFold applies the ContainsFold predicate on the "action_type" field.
+func ActionTypeContainsFold(v string) predicate.BehavioralLog {
+	return predicate.BehavioralLog(sql.FieldContainsFold(FieldActionType, v))
 }
 
 // AppliedAtEQ applies the EQ predicate on the "applied_at" field.

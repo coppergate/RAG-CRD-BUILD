@@ -9,12 +9,44 @@ import (
 )
 
 var (
+	// ActionIdentifiersColumns holds the columns for the "action_identifiers" table.
+	ActionIdentifiersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "identifier", Type: field.TypeString},
+		{Name: "action_type_identifiers", Type: field.TypeInt64},
+	}
+	// ActionIdentifiersTable holds the schema information for the "action_identifiers" table.
+	ActionIdentifiersTable = &schema.Table{
+		Name:       "action_identifiers",
+		Columns:    ActionIdentifiersColumns,
+		PrimaryKey: []*schema.Column{ActionIdentifiersColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "action_identifiers_action_types_identifiers",
+				Columns:    []*schema.Column{ActionIdentifiersColumns[2]},
+				RefColumns: []*schema.Column{ActionTypesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// ActionTypesColumns holds the columns for the "action_types" table.
+	ActionTypesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "name", Type: field.TypeString, Unique: true},
+		{Name: "description", Type: field.TypeString, Nullable: true},
+	}
+	// ActionTypesTable holds the schema information for the "action_types" table.
+	ActionTypesTable = &schema.Table{
+		Name:       "action_types",
+		Columns:    ActionTypesColumns,
+		PrimaryKey: []*schema.Column{ActionTypesColumns[0]},
+	}
 	// BehavioralLogsColumns holds the columns for the "behavioral_logs" table.
 	BehavioralLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "prompt_id", Type: field.TypeString},
 		{Name: "rule_id", Type: field.TypeInt64},
-		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"FILE_SEARCH", "FILE_EDIT", "FILE_VCS", "REMOTE_EXEC", "K8S_ORCHESTRATE", "DB_ACCESS", "BUILD_DEPLOY", "DOC_PROCESS", "JOB_RESUME", "WEB_FETCH"}},
+		{Name: "action_type", Type: field.TypeString},
 		{Name: "applied_at", Type: field.TypeTime},
 		{Name: "context", Type: field.TypeJSON, Nullable: true},
 	}
@@ -27,7 +59,9 @@ var (
 	// BehavioralRulesColumns holds the columns for the "behavioral_rules" table.
 	BehavioralRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"FILE_SEARCH", "FILE_EDIT", "FILE_VCS", "REMOTE_EXEC", "K8S_ORCHESTRATE", "DB_ACCESS", "BUILD_DEPLOY", "DOC_PROCESS", "JOB_RESUME", "WEB_FETCH"}},
+		{Name: "action_type", Type: field.TypeString},
+		{Name: "category", Type: field.TypeString, Nullable: true},
+		{Name: "state", Type: field.TypeEnum, Enums: []string{"PENDING", "ACTIVE", "REJECTED", "EXPIRED"}, Default: "ACTIVE"},
 		{Name: "rule_content", Type: field.TypeString, Size: 2147483647},
 		{Name: "priority", Type: field.TypeInt, Default: 0},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
@@ -417,6 +451,27 @@ var (
 		Columns:    SessionsColumns,
 		PrimaryKey: []*schema.Column{SessionsColumns[0]},
 	}
+	// SessionGovernancesColumns holds the columns for the "session_governances" table.
+	SessionGovernancesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "session_id", Type: field.TypeInt64},
+		{Name: "rule_id", Type: field.TypeInt64},
+		{Name: "priority_override", Type: field.TypeInt},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// SessionGovernancesTable holds the schema information for the "session_governances" table.
+	SessionGovernancesTable = &schema.Table{
+		Name:       "session_governances",
+		Columns:    SessionGovernancesColumns,
+		PrimaryKey: []*schema.Column{SessionGovernancesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "sessiongovernance_session_id_rule_id",
+				Unique:  true,
+				Columns: []*schema.Column{SessionGovernancesColumns[1], SessionGovernancesColumns[2]},
+			},
+		},
+	}
 	// TagColumns holds the columns for the "tag" table.
 	TagColumns = []*schema.Column{
 		{Name: "tag_id", Type: field.TypeInt64, Increment: true},
@@ -506,6 +561,8 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		ActionIdentifiersTable,
+		ActionTypesTable,
 		BehavioralLogsTable,
 		BehavioralRulesTable,
 		BuildJournalsTable,
@@ -523,6 +580,7 @@ var (
 		ResponsesTable,
 		RetrievalLogsTable,
 		SessionsTable,
+		SessionGovernancesTable,
 		TagTable,
 		CodeEmbeddingTagTable,
 		CodeIngestionTagTable,
@@ -531,6 +589,7 @@ var (
 )
 
 func init() {
+	ActionIdentifiersTable.ForeignKeys[0].RefTable = ActionTypesTable
 	CodeEmbeddingTable.ForeignKeys[0].RefTable = CodeIngestionTable
 	CodeEmbeddingTable.Annotation = &entsql.Annotation{
 		Table: "code_embedding",
@@ -546,6 +605,13 @@ func init() {
 	ModelExecutionMetricsTable.ForeignKeys[0].RefTable = InferenceNodesTable
 	ModelExecutionMetricsTable.ForeignKeys[1].RefTable = ModelDefinitionsTable
 	ModelExecutionMetricsTable.ForeignKeys[2].RefTable = SessionsTable
+	ModelExecutionMetricsTable.Annotation = &entsql.Annotation{
+		Table: "model_execution_metrics",
+	}
+	ResponsesTable.Annotation = &entsql.Annotation{
+		Table: "responses",
+		Check: "created_at IS NOT NULL",
+	}
 	RetrievalLogsTable.ForeignKeys[0].RefTable = SessionsTable
 	TagTable.Annotation = &entsql.Annotation{
 		Table: "tag",

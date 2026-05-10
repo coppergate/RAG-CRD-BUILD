@@ -23,8 +23,36 @@ type BehavioralRuleCreate struct {
 }
 
 // SetActionType sets the "action_type" field.
-func (_c *BehavioralRuleCreate) SetActionType(v behavioralrule.ActionType) *BehavioralRuleCreate {
+func (_c *BehavioralRuleCreate) SetActionType(v string) *BehavioralRuleCreate {
 	_c.mutation.SetActionType(v)
+	return _c
+}
+
+// SetCategory sets the "category" field.
+func (_c *BehavioralRuleCreate) SetCategory(v string) *BehavioralRuleCreate {
+	_c.mutation.SetCategory(v)
+	return _c
+}
+
+// SetNillableCategory sets the "category" field if the given value is not nil.
+func (_c *BehavioralRuleCreate) SetNillableCategory(v *string) *BehavioralRuleCreate {
+	if v != nil {
+		_c.SetCategory(*v)
+	}
+	return _c
+}
+
+// SetState sets the "state" field.
+func (_c *BehavioralRuleCreate) SetState(v behavioralrule.State) *BehavioralRuleCreate {
+	_c.mutation.SetState(v)
+	return _c
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_c *BehavioralRuleCreate) SetNillableState(v *behavioralrule.State) *BehavioralRuleCreate {
+	if v != nil {
+		_c.SetState(*v)
+	}
 	return _c
 }
 
@@ -145,6 +173,10 @@ func (_c *BehavioralRuleCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *BehavioralRuleCreate) defaults() {
+	if _, ok := _c.mutation.State(); !ok {
+		v := behavioralrule.DefaultState
+		_c.mutation.SetState(v)
+	}
 	if _, ok := _c.mutation.Priority(); !ok {
 		v := behavioralrule.DefaultPriority
 		_c.mutation.SetPriority(v)
@@ -172,9 +204,12 @@ func (_c *BehavioralRuleCreate) check() error {
 	if _, ok := _c.mutation.ActionType(); !ok {
 		return &ValidationError{Name: "action_type", err: errors.New(`ent: missing required field "BehavioralRule.action_type"`)}
 	}
-	if v, ok := _c.mutation.ActionType(); ok {
-		if err := behavioralrule.ActionTypeValidator(v); err != nil {
-			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "BehavioralRule.action_type": %w`, err)}
+	if _, ok := _c.mutation.State(); !ok {
+		return &ValidationError{Name: "state", err: errors.New(`ent: missing required field "BehavioralRule.state"`)}
+	}
+	if v, ok := _c.mutation.State(); ok {
+		if err := behavioralrule.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "BehavioralRule.state": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.RuleContent(); !ok {
@@ -234,8 +269,16 @@ func (_c *BehavioralRuleCreate) createSpec() (*BehavioralRule, *sqlgraph.CreateS
 		_spec.ID.Value = id
 	}
 	if value, ok := _c.mutation.ActionType(); ok {
-		_spec.SetField(behavioralrule.FieldActionType, field.TypeEnum, value)
+		_spec.SetField(behavioralrule.FieldActionType, field.TypeString, value)
 		_node.ActionType = value
+	}
+	if value, ok := _c.mutation.Category(); ok {
+		_spec.SetField(behavioralrule.FieldCategory, field.TypeString, value)
+		_node.Category = value
+	}
+	if value, ok := _c.mutation.State(); ok {
+		_spec.SetField(behavioralrule.FieldState, field.TypeEnum, value)
+		_node.State = value
 	}
 	if value, ok := _c.mutation.RuleContent(); ok {
 		_spec.SetField(behavioralrule.FieldRuleContent, field.TypeString, value)
@@ -314,7 +357,7 @@ type (
 )
 
 // SetActionType sets the "action_type" field.
-func (u *BehavioralRuleUpsert) SetActionType(v behavioralrule.ActionType) *BehavioralRuleUpsert {
+func (u *BehavioralRuleUpsert) SetActionType(v string) *BehavioralRuleUpsert {
 	u.Set(behavioralrule.FieldActionType, v)
 	return u
 }
@@ -322,6 +365,36 @@ func (u *BehavioralRuleUpsert) SetActionType(v behavioralrule.ActionType) *Behav
 // UpdateActionType sets the "action_type" field to the value that was provided on create.
 func (u *BehavioralRuleUpsert) UpdateActionType() *BehavioralRuleUpsert {
 	u.SetExcluded(behavioralrule.FieldActionType)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *BehavioralRuleUpsert) SetCategory(v string) *BehavioralRuleUpsert {
+	u.Set(behavioralrule.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *BehavioralRuleUpsert) UpdateCategory() *BehavioralRuleUpsert {
+	u.SetExcluded(behavioralrule.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *BehavioralRuleUpsert) ClearCategory() *BehavioralRuleUpsert {
+	u.SetNull(behavioralrule.FieldCategory)
+	return u
+}
+
+// SetState sets the "state" field.
+func (u *BehavioralRuleUpsert) SetState(v behavioralrule.State) *BehavioralRuleUpsert {
+	u.Set(behavioralrule.FieldState, v)
+	return u
+}
+
+// UpdateState sets the "state" field to the value that was provided on create.
+func (u *BehavioralRuleUpsert) UpdateState() *BehavioralRuleUpsert {
+	u.SetExcluded(behavioralrule.FieldState)
 	return u
 }
 
@@ -443,7 +516,7 @@ func (u *BehavioralRuleUpsertOne) Update(set func(*BehavioralRuleUpsert)) *Behav
 }
 
 // SetActionType sets the "action_type" field.
-func (u *BehavioralRuleUpsertOne) SetActionType(v behavioralrule.ActionType) *BehavioralRuleUpsertOne {
+func (u *BehavioralRuleUpsertOne) SetActionType(v string) *BehavioralRuleUpsertOne {
 	return u.Update(func(s *BehavioralRuleUpsert) {
 		s.SetActionType(v)
 	})
@@ -453,6 +526,41 @@ func (u *BehavioralRuleUpsertOne) SetActionType(v behavioralrule.ActionType) *Be
 func (u *BehavioralRuleUpsertOne) UpdateActionType() *BehavioralRuleUpsertOne {
 	return u.Update(func(s *BehavioralRuleUpsert) {
 		s.UpdateActionType()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *BehavioralRuleUpsertOne) SetCategory(v string) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertOne) UpdateCategory() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *BehavioralRuleUpsertOne) ClearCategory() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetState sets the "state" field.
+func (u *BehavioralRuleUpsertOne) SetState(v behavioralrule.State) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetState(v)
+	})
+}
+
+// UpdateState sets the "state" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertOne) UpdateState() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateState()
 	})
 }
 
@@ -751,7 +859,7 @@ func (u *BehavioralRuleUpsertBulk) Update(set func(*BehavioralRuleUpsert)) *Beha
 }
 
 // SetActionType sets the "action_type" field.
-func (u *BehavioralRuleUpsertBulk) SetActionType(v behavioralrule.ActionType) *BehavioralRuleUpsertBulk {
+func (u *BehavioralRuleUpsertBulk) SetActionType(v string) *BehavioralRuleUpsertBulk {
 	return u.Update(func(s *BehavioralRuleUpsert) {
 		s.SetActionType(v)
 	})
@@ -761,6 +869,41 @@ func (u *BehavioralRuleUpsertBulk) SetActionType(v behavioralrule.ActionType) *B
 func (u *BehavioralRuleUpsertBulk) UpdateActionType() *BehavioralRuleUpsertBulk {
 	return u.Update(func(s *BehavioralRuleUpsert) {
 		s.UpdateActionType()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *BehavioralRuleUpsertBulk) SetCategory(v string) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertBulk) UpdateCategory() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *BehavioralRuleUpsertBulk) ClearCategory() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetState sets the "state" field.
+func (u *BehavioralRuleUpsertBulk) SetState(v behavioralrule.State) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetState(v)
+	})
+}
+
+// UpdateState sets the "state" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertBulk) UpdateState() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateState()
 	})
 }
 

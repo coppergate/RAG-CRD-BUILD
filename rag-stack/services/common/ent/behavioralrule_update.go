@@ -29,15 +29,49 @@ func (_u *BehavioralRuleUpdate) Where(ps ...predicate.BehavioralRule) *Behaviora
 }
 
 // SetActionType sets the "action_type" field.
-func (_u *BehavioralRuleUpdate) SetActionType(v behavioralrule.ActionType) *BehavioralRuleUpdate {
+func (_u *BehavioralRuleUpdate) SetActionType(v string) *BehavioralRuleUpdate {
 	_u.mutation.SetActionType(v)
 	return _u
 }
 
 // SetNillableActionType sets the "action_type" field if the given value is not nil.
-func (_u *BehavioralRuleUpdate) SetNillableActionType(v *behavioralrule.ActionType) *BehavioralRuleUpdate {
+func (_u *BehavioralRuleUpdate) SetNillableActionType(v *string) *BehavioralRuleUpdate {
 	if v != nil {
 		_u.SetActionType(*v)
+	}
+	return _u
+}
+
+// SetCategory sets the "category" field.
+func (_u *BehavioralRuleUpdate) SetCategory(v string) *BehavioralRuleUpdate {
+	_u.mutation.SetCategory(v)
+	return _u
+}
+
+// SetNillableCategory sets the "category" field if the given value is not nil.
+func (_u *BehavioralRuleUpdate) SetNillableCategory(v *string) *BehavioralRuleUpdate {
+	if v != nil {
+		_u.SetCategory(*v)
+	}
+	return _u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (_u *BehavioralRuleUpdate) ClearCategory() *BehavioralRuleUpdate {
+	_u.mutation.ClearCategory()
+	return _u
+}
+
+// SetState sets the "state" field.
+func (_u *BehavioralRuleUpdate) SetState(v behavioralrule.State) *BehavioralRuleUpdate {
+	_u.mutation.SetState(v)
+	return _u
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_u *BehavioralRuleUpdate) SetNillableState(v *behavioralrule.State) *BehavioralRuleUpdate {
+	if v != nil {
+		_u.SetState(*v)
 	}
 	return _u
 }
@@ -154,9 +188,9 @@ func (_u *BehavioralRuleUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *BehavioralRuleUpdate) check() error {
-	if v, ok := _u.mutation.ActionType(); ok {
-		if err := behavioralrule.ActionTypeValidator(v); err != nil {
-			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "BehavioralRule.action_type": %w`, err)}
+	if v, ok := _u.mutation.State(); ok {
+		if err := behavioralrule.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "BehavioralRule.state": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Scope(); ok {
@@ -180,7 +214,16 @@ func (_u *BehavioralRuleUpdate) sqlSave(ctx context.Context) (_node int, err err
 		}
 	}
 	if value, ok := _u.mutation.ActionType(); ok {
-		_spec.SetField(behavioralrule.FieldActionType, field.TypeEnum, value)
+		_spec.SetField(behavioralrule.FieldActionType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Category(); ok {
+		_spec.SetField(behavioralrule.FieldCategory, field.TypeString, value)
+	}
+	if _u.mutation.CategoryCleared() {
+		_spec.ClearField(behavioralrule.FieldCategory, field.TypeString)
+	}
+	if value, ok := _u.mutation.State(); ok {
+		_spec.SetField(behavioralrule.FieldState, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.RuleContent(); ok {
 		_spec.SetField(behavioralrule.FieldRuleContent, field.TypeString, value)
@@ -221,15 +264,49 @@ type BehavioralRuleUpdateOne struct {
 }
 
 // SetActionType sets the "action_type" field.
-func (_u *BehavioralRuleUpdateOne) SetActionType(v behavioralrule.ActionType) *BehavioralRuleUpdateOne {
+func (_u *BehavioralRuleUpdateOne) SetActionType(v string) *BehavioralRuleUpdateOne {
 	_u.mutation.SetActionType(v)
 	return _u
 }
 
 // SetNillableActionType sets the "action_type" field if the given value is not nil.
-func (_u *BehavioralRuleUpdateOne) SetNillableActionType(v *behavioralrule.ActionType) *BehavioralRuleUpdateOne {
+func (_u *BehavioralRuleUpdateOne) SetNillableActionType(v *string) *BehavioralRuleUpdateOne {
 	if v != nil {
 		_u.SetActionType(*v)
+	}
+	return _u
+}
+
+// SetCategory sets the "category" field.
+func (_u *BehavioralRuleUpdateOne) SetCategory(v string) *BehavioralRuleUpdateOne {
+	_u.mutation.SetCategory(v)
+	return _u
+}
+
+// SetNillableCategory sets the "category" field if the given value is not nil.
+func (_u *BehavioralRuleUpdateOne) SetNillableCategory(v *string) *BehavioralRuleUpdateOne {
+	if v != nil {
+		_u.SetCategory(*v)
+	}
+	return _u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (_u *BehavioralRuleUpdateOne) ClearCategory() *BehavioralRuleUpdateOne {
+	_u.mutation.ClearCategory()
+	return _u
+}
+
+// SetState sets the "state" field.
+func (_u *BehavioralRuleUpdateOne) SetState(v behavioralrule.State) *BehavioralRuleUpdateOne {
+	_u.mutation.SetState(v)
+	return _u
+}
+
+// SetNillableState sets the "state" field if the given value is not nil.
+func (_u *BehavioralRuleUpdateOne) SetNillableState(v *behavioralrule.State) *BehavioralRuleUpdateOne {
+	if v != nil {
+		_u.SetState(*v)
 	}
 	return _u
 }
@@ -359,9 +436,9 @@ func (_u *BehavioralRuleUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *BehavioralRuleUpdateOne) check() error {
-	if v, ok := _u.mutation.ActionType(); ok {
-		if err := behavioralrule.ActionTypeValidator(v); err != nil {
-			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "BehavioralRule.action_type": %w`, err)}
+	if v, ok := _u.mutation.State(); ok {
+		if err := behavioralrule.StateValidator(v); err != nil {
+			return &ValidationError{Name: "state", err: fmt.Errorf(`ent: validator failed for field "BehavioralRule.state": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.Scope(); ok {
@@ -402,7 +479,16 @@ func (_u *BehavioralRuleUpdateOne) sqlSave(ctx context.Context) (_node *Behavior
 		}
 	}
 	if value, ok := _u.mutation.ActionType(); ok {
-		_spec.SetField(behavioralrule.FieldActionType, field.TypeEnum, value)
+		_spec.SetField(behavioralrule.FieldActionType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Category(); ok {
+		_spec.SetField(behavioralrule.FieldCategory, field.TypeString, value)
+	}
+	if _u.mutation.CategoryCleared() {
+		_spec.ClearField(behavioralrule.FieldCategory, field.TypeString)
+	}
+	if value, ok := _u.mutation.State(); ok {
+		_spec.SetField(behavioralrule.FieldState, field.TypeEnum, value)
 	}
 	if value, ok := _u.mutation.RuleContent(); ok {
 		_spec.SetField(behavioralrule.FieldRuleContent, field.TypeString, value)

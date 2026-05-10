@@ -12,6 +12,10 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// ActionIdentifier is the client for interacting with the ActionIdentifier builders.
+	ActionIdentifier *ActionIdentifierClient
+	// ActionType is the client for interacting with the ActionType builders.
+	ActionType *ActionTypeClient
 	// BehavioralLog is the client for interacting with the BehavioralLog builders.
 	BehavioralLog *BehavioralLogClient
 	// BehavioralRule is the client for interacting with the BehavioralRule builders.
@@ -46,6 +50,8 @@ type Tx struct {
 	RetrievalLog *RetrievalLogClient
 	// Session is the client for interacting with the Session builders.
 	Session *SessionClient
+	// SessionGovernance is the client for interacting with the SessionGovernance builders.
+	SessionGovernance *SessionGovernanceClient
 	// Tag is the client for interacting with the Tag builders.
 	Tag *TagClient
 
@@ -179,6 +185,8 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.ActionIdentifier = NewActionIdentifierClient(tx.config)
+	tx.ActionType = NewActionTypeClient(tx.config)
 	tx.BehavioralLog = NewBehavioralLogClient(tx.config)
 	tx.BehavioralRule = NewBehavioralRuleClient(tx.config)
 	tx.BuildJournal = NewBuildJournalClient(tx.config)
@@ -196,6 +204,7 @@ func (tx *Tx) init() {
 	tx.Response = NewResponseClient(tx.config)
 	tx.RetrievalLog = NewRetrievalLogClient(tx.config)
 	tx.Session = NewSessionClient(tx.config)
+	tx.SessionGovernance = NewSessionGovernanceClient(tx.config)
 	tx.Tag = NewTagClient(tx.config)
 }
 
@@ -206,7 +215,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: BehavioralLog.QueryXXX(), the query will be executed
+// applies a query, for example: ActionIdentifier.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

@@ -23,7 +23,7 @@ type BehavioralLog struct {
 	// RuleID holds the value of the "rule_id" field.
 	RuleID int64 `json:"rule_id,omitempty"`
 	// ActionType holds the value of the "action_type" field.
-	ActionType behaviorallog.ActionType `json:"action_type,omitempty"`
+	ActionType string `json:"action_type,omitempty"`
 	// AppliedAt holds the value of the "applied_at" field.
 	AppliedAt time.Time `json:"applied_at,omitempty"`
 	// Context holds the value of the "context" field.
@@ -81,7 +81,7 @@ func (_m *BehavioralLog) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field action_type", values[i])
 			} else if value.Valid {
-				_m.ActionType = behaviorallog.ActionType(value.String)
+				_m.ActionType = value.String
 			}
 		case behaviorallog.FieldAppliedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -140,7 +140,7 @@ func (_m *BehavioralLog) String() string {
 	builder.WriteString(fmt.Sprintf("%v", _m.RuleID))
 	builder.WriteString(", ")
 	builder.WriteString("action_type=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ActionType))
+	builder.WriteString(_m.ActionType)
 	builder.WriteString(", ")
 	builder.WriteString("applied_at=")
 	builder.WriteString(_m.AppliedAt.Format(time.ANSIC))

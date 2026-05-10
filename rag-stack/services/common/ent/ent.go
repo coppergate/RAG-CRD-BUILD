@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"app-builds/common/ent/actionidentifier"
+	"app-builds/common/ent/actiontype"
 	"app-builds/common/ent/behaviorallog"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
@@ -20,6 +22,7 @@ import (
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
+	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/tag"
 	"context"
 	"errors"
@@ -90,6 +93,8 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			actionidentifier.Table:     actionidentifier.ValidColumn,
+			actiontype.Table:           actiontype.ValidColumn,
 			behaviorallog.Table:        behaviorallog.ValidColumn,
 			behavioralrule.Table:       behavioralrule.ValidColumn,
 			buildjournal.Table:         buildjournal.ValidColumn,
@@ -107,6 +112,7 @@ func checkColumn(t, c string) error {
 			response.Table:             response.ValidColumn,
 			retrievallog.Table:         retrievallog.ValidColumn,
 			session.Table:              session.ValidColumn,
+			sessiongovernance.Table:    sessiongovernance.ValidColumn,
 			tag.Table:                  tag.ValidColumn,
 		})
 	})

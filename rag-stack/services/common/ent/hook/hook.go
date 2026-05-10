@@ -8,6 +8,30 @@ import (
 	"fmt"
 )
 
+// The ActionIdentifierFunc type is an adapter to allow the use of ordinary
+// function as ActionIdentifier mutator.
+type ActionIdentifierFunc func(context.Context, *ent.ActionIdentifierMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActionIdentifierFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActionIdentifierMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActionIdentifierMutation", m)
+}
+
+// The ActionTypeFunc type is an adapter to allow the use of ordinary
+// function as ActionType mutator.
+type ActionTypeFunc func(context.Context, *ent.ActionTypeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActionTypeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActionTypeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActionTypeMutation", m)
+}
+
 // The BehavioralLogFunc type is an adapter to allow the use of ordinary
 // function as BehavioralLog mutator.
 type BehavioralLogFunc func(context.Context, *ent.BehavioralLogMutation) (ent.Value, error)
@@ -210,6 +234,18 @@ func (f SessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionMutation", m)
+}
+
+// The SessionGovernanceFunc type is an adapter to allow the use of ordinary
+// function as SessionGovernance mutator.
+type SessionGovernanceFunc func(context.Context, *ent.SessionGovernanceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SessionGovernanceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SessionGovernanceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionGovernanceMutation", m)
 }
 
 // The TagFunc type is an adapter to allow the use of ordinary

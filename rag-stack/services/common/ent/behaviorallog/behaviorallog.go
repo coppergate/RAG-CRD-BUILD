@@ -3,7 +3,6 @@
 package behaviorallog
 
 import (
-	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -52,37 +51,6 @@ var (
 	// DefaultAppliedAt holds the default value on creation for the "applied_at" field.
 	DefaultAppliedAt func() time.Time
 )
-
-// ActionType defines the type for the "action_type" enum field.
-type ActionType string
-
-// ActionType values.
-const (
-	ActionTypeFILE_SEARCH     ActionType = "FILE_SEARCH"
-	ActionTypeFILE_EDIT       ActionType = "FILE_EDIT"
-	ActionTypeFILE_VCS        ActionType = "FILE_VCS"
-	ActionTypeREMOTE_EXEC     ActionType = "REMOTE_EXEC"
-	ActionTypeK8S_ORCHESTRATE ActionType = "K8S_ORCHESTRATE"
-	ActionTypeDB_ACCESS       ActionType = "DB_ACCESS"
-	ActionTypeBUILD_DEPLOY    ActionType = "BUILD_DEPLOY"
-	ActionTypeDOC_PROCESS     ActionType = "DOC_PROCESS"
-	ActionTypeJOB_RESUME      ActionType = "JOB_RESUME"
-	ActionTypeWEB_FETCH       ActionType = "WEB_FETCH"
-)
-
-func (at ActionType) String() string {
-	return string(at)
-}
-
-// ActionTypeValidator is a validator for the "action_type" field enum values. It is called by the builders before save.
-func ActionTypeValidator(at ActionType) error {
-	switch at {
-	case ActionTypeFILE_SEARCH, ActionTypeFILE_EDIT, ActionTypeFILE_VCS, ActionTypeREMOTE_EXEC, ActionTypeK8S_ORCHESTRATE, ActionTypeDB_ACCESS, ActionTypeBUILD_DEPLOY, ActionTypeDOC_PROCESS, ActionTypeJOB_RESUME, ActionTypeWEB_FETCH:
-		return nil
-	default:
-		return fmt.Errorf("behaviorallog: invalid enum value for action_type field: %q", at)
-	}
-}
 
 // OrderOption defines the ordering options for the BehavioralLog queries.
 type OrderOption func(*sql.Selector)

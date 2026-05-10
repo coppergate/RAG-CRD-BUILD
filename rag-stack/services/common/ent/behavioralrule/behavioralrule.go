@@ -16,6 +16,10 @@ const (
 	FieldID = "id"
 	// FieldActionType holds the string denoting the action_type field in the database.
 	FieldActionType = "action_type"
+	// FieldCategory holds the string denoting the category field in the database.
+	FieldCategory = "category"
+	// FieldState holds the string denoting the state field in the database.
+	FieldState = "state"
 	// FieldRuleContent holds the string denoting the rule_content field in the database.
 	FieldRuleContent = "rule_content"
 	// FieldPriority holds the string denoting the priority field in the database.
@@ -36,6 +40,8 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldActionType,
+	FieldCategory,
+	FieldState,
 	FieldRuleContent,
 	FieldPriority,
 	FieldIsActive,
@@ -67,34 +73,31 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 )
 
-// ActionType defines the type for the "action_type" enum field.
-type ActionType string
+// State defines the type for the "state" enum field.
+type State string
 
-// ActionType values.
+// StateACTIVE is the default value of the State enum.
+const DefaultState = StateACTIVE
+
+// State values.
 const (
-	ActionTypeFILE_SEARCH     ActionType = "FILE_SEARCH"
-	ActionTypeFILE_EDIT       ActionType = "FILE_EDIT"
-	ActionTypeFILE_VCS        ActionType = "FILE_VCS"
-	ActionTypeREMOTE_EXEC     ActionType = "REMOTE_EXEC"
-	ActionTypeK8S_ORCHESTRATE ActionType = "K8S_ORCHESTRATE"
-	ActionTypeDB_ACCESS       ActionType = "DB_ACCESS"
-	ActionTypeBUILD_DEPLOY    ActionType = "BUILD_DEPLOY"
-	ActionTypeDOC_PROCESS     ActionType = "DOC_PROCESS"
-	ActionTypeJOB_RESUME      ActionType = "JOB_RESUME"
-	ActionTypeWEB_FETCH       ActionType = "WEB_FETCH"
+	StatePENDING  State = "PENDING"
+	StateACTIVE   State = "ACTIVE"
+	StateREJECTED State = "REJECTED"
+	StateEXPIRED  State = "EXPIRED"
 )
 
-func (at ActionType) String() string {
-	return string(at)
+func (s State) String() string {
+	return string(s)
 }
 
-// ActionTypeValidator is a validator for the "action_type" field enum values. It is called by the builders before save.
-func ActionTypeValidator(at ActionType) error {
-	switch at {
-	case ActionTypeFILE_SEARCH, ActionTypeFILE_EDIT, ActionTypeFILE_VCS, ActionTypeREMOTE_EXEC, ActionTypeK8S_ORCHESTRATE, ActionTypeDB_ACCESS, ActionTypeBUILD_DEPLOY, ActionTypeDOC_PROCESS, ActionTypeJOB_RESUME, ActionTypeWEB_FETCH:
+// StateValidator is a validator for the "state" field enum values. It is called by the builders before save.
+func StateValidator(s State) error {
+	switch s {
+	case StatePENDING, StateACTIVE, StateREJECTED, StateEXPIRED:
 		return nil
 	default:
-		return fmt.Errorf("behavioralrule: invalid enum value for action_type field: %q", at)
+		return fmt.Errorf("behavioralrule: invalid enum value for state field: %q", s)
 	}
 }
 
@@ -136,6 +139,16 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByActionType orders the results by the action_type field.
 func ByActionType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActionType, opts...).ToFunc()
+}
+
+// ByCategory orders the results by the category field.
+func ByCategory(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCategory, opts...).ToFunc()
+}
+
+// ByState orders the results by the state field.
+func ByState(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldState, opts...).ToFunc()
 }
 
 // ByRuleContent orders the results by the rule_content field.

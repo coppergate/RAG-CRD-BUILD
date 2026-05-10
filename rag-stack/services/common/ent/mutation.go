@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"app-builds/common/ent/actionidentifier"
+	"app-builds/common/ent/actiontype"
 	"app-builds/common/ent/behaviorallog"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
@@ -21,6 +23,7 @@ import (
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
+	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/tag"
 	"context"
 	"errors"
@@ -42,6 +45,8 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeActionIdentifier     = "ActionIdentifier"
+	TypeActionType           = "ActionType"
 	TypeBehavioralLog        = "BehavioralLog"
 	TypeBehavioralRule       = "BehavioralRule"
 	TypeBuildJournal         = "BuildJournal"
@@ -59,8 +64,909 @@ const (
 	TypeResponse             = "Response"
 	TypeRetrievalLog         = "RetrievalLog"
 	TypeSession              = "Session"
+	TypeSessionGovernance    = "SessionGovernance"
 	TypeTag                  = "Tag"
 )
+
+// ActionIdentifierMutation represents an operation that mutates the ActionIdentifier nodes in the graph.
+type ActionIdentifierMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *int64
+	identifier         *string
+	clearedFields      map[string]struct{}
+	action_type        *int64
+	clearedaction_type bool
+	done               bool
+	oldValue           func(context.Context) (*ActionIdentifier, error)
+	predicates         []predicate.ActionIdentifier
+}
+
+var _ ent.Mutation = (*ActionIdentifierMutation)(nil)
+
+// actionidentifierOption allows management of the mutation configuration using functional options.
+type actionidentifierOption func(*ActionIdentifierMutation)
+
+// newActionIdentifierMutation creates new mutation for the ActionIdentifier entity.
+func newActionIdentifierMutation(c config, op Op, opts ...actionidentifierOption) *ActionIdentifierMutation {
+	m := &ActionIdentifierMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeActionIdentifier,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withActionIdentifierID sets the ID field of the mutation.
+func withActionIdentifierID(id int64) actionidentifierOption {
+	return func(m *ActionIdentifierMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ActionIdentifier
+		)
+		m.oldValue = func(ctx context.Context) (*ActionIdentifier, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ActionIdentifier.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withActionIdentifier sets the old ActionIdentifier of the mutation.
+func withActionIdentifier(node *ActionIdentifier) actionidentifierOption {
+	return func(m *ActionIdentifierMutation) {
+		m.oldValue = func(context.Context) (*ActionIdentifier, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ActionIdentifierMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ActionIdentifierMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ActionIdentifier entities.
+func (m *ActionIdentifierMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ActionIdentifierMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ActionIdentifierMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ActionIdentifier.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetIdentifier sets the "identifier" field.
+func (m *ActionIdentifierMutation) SetIdentifier(s string) {
+	m.identifier = &s
+}
+
+// Identifier returns the value of the "identifier" field in the mutation.
+func (m *ActionIdentifierMutation) Identifier() (r string, exists bool) {
+	v := m.identifier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdentifier returns the old "identifier" field's value of the ActionIdentifier entity.
+// If the ActionIdentifier object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActionIdentifierMutation) OldIdentifier(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdentifier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdentifier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdentifier: %w", err)
+	}
+	return oldValue.Identifier, nil
+}
+
+// ResetIdentifier resets all changes to the "identifier" field.
+func (m *ActionIdentifierMutation) ResetIdentifier() {
+	m.identifier = nil
+}
+
+// SetActionTypeID sets the "action_type" edge to the ActionType entity by id.
+func (m *ActionIdentifierMutation) SetActionTypeID(id int64) {
+	m.action_type = &id
+}
+
+// ClearActionType clears the "action_type" edge to the ActionType entity.
+func (m *ActionIdentifierMutation) ClearActionType() {
+	m.clearedaction_type = true
+}
+
+// ActionTypeCleared reports if the "action_type" edge to the ActionType entity was cleared.
+func (m *ActionIdentifierMutation) ActionTypeCleared() bool {
+	return m.clearedaction_type
+}
+
+// ActionTypeID returns the "action_type" edge ID in the mutation.
+func (m *ActionIdentifierMutation) ActionTypeID() (id int64, exists bool) {
+	if m.action_type != nil {
+		return *m.action_type, true
+	}
+	return
+}
+
+// ActionTypeIDs returns the "action_type" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ActionTypeID instead. It exists only for internal usage by the builders.
+func (m *ActionIdentifierMutation) ActionTypeIDs() (ids []int64) {
+	if id := m.action_type; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetActionType resets all changes to the "action_type" edge.
+func (m *ActionIdentifierMutation) ResetActionType() {
+	m.action_type = nil
+	m.clearedaction_type = false
+}
+
+// Where appends a list predicates to the ActionIdentifierMutation builder.
+func (m *ActionIdentifierMutation) Where(ps ...predicate.ActionIdentifier) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ActionIdentifierMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ActionIdentifierMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ActionIdentifier, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ActionIdentifierMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ActionIdentifierMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ActionIdentifier).
+func (m *ActionIdentifierMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ActionIdentifierMutation) Fields() []string {
+	fields := make([]string, 0, 1)
+	if m.identifier != nil {
+		fields = append(fields, actionidentifier.FieldIdentifier)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ActionIdentifierMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case actionidentifier.FieldIdentifier:
+		return m.Identifier()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ActionIdentifierMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case actionidentifier.FieldIdentifier:
+		return m.OldIdentifier(ctx)
+	}
+	return nil, fmt.Errorf("unknown ActionIdentifier field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActionIdentifierMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case actionidentifier.FieldIdentifier:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdentifier(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ActionIdentifier field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ActionIdentifierMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ActionIdentifierMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActionIdentifierMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ActionIdentifier numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ActionIdentifierMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ActionIdentifierMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ActionIdentifierMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ActionIdentifier nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ActionIdentifierMutation) ResetField(name string) error {
+	switch name {
+	case actionidentifier.FieldIdentifier:
+		m.ResetIdentifier()
+		return nil
+	}
+	return fmt.Errorf("unknown ActionIdentifier field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ActionIdentifierMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.action_type != nil {
+		edges = append(edges, actionidentifier.EdgeActionType)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ActionIdentifierMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case actionidentifier.EdgeActionType:
+		if id := m.action_type; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ActionIdentifierMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ActionIdentifierMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ActionIdentifierMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedaction_type {
+		edges = append(edges, actionidentifier.EdgeActionType)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ActionIdentifierMutation) EdgeCleared(name string) bool {
+	switch name {
+	case actionidentifier.EdgeActionType:
+		return m.clearedaction_type
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ActionIdentifierMutation) ClearEdge(name string) error {
+	switch name {
+	case actionidentifier.EdgeActionType:
+		m.ClearActionType()
+		return nil
+	}
+	return fmt.Errorf("unknown ActionIdentifier unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ActionIdentifierMutation) ResetEdge(name string) error {
+	switch name {
+	case actionidentifier.EdgeActionType:
+		m.ResetActionType()
+		return nil
+	}
+	return fmt.Errorf("unknown ActionIdentifier edge %s", name)
+}
+
+// ActionTypeMutation represents an operation that mutates the ActionType nodes in the graph.
+type ActionTypeMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *int64
+	name               *string
+	description        *string
+	clearedFields      map[string]struct{}
+	identifiers        map[int64]struct{}
+	removedidentifiers map[int64]struct{}
+	clearedidentifiers bool
+	done               bool
+	oldValue           func(context.Context) (*ActionType, error)
+	predicates         []predicate.ActionType
+}
+
+var _ ent.Mutation = (*ActionTypeMutation)(nil)
+
+// actiontypeOption allows management of the mutation configuration using functional options.
+type actiontypeOption func(*ActionTypeMutation)
+
+// newActionTypeMutation creates new mutation for the ActionType entity.
+func newActionTypeMutation(c config, op Op, opts ...actiontypeOption) *ActionTypeMutation {
+	m := &ActionTypeMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeActionType,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withActionTypeID sets the ID field of the mutation.
+func withActionTypeID(id int64) actiontypeOption {
+	return func(m *ActionTypeMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ActionType
+		)
+		m.oldValue = func(ctx context.Context) (*ActionType, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ActionType.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withActionType sets the old ActionType of the mutation.
+func withActionType(node *ActionType) actiontypeOption {
+	return func(m *ActionTypeMutation) {
+		m.oldValue = func(context.Context) (*ActionType, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ActionTypeMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ActionTypeMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ActionType entities.
+func (m *ActionTypeMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ActionTypeMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ActionTypeMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ActionType.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetName sets the "name" field.
+func (m *ActionTypeMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *ActionTypeMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the ActionType entity.
+// If the ActionType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActionTypeMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *ActionTypeMutation) ResetName() {
+	m.name = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *ActionTypeMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *ActionTypeMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the ActionType entity.
+// If the ActionType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActionTypeMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ClearDescription clears the value of the "description" field.
+func (m *ActionTypeMutation) ClearDescription() {
+	m.description = nil
+	m.clearedFields[actiontype.FieldDescription] = struct{}{}
+}
+
+// DescriptionCleared returns if the "description" field was cleared in this mutation.
+func (m *ActionTypeMutation) DescriptionCleared() bool {
+	_, ok := m.clearedFields[actiontype.FieldDescription]
+	return ok
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *ActionTypeMutation) ResetDescription() {
+	m.description = nil
+	delete(m.clearedFields, actiontype.FieldDescription)
+}
+
+// AddIdentifierIDs adds the "identifiers" edge to the ActionIdentifier entity by ids.
+func (m *ActionTypeMutation) AddIdentifierIDs(ids ...int64) {
+	if m.identifiers == nil {
+		m.identifiers = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.identifiers[ids[i]] = struct{}{}
+	}
+}
+
+// ClearIdentifiers clears the "identifiers" edge to the ActionIdentifier entity.
+func (m *ActionTypeMutation) ClearIdentifiers() {
+	m.clearedidentifiers = true
+}
+
+// IdentifiersCleared reports if the "identifiers" edge to the ActionIdentifier entity was cleared.
+func (m *ActionTypeMutation) IdentifiersCleared() bool {
+	return m.clearedidentifiers
+}
+
+// RemoveIdentifierIDs removes the "identifiers" edge to the ActionIdentifier entity by IDs.
+func (m *ActionTypeMutation) RemoveIdentifierIDs(ids ...int64) {
+	if m.removedidentifiers == nil {
+		m.removedidentifiers = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.identifiers, ids[i])
+		m.removedidentifiers[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedIdentifiers returns the removed IDs of the "identifiers" edge to the ActionIdentifier entity.
+func (m *ActionTypeMutation) RemovedIdentifiersIDs() (ids []int64) {
+	for id := range m.removedidentifiers {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// IdentifiersIDs returns the "identifiers" edge IDs in the mutation.
+func (m *ActionTypeMutation) IdentifiersIDs() (ids []int64) {
+	for id := range m.identifiers {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetIdentifiers resets all changes to the "identifiers" edge.
+func (m *ActionTypeMutation) ResetIdentifiers() {
+	m.identifiers = nil
+	m.clearedidentifiers = false
+	m.removedidentifiers = nil
+}
+
+// Where appends a list predicates to the ActionTypeMutation builder.
+func (m *ActionTypeMutation) Where(ps ...predicate.ActionType) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ActionTypeMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ActionTypeMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ActionType, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ActionTypeMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ActionTypeMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ActionType).
+func (m *ActionTypeMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ActionTypeMutation) Fields() []string {
+	fields := make([]string, 0, 2)
+	if m.name != nil {
+		fields = append(fields, actiontype.FieldName)
+	}
+	if m.description != nil {
+		fields = append(fields, actiontype.FieldDescription)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ActionTypeMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case actiontype.FieldName:
+		return m.Name()
+	case actiontype.FieldDescription:
+		return m.Description()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ActionTypeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case actiontype.FieldName:
+		return m.OldName(ctx)
+	case actiontype.FieldDescription:
+		return m.OldDescription(ctx)
+	}
+	return nil, fmt.Errorf("unknown ActionType field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActionTypeMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case actiontype.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case actiontype.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ActionType field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ActionTypeMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ActionTypeMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActionTypeMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ActionType numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ActionTypeMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(actiontype.FieldDescription) {
+		fields = append(fields, actiontype.FieldDescription)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ActionTypeMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ActionTypeMutation) ClearField(name string) error {
+	switch name {
+	case actiontype.FieldDescription:
+		m.ClearDescription()
+		return nil
+	}
+	return fmt.Errorf("unknown ActionType nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ActionTypeMutation) ResetField(name string) error {
+	switch name {
+	case actiontype.FieldName:
+		m.ResetName()
+		return nil
+	case actiontype.FieldDescription:
+		m.ResetDescription()
+		return nil
+	}
+	return fmt.Errorf("unknown ActionType field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ActionTypeMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.identifiers != nil {
+		edges = append(edges, actiontype.EdgeIdentifiers)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ActionTypeMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case actiontype.EdgeIdentifiers:
+		ids := make([]ent.Value, 0, len(m.identifiers))
+		for id := range m.identifiers {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ActionTypeMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.removedidentifiers != nil {
+		edges = append(edges, actiontype.EdgeIdentifiers)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ActionTypeMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case actiontype.EdgeIdentifiers:
+		ids := make([]ent.Value, 0, len(m.removedidentifiers))
+		for id := range m.removedidentifiers {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ActionTypeMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedidentifiers {
+		edges = append(edges, actiontype.EdgeIdentifiers)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ActionTypeMutation) EdgeCleared(name string) bool {
+	switch name {
+	case actiontype.EdgeIdentifiers:
+		return m.clearedidentifiers
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ActionTypeMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ActionType unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ActionTypeMutation) ResetEdge(name string) error {
+	switch name {
+	case actiontype.EdgeIdentifiers:
+		m.ResetIdentifiers()
+		return nil
+	}
+	return fmt.Errorf("unknown ActionType edge %s", name)
+}
 
 // BehavioralLogMutation represents an operation that mutates the BehavioralLog nodes in the graph.
 type BehavioralLogMutation struct {
@@ -71,7 +977,7 @@ type BehavioralLogMutation struct {
 	prompt_id     *string
 	rule_id       *int64
 	addrule_id    *int64
-	action_type   *behaviorallog.ActionType
+	action_type   *string
 	applied_at    *time.Time
 	context       *map[string]interface{}
 	clearedFields map[string]struct{}
@@ -277,12 +1183,12 @@ func (m *BehavioralLogMutation) ResetRuleID() {
 }
 
 // SetActionType sets the "action_type" field.
-func (m *BehavioralLogMutation) SetActionType(bt behaviorallog.ActionType) {
-	m.action_type = &bt
+func (m *BehavioralLogMutation) SetActionType(s string) {
+	m.action_type = &s
 }
 
 // ActionType returns the value of the "action_type" field in the mutation.
-func (m *BehavioralLogMutation) ActionType() (r behaviorallog.ActionType, exists bool) {
+func (m *BehavioralLogMutation) ActionType() (r string, exists bool) {
 	v := m.action_type
 	if v == nil {
 		return
@@ -293,7 +1199,7 @@ func (m *BehavioralLogMutation) ActionType() (r behaviorallog.ActionType, exists
 // OldActionType returns the old "action_type" field's value of the BehavioralLog entity.
 // If the BehavioralLog object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BehavioralLogMutation) OldActionType(ctx context.Context) (v behaviorallog.ActionType, err error) {
+func (m *BehavioralLogMutation) OldActionType(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldActionType is only allowed on UpdateOne operations")
 	}
@@ -508,7 +1414,7 @@ func (m *BehavioralLogMutation) SetField(name string, value ent.Value) error {
 		m.SetRuleID(v)
 		return nil
 	case behaviorallog.FieldActionType:
-		v, ok := value.(behaviorallog.ActionType)
+		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -674,7 +1580,9 @@ type BehavioralRuleMutation struct {
 	op            Op
 	typ           string
 	id            *int64
-	action_type   *behavioralrule.ActionType
+	action_type   *string
+	category      *string
+	state         *behavioralrule.State
 	rule_content  *string
 	priority      *int
 	addpriority   *int
@@ -793,12 +1701,12 @@ func (m *BehavioralRuleMutation) IDs(ctx context.Context) ([]int64, error) {
 }
 
 // SetActionType sets the "action_type" field.
-func (m *BehavioralRuleMutation) SetActionType(bt behavioralrule.ActionType) {
-	m.action_type = &bt
+func (m *BehavioralRuleMutation) SetActionType(s string) {
+	m.action_type = &s
 }
 
 // ActionType returns the value of the "action_type" field in the mutation.
-func (m *BehavioralRuleMutation) ActionType() (r behavioralrule.ActionType, exists bool) {
+func (m *BehavioralRuleMutation) ActionType() (r string, exists bool) {
 	v := m.action_type
 	if v == nil {
 		return
@@ -809,7 +1717,7 @@ func (m *BehavioralRuleMutation) ActionType() (r behavioralrule.ActionType, exis
 // OldActionType returns the old "action_type" field's value of the BehavioralRule entity.
 // If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *BehavioralRuleMutation) OldActionType(ctx context.Context) (v behavioralrule.ActionType, err error) {
+func (m *BehavioralRuleMutation) OldActionType(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldActionType is only allowed on UpdateOne operations")
 	}
@@ -826,6 +1734,91 @@ func (m *BehavioralRuleMutation) OldActionType(ctx context.Context) (v behaviora
 // ResetActionType resets all changes to the "action_type" field.
 func (m *BehavioralRuleMutation) ResetActionType() {
 	m.action_type = nil
+}
+
+// SetCategory sets the "category" field.
+func (m *BehavioralRuleMutation) SetCategory(s string) {
+	m.category = &s
+}
+
+// Category returns the value of the "category" field in the mutation.
+func (m *BehavioralRuleMutation) Category() (r string, exists bool) {
+	v := m.category
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCategory returns the old "category" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldCategory(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCategory is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCategory requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCategory: %w", err)
+	}
+	return oldValue.Category, nil
+}
+
+// ClearCategory clears the value of the "category" field.
+func (m *BehavioralRuleMutation) ClearCategory() {
+	m.category = nil
+	m.clearedFields[behavioralrule.FieldCategory] = struct{}{}
+}
+
+// CategoryCleared returns if the "category" field was cleared in this mutation.
+func (m *BehavioralRuleMutation) CategoryCleared() bool {
+	_, ok := m.clearedFields[behavioralrule.FieldCategory]
+	return ok
+}
+
+// ResetCategory resets all changes to the "category" field.
+func (m *BehavioralRuleMutation) ResetCategory() {
+	m.category = nil
+	delete(m.clearedFields, behavioralrule.FieldCategory)
+}
+
+// SetState sets the "state" field.
+func (m *BehavioralRuleMutation) SetState(b behavioralrule.State) {
+	m.state = &b
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *BehavioralRuleMutation) State() (r behavioralrule.State, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldState(ctx context.Context) (v behavioralrule.State, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *BehavioralRuleMutation) ResetState() {
+	m.state = nil
 }
 
 // SetRuleContent sets the "rule_content" field.
@@ -1098,9 +2091,15 @@ func (m *BehavioralRuleMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *BehavioralRuleMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 9)
 	if m.action_type != nil {
 		fields = append(fields, behavioralrule.FieldActionType)
+	}
+	if m.category != nil {
+		fields = append(fields, behavioralrule.FieldCategory)
+	}
+	if m.state != nil {
+		fields = append(fields, behavioralrule.FieldState)
 	}
 	if m.rule_content != nil {
 		fields = append(fields, behavioralrule.FieldRuleContent)
@@ -1130,6 +2129,10 @@ func (m *BehavioralRuleMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case behavioralrule.FieldActionType:
 		return m.ActionType()
+	case behavioralrule.FieldCategory:
+		return m.Category()
+	case behavioralrule.FieldState:
+		return m.State()
 	case behavioralrule.FieldRuleContent:
 		return m.RuleContent()
 	case behavioralrule.FieldPriority:
@@ -1153,6 +2156,10 @@ func (m *BehavioralRuleMutation) OldField(ctx context.Context, name string) (ent
 	switch name {
 	case behavioralrule.FieldActionType:
 		return m.OldActionType(ctx)
+	case behavioralrule.FieldCategory:
+		return m.OldCategory(ctx)
+	case behavioralrule.FieldState:
+		return m.OldState(ctx)
 	case behavioralrule.FieldRuleContent:
 		return m.OldRuleContent(ctx)
 	case behavioralrule.FieldPriority:
@@ -1175,11 +2182,25 @@ func (m *BehavioralRuleMutation) OldField(ctx context.Context, name string) (ent
 func (m *BehavioralRuleMutation) SetField(name string, value ent.Value) error {
 	switch name {
 	case behavioralrule.FieldActionType:
-		v, ok := value.(behavioralrule.ActionType)
+		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActionType(v)
+		return nil
+	case behavioralrule.FieldCategory:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCategory(v)
+		return nil
+	case behavioralrule.FieldState:
+		v, ok := value.(behavioralrule.State)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
 		return nil
 	case behavioralrule.FieldRuleContent:
 		v, ok := value.(string)
@@ -1267,7 +2288,11 @@ func (m *BehavioralRuleMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *BehavioralRuleMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(behavioralrule.FieldCategory) {
+		fields = append(fields, behavioralrule.FieldCategory)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -1280,6 +2305,11 @@ func (m *BehavioralRuleMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *BehavioralRuleMutation) ClearField(name string) error {
+	switch name {
+	case behavioralrule.FieldCategory:
+		m.ClearCategory()
+		return nil
+	}
 	return fmt.Errorf("unknown BehavioralRule nullable field %s", name)
 }
 
@@ -1289,6 +2319,12 @@ func (m *BehavioralRuleMutation) ResetField(name string) error {
 	switch name {
 	case behavioralrule.FieldActionType:
 		m.ResetActionType()
+		return nil
+	case behavioralrule.FieldCategory:
+		m.ResetCategory()
+		return nil
+	case behavioralrule.FieldState:
+		m.ResetState()
 		return nil
 	case behavioralrule.FieldRuleContent:
 		m.ResetRuleContent()
@@ -13960,6 +14996,602 @@ func (m *SessionMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Session edge %s", name)
+}
+
+// SessionGovernanceMutation represents an operation that mutates the SessionGovernance nodes in the graph.
+type SessionGovernanceMutation struct {
+	config
+	op                   Op
+	typ                  string
+	id                   *int64
+	session_id           *int64
+	addsession_id        *int64
+	rule_id              *int64
+	addrule_id           *int64
+	priority_override    *int
+	addpriority_override *int
+	updated_at           *time.Time
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*SessionGovernance, error)
+	predicates           []predicate.SessionGovernance
+}
+
+var _ ent.Mutation = (*SessionGovernanceMutation)(nil)
+
+// sessiongovernanceOption allows management of the mutation configuration using functional options.
+type sessiongovernanceOption func(*SessionGovernanceMutation)
+
+// newSessionGovernanceMutation creates new mutation for the SessionGovernance entity.
+func newSessionGovernanceMutation(c config, op Op, opts ...sessiongovernanceOption) *SessionGovernanceMutation {
+	m := &SessionGovernanceMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSessionGovernance,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSessionGovernanceID sets the ID field of the mutation.
+func withSessionGovernanceID(id int64) sessiongovernanceOption {
+	return func(m *SessionGovernanceMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SessionGovernance
+		)
+		m.oldValue = func(ctx context.Context) (*SessionGovernance, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SessionGovernance.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSessionGovernance sets the old SessionGovernance of the mutation.
+func withSessionGovernance(node *SessionGovernance) sessiongovernanceOption {
+	return func(m *SessionGovernanceMutation) {
+		m.oldValue = func(context.Context) (*SessionGovernance, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SessionGovernanceMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SessionGovernanceMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of SessionGovernance entities.
+func (m *SessionGovernanceMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SessionGovernanceMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SessionGovernanceMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SessionGovernance.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetSessionID sets the "session_id" field.
+func (m *SessionGovernanceMutation) SetSessionID(i int64) {
+	m.session_id = &i
+	m.addsession_id = nil
+}
+
+// SessionID returns the value of the "session_id" field in the mutation.
+func (m *SessionGovernanceMutation) SessionID() (r int64, exists bool) {
+	v := m.session_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionID returns the old "session_id" field's value of the SessionGovernance entity.
+// If the SessionGovernance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionGovernanceMutation) OldSessionID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionID: %w", err)
+	}
+	return oldValue.SessionID, nil
+}
+
+// AddSessionID adds i to the "session_id" field.
+func (m *SessionGovernanceMutation) AddSessionID(i int64) {
+	if m.addsession_id != nil {
+		*m.addsession_id += i
+	} else {
+		m.addsession_id = &i
+	}
+}
+
+// AddedSessionID returns the value that was added to the "session_id" field in this mutation.
+func (m *SessionGovernanceMutation) AddedSessionID() (r int64, exists bool) {
+	v := m.addsession_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSessionID resets all changes to the "session_id" field.
+func (m *SessionGovernanceMutation) ResetSessionID() {
+	m.session_id = nil
+	m.addsession_id = nil
+}
+
+// SetRuleID sets the "rule_id" field.
+func (m *SessionGovernanceMutation) SetRuleID(i int64) {
+	m.rule_id = &i
+	m.addrule_id = nil
+}
+
+// RuleID returns the value of the "rule_id" field in the mutation.
+func (m *SessionGovernanceMutation) RuleID() (r int64, exists bool) {
+	v := m.rule_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuleID returns the old "rule_id" field's value of the SessionGovernance entity.
+// If the SessionGovernance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionGovernanceMutation) OldRuleID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuleID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuleID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuleID: %w", err)
+	}
+	return oldValue.RuleID, nil
+}
+
+// AddRuleID adds i to the "rule_id" field.
+func (m *SessionGovernanceMutation) AddRuleID(i int64) {
+	if m.addrule_id != nil {
+		*m.addrule_id += i
+	} else {
+		m.addrule_id = &i
+	}
+}
+
+// AddedRuleID returns the value that was added to the "rule_id" field in this mutation.
+func (m *SessionGovernanceMutation) AddedRuleID() (r int64, exists bool) {
+	v := m.addrule_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRuleID resets all changes to the "rule_id" field.
+func (m *SessionGovernanceMutation) ResetRuleID() {
+	m.rule_id = nil
+	m.addrule_id = nil
+}
+
+// SetPriorityOverride sets the "priority_override" field.
+func (m *SessionGovernanceMutation) SetPriorityOverride(i int) {
+	m.priority_override = &i
+	m.addpriority_override = nil
+}
+
+// PriorityOverride returns the value of the "priority_override" field in the mutation.
+func (m *SessionGovernanceMutation) PriorityOverride() (r int, exists bool) {
+	v := m.priority_override
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriorityOverride returns the old "priority_override" field's value of the SessionGovernance entity.
+// If the SessionGovernance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionGovernanceMutation) OldPriorityOverride(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriorityOverride is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriorityOverride requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriorityOverride: %w", err)
+	}
+	return oldValue.PriorityOverride, nil
+}
+
+// AddPriorityOverride adds i to the "priority_override" field.
+func (m *SessionGovernanceMutation) AddPriorityOverride(i int) {
+	if m.addpriority_override != nil {
+		*m.addpriority_override += i
+	} else {
+		m.addpriority_override = &i
+	}
+}
+
+// AddedPriorityOverride returns the value that was added to the "priority_override" field in this mutation.
+func (m *SessionGovernanceMutation) AddedPriorityOverride() (r int, exists bool) {
+	v := m.addpriority_override
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriorityOverride resets all changes to the "priority_override" field.
+func (m *SessionGovernanceMutation) ResetPriorityOverride() {
+	m.priority_override = nil
+	m.addpriority_override = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SessionGovernanceMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SessionGovernanceMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SessionGovernance entity.
+// If the SessionGovernance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SessionGovernanceMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SessionGovernanceMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the SessionGovernanceMutation builder.
+func (m *SessionGovernanceMutation) Where(ps ...predicate.SessionGovernance) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SessionGovernanceMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SessionGovernanceMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SessionGovernance, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SessionGovernanceMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SessionGovernanceMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SessionGovernance).
+func (m *SessionGovernanceMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SessionGovernanceMutation) Fields() []string {
+	fields := make([]string, 0, 4)
+	if m.session_id != nil {
+		fields = append(fields, sessiongovernance.FieldSessionID)
+	}
+	if m.rule_id != nil {
+		fields = append(fields, sessiongovernance.FieldRuleID)
+	}
+	if m.priority_override != nil {
+		fields = append(fields, sessiongovernance.FieldPriorityOverride)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, sessiongovernance.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SessionGovernanceMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case sessiongovernance.FieldSessionID:
+		return m.SessionID()
+	case sessiongovernance.FieldRuleID:
+		return m.RuleID()
+	case sessiongovernance.FieldPriorityOverride:
+		return m.PriorityOverride()
+	case sessiongovernance.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SessionGovernanceMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case sessiongovernance.FieldSessionID:
+		return m.OldSessionID(ctx)
+	case sessiongovernance.FieldRuleID:
+		return m.OldRuleID(ctx)
+	case sessiongovernance.FieldPriorityOverride:
+		return m.OldPriorityOverride(ctx)
+	case sessiongovernance.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown SessionGovernance field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SessionGovernanceMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case sessiongovernance.FieldSessionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionID(v)
+		return nil
+	case sessiongovernance.FieldRuleID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuleID(v)
+		return nil
+	case sessiongovernance.FieldPriorityOverride:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriorityOverride(v)
+		return nil
+	case sessiongovernance.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SessionGovernance field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SessionGovernanceMutation) AddedFields() []string {
+	var fields []string
+	if m.addsession_id != nil {
+		fields = append(fields, sessiongovernance.FieldSessionID)
+	}
+	if m.addrule_id != nil {
+		fields = append(fields, sessiongovernance.FieldRuleID)
+	}
+	if m.addpriority_override != nil {
+		fields = append(fields, sessiongovernance.FieldPriorityOverride)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SessionGovernanceMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case sessiongovernance.FieldSessionID:
+		return m.AddedSessionID()
+	case sessiongovernance.FieldRuleID:
+		return m.AddedRuleID()
+	case sessiongovernance.FieldPriorityOverride:
+		return m.AddedPriorityOverride()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SessionGovernanceMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case sessiongovernance.FieldSessionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSessionID(v)
+		return nil
+	case sessiongovernance.FieldRuleID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRuleID(v)
+		return nil
+	case sessiongovernance.FieldPriorityOverride:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriorityOverride(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SessionGovernance numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SessionGovernanceMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SessionGovernanceMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SessionGovernanceMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown SessionGovernance nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SessionGovernanceMutation) ResetField(name string) error {
+	switch name {
+	case sessiongovernance.FieldSessionID:
+		m.ResetSessionID()
+		return nil
+	case sessiongovernance.FieldRuleID:
+		m.ResetRuleID()
+		return nil
+	case sessiongovernance.FieldPriorityOverride:
+		m.ResetPriorityOverride()
+		return nil
+	case sessiongovernance.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown SessionGovernance field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SessionGovernanceMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SessionGovernanceMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SessionGovernanceMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SessionGovernanceMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SessionGovernanceMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SessionGovernanceMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SessionGovernanceMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown SessionGovernance unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SessionGovernanceMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown SessionGovernance edge %s", name)
 }
 
 // TagMutation represents an operation that mutates the Tag nodes in the graph.

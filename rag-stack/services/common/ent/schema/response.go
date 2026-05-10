@@ -1,16 +1,29 @@
 package schema
 
 import (
-"github.com/google/uuid"
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
+	"github.com/google/uuid"
 	"time"
 )
 
 // Response holds the schema definition for the Response entity.
 type Response struct {
 	ent.Schema
+}
+
+// Annotations of the Response.
+func (Response) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entsql.Annotation{Table: "responses"},
+		entsql.WithComments(true),
+		entsql.Annotation{
+			Check: "created_at IS NOT NULL", // Placeholder, we actually want composite PK
+		},
+	}
 }
 
 // Fields of the Response.

@@ -35,7 +35,7 @@ func (_c *BehavioralLogCreate) SetRuleID(v int64) *BehavioralLogCreate {
 }
 
 // SetActionType sets the "action_type" field.
-func (_c *BehavioralLogCreate) SetActionType(v behaviorallog.ActionType) *BehavioralLogCreate {
+func (_c *BehavioralLogCreate) SetActionType(v string) *BehavioralLogCreate {
 	_c.mutation.SetActionType(v)
 	return _c
 }
@@ -118,11 +118,6 @@ func (_c *BehavioralLogCreate) check() error {
 	if _, ok := _c.mutation.ActionType(); !ok {
 		return &ValidationError{Name: "action_type", err: errors.New(`ent: missing required field "BehavioralLog.action_type"`)}
 	}
-	if v, ok := _c.mutation.ActionType(); ok {
-		if err := behaviorallog.ActionTypeValidator(v); err != nil {
-			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "BehavioralLog.action_type": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.AppliedAt(); !ok {
 		return &ValidationError{Name: "applied_at", err: errors.New(`ent: missing required field "BehavioralLog.applied_at"`)}
 	}
@@ -168,7 +163,7 @@ func (_c *BehavioralLogCreate) createSpec() (*BehavioralLog, *sqlgraph.CreateSpe
 		_node.RuleID = value
 	}
 	if value, ok := _c.mutation.ActionType(); ok {
-		_spec.SetField(behaviorallog.FieldActionType, field.TypeEnum, value)
+		_spec.SetField(behaviorallog.FieldActionType, field.TypeString, value)
 		_node.ActionType = value
 	}
 	if value, ok := _c.mutation.AppliedAt(); ok {
@@ -262,7 +257,7 @@ func (u *BehavioralLogUpsert) AddRuleID(v int64) *BehavioralLogUpsert {
 }
 
 // SetActionType sets the "action_type" field.
-func (u *BehavioralLogUpsert) SetActionType(v behaviorallog.ActionType) *BehavioralLogUpsert {
+func (u *BehavioralLogUpsert) SetActionType(v string) *BehavioralLogUpsert {
 	u.Set(behaviorallog.FieldActionType, v)
 	return u
 }
@@ -378,7 +373,7 @@ func (u *BehavioralLogUpsertOne) UpdateRuleID() *BehavioralLogUpsertOne {
 }
 
 // SetActionType sets the "action_type" field.
-func (u *BehavioralLogUpsertOne) SetActionType(v behaviorallog.ActionType) *BehavioralLogUpsertOne {
+func (u *BehavioralLogUpsertOne) SetActionType(v string) *BehavioralLogUpsertOne {
 	return u.Update(func(s *BehavioralLogUpsert) {
 		s.SetActionType(v)
 	})
@@ -665,7 +660,7 @@ func (u *BehavioralLogUpsertBulk) UpdateRuleID() *BehavioralLogUpsertBulk {
 }
 
 // SetActionType sets the "action_type" field.
-func (u *BehavioralLogUpsertBulk) SetActionType(v behaviorallog.ActionType) *BehavioralLogUpsertBulk {
+func (u *BehavioralLogUpsertBulk) SetActionType(v string) *BehavioralLogUpsertBulk {
 	return u.Update(func(s *BehavioralLogUpsert) {
 		s.SetActionType(v)
 	})

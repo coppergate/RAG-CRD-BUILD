@@ -171,33 +171,6 @@ func (_u *ModelExecutionMetricUpdate) ClearCompletionTokens() *ModelExecutionMet
 	return _u
 }
 
-// SetTotalTokens sets the "total_tokens" field.
-func (_u *ModelExecutionMetricUpdate) SetTotalTokens(v int) *ModelExecutionMetricUpdate {
-	_u.mutation.ResetTotalTokens()
-	_u.mutation.SetTotalTokens(v)
-	return _u
-}
-
-// SetNillableTotalTokens sets the "total_tokens" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdate) SetNillableTotalTokens(v *int) *ModelExecutionMetricUpdate {
-	if v != nil {
-		_u.SetTotalTokens(*v)
-	}
-	return _u
-}
-
-// AddTotalTokens adds value to the "total_tokens" field.
-func (_u *ModelExecutionMetricUpdate) AddTotalTokens(v int) *ModelExecutionMetricUpdate {
-	_u.mutation.AddTotalTokens(v)
-	return _u
-}
-
-// ClearTotalTokens clears the value of the "total_tokens" field.
-func (_u *ModelExecutionMetricUpdate) ClearTotalTokens() *ModelExecutionMetricUpdate {
-	_u.mutation.ClearTotalTokens()
-	return _u
-}
-
 // SetTotalDurationUsec sets the "total_duration_usec" field.
 func (_u *ModelExecutionMetricUpdate) SetTotalDurationUsec(v int64) *ModelExecutionMetricUpdate {
 	_u.mutation.ResetTotalDurationUsec()
@@ -433,12 +406,6 @@ func (_u *ModelExecutionMetricUpdate) sqlSave(ctx context.Context) (_node int, e
 	}
 	if _u.mutation.CompletionTokensCleared() {
 		_spec.ClearField(modelexecutionmetric.FieldCompletionTokens, field.TypeInt)
-	}
-	if value, ok := _u.mutation.TotalTokens(); ok {
-		_spec.SetField(modelexecutionmetric.FieldTotalTokens, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTotalTokens(); ok {
-		_spec.AddField(modelexecutionmetric.FieldTotalTokens, field.TypeInt, value)
 	}
 	if _u.mutation.TotalTokensCleared() {
 		_spec.ClearField(modelexecutionmetric.FieldTotalTokens, field.TypeInt)
@@ -736,33 +703,6 @@ func (_u *ModelExecutionMetricUpdateOne) ClearCompletionTokens() *ModelExecution
 	return _u
 }
 
-// SetTotalTokens sets the "total_tokens" field.
-func (_u *ModelExecutionMetricUpdateOne) SetTotalTokens(v int) *ModelExecutionMetricUpdateOne {
-	_u.mutation.ResetTotalTokens()
-	_u.mutation.SetTotalTokens(v)
-	return _u
-}
-
-// SetNillableTotalTokens sets the "total_tokens" field if the given value is not nil.
-func (_u *ModelExecutionMetricUpdateOne) SetNillableTotalTokens(v *int) *ModelExecutionMetricUpdateOne {
-	if v != nil {
-		_u.SetTotalTokens(*v)
-	}
-	return _u
-}
-
-// AddTotalTokens adds value to the "total_tokens" field.
-func (_u *ModelExecutionMetricUpdateOne) AddTotalTokens(v int) *ModelExecutionMetricUpdateOne {
-	_u.mutation.AddTotalTokens(v)
-	return _u
-}
-
-// ClearTotalTokens clears the value of the "total_tokens" field.
-func (_u *ModelExecutionMetricUpdateOne) ClearTotalTokens() *ModelExecutionMetricUpdateOne {
-	_u.mutation.ClearTotalTokens()
-	return _u
-}
-
 // SetTotalDurationUsec sets the "total_duration_usec" field.
 func (_u *ModelExecutionMetricUpdateOne) SetTotalDurationUsec(v int64) *ModelExecutionMetricUpdateOne {
 	_u.mutation.ResetTotalDurationUsec()
@@ -1028,12 +968,6 @@ func (_u *ModelExecutionMetricUpdateOne) sqlSave(ctx context.Context) (_node *Mo
 	}
 	if _u.mutation.CompletionTokensCleared() {
 		_spec.ClearField(modelexecutionmetric.FieldCompletionTokens, field.TypeInt)
-	}
-	if value, ok := _u.mutation.TotalTokens(); ok {
-		_spec.SetField(modelexecutionmetric.FieldTotalTokens, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedTotalTokens(); ok {
-		_spec.AddField(modelexecutionmetric.FieldTotalTokens, field.TypeInt, value)
 	}
 	if _u.mutation.TotalTokensCleared() {
 		_spec.ClearField(modelexecutionmetric.FieldTotalTokens, field.TypeInt)

@@ -18,7 +18,11 @@ type BehavioralRule struct {
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
 	// ActionType holds the value of the "action_type" field.
-	ActionType behavioralrule.ActionType `json:"action_type,omitempty"`
+	ActionType string `json:"action_type,omitempty"`
+	// Category holds the value of the "category" field.
+	Category string `json:"category,omitempty"`
+	// State holds the value of the "state" field.
+	State behavioralrule.State `json:"state,omitempty"`
 	// RuleContent holds the value of the "rule_content" field.
 	RuleContent string `json:"rule_content,omitempty"`
 	// Priority holds the value of the "priority" field.
@@ -43,7 +47,7 @@ func (*BehavioralRule) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case behavioralrule.FieldID, behavioralrule.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case behavioralrule.FieldActionType, behavioralrule.FieldRuleContent, behavioralrule.FieldScope:
+		case behavioralrule.FieldActionType, behavioralrule.FieldCategory, behavioralrule.FieldState, behavioralrule.FieldRuleContent, behavioralrule.FieldScope:
 			values[i] = new(sql.NullString)
 		case behavioralrule.FieldCreatedAt, behavioralrule.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -72,7 +76,19 @@ func (_m *BehavioralRule) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field action_type", values[i])
 			} else if value.Valid {
-				_m.ActionType = behavioralrule.ActionType(value.String)
+				_m.ActionType = value.String
+			}
+		case behavioralrule.FieldCategory:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field category", values[i])
+			} else if value.Valid {
+				_m.Category = value.String
+			}
+		case behavioralrule.FieldState:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field state", values[i])
+			} else if value.Valid {
+				_m.State = behavioralrule.State(value.String)
 			}
 		case behavioralrule.FieldRuleContent:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -147,7 +163,13 @@ func (_m *BehavioralRule) String() string {
 	builder.WriteString("BehavioralRule(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("action_type=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ActionType))
+	builder.WriteString(_m.ActionType)
+	builder.WriteString(", ")
+	builder.WriteString("category=")
+	builder.WriteString(_m.Category)
+	builder.WriteString(", ")
+	builder.WriteString("state=")
+	builder.WriteString(fmt.Sprintf("%v", _m.State))
 	builder.WriteString(", ")
 	builder.WriteString("rule_content=")
 	builder.WriteString(_m.RuleContent)

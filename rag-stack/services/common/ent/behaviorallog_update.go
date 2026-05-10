@@ -63,13 +63,13 @@ func (_u *BehavioralLogUpdate) AddRuleID(v int64) *BehavioralLogUpdate {
 }
 
 // SetActionType sets the "action_type" field.
-func (_u *BehavioralLogUpdate) SetActionType(v behaviorallog.ActionType) *BehavioralLogUpdate {
+func (_u *BehavioralLogUpdate) SetActionType(v string) *BehavioralLogUpdate {
 	_u.mutation.SetActionType(v)
 	return _u
 }
 
 // SetNillableActionType sets the "action_type" field if the given value is not nil.
-func (_u *BehavioralLogUpdate) SetNillableActionType(v *behaviorallog.ActionType) *BehavioralLogUpdate {
+func (_u *BehavioralLogUpdate) SetNillableActionType(v *string) *BehavioralLogUpdate {
 	if v != nil {
 		_u.SetActionType(*v)
 	}
@@ -120,20 +120,7 @@ func (_u *BehavioralLogUpdate) ExecX(ctx context.Context) {
 	}
 }
 
-// check runs all checks and user-defined validators on the builder.
-func (_u *BehavioralLogUpdate) check() error {
-	if v, ok := _u.mutation.ActionType(); ok {
-		if err := behaviorallog.ActionTypeValidator(v); err != nil {
-			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "BehavioralLog.action_type": %w`, err)}
-		}
-	}
-	return nil
-}
-
 func (_u *BehavioralLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
-	if err := _u.check(); err != nil {
-		return _node, err
-	}
 	_spec := sqlgraph.NewUpdateSpec(behaviorallog.Table, behaviorallog.Columns, sqlgraph.NewFieldSpec(behaviorallog.FieldID, field.TypeInt64))
 	if ps := _u.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -152,7 +139,7 @@ func (_u *BehavioralLogUpdate) sqlSave(ctx context.Context) (_node int, err erro
 		_spec.AddField(behaviorallog.FieldRuleID, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.ActionType(); ok {
-		_spec.SetField(behaviorallog.FieldActionType, field.TypeEnum, value)
+		_spec.SetField(behaviorallog.FieldActionType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Context(); ok {
 		_spec.SetField(behaviorallog.FieldContext, field.TypeJSON, value)
@@ -216,13 +203,13 @@ func (_u *BehavioralLogUpdateOne) AddRuleID(v int64) *BehavioralLogUpdateOne {
 }
 
 // SetActionType sets the "action_type" field.
-func (_u *BehavioralLogUpdateOne) SetActionType(v behaviorallog.ActionType) *BehavioralLogUpdateOne {
+func (_u *BehavioralLogUpdateOne) SetActionType(v string) *BehavioralLogUpdateOne {
 	_u.mutation.SetActionType(v)
 	return _u
 }
 
 // SetNillableActionType sets the "action_type" field if the given value is not nil.
-func (_u *BehavioralLogUpdateOne) SetNillableActionType(v *behaviorallog.ActionType) *BehavioralLogUpdateOne {
+func (_u *BehavioralLogUpdateOne) SetNillableActionType(v *string) *BehavioralLogUpdateOne {
 	if v != nil {
 		_u.SetActionType(*v)
 	}
@@ -286,20 +273,7 @@ func (_u *BehavioralLogUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
-// check runs all checks and user-defined validators on the builder.
-func (_u *BehavioralLogUpdateOne) check() error {
-	if v, ok := _u.mutation.ActionType(); ok {
-		if err := behaviorallog.ActionTypeValidator(v); err != nil {
-			return &ValidationError{Name: "action_type", err: fmt.Errorf(`ent: validator failed for field "BehavioralLog.action_type": %w`, err)}
-		}
-	}
-	return nil
-}
-
 func (_u *BehavioralLogUpdateOne) sqlSave(ctx context.Context) (_node *BehavioralLog, err error) {
-	if err := _u.check(); err != nil {
-		return _node, err
-	}
 	_spec := sqlgraph.NewUpdateSpec(behaviorallog.Table, behaviorallog.Columns, sqlgraph.NewFieldSpec(behaviorallog.FieldID, field.TypeInt64))
 	id, ok := _u.mutation.ID()
 	if !ok {
@@ -335,7 +309,7 @@ func (_u *BehavioralLogUpdateOne) sqlSave(ctx context.Context) (_node *Behaviora
 		_spec.AddField(behaviorallog.FieldRuleID, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.ActionType(); ok {
-		_spec.SetField(behaviorallog.FieldActionType, field.TypeEnum, value)
+		_spec.SetField(behaviorallog.FieldActionType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Context(); ok {
 		_spec.SetField(behaviorallog.FieldContext, field.TypeJSON, value)

@@ -21,6 +21,7 @@ import (
 	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/schema"
 	"app-builds/common/ent/session"
+	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/tag"
 	"time"
 
@@ -40,19 +41,19 @@ func init() {
 	behavioralruleFields := schema.BehavioralRule{}.Fields()
 	_ = behavioralruleFields
 	// behavioralruleDescPriority is the schema descriptor for priority field.
-	behavioralruleDescPriority := behavioralruleFields[3].Descriptor()
+	behavioralruleDescPriority := behavioralruleFields[5].Descriptor()
 	// behavioralrule.DefaultPriority holds the default value on creation for the priority field.
 	behavioralrule.DefaultPriority = behavioralruleDescPriority.Default.(int)
 	// behavioralruleDescIsActive is the schema descriptor for is_active field.
-	behavioralruleDescIsActive := behavioralruleFields[4].Descriptor()
+	behavioralruleDescIsActive := behavioralruleFields[6].Descriptor()
 	// behavioralrule.DefaultIsActive holds the default value on creation for the is_active field.
 	behavioralrule.DefaultIsActive = behavioralruleDescIsActive.Default.(bool)
 	// behavioralruleDescCreatedAt is the schema descriptor for created_at field.
-	behavioralruleDescCreatedAt := behavioralruleFields[6].Descriptor()
+	behavioralruleDescCreatedAt := behavioralruleFields[8].Descriptor()
 	// behavioralrule.DefaultCreatedAt holds the default value on creation for the created_at field.
 	behavioralrule.DefaultCreatedAt = behavioralruleDescCreatedAt.Default.(func() time.Time)
 	// behavioralruleDescUpdatedAt is the schema descriptor for updated_at field.
-	behavioralruleDescUpdatedAt := behavioralruleFields[7].Descriptor()
+	behavioralruleDescUpdatedAt := behavioralruleFields[9].Descriptor()
 	// behavioralrule.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	behavioralrule.DefaultUpdatedAt = behavioralruleDescUpdatedAt.Default.(func() time.Time)
 	// behavioralrule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -211,6 +212,14 @@ func init() {
 	sessionDescLastActiveAt := sessionFields[7].Descriptor()
 	// session.DefaultLastActiveAt holds the default value on creation for the last_active_at field.
 	session.DefaultLastActiveAt = sessionDescLastActiveAt.Default.(func() time.Time)
+	sessiongovernanceFields := schema.SessionGovernance{}.Fields()
+	_ = sessiongovernanceFields
+	// sessiongovernanceDescUpdatedAt is the schema descriptor for updated_at field.
+	sessiongovernanceDescUpdatedAt := sessiongovernanceFields[4].Descriptor()
+	// sessiongovernance.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	sessiongovernance.DefaultUpdatedAt = sessiongovernanceDescUpdatedAt.Default.(func() time.Time)
+	// sessiongovernance.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	sessiongovernance.UpdateDefaultUpdatedAt = sessiongovernanceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	tagFields := schema.Tag{}.Fields()
 	_ = tagFields
 	// tagDescCreatedAt is the schema descriptor for created_at field.

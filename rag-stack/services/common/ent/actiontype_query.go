@@ -3,9 +3,11 @@
 package ent
 
 import (
-	"app-builds/common/ent/behavioralrule"
+	"app-builds/common/ent/actionidentifier"
+	"app-builds/common/ent/actiontype"
 	"app-builds/common/ent/predicate"
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -15,64 +17,87 @@ import (
 	"entgo.io/ent/schema/field"
 )
 
-// BehavioralRuleQuery is the builder for querying BehavioralRule entities.
-type BehavioralRuleQuery struct {
+// ActionTypeQuery is the builder for querying ActionType entities.
+type ActionTypeQuery struct {
 	config
-	ctx        *QueryContext
-	order      []behavioralrule.OrderOption
-	inters     []Interceptor
-	predicates []predicate.BehavioralRule
+	ctx             *QueryContext
+	order           []actiontype.OrderOption
+	inters          []Interceptor
+	predicates      []predicate.ActionType
+	withIdentifiers *ActionIdentifierQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the BehavioralRuleQuery builder.
-func (_q *BehavioralRuleQuery) Where(ps ...predicate.BehavioralRule) *BehavioralRuleQuery {
+// Where adds a new predicate for the ActionTypeQuery builder.
+func (_q *ActionTypeQuery) Where(ps ...predicate.ActionType) *ActionTypeQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *BehavioralRuleQuery) Limit(limit int) *BehavioralRuleQuery {
+func (_q *ActionTypeQuery) Limit(limit int) *ActionTypeQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *BehavioralRuleQuery) Offset(offset int) *BehavioralRuleQuery {
+func (_q *ActionTypeQuery) Offset(offset int) *ActionTypeQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *BehavioralRuleQuery) Unique(unique bool) *BehavioralRuleQuery {
+func (_q *ActionTypeQuery) Unique(unique bool) *ActionTypeQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *BehavioralRuleQuery) Order(o ...behavioralrule.OrderOption) *BehavioralRuleQuery {
+func (_q *ActionTypeQuery) Order(o ...actiontype.OrderOption) *ActionTypeQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// First returns the first BehavioralRule entity from the query.
-// Returns a *NotFoundError when no BehavioralRule was found.
-func (_q *BehavioralRuleQuery) First(ctx context.Context) (*BehavioralRule, error) {
+// QueryIdentifiers chains the current query on the "identifiers" edge.
+func (_q *ActionTypeQuery) QueryIdentifiers() *ActionIdentifierQuery {
+	query := (&ActionIdentifierClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(actiontype.Table, actiontype.FieldID, selector),
+			sqlgraph.To(actionidentifier.Table, actionidentifier.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, actiontype.IdentifiersTable, actiontype.IdentifiersColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// First returns the first ActionType entity from the query.
+// Returns a *NotFoundError when no ActionType was found.
+func (_q *ActionTypeQuery) First(ctx context.Context) (*ActionType, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{behavioralrule.Label}
+		return nil, &NotFoundError{actiontype.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *BehavioralRuleQuery) FirstX(ctx context.Context) *BehavioralRule {
+func (_q *ActionTypeQuery) FirstX(ctx context.Context) *ActionType {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -80,22 +105,22 @@ func (_q *BehavioralRuleQuery) FirstX(ctx context.Context) *BehavioralRule {
 	return node
 }
 
-// FirstID returns the first BehavioralRule ID from the query.
-// Returns a *NotFoundError when no BehavioralRule ID was found.
-func (_q *BehavioralRuleQuery) FirstID(ctx context.Context) (id int64, err error) {
+// FirstID returns the first ActionType ID from the query.
+// Returns a *NotFoundError when no ActionType ID was found.
+func (_q *ActionTypeQuery) FirstID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{behavioralrule.Label}
+		err = &NotFoundError{actiontype.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *BehavioralRuleQuery) FirstIDX(ctx context.Context) int64 {
+func (_q *ActionTypeQuery) FirstIDX(ctx context.Context) int64 {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -103,10 +128,10 @@ func (_q *BehavioralRuleQuery) FirstIDX(ctx context.Context) int64 {
 	return id
 }
 
-// Only returns a single BehavioralRule entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one BehavioralRule entity is found.
-// Returns a *NotFoundError when no BehavioralRule entities are found.
-func (_q *BehavioralRuleQuery) Only(ctx context.Context) (*BehavioralRule, error) {
+// Only returns a single ActionType entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one ActionType entity is found.
+// Returns a *NotFoundError when no ActionType entities are found.
+func (_q *ActionTypeQuery) Only(ctx context.Context) (*ActionType, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -115,14 +140,14 @@ func (_q *BehavioralRuleQuery) Only(ctx context.Context) (*BehavioralRule, error
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{behavioralrule.Label}
+		return nil, &NotFoundError{actiontype.Label}
 	default:
-		return nil, &NotSingularError{behavioralrule.Label}
+		return nil, &NotSingularError{actiontype.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *BehavioralRuleQuery) OnlyX(ctx context.Context) *BehavioralRule {
+func (_q *ActionTypeQuery) OnlyX(ctx context.Context) *ActionType {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -130,10 +155,10 @@ func (_q *BehavioralRuleQuery) OnlyX(ctx context.Context) *BehavioralRule {
 	return node
 }
 
-// OnlyID is like Only, but returns the only BehavioralRule ID in the query.
-// Returns a *NotSingularError when more than one BehavioralRule ID is found.
+// OnlyID is like Only, but returns the only ActionType ID in the query.
+// Returns a *NotSingularError when more than one ActionType ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *BehavioralRuleQuery) OnlyID(ctx context.Context) (id int64, err error) {
+func (_q *ActionTypeQuery) OnlyID(ctx context.Context) (id int64, err error) {
 	var ids []int64
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -142,15 +167,15 @@ func (_q *BehavioralRuleQuery) OnlyID(ctx context.Context) (id int64, err error)
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{behavioralrule.Label}
+		err = &NotFoundError{actiontype.Label}
 	default:
-		err = &NotSingularError{behavioralrule.Label}
+		err = &NotSingularError{actiontype.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *BehavioralRuleQuery) OnlyIDX(ctx context.Context) int64 {
+func (_q *ActionTypeQuery) OnlyIDX(ctx context.Context) int64 {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -158,18 +183,18 @@ func (_q *BehavioralRuleQuery) OnlyIDX(ctx context.Context) int64 {
 	return id
 }
 
-// All executes the query and returns a list of BehavioralRules.
-func (_q *BehavioralRuleQuery) All(ctx context.Context) ([]*BehavioralRule, error) {
+// All executes the query and returns a list of ActionTypes.
+func (_q *ActionTypeQuery) All(ctx context.Context) ([]*ActionType, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*BehavioralRule, *BehavioralRuleQuery]()
-	return withInterceptors[[]*BehavioralRule](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*ActionType, *ActionTypeQuery]()
+	return withInterceptors[[]*ActionType](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *BehavioralRuleQuery) AllX(ctx context.Context) []*BehavioralRule {
+func (_q *ActionTypeQuery) AllX(ctx context.Context) []*ActionType {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -177,20 +202,20 @@ func (_q *BehavioralRuleQuery) AllX(ctx context.Context) []*BehavioralRule {
 	return nodes
 }
 
-// IDs executes the query and returns a list of BehavioralRule IDs.
-func (_q *BehavioralRuleQuery) IDs(ctx context.Context) (ids []int64, err error) {
+// IDs executes the query and returns a list of ActionType IDs.
+func (_q *ActionTypeQuery) IDs(ctx context.Context) (ids []int64, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(behavioralrule.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(actiontype.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *BehavioralRuleQuery) IDsX(ctx context.Context) []int64 {
+func (_q *ActionTypeQuery) IDsX(ctx context.Context) []int64 {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -199,16 +224,16 @@ func (_q *BehavioralRuleQuery) IDsX(ctx context.Context) []int64 {
 }
 
 // Count returns the count of the given query.
-func (_q *BehavioralRuleQuery) Count(ctx context.Context) (int, error) {
+func (_q *ActionTypeQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*BehavioralRuleQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*ActionTypeQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *BehavioralRuleQuery) CountX(ctx context.Context) int {
+func (_q *ActionTypeQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -217,7 +242,7 @@ func (_q *BehavioralRuleQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *BehavioralRuleQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *ActionTypeQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -230,7 +255,7 @@ func (_q *BehavioralRuleQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *BehavioralRuleQuery) ExistX(ctx context.Context) bool {
+func (_q *ActionTypeQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -238,22 +263,34 @@ func (_q *BehavioralRuleQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the BehavioralRuleQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the ActionTypeQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *BehavioralRuleQuery) Clone() *BehavioralRuleQuery {
+func (_q *ActionTypeQuery) Clone() *ActionTypeQuery {
 	if _q == nil {
 		return nil
 	}
-	return &BehavioralRuleQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]behavioralrule.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.BehavioralRule{}, _q.predicates...),
+	return &ActionTypeQuery{
+		config:          _q.config,
+		ctx:             _q.ctx.Clone(),
+		order:           append([]actiontype.OrderOption{}, _q.order...),
+		inters:          append([]Interceptor{}, _q.inters...),
+		predicates:      append([]predicate.ActionType{}, _q.predicates...),
+		withIdentifiers: _q.withIdentifiers.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithIdentifiers tells the query-builder to eager-load the nodes that are connected to
+// the "identifiers" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ActionTypeQuery) WithIdentifiers(opts ...func(*ActionIdentifierQuery)) *ActionTypeQuery {
+	query := (&ActionIdentifierClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withIdentifiers = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -262,19 +299,19 @@ func (_q *BehavioralRuleQuery) Clone() *BehavioralRuleQuery {
 // Example:
 //
 //	var v []struct {
-//		ActionType string `json:"action_type,omitempty"`
+//		Name string `json:"name,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.BehavioralRule.Query().
-//		GroupBy(behavioralrule.FieldActionType).
+//	client.ActionType.Query().
+//		GroupBy(actiontype.FieldName).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *BehavioralRuleQuery) GroupBy(field string, fields ...string) *BehavioralRuleGroupBy {
+func (_q *ActionTypeQuery) GroupBy(field string, fields ...string) *ActionTypeGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &BehavioralRuleGroupBy{build: _q}
+	grbuild := &ActionTypeGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = behavioralrule.Label
+	grbuild.label = actiontype.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -285,26 +322,26 @@ func (_q *BehavioralRuleQuery) GroupBy(field string, fields ...string) *Behavior
 // Example:
 //
 //	var v []struct {
-//		ActionType string `json:"action_type,omitempty"`
+//		Name string `json:"name,omitempty"`
 //	}
 //
-//	client.BehavioralRule.Query().
-//		Select(behavioralrule.FieldActionType).
+//	client.ActionType.Query().
+//		Select(actiontype.FieldName).
 //		Scan(ctx, &v)
-func (_q *BehavioralRuleQuery) Select(fields ...string) *BehavioralRuleSelect {
+func (_q *ActionTypeQuery) Select(fields ...string) *ActionTypeSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &BehavioralRuleSelect{BehavioralRuleQuery: _q}
-	sbuild.label = behavioralrule.Label
+	sbuild := &ActionTypeSelect{ActionTypeQuery: _q}
+	sbuild.label = actiontype.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a BehavioralRuleSelect configured with the given aggregations.
-func (_q *BehavioralRuleQuery) Aggregate(fns ...AggregateFunc) *BehavioralRuleSelect {
+// Aggregate returns a ActionTypeSelect configured with the given aggregations.
+func (_q *ActionTypeQuery) Aggregate(fns ...AggregateFunc) *ActionTypeSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *BehavioralRuleQuery) prepareQuery(ctx context.Context) error {
+func (_q *ActionTypeQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -316,7 +353,7 @@ func (_q *BehavioralRuleQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !behavioralrule.ValidColumn(f) {
+		if !actiontype.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -330,17 +367,21 @@ func (_q *BehavioralRuleQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *BehavioralRuleQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*BehavioralRule, error) {
+func (_q *ActionTypeQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ActionType, error) {
 	var (
-		nodes = []*BehavioralRule{}
-		_spec = _q.querySpec()
+		nodes       = []*ActionType{}
+		_spec       = _q.querySpec()
+		loadedTypes = [1]bool{
+			_q.withIdentifiers != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*BehavioralRule).scanValues(nil, columns)
+		return (*ActionType).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &BehavioralRule{config: _q.config}
+		node := &ActionType{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,10 +393,49 @@ func (_q *BehavioralRuleQuery) sqlAll(ctx context.Context, hooks ...queryHook) (
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withIdentifiers; query != nil {
+		if err := _q.loadIdentifiers(ctx, query, nodes,
+			func(n *ActionType) { n.Edges.Identifiers = []*ActionIdentifier{} },
+			func(n *ActionType, e *ActionIdentifier) { n.Edges.Identifiers = append(n.Edges.Identifiers, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
-func (_q *BehavioralRuleQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *ActionTypeQuery) loadIdentifiers(ctx context.Context, query *ActionIdentifierQuery, nodes []*ActionType, init func(*ActionType), assign func(*ActionType, *ActionIdentifier)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*ActionType)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	query.withFKs = true
+	query.Where(predicate.ActionIdentifier(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(actiontype.IdentifiersColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.action_type_identifiers
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "action_type_identifiers" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "action_type_identifiers" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+
+func (_q *ActionTypeQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
@@ -364,8 +444,8 @@ func (_q *BehavioralRuleQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *BehavioralRuleQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(behavioralrule.Table, behavioralrule.Columns, sqlgraph.NewFieldSpec(behavioralrule.FieldID, field.TypeInt64))
+func (_q *ActionTypeQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(actiontype.Table, actiontype.Columns, sqlgraph.NewFieldSpec(actiontype.FieldID, field.TypeInt64))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -374,9 +454,9 @@ func (_q *BehavioralRuleQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, behavioralrule.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, actiontype.FieldID)
 		for i := range fields {
-			if fields[i] != behavioralrule.FieldID {
+			if fields[i] != actiontype.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
@@ -404,12 +484,12 @@ func (_q *BehavioralRuleQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *BehavioralRuleQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *ActionTypeQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(behavioralrule.Table)
+	t1 := builder.Table(actiontype.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = behavioralrule.Columns
+		columns = actiontype.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -436,28 +516,28 @@ func (_q *BehavioralRuleQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	return selector
 }
 
-// BehavioralRuleGroupBy is the group-by builder for BehavioralRule entities.
-type BehavioralRuleGroupBy struct {
+// ActionTypeGroupBy is the group-by builder for ActionType entities.
+type ActionTypeGroupBy struct {
 	selector
-	build *BehavioralRuleQuery
+	build *ActionTypeQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *BehavioralRuleGroupBy) Aggregate(fns ...AggregateFunc) *BehavioralRuleGroupBy {
+func (_g *ActionTypeGroupBy) Aggregate(fns ...AggregateFunc) *ActionTypeGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *BehavioralRuleGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *ActionTypeGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*BehavioralRuleQuery, *BehavioralRuleGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*ActionTypeQuery, *ActionTypeGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *BehavioralRuleGroupBy) sqlScan(ctx context.Context, root *BehavioralRuleQuery, v any) error {
+func (_g *ActionTypeGroupBy) sqlScan(ctx context.Context, root *ActionTypeQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -484,28 +564,28 @@ func (_g *BehavioralRuleGroupBy) sqlScan(ctx context.Context, root *BehavioralRu
 	return sql.ScanSlice(rows, v)
 }
 
-// BehavioralRuleSelect is the builder for selecting fields of BehavioralRule entities.
-type BehavioralRuleSelect struct {
-	*BehavioralRuleQuery
+// ActionTypeSelect is the builder for selecting fields of ActionType entities.
+type ActionTypeSelect struct {
+	*ActionTypeQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *BehavioralRuleSelect) Aggregate(fns ...AggregateFunc) *BehavioralRuleSelect {
+func (_s *ActionTypeSelect) Aggregate(fns ...AggregateFunc) *ActionTypeSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *BehavioralRuleSelect) Scan(ctx context.Context, v any) error {
+func (_s *ActionTypeSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*BehavioralRuleQuery, *BehavioralRuleSelect](ctx, _s.BehavioralRuleQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*ActionTypeQuery, *ActionTypeSelect](ctx, _s.ActionTypeQuery, _s, _s.inters, v)
 }
 
-func (_s *BehavioralRuleSelect) sqlScan(ctx context.Context, root *BehavioralRuleQuery, v any) error {
+func (_s *ActionTypeSelect) sqlScan(ctx context.Context, root *ActionTypeQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

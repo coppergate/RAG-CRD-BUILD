@@ -54,6 +54,16 @@ func IDLTE(id int64) predicate.BehavioralRule {
 	return predicate.BehavioralRule(sql.FieldLTE(FieldID, id))
 }
 
+// ActionType applies equality check predicate on the "action_type" field. It's identical to ActionTypeEQ.
+func ActionType(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldEQ(FieldActionType, v))
+}
+
+// Category applies equality check predicate on the "category" field. It's identical to CategoryEQ.
+func Category(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldEQ(FieldCategory, v))
+}
+
 // RuleContent applies equality check predicate on the "rule_content" field. It's identical to RuleContentEQ.
 func RuleContent(v string) predicate.BehavioralRule {
 	return predicate.BehavioralRule(sql.FieldEQ(FieldRuleContent, v))
@@ -80,23 +90,163 @@ func UpdatedAt(v time.Time) predicate.BehavioralRule {
 }
 
 // ActionTypeEQ applies the EQ predicate on the "action_type" field.
-func ActionTypeEQ(v ActionType) predicate.BehavioralRule {
+func ActionTypeEQ(v string) predicate.BehavioralRule {
 	return predicate.BehavioralRule(sql.FieldEQ(FieldActionType, v))
 }
 
 // ActionTypeNEQ applies the NEQ predicate on the "action_type" field.
-func ActionTypeNEQ(v ActionType) predicate.BehavioralRule {
+func ActionTypeNEQ(v string) predicate.BehavioralRule {
 	return predicate.BehavioralRule(sql.FieldNEQ(FieldActionType, v))
 }
 
 // ActionTypeIn applies the In predicate on the "action_type" field.
-func ActionTypeIn(vs ...ActionType) predicate.BehavioralRule {
+func ActionTypeIn(vs ...string) predicate.BehavioralRule {
 	return predicate.BehavioralRule(sql.FieldIn(FieldActionType, vs...))
 }
 
 // ActionTypeNotIn applies the NotIn predicate on the "action_type" field.
-func ActionTypeNotIn(vs ...ActionType) predicate.BehavioralRule {
+func ActionTypeNotIn(vs ...string) predicate.BehavioralRule {
 	return predicate.BehavioralRule(sql.FieldNotIn(FieldActionType, vs...))
+}
+
+// ActionTypeGT applies the GT predicate on the "action_type" field.
+func ActionTypeGT(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldGT(FieldActionType, v))
+}
+
+// ActionTypeGTE applies the GTE predicate on the "action_type" field.
+func ActionTypeGTE(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldGTE(FieldActionType, v))
+}
+
+// ActionTypeLT applies the LT predicate on the "action_type" field.
+func ActionTypeLT(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldLT(FieldActionType, v))
+}
+
+// ActionTypeLTE applies the LTE predicate on the "action_type" field.
+func ActionTypeLTE(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldLTE(FieldActionType, v))
+}
+
+// ActionTypeContains applies the Contains predicate on the "action_type" field.
+func ActionTypeContains(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldContains(FieldActionType, v))
+}
+
+// ActionTypeHasPrefix applies the HasPrefix predicate on the "action_type" field.
+func ActionTypeHasPrefix(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldHasPrefix(FieldActionType, v))
+}
+
+// ActionTypeHasSuffix applies the HasSuffix predicate on the "action_type" field.
+func ActionTypeHasSuffix(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldHasSuffix(FieldActionType, v))
+}
+
+// ActionTypeEqualFold applies the EqualFold predicate on the "action_type" field.
+func ActionTypeEqualFold(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldEqualFold(FieldActionType, v))
+}
+
+// ActionTypeContainsFold applies the ContainsFold predicate on the "action_type" field.
+func ActionTypeContainsFold(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldContainsFold(FieldActionType, v))
+}
+
+// CategoryEQ applies the EQ predicate on the "category" field.
+func CategoryEQ(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldEQ(FieldCategory, v))
+}
+
+// CategoryNEQ applies the NEQ predicate on the "category" field.
+func CategoryNEQ(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldNEQ(FieldCategory, v))
+}
+
+// CategoryIn applies the In predicate on the "category" field.
+func CategoryIn(vs ...string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldIn(FieldCategory, vs...))
+}
+
+// CategoryNotIn applies the NotIn predicate on the "category" field.
+func CategoryNotIn(vs ...string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldNotIn(FieldCategory, vs...))
+}
+
+// CategoryGT applies the GT predicate on the "category" field.
+func CategoryGT(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldGT(FieldCategory, v))
+}
+
+// CategoryGTE applies the GTE predicate on the "category" field.
+func CategoryGTE(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldGTE(FieldCategory, v))
+}
+
+// CategoryLT applies the LT predicate on the "category" field.
+func CategoryLT(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldLT(FieldCategory, v))
+}
+
+// CategoryLTE applies the LTE predicate on the "category" field.
+func CategoryLTE(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldLTE(FieldCategory, v))
+}
+
+// CategoryContains applies the Contains predicate on the "category" field.
+func CategoryContains(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldContains(FieldCategory, v))
+}
+
+// CategoryHasPrefix applies the HasPrefix predicate on the "category" field.
+func CategoryHasPrefix(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldHasPrefix(FieldCategory, v))
+}
+
+// CategoryHasSuffix applies the HasSuffix predicate on the "category" field.
+func CategoryHasSuffix(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldHasSuffix(FieldCategory, v))
+}
+
+// CategoryIsNil applies the IsNil predicate on the "category" field.
+func CategoryIsNil() predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldIsNull(FieldCategory))
+}
+
+// CategoryNotNil applies the NotNil predicate on the "category" field.
+func CategoryNotNil() predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldNotNull(FieldCategory))
+}
+
+// CategoryEqualFold applies the EqualFold predicate on the "category" field.
+func CategoryEqualFold(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldEqualFold(FieldCategory, v))
+}
+
+// CategoryContainsFold applies the ContainsFold predicate on the "category" field.
+func CategoryContainsFold(v string) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldContainsFold(FieldCategory, v))
+}
+
+// StateEQ applies the EQ predicate on the "state" field.
+func StateEQ(v State) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldEQ(FieldState, v))
+}
+
+// StateNEQ applies the NEQ predicate on the "state" field.
+func StateNEQ(v State) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldNEQ(FieldState, v))
+}
+
+// StateIn applies the In predicate on the "state" field.
+func StateIn(vs ...State) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldIn(FieldState, vs...))
+}
+
+// StateNotIn applies the NotIn predicate on the "state" field.
+func StateNotIn(vs ...State) predicate.BehavioralRule {
+	return predicate.BehavioralRule(sql.FieldNotIn(FieldState, vs...))
 }
 
 // RuleContentEQ applies the EQ predicate on the "rule_content" field.
