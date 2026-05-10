@@ -35,6 +35,7 @@ type Config struct {
 	ChunkVectorLimit    int
 	QdrantSearchTimeout time.Duration
 	RecursionBudget    float64
+	MaxChunksPerRecursion int
 	ShutdownTimeout    time.Duration
 	StreamIntermediate  bool
 
@@ -85,6 +86,7 @@ func LoadConfig() *Config {
 		ChunkVectorLimit:    envutil.GetEnvInt("CHUNK_VECTOR_LIMIT", 50),
 		QdrantSearchTimeout: envutil.GetEnvDuration("QDRANT_SEARCH_TIMEOUT", 30*time.Second),
 		RecursionBudget:     envutil.GetEnvFloat("RECURSION_BUDGET", 2.0),
+		MaxChunksPerRecursion: envutil.GetEnvInt("MAX_CHUNKS_PER_RECURSION", 10),
 		ShutdownTimeout:     envutil.GetEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 		StreamAccumulationCount: envutil.GetEnvInt("STREAM_ACCUMULATION_COUNT", 10),
 		StreamIntermediate:  envutil.GetEnvBool("STREAM_INTERMEDIATE", true),

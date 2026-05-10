@@ -11,7 +11,7 @@ type ChatClient interface {
 }
 
 type Planner interface {
-	Plan(ctx context.Context, prompt string, contexts []interface{}) ([]string, interface{}, error)
+	Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) ([]string, interface{}, error)
 	GetEmbeddings(ctx context.Context, text string) ([]float32, error)
 }
 

@@ -17,6 +17,7 @@ import (
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
 	"app-builds/common/telemetry"
+	"app-builds/rag-worker/internal/behavioral"
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/models"
 	"app-builds/rag-worker/pkg/messaging"
@@ -62,6 +63,7 @@ type QdrantSearcher interface {
 
 type MemoryClient interface {
 	Retrieve(ctx context.Context, sessionID int64, tags []int64, query string) (*contracts.MemoryPack, error)
+	AuditRuleApplication(ctx context.Context, promptID string, ruleID int64, actionType string, metadata map[string]interface{}) error
 }
 
 type ModelRegistry interface {
@@ -152,6 +154,12 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	}
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "PLANNING_TASK", "Decomposing prompt into sub-tasks")
 
+	// Fetch Memory (History + Behavioral Rules) for Planning Governance (Iteration 9)
+	historyPack, err := h.memoryClient.Retrieve(ctx, req.SessionId, req.Tags, req.Prompt)
+	if err != nil {
+		log.Printf("[%s] Memory retrieval failed in planning: %v", req.Id, err)
+	}
+
 	modelID := req.PlannerModel
 	if modelID == "" {
 		modelID = h.cfg.PlannerModel
@@ -164,12 +172,25 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 		return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
 	}
 
-	subQueries, metrics, err := planner.Plan(ctx, req.Prompt, nil)
+	var history []interface{}
+	if historyPack != nil {
+		for _, item := range historyPack.Items {
+			history = append(history, item)
+		}
+	}
+
+	subQueries, metrics, err := planner.Plan(ctx, req.Prompt, nil, history)
 	if err != nil {
 		log.Printf("[%s] Planning failed: %v", req.Id, err)
 		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Planning failed: %v", err), false)
 		return dlq.TransientFailure, fmt.Errorf("planning: %w", err)
 	}
+
+	// Filter behavioral rules by detected action type (Iteration 9)
+	actionType := behavioral.DetectActionType(req.Prompt)
+	log.Printf("[%s] Detected ActionType: %s", req.Id, actionType)
+
+	// ...
 
 	// We don't store planning metrics yet, but we could in the future.
 	_ = metrics 
@@ -190,6 +211,10 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 		metadata = make(map[string]interface{})
 	}
 	metadata["sub_queries"] = subQueries
+	metadata["action_type"] = string(actionType)
+	if historyPack != nil {
+		metadata["history"] = historyPack.Items
+	}
 	req.Metadata = contracts.ToStruct(metadata)
 
 	marshaller := protojson.MarshalOptions{UseProtoNames: true}
@@ -278,12 +303,6 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, fmt.Sprintf(" (Found %d vectors in %d groups)", len(allRawResults), len(allChunks)))
 	}
 
-	// Fetch Session History from Memory Controller
-	historyPack, err := h.memoryClient.Retrieve(ctx, req.SessionId, req.Tags, req.Prompt)
-	if err != nil {
-		log.Printf("[%s] Memory retrieval failed: %v", req.Id, err)
-	}
-
 	if req.Metadata == nil {
 		req.Metadata = contracts.ToStruct(make(map[string]interface{}))
 	}
@@ -292,11 +311,11 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		metadataMap = make(map[string]interface{})
 	}
 	metadataMap["chunks"] = allChunks
-	if historyPack != nil {
-		metadataMap["history"] = historyPack.Items
-	}
 	if metadataMap["recursion_budget"] == nil {
 		metadataMap["recursion_budget"] = h.cfg.RecursionBudget
+	}
+	if metadataMap["chunk_offset"] == nil {
+		metadataMap["chunk_offset"] = float64(0)
 	}
 	req.Metadata = contracts.ToStruct(metadataMap)
 
@@ -530,9 +549,30 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			chunks = append(chunks, c)
 		}
 	}
-	// Ensure at least one execution loop if no chunks are found
-	if len(chunks) == 0 {
-		chunks = append(chunks, []interface{}{})
+
+	// Handle chunk pagination
+	offset := 0
+	if o, ok := metadata["chunk_offset"].(float64); ok {
+		offset = int(o)
+	}
+	maxChunks := h.cfg.MaxChunksPerRecursion
+	if maxChunks <= 0 {
+		maxChunks = 10
+	}
+
+	end := offset + maxChunks
+	if end > len(chunks) {
+		end = len(chunks)
+	}
+
+	var chunksToProcess [][]interface{}
+	if offset < len(chunks) {
+		chunksToProcess = chunks[offset:end]
+	}
+
+	// Ensure at least one execution loop if no chunks are found and we are at start
+	if len(chunksToProcess) == 0 && offset == 0 {
+		chunksToProcess = append(chunksToProcess, []interface{}{})
 	}
 
 	modelID := req.ExecutorModel
@@ -561,18 +601,20 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	var finalMetrics *contracts.ExecutionMetrics
 	seq := 1
 	inConversation := false
+	hasSubstantialResult := false
 
-	for i, chunk := range chunks {
-		h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", fmt.Sprintf("Processing context chunk %d/%d", i+1, len(chunks)))
+	for i, chunk := range chunksToProcess {
+		actualIndex := offset + i
+		h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", fmt.Sprintf("Processing context chunk %d/%d (Total: %d)", actualIndex+1, end, len(chunks)))
 		if req.Stream {
-			h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, fmt.Sprintf("\n\u231B *Generating response (Context chunk %d/%d)*...", i+1, len(chunks)))
+			h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, fmt.Sprintf("\n\u231B *Generating response (Context chunk %d/%d)*...", actualIndex+1, end))
 		}
 
 		// 1. Refine Plan with chunk context
 		if planner != nil {
-			refinedQueries, _, err := planner.Plan(ctx, req.Prompt, chunk)
+			refinedQueries, _, err := planner.Plan(ctx, req.Prompt, chunk, history)
 			if err == nil && len(refinedQueries) > 0 && h.cfg.StreamIntermediate {
-				planningText := fmt.Sprintf("Refined sub-queries for chunk %d:\n", i+1)
+				planningText := fmt.Sprintf("Refined sub-queries for chunk %d:\n", actualIndex+1)
 				for _, sq := range refinedQueries {
 					planningText += fmt.Sprintf("- %s\n", sq)
 				}
@@ -582,14 +624,15 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 
 		// 2. Execute
 		if req.Stream {
-			if i == 0 {
-				// Send Seq 0 with metadata only on first chunk
+			if actualIndex == 0 {
+				// Send Seq 0 with metadata only on first chunk of THIS recursion
 				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", 0, false, modelID, false, metadata)
 			}
 
 			stream, metaCh, errCh := executor.ExecuteStream(ctx, req.Prompt, chunk, history)
 			var chunkBuffer string
 			var chunkCount int
+			var currentChunkResult string
 
 			loop := true
 			for loop {
@@ -603,6 +646,7 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 						continue
 					}
 					fullAccumulatedResult += c
+					currentChunkResult += c
 					chunkBuffer += c
 					chunkCount++
 					inConversation = true
@@ -638,8 +682,8 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 						continue
 					}
 					if err != nil {
-						log.Printf("[%s] Execution stream failed on chunk %d: %v", req.Id, i+1, err)
-						h.msg.SendError(ctx, req.Id, fmt.Sprintf("Chunk %d failed: %v", i+1, err), inConversation)
+						log.Printf("[%s] Execution stream failed on chunk %d: %v", req.Id, actualIndex+1, err)
+						h.msg.SendError(ctx, req.Id, fmt.Sprintf("Chunk %d failed: %v", actualIndex+1, err), inConversation)
 					}
 				case <-ctx.Done():
 					h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
@@ -651,15 +695,21 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 				seq++
 			}
 			fullAccumulatedResult += "\n"
+			if !executor.IsInsufficientContext(currentChunkResult) {
+				hasSubstantialResult = true
+			}
 		} else {
 			res, rawMeta, err := executor.Execute(ctx, req.Prompt, chunk, history)
 			if err != nil {
-				log.Printf("[%s] Execution failed on chunk %d: %v", req.Id, i+1, err)
-				h.msg.SendError(ctx, req.Id, fmt.Sprintf("Chunk %d failed: %v", i+1, err), inConversation)
+				log.Printf("[%s] Execution failed on chunk %d: %v", req.Id, actualIndex+1, err)
+				h.msg.SendError(ctx, req.Id, fmt.Sprintf("Chunk %d failed: %v", actualIndex+1, err), inConversation)
 				continue
 			}
 			fullAccumulatedResult += res + "\n"
 			inConversation = true
+			if !executor.IsInsufficientContext(res) {
+				hasSubstantialResult = true
+			}
 
 			m := h.mapMetrics(rawMeta, modelID)
 			if finalMetrics == nil {
@@ -675,6 +725,9 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 				seq++
 			}
 		}
+
+		// If we found a substantial result and we are over some limit, maybe we could stop?
+		// But let's process at least the current set of chunksToProcess.
 	}
 
 	// Record response size
@@ -682,12 +735,24 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 		responseSizeHist.Record(ctx, int64(len(fullAccumulatedResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
 	}
 
-	// Final grounding check
-	if executor.IsInsufficientContext(fullAccumulatedResult) {
-		budget, _ := metadata["recursion_budget"].(float64)
-		if budget > 0 {
-			h.msg.SendStatus(ctx, req.Id, req.SessionId, "REFINING_PLAN", "Context insufficient, triggering recursion")
-			metadata["recursion_budget"] = budget - 1
+	// Final grounding and recursion check
+	isInsufficient := executor.IsInsufficientContext(fullAccumulatedResult)
+	budget, _ := metadata["recursion_budget"].(float64)
+
+	if (isInsufficient && !hasSubstantialResult) || end < len(chunks) {
+		if end < len(chunks) && !hasSubstantialResult {
+			// Move to next batch of chunks if we haven't found a substantial answer
+			log.Printf("[%s] No substantial result in chunks %d-%d, moving to next batch (Budget: %v)", req.Id, offset+1, end, budget)
+			metadata["chunk_offset"] = float64(end)
+			// We don't necessarily want to drain budget for just chunk pagination, 
+			// but to satisfy "limit recursion", let's decrease it slightly or count it.
+			// Actually, let's just use the budget as a total limit for ALL steps.
+			metadata["recursion_budget"] = budget - 0.1 // Small deduction for chunk step
+		} else if isInsufficient && !hasSubstantialResult && budget >= 1.0 {
+			// True recursion: re-plan
+			log.Printf("[%s] Context insufficient after all chunks, triggering re-plan (Budget: %v)", req.Id, budget)
+			metadata["recursion_budget"] = budget - 1.0
+			metadata["chunk_offset"] = float64(0)
 			req.Metadata = contracts.ToStruct(metadata)
 			marshaller := protojson.MarshalOptions{UseProtoNames: true}
 			payload, err := marshaller.Marshal(req)
@@ -695,6 +760,20 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 				if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err == nil {
 					return dlq.Success, nil
 				}
+			}
+		} else if end < len(chunks) && hasSubstantialResult {
+			log.Printf("[%s] Found substantial result, stopping chunk processing early at %d/%d", req.Id, end, len(chunks))
+		}
+	}
+
+	// If we are recursing within the same set of chunks (pagination), send back to Exec but with new offset
+	if end < len(chunks) && !hasSubstantialResult && budget > 0 {
+		req.Metadata = contracts.ToStruct(metadata)
+		marshaller := protojson.MarshalOptions{UseProtoNames: true}
+		payload, err := marshaller.Marshal(req)
+		if err == nil {
+			if _, err := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err == nil {
+				return dlq.Success, nil
 			}
 		}
 	}

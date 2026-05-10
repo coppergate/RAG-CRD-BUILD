@@ -68,3 +68,40 @@ func (m *MemoryClient) Retrieve(ctx context.Context, sessionID int64, tags []int
 
 	return &pack, nil
 }
+
+func (m *MemoryClient) AuditRuleApplication(ctx context.Context, promptID string, ruleID int64, actionType string, metadata map[string]interface{}) error {
+	req := struct {
+		PromptID   string                 `json:"prompt_id"`
+		RuleID     int64                  `json:"rule_id"`
+		ActionType string                 `json:"action_type"`
+		Context    map[string]interface{} `json:"context"`
+	}{
+		PromptID:   promptID,
+		RuleID:     ruleID,
+		ActionType: actionType,
+		Context:    metadata,
+	}
+
+	body, err := json.Marshal(&req)
+	if err != nil {
+		return err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", m.url+"/behavior/audit", bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := m.client.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("memory-controller audit returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}

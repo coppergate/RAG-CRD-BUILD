@@ -91,6 +91,7 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 
 	// Mock RetrieveByPaths for all files
 	var allFileChunks []interface{}
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64{101}, "analyze the whole project").Return(&contracts.MemoryPack{}, nil)
 	// Full file1 (60 chunks)
 	for i := 0; i < 60; i++ {
 		allFileChunks = append(allFileChunks, map[string]interface{}{
@@ -245,14 +246,16 @@ func TestHandleExec_MultiChunk(t *testing.T) {
 	mockCompletionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 
 	// Planner.Plan should be called for each chunk to "refine"
-	mockPlanner.On("Plan", mock.Anything, "multi-chunk prompt", chunks[0]).Return([]string{"refined plan 1"}, nil, nil)
-	mockPlanner.On("Plan", mock.Anything, "multi-chunk prompt", chunks[1]).Return([]string{"refined plan 2"}, nil, nil)
+	mockPlanner.On("Plan", mock.Anything, "multi-chunk prompt", chunks[0], mock.Anything).Return([]string{"refined plan 1"}, nil, nil)
+	mockPlanner.On("Plan", mock.Anything, "multi-chunk prompt", chunks[1], mock.Anything).Return([]string{"refined plan 2"}, nil, nil)
 
 	// Executor.Execute should be called for each chunk
 	mockExecutor.On("Execute", mock.Anything, "multi-chunk prompt", chunks[0], mock.Anything).Return("part 1", nil, nil)
 	mockExecutor.On("Execute", mock.Anything, "multi-chunk prompt", chunks[1], mock.Anything).Return("part 2", nil, nil)
 
-	// Grounding check at the end
+	// Grounding check for each chunk and then final
+	mockExecutor.On("IsInsufficientContext", "part 1").Return(false)
+	mockExecutor.On("IsInsufficientContext", "part 2").Return(false)
 	mockExecutor.On("IsInsufficientContext", "part 1\npart 2\n").Return(false)
 
 	// Mock status updates

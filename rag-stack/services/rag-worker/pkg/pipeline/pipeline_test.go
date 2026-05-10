@@ -52,6 +52,11 @@ func (m *MockMemoryClient) Retrieve(ctx context.Context, sessionID int64, tags [
 	return args.Get(0).(*contracts.MemoryPack), args.Error(1)
 }
 
+func (m *MockMemoryClient) AuditRuleApplication(ctx context.Context, promptID string, ruleID int64, actionType string, metadata map[string]interface{}) error {
+	args := m.Called(ctx, promptID, ruleID, actionType, metadata)
+	return args.Error(0)
+}
+
 // MockRegistry is a mock implementation of ModelRegistry interface
 type MockRegistry struct {
 	mock.Mock
@@ -78,8 +83,8 @@ type MockPlanner struct {
 	mock.Mock
 }
 
-func (m *MockPlanner) Plan(ctx context.Context, prompt string, contexts []interface{}) ([]string, interface{}, error) {
-	args := m.Called(ctx, prompt, contexts)
+func (m *MockPlanner) Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) ([]string, interface{}, error) {
+	args := m.Called(ctx, prompt, contexts, history)
 	return args.Get(0).([]string), args.Get(1), args.Error(2)
 }
 
@@ -260,13 +265,6 @@ func TestHandleSearch(t *testing.T) {
 		map[string]interface{}{"content": "found context"},
 	}, nil)
 
-	// Mock memory retrieval
-	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), "test prompt").Return(&contracts.MemoryPack{
-		Items: []*contracts.MemoryWriteItem{
-			{Content: "history item"},
-		},
-	}, nil)
-
 	// Mock send to exec topic
 	mockExecProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 
@@ -281,6 +279,64 @@ func TestHandleSearch(t *testing.T) {
 	mockPlanner.AssertExpectations(t)
 	mockMem.AssertExpectations(t)
 	mockExecProd.AssertExpectations(t)
+}
+
+func TestHandlePlan(t *testing.T) {
+	mockRegistry := new(MockRegistry)
+	mockPlanner := new(MockPlanner)
+	mockMem := new(MockMemoryClient)
+	mockStatusProd := new(MockProducer)
+	mockPlanProd := new(MockProducer)
+	mockSearchProd := new(MockProducer)
+
+	cfg := &config.Config{
+		PlannerModel: "default-planner",
+	}
+
+	h := &Handler{
+		cfg:      cfg,
+		registry: mockRegistry,
+		memoryClient: mockMem,
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status: mockStatusProd,
+				Plan:   mockPlanProd,
+				Search: mockSearchProd,
+			},
+		},
+	}
+
+	req := &contracts.InternalRequest{
+		Id:        "test-id",
+		SessionId: 1,
+		Prompt:    "test prompt",
+	}
+
+	mockRegistry.On("GetPlanner", "default-planner").Return(mockPlanner, nil)
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), "test prompt").Return(&contracts.MemoryPack{
+		Items: []*contracts.MemoryWriteItem{
+			{Content: "history item", MemoryType: "episodic", Metadata: contracts.ToStruct(map[string]interface{}{"role": "user"})},
+		},
+	}, nil)
+	mockPlanner.On("Plan", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return([]string{"subquery 1"}, nil, nil)
+
+	// Mock status and planning response
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockSearchProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockResultsProd := new(MockProducer)
+	h.msg.Producers.Results = mockResultsProd
+	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	h.msg.SetSessionProducer(h.msg.SessionTopic("test-id"), mockResultsProd)
+
+	// Call handlePlan
+	result, err := h.handlePlan(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+
+	mockMem.AssertExpectations(t)
+	mockPlanner.AssertExpectations(t)
+	mockSearchProd.AssertExpectations(t)
 }
 
 func TestHandleExec_Recursion(t *testing.T) {
@@ -322,7 +378,8 @@ func TestHandleExec_Recursion(t *testing.T) {
 	// Mock non-streaming execution
 	mockExecutor.On("Execute", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return("I don't know enough", nil, nil)
 	
-	// Crucial part: mock insufficient context check
+	// Grounding check for chunk and then final
+	mockExecutor.On("IsInsufficientContext", "I don't know enough").Return(true)
 	mockExecutor.On("IsInsufficientContext", "I don't know enough\n").Return(true)
 	
 	// Mock status updates
