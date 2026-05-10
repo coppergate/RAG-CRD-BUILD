@@ -57,15 +57,13 @@
 - **Commit Policy**:
   - Commit all changes to the local branch in git any time changes are made.
   - **Commit message**: A simple timestamp (e.g., `2026-03-02 08:30`).
-  - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies"`.
   - **File Size Limit**: Do not commit any files larger than 1MB without asking first.
   - **Clean History (Rebase & Squash)**:
     - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
     - Rebase with autosquash: Run `git rebase -i --autosquash main` before pushing. This ensures commits are squashed before pushing.
     - Push safely: Use `git push --force-with-lease origin <branch>` if the branch was already pushed.
-- **Daily Push & Merge**: Every day, make a new push to GIT with the current committed code, create a pull request/merge request, and then merge it into the main branch.
-  - **Merge Policy**: When merging, create an appropriate summary of the work contained in the commits.
-- **Pull Requests**:
+- **Daily Push**: Every day, make a new push to GIT with the current committed code.
+- **Pull Requests**: Create a pull request for each day's branch.
   - **PR Description**: Provide a brief summary of the changes made in the branch, including any new features, bug fixes, or improvements.
   - **PR Title**: Use a concise title that reflects the main purpose of the pull request, such as "Add feature X" or "Fix issue #123".
 

@@ -694,19 +694,18 @@ Session context is managed by the `memory-controller` service and consumed by th
 - **LLM Context**: `rag-worker` converts the `MemoryPack` into a list of messages (role/content) which are prepended to the final LLM prompt.
 - **Configuration**: `MEMORY_CONTROLLER_URL` environment variable must be set in `rag-worker`.
 
-## 8. RAG Pipeline Testing & Validation
+## 10. RAG Pipeline Testing & Validation
 
-### 8.1 Context Paging and Chunking Verification
+### 10.1 Context Paging and Chunking Verification
 The RAG pipeline supports exhaustive context retrieval (up to 10,000 vectors) and partitioning into 50-vector chunks for LLM processing. This ensures that large tag-based collections can be processed within the model's context window.
 
-#### 8.2 Behavioral Governance (Iteration 9)
-The RAG pipeline uses a database-backed governance system to enforce operational rules during planning and execution.
+#### 10.2 Behavioral Governance (Iteration 9)
 
-##### 8.2.1 Action Taxonomy
+##### 10.2.1 Action Taxonomy
 The system identifies the type of action requested in a prompt using keywords defined in the `action_identifiers` table. Current types include:
 - `FILE_SEARCH`, `FILE_EDIT`, `FILE_VCS`, `REMOTE_EXEC`, `K8S_ORCHESTRATE`, `DB_ACCESS`, `BUILD_DEPLOY`, `DOC_PROCESS`, `JOB_RESUME`, `WEB_FETCH`.
 
-##### 8.2.2 Interactive Learning Loop
+##### 10.2.2 Interactive Learning Loop
 You can teach the agent new behaviors or adjust priorities using the following syntax:
 `REMEMBER [WHEN|BEFORE|AFTER|DURING|WHILE|ONCE|FOR] [ACTION_TYPE] [INSTRUCTION]`
 
@@ -716,20 +715,20 @@ You can teach the agent new behaviors or adjust priorities using the following s
     - `###` -> Priority 20
 - **Staging**: New rules are created in `PENDING` state and must be accepted via the `rag-admin-api` or confirmed in the UI.
 
-##### 8.2.3 Session Governance Overrides
+##### 10.2.3 Session Governance Overrides
 To temporarily prioritize a specific behavior (e.g., "Optimize for memory") for the current session:
 1. Use a standard learning trigger with high priority.
 2. The `memory-controller` will apply this override only to the current `SessionID`.
 3. To revert to global defaults, use the command: `RESET BEHAVIOR`.
 
-##### 8.2.4 Management API Endpoints
+##### 10.2.4 Management API Endpoints
 All governance data is managed via the `memory-controller` (proxied by `rag-admin-api` at `/api/behavior/`):
 - `GET /behavior/rules`: List active global rules.
 - `GET /behavior/identifiers`: Fetch the action-to-keyword identification map.
 - `POST /behavior/learn`: Stage a new learned behavior.
 - `POST /behavior/session/reset`: Clear current session priority overrides.
 
-#### Automated Test Suite
+#### 10.4 Automated Test Suite
 - **Location**: `rag-stack/services/rag-worker/pkg/pipeline/chunking_test.go`
 - **Execution**:
   ```bash
@@ -737,7 +736,7 @@ All governance data is managed via the `memory-controller` (proxied by `rag-admi
   go test -v ./pkg/pipeline/...
   ```
 
-#### Test Scenarios Covered:
+#### 10.5 Test Scenarios Covered:
 1.  **Exhaustive Retrieval (`TestHandleSearch_LargeVectorStore`)**: 
     - Simulates a tag-based search returning >100 vectors across multiple files.
     - Verifies that files larger than the `ChunkVectorLimit` (50) are correctly split.
@@ -752,7 +751,7 @@ All governance data is managed via the `memory-controller` (proxied by `rag-admi
     - Verifies that reassembled files are kept together in chunks when possible.
     - Verifies that non-file context (e.g., from prompt search) is correctly integrated into the chunks.
 
-### 8.2 Testing with Mock Messaging
+### 10.3 Testing with Mock Messaging
 When writing unit tests for the pipeline that involve session-specific topics (e.g., `SendResult`), use the `SetSessionProducer` helper to avoid dependency on a running Pulsar cluster:
 
 ```go
@@ -761,9 +760,9 @@ topic := msgClient.SessionTopic("test-id")
 msgClient.SetSessionProducer(topic, mockProducer)
 ```
 
-## 10. Observability & Troubleshooting
+## 11. Observability & Troubleshooting
 
-### 10.1 Session-Based Troubleshooting
+### 11.1 Session-Based Troubleshooting
 All telemetry data (metrics, logs, and traces) in the RAG stack is enriched with the `session_id` to allow end-to-end performance analysis and troubleshooting.
 
 #### Log Enrichment
@@ -777,3 +776,21 @@ All OpenTelemetry spans generated during a request include the `session_id` attr
 #### Metrics Enrichment
 OpenTelemetry metrics (request counters, latency histograms) include the `session_id` as a label/dimension. This allows for per-session performance monitoring in Grafana Mimir.
 - **Metric Label**: `session_id`
+
+## 12. Resume Generation Environment
+
+### 12.1 Generation Workflow
+The resume and cover letter generation follows a strict Markdown-first workflow to ensure user oversight.
+1.  **Ingestion**: Import qualifications from the `./working` directory.
+2.  **Markdown Generation**: Generate documents in Markdown format within the `./working` directory.
+3.  **User Review**: **STOP** and wait for user review of the Markdown files.
+4.  **PDF Conversion**: Upon approval, convert to PDF using `paps`.
+    ```bash
+    paps --format=pdf --paper=letter --font="Monospace 10" input.txt -o output.pdf
+    ```
+5.  **Finalization**: Move original job requirements to `./JOB-REQS` and clean up the `./working` directory.
+
+### 12.2 Content Guidelines
+- **Authenticity**: Treat the RAG pipeline and AI stack as personal projects. Do not attribute them to previous employers unless applicable.
+- **Accuracy**: Do not claim experience or achievements not present in source documents.
+- **Language**: Only include languages the subject actually uses.
