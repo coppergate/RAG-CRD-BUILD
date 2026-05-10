@@ -15,6 +15,7 @@ import (
 	"app-builds/memory-controller/internal/config"
 	"app-builds/memory-controller/internal/handlers"
 	_ "github.com/lib/pq"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
@@ -60,9 +61,11 @@ func main() {
 	mux.HandleFunc("/behavior/session/override", behavioralHandler.HandleSessionOverride)
 	mux.HandleFunc("/behavior/session/reset", behavioralHandler.HandleResetSession)
 
+	otelHandler := otelhttp.NewHandler(mux, "memory-controller")
+
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,
-		Handler: mux,
+		Handler: otelHandler,
 	}
 
 	go func() {

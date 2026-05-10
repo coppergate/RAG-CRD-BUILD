@@ -141,10 +141,9 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		latencyHist.Record(ctx, duration, metric.WithAttributes(attrs...))
 	}()
 
-	requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
-
 	if r.Method != http.MethodPost {
 		log.Printf("Method not allowed: %s %s", r.Method, r.URL.Path)
+		requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -152,6 +151,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	var req ChatCompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("Bad request: %v", err)
+		requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -165,6 +165,12 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		return
 	}
 	sessionID := sess.ID
+
+	// Add session_id to telemetry
+	attrs = append(attrs, attribute.Int64("session_id", sessionID))
+	span.SetAttributes(attribute.Int64("session_id", sessionID))
+
+	requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 
 	// Fetch all tags for the session
 	var sessionTags []int64
@@ -185,7 +191,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	if len(req.Messages) > 0 {
 		userMsg := req.Messages[len(req.Messages)-1].Content
 		if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, userMsg, sessionTags); err != nil {
-			log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
+			log.Printf("[%s][SID:%d] Failed to send prompt event: %v", correlationID, sessionID, err)
 		}
 	}
 
@@ -218,7 +224,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)
 	if err != nil {
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "pulsar_send")))
-		log.Printf("[%s] Pulsar request failed for session %d: %v", correlationID, sessionID, err)
+		log.Printf("[%s][SID:%d] Pulsar request failed: %v", correlationID, sessionID, err)
 		http.Error(w, "Service unavailable: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
@@ -245,7 +251,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("[%s] Failed to encode response: %v", correlationID, err)
+		log.Printf("[%s][SID:%d] Failed to encode response: %v", correlationID, sessionID, err)
 	}
 }
 

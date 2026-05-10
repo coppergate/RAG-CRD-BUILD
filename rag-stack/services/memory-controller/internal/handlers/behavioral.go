@@ -9,6 +9,8 @@ import (
 
 	"app-builds/common/ent"
 	"app-builds/memory-controller/internal/behavioral"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type BehavioralHandler struct {
@@ -49,14 +51,25 @@ func (h *BehavioralHandler) createRule(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ActionType  string `json:"action_type"`
 		RuleContent string `json:"rule_content"`
+		Category    string `json:"category"`
 		Priority    int    `json:"priority"`
 		Scope       string `json:"scope"`
+		State       string `json:"state"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	rule, err := h.manager.CreateRule(r.Context(), req.ActionType, req.RuleContent, req.Priority, req.Scope)
+
+	// Defaults
+	if req.Scope == "" {
+		req.Scope = "GLOBAL"
+	}
+	if req.State == "" {
+		req.State = "ACTIVE"
+	}
+
+	rule, err := h.manager.CreateRule(r.Context(), req.ActionType, req.RuleContent, req.Category, req.Priority, req.Scope, req.State)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -159,6 +172,8 @@ func (h *BehavioralHandler) HandleSessionOverride(w http.ResponseWriter, r *http
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ctx := r.Context()
+	span := trace.SpanFromContext(ctx)
 	var req struct {
 		SessionID int64 `json:"session_id"`
 		RuleID    int64 `json:"rule_id"`
@@ -168,7 +183,10 @@ func (h *BehavioralHandler) HandleSessionOverride(w http.ResponseWriter, r *http
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	if err := h.manager.SetSessionOverride(r.Context(), req.SessionID, req.RuleID, req.Priority); err != nil {
+	if req.SessionID > 0 {
+		span.SetAttributes(attribute.Int64("session_id", req.SessionID))
+	}
+	if err := h.manager.SetSessionOverride(ctx, req.SessionID, req.RuleID, req.Priority); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -180,6 +198,8 @@ func (h *BehavioralHandler) HandleResetSession(w http.ResponseWriter, r *http.Re
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ctx := r.Context()
+	span := trace.SpanFromContext(ctx)
 	var req struct {
 		SessionID int64 `json:"session_id"`
 	}
@@ -187,7 +207,10 @@ func (h *BehavioralHandler) HandleResetSession(w http.ResponseWriter, r *http.Re
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	if err := h.manager.ClearSessionOverrides(r.Context(), req.SessionID); err != nil {
+	if req.SessionID > 0 {
+		span.SetAttributes(attribute.Int64("session_id", req.SessionID))
+	}
+	if err := h.manager.ClearSessionOverrides(ctx, req.SessionID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

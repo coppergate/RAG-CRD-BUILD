@@ -2,13 +2,9 @@ package behavioral
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"app-builds/common/ent"
-	"app-builds/common/ent/actionidentifier"
-	"app-builds/common/ent/actiontype"
-	"app-builds/common/ent/behaviorallog"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/sessiongovernance"
 )

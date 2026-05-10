@@ -237,14 +237,14 @@ func main() {
 func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	start := time.Now()
 
-	tracer := otel.Tracer("qdrant-adapter")
-	ctx, span := tracer.Start(ctx, "HandleOp")
-	defer span.End()
-
 	var data contracts.QdrantOp
 	if err := protojson.Unmarshal(msg.Payload(), &data); err != nil {
 		return dlq.PermanentFailure, fmt.Errorf("bad payload: %w", err)
 	}
+
+	tracer := otel.Tracer("qdrant-adapter")
+	ctx, span := tracer.Start(ctx, "HandleOp")
+	defer span.End()
 
 	opID := data.Id
 	action := data.Action
@@ -255,12 +255,17 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 		attribute.String("action", action),
 		attribute.String("collection", collection),
 		attribute.Int("vector_size", vs),
+		attribute.Int64("session_id", data.SessionId),
 	}
+	span.SetAttributes(attrs...)
+
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
 		opLatency.Record(ctx, duration, metric.WithAttributes(attrs...))
 	}()
 	opCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
+
+	log.Printf("[SID:%d] Received Qdrant op %s for collection %s", data.SessionId, action, collection)
 
 	var (
 		result interface{}

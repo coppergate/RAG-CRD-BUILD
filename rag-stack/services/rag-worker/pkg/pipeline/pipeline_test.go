@@ -457,8 +457,10 @@ func TestHandleExec_Recursion(t *testing.T) {
 	mockPlanProd := new(MockProducer)
 
 	cfg := &config.Config{
-		ExecutorModel: "default-executor",
-		PlannerModel:  "default-planner",
+		ExecutorModel:     "default-executor",
+		PlannerModel:      "default-planner",
+		MaxRecursionCount: 3,
+		MaxTotalChunks:    100,
 	}
 
 	h := &Handler{
@@ -471,6 +473,7 @@ func TestHandleExec_Recursion(t *testing.T) {
 			},
 		},
 	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("test-id"), mockStatusProd) // Use any producer as mock
 
 	metadataMap := map[string]interface{}{
 		"recursion_budget": float64(1),

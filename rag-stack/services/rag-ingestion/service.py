@@ -229,7 +229,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
         if effective_prefix.startswith("/"):
             effective_prefix = effective_prefix.lstrip("/")
 
-        logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {QDRANT_MODEL} (dims: {current_vs}) on bucket {effective_bucket} (prefix: {effective_prefix}), tags: {tag_ids}")
+        logger.info(f"[SID:{session_id}] Starting ingestion task for {ingestion_id} using Ollama model {QDRANT_MODEL} (dims: {current_vs}) on bucket {effective_bucket} (prefix: {effective_prefix}), tags: {tag_ids}")
 
         pulsar_client = _create_pulsar_client()
         q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)

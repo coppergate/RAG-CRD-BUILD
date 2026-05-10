@@ -458,7 +458,13 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 
 ### 5.1 Service Configuration (Externalized Values)
 - **RAG Ingestion**: `QDRANT_COLLECTION`, `INGEST_BATCH_SIZE`, `CHUNK_SIZE`, `CHUNK_OVERLAP`.
-- **RAG Worker**: `QDRANT_COLLECTION`, `QDRANT_SEARCH_LIMIT`, `RECURSION_BUDGET`.
+- **RAG Worker**:
+  - `QDRANT_RETRIEVAL_LIMIT` (Default: 10,000): Max points to pull from Qdrant for tag-based searches.
+  - `CHUNK_VECTOR_LIMIT` (Default: 50): Max vectors per context chunk.
+  - `MAX_RECURSION_COUNT` (Default: 3): Max number of re-planning cycles.
+  - `MAX_TOTAL_CHUNKS` (Default: 100): Max cumulative chunks processed across all iterations.
+  - `RECURSION_BUDGET` (Default: 2.0): Deducted 1.0 per re-plan and 0.1 per chunk pagination.
+  - `MAX_CHUNKS_PER_RECURSION` (Default: 10): Chunks processed in a single sequential batch.
 - **LLM Gateway**: `REQUEST_TIMEOUT` (Pulsar inference).
 
 ### 5.2 Prompt Aggregation (Session Topics)
@@ -693,6 +699,36 @@ Session context is managed by the `memory-controller` service and consumed by th
 ### 8.1 Context Paging and Chunking Verification
 The RAG pipeline supports exhaustive context retrieval (up to 10,000 vectors) and partitioning into 50-vector chunks for LLM processing. This ensures that large tag-based collections can be processed within the model's context window.
 
+#### 8.2 Behavioral Governance (Iteration 9)
+The RAG pipeline uses a database-backed governance system to enforce operational rules during planning and execution.
+
+##### 8.2.1 Action Taxonomy
+The system identifies the type of action requested in a prompt using keywords defined in the `action_identifiers` table. Current types include:
+- `FILE_SEARCH`, `FILE_EDIT`, `FILE_VCS`, `REMOTE_EXEC`, `K8S_ORCHESTRATE`, `DB_ACCESS`, `BUILD_DEPLOY`, `DOC_PROCESS`, `JOB_RESUME`, `WEB_FETCH`.
+
+##### 8.2.2 Interactive Learning Loop
+You can teach the agent new behaviors or adjust priorities using the following syntax:
+`REMEMBER [WHEN|BEFORE|AFTER|DURING|WHILE|ONCE|FOR] [ACTION_TYPE] [INSTRUCTION]`
+
+- **Priority Markers**: Use Markdown headers at the start of the instruction:
+    - `#` -> Priority 100 (Highest)
+    - `##` -> Priority 50
+    - `###` -> Priority 20
+- **Staging**: New rules are created in `PENDING` state and must be accepted via the `rag-admin-api` or confirmed in the UI.
+
+##### 8.2.3 Session Governance Overrides
+To temporarily prioritize a specific behavior (e.g., "Optimize for memory") for the current session:
+1. Use a standard learning trigger with high priority.
+2. The `memory-controller` will apply this override only to the current `SessionID`.
+3. To revert to global defaults, use the command: `RESET BEHAVIOR`.
+
+##### 8.2.4 Management API Endpoints
+All governance data is managed via the `memory-controller` (proxied by `rag-admin-api` at `/api/behavior/`):
+- `GET /behavior/rules`: List active global rules.
+- `GET /behavior/identifiers`: Fetch the action-to-keyword identification map.
+- `POST /behavior/learn`: Stage a new learned behavior.
+- `POST /behavior/session/reset`: Clear current session priority overrides.
+
 #### Automated Test Suite
 - **Location**: `rag-stack/services/rag-worker/pkg/pipeline/chunking_test.go`
 - **Execution**:
@@ -724,3 +760,20 @@ msgClient := &messaging.Client{}
 topic := msgClient.SessionTopic("test-id")
 msgClient.SetSessionProducer(topic, mockProducer)
 ```
+
+## 10. Observability & Troubleshooting
+
+### 10.1 Session-Based Troubleshooting
+All telemetry data (metrics, logs, and traces) in the RAG stack is enriched with the `session_id` to allow end-to-end performance analysis and troubleshooting.
+
+#### Log Enrichment
+Key log lines across all services include the session ID in the format `[SID:%d]`. This allows you to filter logs for a specific user session:
+- **Command**: `kubectl logs -n rag-system -l app=rag-worker | grep "[SID:123]"`
+
+#### Trace Enrichment
+All OpenTelemetry spans generated during a request include the `session_id` attribute. You can search for these in Grafana Tempo or the APM dashboard.
+- **Attribute**: `session_id` (Type: `int64`)
+
+#### Metrics Enrichment
+OpenTelemetry metrics (request counters, latency histograms) include the `session_id` as a label/dimension. This allows for per-session performance monitoring in Grafana Mimir.
+- **Metric Label**: `session_id`

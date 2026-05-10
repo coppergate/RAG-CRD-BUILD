@@ -53,9 +53,23 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 	msgCtx, span := tracer.Start(msgCtx, "HandleDBOp")
 	defer span.End()
 
-	log.Printf("Received DB op message: %s", string(msg.Payload()))
+	var payload struct {
+		Op        string `json:"op"`
+		Id        string `json:"id"`
+		SessionId int64  `json:"session_id"`
+	}
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		return dlq.PermanentFailure, fmt.Errorf("unmarshal DB op payload: %w", err)
+	}
 
-	attrs := []attribute.KeyValue{attribute.String("op", "unknown")}
+	log.Printf("[SID:%d] Received DB op message: %s", payload.SessionId, string(msg.Payload()))
+
+	attrs := []attribute.KeyValue{
+		attribute.String("op", payload.Op),
+		attribute.Int64("session_id", payload.SessionId),
+	}
+	span.SetAttributes(attrs...)
+
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
 		if p.queryLatency != nil {
@@ -65,16 +79,6 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 	if p.queryCounter != nil {
 		p.queryCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
 	}
-
-	var payload struct {
-		Op string `json:"op"`
-		Id string `json:"id"`
-	}
-	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-		return dlq.PermanentFailure, fmt.Errorf("unmarshal DB op payload: %w", err)
-	}
-
-	attrs[0] = attribute.String("op", payload.Op)
 
 	if payload.Op == "delete_session" {
 		sessID, parseErr := strconv.ParseInt(payload.Id, 10, 64)
