@@ -8,6 +8,30 @@ import (
 	"fmt"
 )
 
+// The BehavioralLogFunc type is an adapter to allow the use of ordinary
+// function as BehavioralLog mutator.
+type BehavioralLogFunc func(context.Context, *ent.BehavioralLogMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BehavioralLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BehavioralLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BehavioralLogMutation", m)
+}
+
+// The BehavioralRuleFunc type is an adapter to allow the use of ordinary
+// function as BehavioralRule mutator.
+type BehavioralRuleFunc func(context.Context, *ent.BehavioralRuleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BehavioralRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BehavioralRuleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BehavioralRuleMutation", m)
+}
+
 // The BuildJournalFunc type is an adapter to allow the use of ordinary
 // function as BuildJournal mutator.
 type BuildJournalFunc func(context.Context, *ent.BuildJournalMutation) (ent.Value, error)

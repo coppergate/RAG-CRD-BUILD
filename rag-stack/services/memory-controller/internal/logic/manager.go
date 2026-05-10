@@ -9,6 +9,7 @@ import (
 
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
+	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/memoryevent"
 	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
@@ -25,7 +26,9 @@ type MemoryManager struct {
 }
 
 func NewMemoryManager(client *ent.Client) *MemoryManager {
-	return &MemoryManager{client: client}
+	return &MemoryManager{
+		client: client,
+	}
 }
 
 func (m *MemoryManager) ListItems(ctx context.Context, sessionID int64) ([]*ent.MemoryItem, error) {
@@ -301,9 +304,32 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		}
 	}
 
-	// 3. Assemble MemoryPack
+	// 3. Fetch Behavioral Rules (Iteration 9)
+	rules, err := m.client.BehavioralRule.Query().
+		Where(behavioralrule.IsActive(true)).
+		Order(ent.Desc(behavioralrule.FieldPriority)).
+		All(ctx)
+	if err != nil {
+		log.Printf("[MEMCTRL] Error fetching behavioral rules: %v", err)
+	}
+
+	// 4. Assemble MemoryPack
 	pack := &contracts.MemoryPack{
 		Items: []*contracts.MemoryWriteItem{},
+	}
+
+	// Add Behavioral Rules first (System instructions)
+	for _, rule := range rules {
+		pack.Items = append(pack.Items, &contracts.MemoryWriteItem{
+			MemoryId:   rule.ID,
+			MemoryType: "behavioral_rule",
+			Content:    rule.RuleContent,
+			Metadata: contracts.ToStruct(map[string]interface{}{
+				"action_type": string(rule.ActionType),
+				"priority":    rule.Priority,
+				"scope":       string(rule.Scope),
+			}),
+		})
 	}
 
 	// Add MemoryItems

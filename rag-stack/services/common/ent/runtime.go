@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"app-builds/common/ent/behaviorallog"
+	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
 	"app-builds/common/ent/buildlock"
 	"app-builds/common/ent/buildversion"
@@ -29,6 +31,32 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	behaviorallogFields := schema.BehavioralLog{}.Fields()
+	_ = behaviorallogFields
+	// behaviorallogDescAppliedAt is the schema descriptor for applied_at field.
+	behaviorallogDescAppliedAt := behaviorallogFields[4].Descriptor()
+	// behaviorallog.DefaultAppliedAt holds the default value on creation for the applied_at field.
+	behaviorallog.DefaultAppliedAt = behaviorallogDescAppliedAt.Default.(func() time.Time)
+	behavioralruleFields := schema.BehavioralRule{}.Fields()
+	_ = behavioralruleFields
+	// behavioralruleDescPriority is the schema descriptor for priority field.
+	behavioralruleDescPriority := behavioralruleFields[3].Descriptor()
+	// behavioralrule.DefaultPriority holds the default value on creation for the priority field.
+	behavioralrule.DefaultPriority = behavioralruleDescPriority.Default.(int)
+	// behavioralruleDescIsActive is the schema descriptor for is_active field.
+	behavioralruleDescIsActive := behavioralruleFields[4].Descriptor()
+	// behavioralrule.DefaultIsActive holds the default value on creation for the is_active field.
+	behavioralrule.DefaultIsActive = behavioralruleDescIsActive.Default.(bool)
+	// behavioralruleDescCreatedAt is the schema descriptor for created_at field.
+	behavioralruleDescCreatedAt := behavioralruleFields[6].Descriptor()
+	// behavioralrule.DefaultCreatedAt holds the default value on creation for the created_at field.
+	behavioralrule.DefaultCreatedAt = behavioralruleDescCreatedAt.Default.(func() time.Time)
+	// behavioralruleDescUpdatedAt is the schema descriptor for updated_at field.
+	behavioralruleDescUpdatedAt := behavioralruleFields[7].Descriptor()
+	// behavioralrule.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	behavioralrule.DefaultUpdatedAt = behavioralruleDescUpdatedAt.Default.(func() time.Time)
+	// behavioralrule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	behavioralrule.UpdateDefaultUpdatedAt = behavioralruleDescUpdatedAt.UpdateDefault.(func() time.Time)
 	buildjournalFields := schema.BuildJournal{}.Fields()
 	_ = buildjournalFields
 	// buildjournalDescServiceName is the schema descriptor for service_name field.

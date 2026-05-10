@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"app-builds/common/ent/behaviorallog"
+	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
 	"app-builds/common/ent/buildlock"
 	"app-builds/common/ent/buildversion"
@@ -88,6 +90,8 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			behaviorallog.Table:        behaviorallog.ValidColumn,
+			behavioralrule.Table:       behavioralrule.ValidColumn,
 			buildjournal.Table:         buildjournal.ValidColumn,
 			buildlock.Table:            buildlock.ValidColumn,
 			buildversion.Table:         buildversion.ValidColumn,

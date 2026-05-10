@@ -3,6 +3,8 @@
 package ent
 
 import (
+	"app-builds/common/ent/behaviorallog"
+	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
 	"app-builds/common/ent/buildlock"
 	"app-builds/common/ent/buildversion"
@@ -40,6 +42,8 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeBehavioralLog        = "BehavioralLog"
+	TypeBehavioralRule       = "BehavioralRule"
 	TypeBuildJournal         = "BuildJournal"
 	TypeBuildLock            = "BuildLock"
 	TypeBuildVersion         = "BuildVersion"
@@ -57,6 +61,1304 @@ const (
 	TypeSession              = "Session"
 	TypeTag                  = "Tag"
 )
+
+// BehavioralLogMutation represents an operation that mutates the BehavioralLog nodes in the graph.
+type BehavioralLogMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	prompt_id     *string
+	rule_id       *int64
+	addrule_id    *int64
+	action_type   *behaviorallog.ActionType
+	applied_at    *time.Time
+	context       *map[string]interface{}
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*BehavioralLog, error)
+	predicates    []predicate.BehavioralLog
+}
+
+var _ ent.Mutation = (*BehavioralLogMutation)(nil)
+
+// behaviorallogOption allows management of the mutation configuration using functional options.
+type behaviorallogOption func(*BehavioralLogMutation)
+
+// newBehavioralLogMutation creates new mutation for the BehavioralLog entity.
+func newBehavioralLogMutation(c config, op Op, opts ...behaviorallogOption) *BehavioralLogMutation {
+	m := &BehavioralLogMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBehavioralLog,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBehavioralLogID sets the ID field of the mutation.
+func withBehavioralLogID(id int64) behaviorallogOption {
+	return func(m *BehavioralLogMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BehavioralLog
+		)
+		m.oldValue = func(ctx context.Context) (*BehavioralLog, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BehavioralLog.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBehavioralLog sets the old BehavioralLog of the mutation.
+func withBehavioralLog(node *BehavioralLog) behaviorallogOption {
+	return func(m *BehavioralLogMutation) {
+		m.oldValue = func(context.Context) (*BehavioralLog, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BehavioralLogMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BehavioralLogMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of BehavioralLog entities.
+func (m *BehavioralLogMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BehavioralLogMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BehavioralLogMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BehavioralLog.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetPromptID sets the "prompt_id" field.
+func (m *BehavioralLogMutation) SetPromptID(s string) {
+	m.prompt_id = &s
+}
+
+// PromptID returns the value of the "prompt_id" field in the mutation.
+func (m *BehavioralLogMutation) PromptID() (r string, exists bool) {
+	v := m.prompt_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPromptID returns the old "prompt_id" field's value of the BehavioralLog entity.
+// If the BehavioralLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralLogMutation) OldPromptID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPromptID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPromptID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPromptID: %w", err)
+	}
+	return oldValue.PromptID, nil
+}
+
+// ResetPromptID resets all changes to the "prompt_id" field.
+func (m *BehavioralLogMutation) ResetPromptID() {
+	m.prompt_id = nil
+}
+
+// SetRuleID sets the "rule_id" field.
+func (m *BehavioralLogMutation) SetRuleID(i int64) {
+	m.rule_id = &i
+	m.addrule_id = nil
+}
+
+// RuleID returns the value of the "rule_id" field in the mutation.
+func (m *BehavioralLogMutation) RuleID() (r int64, exists bool) {
+	v := m.rule_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuleID returns the old "rule_id" field's value of the BehavioralLog entity.
+// If the BehavioralLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralLogMutation) OldRuleID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuleID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuleID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuleID: %w", err)
+	}
+	return oldValue.RuleID, nil
+}
+
+// AddRuleID adds i to the "rule_id" field.
+func (m *BehavioralLogMutation) AddRuleID(i int64) {
+	if m.addrule_id != nil {
+		*m.addrule_id += i
+	} else {
+		m.addrule_id = &i
+	}
+}
+
+// AddedRuleID returns the value that was added to the "rule_id" field in this mutation.
+func (m *BehavioralLogMutation) AddedRuleID() (r int64, exists bool) {
+	v := m.addrule_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRuleID resets all changes to the "rule_id" field.
+func (m *BehavioralLogMutation) ResetRuleID() {
+	m.rule_id = nil
+	m.addrule_id = nil
+}
+
+// SetActionType sets the "action_type" field.
+func (m *BehavioralLogMutation) SetActionType(bt behaviorallog.ActionType) {
+	m.action_type = &bt
+}
+
+// ActionType returns the value of the "action_type" field in the mutation.
+func (m *BehavioralLogMutation) ActionType() (r behaviorallog.ActionType, exists bool) {
+	v := m.action_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionType returns the old "action_type" field's value of the BehavioralLog entity.
+// If the BehavioralLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralLogMutation) OldActionType(ctx context.Context) (v behaviorallog.ActionType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionType: %w", err)
+	}
+	return oldValue.ActionType, nil
+}
+
+// ResetActionType resets all changes to the "action_type" field.
+func (m *BehavioralLogMutation) ResetActionType() {
+	m.action_type = nil
+}
+
+// SetAppliedAt sets the "applied_at" field.
+func (m *BehavioralLogMutation) SetAppliedAt(t time.Time) {
+	m.applied_at = &t
+}
+
+// AppliedAt returns the value of the "applied_at" field in the mutation.
+func (m *BehavioralLogMutation) AppliedAt() (r time.Time, exists bool) {
+	v := m.applied_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAppliedAt returns the old "applied_at" field's value of the BehavioralLog entity.
+// If the BehavioralLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralLogMutation) OldAppliedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAppliedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAppliedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAppliedAt: %w", err)
+	}
+	return oldValue.AppliedAt, nil
+}
+
+// ResetAppliedAt resets all changes to the "applied_at" field.
+func (m *BehavioralLogMutation) ResetAppliedAt() {
+	m.applied_at = nil
+}
+
+// SetContext sets the "context" field.
+func (m *BehavioralLogMutation) SetContext(value map[string]interface{}) {
+	m.context = &value
+}
+
+// Context returns the value of the "context" field in the mutation.
+func (m *BehavioralLogMutation) Context() (r map[string]interface{}, exists bool) {
+	v := m.context
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldContext returns the old "context" field's value of the BehavioralLog entity.
+// If the BehavioralLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralLogMutation) OldContext(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldContext is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldContext requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldContext: %w", err)
+	}
+	return oldValue.Context, nil
+}
+
+// ClearContext clears the value of the "context" field.
+func (m *BehavioralLogMutation) ClearContext() {
+	m.context = nil
+	m.clearedFields[behaviorallog.FieldContext] = struct{}{}
+}
+
+// ContextCleared returns if the "context" field was cleared in this mutation.
+func (m *BehavioralLogMutation) ContextCleared() bool {
+	_, ok := m.clearedFields[behaviorallog.FieldContext]
+	return ok
+}
+
+// ResetContext resets all changes to the "context" field.
+func (m *BehavioralLogMutation) ResetContext() {
+	m.context = nil
+	delete(m.clearedFields, behaviorallog.FieldContext)
+}
+
+// Where appends a list predicates to the BehavioralLogMutation builder.
+func (m *BehavioralLogMutation) Where(ps ...predicate.BehavioralLog) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BehavioralLogMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BehavioralLogMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BehavioralLog, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BehavioralLogMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BehavioralLogMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BehavioralLog).
+func (m *BehavioralLogMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BehavioralLogMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.prompt_id != nil {
+		fields = append(fields, behaviorallog.FieldPromptID)
+	}
+	if m.rule_id != nil {
+		fields = append(fields, behaviorallog.FieldRuleID)
+	}
+	if m.action_type != nil {
+		fields = append(fields, behaviorallog.FieldActionType)
+	}
+	if m.applied_at != nil {
+		fields = append(fields, behaviorallog.FieldAppliedAt)
+	}
+	if m.context != nil {
+		fields = append(fields, behaviorallog.FieldContext)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BehavioralLogMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case behaviorallog.FieldPromptID:
+		return m.PromptID()
+	case behaviorallog.FieldRuleID:
+		return m.RuleID()
+	case behaviorallog.FieldActionType:
+		return m.ActionType()
+	case behaviorallog.FieldAppliedAt:
+		return m.AppliedAt()
+	case behaviorallog.FieldContext:
+		return m.Context()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BehavioralLogMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case behaviorallog.FieldPromptID:
+		return m.OldPromptID(ctx)
+	case behaviorallog.FieldRuleID:
+		return m.OldRuleID(ctx)
+	case behaviorallog.FieldActionType:
+		return m.OldActionType(ctx)
+	case behaviorallog.FieldAppliedAt:
+		return m.OldAppliedAt(ctx)
+	case behaviorallog.FieldContext:
+		return m.OldContext(ctx)
+	}
+	return nil, fmt.Errorf("unknown BehavioralLog field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BehavioralLogMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case behaviorallog.FieldPromptID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPromptID(v)
+		return nil
+	case behaviorallog.FieldRuleID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuleID(v)
+		return nil
+	case behaviorallog.FieldActionType:
+		v, ok := value.(behaviorallog.ActionType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionType(v)
+		return nil
+	case behaviorallog.FieldAppliedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAppliedAt(v)
+		return nil
+	case behaviorallog.FieldContext:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetContext(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BehavioralLog field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BehavioralLogMutation) AddedFields() []string {
+	var fields []string
+	if m.addrule_id != nil {
+		fields = append(fields, behaviorallog.FieldRuleID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BehavioralLogMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case behaviorallog.FieldRuleID:
+		return m.AddedRuleID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BehavioralLogMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case behaviorallog.FieldRuleID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRuleID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BehavioralLog numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BehavioralLogMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(behaviorallog.FieldContext) {
+		fields = append(fields, behaviorallog.FieldContext)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BehavioralLogMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BehavioralLogMutation) ClearField(name string) error {
+	switch name {
+	case behaviorallog.FieldContext:
+		m.ClearContext()
+		return nil
+	}
+	return fmt.Errorf("unknown BehavioralLog nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BehavioralLogMutation) ResetField(name string) error {
+	switch name {
+	case behaviorallog.FieldPromptID:
+		m.ResetPromptID()
+		return nil
+	case behaviorallog.FieldRuleID:
+		m.ResetRuleID()
+		return nil
+	case behaviorallog.FieldActionType:
+		m.ResetActionType()
+		return nil
+	case behaviorallog.FieldAppliedAt:
+		m.ResetAppliedAt()
+		return nil
+	case behaviorallog.FieldContext:
+		m.ResetContext()
+		return nil
+	}
+	return fmt.Errorf("unknown BehavioralLog field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BehavioralLogMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BehavioralLogMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BehavioralLogMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BehavioralLogMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BehavioralLogMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BehavioralLogMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BehavioralLogMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown BehavioralLog unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BehavioralLogMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown BehavioralLog edge %s", name)
+}
+
+// BehavioralRuleMutation represents an operation that mutates the BehavioralRule nodes in the graph.
+type BehavioralRuleMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	action_type   *behavioralrule.ActionType
+	rule_content  *string
+	priority      *int
+	addpriority   *int
+	is_active     *bool
+	scope         *behavioralrule.Scope
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*BehavioralRule, error)
+	predicates    []predicate.BehavioralRule
+}
+
+var _ ent.Mutation = (*BehavioralRuleMutation)(nil)
+
+// behavioralruleOption allows management of the mutation configuration using functional options.
+type behavioralruleOption func(*BehavioralRuleMutation)
+
+// newBehavioralRuleMutation creates new mutation for the BehavioralRule entity.
+func newBehavioralRuleMutation(c config, op Op, opts ...behavioralruleOption) *BehavioralRuleMutation {
+	m := &BehavioralRuleMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBehavioralRule,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBehavioralRuleID sets the ID field of the mutation.
+func withBehavioralRuleID(id int64) behavioralruleOption {
+	return func(m *BehavioralRuleMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BehavioralRule
+		)
+		m.oldValue = func(ctx context.Context) (*BehavioralRule, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BehavioralRule.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBehavioralRule sets the old BehavioralRule of the mutation.
+func withBehavioralRule(node *BehavioralRule) behavioralruleOption {
+	return func(m *BehavioralRuleMutation) {
+		m.oldValue = func(context.Context) (*BehavioralRule, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BehavioralRuleMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BehavioralRuleMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of BehavioralRule entities.
+func (m *BehavioralRuleMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BehavioralRuleMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BehavioralRuleMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BehavioralRule.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetActionType sets the "action_type" field.
+func (m *BehavioralRuleMutation) SetActionType(bt behavioralrule.ActionType) {
+	m.action_type = &bt
+}
+
+// ActionType returns the value of the "action_type" field in the mutation.
+func (m *BehavioralRuleMutation) ActionType() (r behavioralrule.ActionType, exists bool) {
+	v := m.action_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionType returns the old "action_type" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldActionType(ctx context.Context) (v behavioralrule.ActionType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionType: %w", err)
+	}
+	return oldValue.ActionType, nil
+}
+
+// ResetActionType resets all changes to the "action_type" field.
+func (m *BehavioralRuleMutation) ResetActionType() {
+	m.action_type = nil
+}
+
+// SetRuleContent sets the "rule_content" field.
+func (m *BehavioralRuleMutation) SetRuleContent(s string) {
+	m.rule_content = &s
+}
+
+// RuleContent returns the value of the "rule_content" field in the mutation.
+func (m *BehavioralRuleMutation) RuleContent() (r string, exists bool) {
+	v := m.rule_content
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRuleContent returns the old "rule_content" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldRuleContent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRuleContent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRuleContent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRuleContent: %w", err)
+	}
+	return oldValue.RuleContent, nil
+}
+
+// ResetRuleContent resets all changes to the "rule_content" field.
+func (m *BehavioralRuleMutation) ResetRuleContent() {
+	m.rule_content = nil
+}
+
+// SetPriority sets the "priority" field.
+func (m *BehavioralRuleMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
+}
+
+// Priority returns the value of the "priority" field in the mutation.
+func (m *BehavioralRuleMutation) Priority() (r int, exists bool) {
+	v := m.priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriority returns the old "priority" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldPriority(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
+	}
+	return oldValue.Priority, nil
+}
+
+// AddPriority adds i to the "priority" field.
+func (m *BehavioralRuleMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *BehavioralRuleMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *BehavioralRuleMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
+}
+
+// SetIsActive sets the "is_active" field.
+func (m *BehavioralRuleMutation) SetIsActive(b bool) {
+	m.is_active = &b
+}
+
+// IsActive returns the value of the "is_active" field in the mutation.
+func (m *BehavioralRuleMutation) IsActive() (r bool, exists bool) {
+	v := m.is_active
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsActive returns the old "is_active" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldIsActive(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsActive is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsActive requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsActive: %w", err)
+	}
+	return oldValue.IsActive, nil
+}
+
+// ResetIsActive resets all changes to the "is_active" field.
+func (m *BehavioralRuleMutation) ResetIsActive() {
+	m.is_active = nil
+}
+
+// SetScope sets the "scope" field.
+func (m *BehavioralRuleMutation) SetScope(b behavioralrule.Scope) {
+	m.scope = &b
+}
+
+// Scope returns the value of the "scope" field in the mutation.
+func (m *BehavioralRuleMutation) Scope() (r behavioralrule.Scope, exists bool) {
+	v := m.scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScope returns the old "scope" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldScope(ctx context.Context) (v behavioralrule.Scope, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScope: %w", err)
+	}
+	return oldValue.Scope, nil
+}
+
+// ResetScope resets all changes to the "scope" field.
+func (m *BehavioralRuleMutation) ResetScope() {
+	m.scope = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BehavioralRuleMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BehavioralRuleMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BehavioralRuleMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *BehavioralRuleMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *BehavioralRuleMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the BehavioralRule entity.
+// If the BehavioralRule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BehavioralRuleMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *BehavioralRuleMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the BehavioralRuleMutation builder.
+func (m *BehavioralRuleMutation) Where(ps ...predicate.BehavioralRule) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BehavioralRuleMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BehavioralRuleMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BehavioralRule, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BehavioralRuleMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BehavioralRuleMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BehavioralRule).
+func (m *BehavioralRuleMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BehavioralRuleMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.action_type != nil {
+		fields = append(fields, behavioralrule.FieldActionType)
+	}
+	if m.rule_content != nil {
+		fields = append(fields, behavioralrule.FieldRuleContent)
+	}
+	if m.priority != nil {
+		fields = append(fields, behavioralrule.FieldPriority)
+	}
+	if m.is_active != nil {
+		fields = append(fields, behavioralrule.FieldIsActive)
+	}
+	if m.scope != nil {
+		fields = append(fields, behavioralrule.FieldScope)
+	}
+	if m.created_at != nil {
+		fields = append(fields, behavioralrule.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, behavioralrule.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BehavioralRuleMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case behavioralrule.FieldActionType:
+		return m.ActionType()
+	case behavioralrule.FieldRuleContent:
+		return m.RuleContent()
+	case behavioralrule.FieldPriority:
+		return m.Priority()
+	case behavioralrule.FieldIsActive:
+		return m.IsActive()
+	case behavioralrule.FieldScope:
+		return m.Scope()
+	case behavioralrule.FieldCreatedAt:
+		return m.CreatedAt()
+	case behavioralrule.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BehavioralRuleMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case behavioralrule.FieldActionType:
+		return m.OldActionType(ctx)
+	case behavioralrule.FieldRuleContent:
+		return m.OldRuleContent(ctx)
+	case behavioralrule.FieldPriority:
+		return m.OldPriority(ctx)
+	case behavioralrule.FieldIsActive:
+		return m.OldIsActive(ctx)
+	case behavioralrule.FieldScope:
+		return m.OldScope(ctx)
+	case behavioralrule.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case behavioralrule.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown BehavioralRule field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BehavioralRuleMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case behavioralrule.FieldActionType:
+		v, ok := value.(behavioralrule.ActionType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionType(v)
+		return nil
+	case behavioralrule.FieldRuleContent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRuleContent(v)
+		return nil
+	case behavioralrule.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriority(v)
+		return nil
+	case behavioralrule.FieldIsActive:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsActive(v)
+		return nil
+	case behavioralrule.FieldScope:
+		v, ok := value.(behavioralrule.Scope)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScope(v)
+		return nil
+	case behavioralrule.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case behavioralrule.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BehavioralRule field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BehavioralRuleMutation) AddedFields() []string {
+	var fields []string
+	if m.addpriority != nil {
+		fields = append(fields, behavioralrule.FieldPriority)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BehavioralRuleMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case behavioralrule.FieldPriority:
+		return m.AddedPriority()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BehavioralRuleMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case behavioralrule.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BehavioralRule numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BehavioralRuleMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BehavioralRuleMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BehavioralRuleMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown BehavioralRule nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BehavioralRuleMutation) ResetField(name string) error {
+	switch name {
+	case behavioralrule.FieldActionType:
+		m.ResetActionType()
+		return nil
+	case behavioralrule.FieldRuleContent:
+		m.ResetRuleContent()
+		return nil
+	case behavioralrule.FieldPriority:
+		m.ResetPriority()
+		return nil
+	case behavioralrule.FieldIsActive:
+		m.ResetIsActive()
+		return nil
+	case behavioralrule.FieldScope:
+		m.ResetScope()
+		return nil
+	case behavioralrule.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case behavioralrule.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BehavioralRule field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BehavioralRuleMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BehavioralRuleMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BehavioralRuleMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BehavioralRuleMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BehavioralRuleMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BehavioralRuleMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BehavioralRuleMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown BehavioralRule unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BehavioralRuleMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown BehavioralRule edge %s", name)
+}
 
 // BuildJournalMutation represents an operation that mutates the BuildJournal nodes in the graph.
 type BuildJournalMutation struct {

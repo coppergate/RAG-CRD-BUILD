@@ -9,6 +9,38 @@ import (
 )
 
 var (
+	// BehavioralLogsColumns holds the columns for the "behavioral_logs" table.
+	BehavioralLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "prompt_id", Type: field.TypeString},
+		{Name: "rule_id", Type: field.TypeInt64},
+		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"FILE_SEARCH", "FILE_EDIT", "FILE_VCS", "REMOTE_EXEC", "K8S_ORCHESTRATE", "DB_ACCESS", "BUILD_DEPLOY", "DOC_PROCESS", "JOB_RESUME", "WEB_FETCH"}},
+		{Name: "applied_at", Type: field.TypeTime},
+		{Name: "context", Type: field.TypeJSON, Nullable: true},
+	}
+	// BehavioralLogsTable holds the schema information for the "behavioral_logs" table.
+	BehavioralLogsTable = &schema.Table{
+		Name:       "behavioral_logs",
+		Columns:    BehavioralLogsColumns,
+		PrimaryKey: []*schema.Column{BehavioralLogsColumns[0]},
+	}
+	// BehavioralRulesColumns holds the columns for the "behavioral_rules" table.
+	BehavioralRulesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "action_type", Type: field.TypeEnum, Enums: []string{"FILE_SEARCH", "FILE_EDIT", "FILE_VCS", "REMOTE_EXEC", "K8S_ORCHESTRATE", "DB_ACCESS", "BUILD_DEPLOY", "DOC_PROCESS", "JOB_RESUME", "WEB_FETCH"}},
+		{Name: "rule_content", Type: field.TypeString, Size: 2147483647},
+		{Name: "priority", Type: field.TypeInt, Default: 0},
+		{Name: "is_active", Type: field.TypeBool, Default: true},
+		{Name: "scope", Type: field.TypeEnum, Enums: []string{"GLOBAL", "PROJECT", "SESSION"}, Default: "GLOBAL"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// BehavioralRulesTable holds the schema information for the "behavioral_rules" table.
+	BehavioralRulesTable = &schema.Table{
+		Name:       "behavioral_rules",
+		Columns:    BehavioralRulesColumns,
+		PrimaryKey: []*schema.Column{BehavioralRulesColumns[0]},
+	}
 	// BuildJournalsColumns holds the columns for the "build_journals" table.
 	BuildJournalsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -474,6 +506,8 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		BehavioralLogsTable,
+		BehavioralRulesTable,
 		BuildJournalsTable,
 		BuildLocksTable,
 		BuildVersionsTable,

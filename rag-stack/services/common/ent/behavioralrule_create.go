@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type BehavioralRuleCreate struct {
 	config
 	mutation *BehavioralRuleMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetActionType sets the "action_type" field.
@@ -226,6 +228,7 @@ func (_c *BehavioralRuleCreate) createSpec() (*BehavioralRule, *sqlgraph.CreateS
 		_node = &BehavioralRule{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(behavioralrule.Table, sqlgraph.NewFieldSpec(behavioralrule.FieldID, field.TypeInt64))
 	)
+	_spec.OnConflict = _c.conflict
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
@@ -261,11 +264,314 @@ func (_c *BehavioralRuleCreate) createSpec() (*BehavioralRule, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.BehavioralRule.Create().
+//		SetActionType(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.BehavioralRuleUpsert) {
+//			SetActionType(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *BehavioralRuleCreate) OnConflict(opts ...sql.ConflictOption) *BehavioralRuleUpsertOne {
+	_c.conflict = opts
+	return &BehavioralRuleUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.BehavioralRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *BehavioralRuleCreate) OnConflictColumns(columns ...string) *BehavioralRuleUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &BehavioralRuleUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// BehavioralRuleUpsertOne is the builder for "upsert"-ing
+	//  one BehavioralRule node.
+	BehavioralRuleUpsertOne struct {
+		create *BehavioralRuleCreate
+	}
+
+	// BehavioralRuleUpsert is the "OnConflict" setter.
+	BehavioralRuleUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetActionType sets the "action_type" field.
+func (u *BehavioralRuleUpsert) SetActionType(v behavioralrule.ActionType) *BehavioralRuleUpsert {
+	u.Set(behavioralrule.FieldActionType, v)
+	return u
+}
+
+// UpdateActionType sets the "action_type" field to the value that was provided on create.
+func (u *BehavioralRuleUpsert) UpdateActionType() *BehavioralRuleUpsert {
+	u.SetExcluded(behavioralrule.FieldActionType)
+	return u
+}
+
+// SetRuleContent sets the "rule_content" field.
+func (u *BehavioralRuleUpsert) SetRuleContent(v string) *BehavioralRuleUpsert {
+	u.Set(behavioralrule.FieldRuleContent, v)
+	return u
+}
+
+// UpdateRuleContent sets the "rule_content" field to the value that was provided on create.
+func (u *BehavioralRuleUpsert) UpdateRuleContent() *BehavioralRuleUpsert {
+	u.SetExcluded(behavioralrule.FieldRuleContent)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *BehavioralRuleUpsert) SetPriority(v int) *BehavioralRuleUpsert {
+	u.Set(behavioralrule.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *BehavioralRuleUpsert) UpdatePriority() *BehavioralRuleUpsert {
+	u.SetExcluded(behavioralrule.FieldPriority)
+	return u
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *BehavioralRuleUpsert) AddPriority(v int) *BehavioralRuleUpsert {
+	u.Add(behavioralrule.FieldPriority, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *BehavioralRuleUpsert) SetIsActive(v bool) *BehavioralRuleUpsert {
+	u.Set(behavioralrule.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *BehavioralRuleUpsert) UpdateIsActive() *BehavioralRuleUpsert {
+	u.SetExcluded(behavioralrule.FieldIsActive)
+	return u
+}
+
+// SetScope sets the "scope" field.
+func (u *BehavioralRuleUpsert) SetScope(v behavioralrule.Scope) *BehavioralRuleUpsert {
+	u.Set(behavioralrule.FieldScope, v)
+	return u
+}
+
+// UpdateScope sets the "scope" field to the value that was provided on create.
+func (u *BehavioralRuleUpsert) UpdateScope() *BehavioralRuleUpsert {
+	u.SetExcluded(behavioralrule.FieldScope)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *BehavioralRuleUpsert) SetUpdatedAt(v time.Time) *BehavioralRuleUpsert {
+	u.Set(behavioralrule.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *BehavioralRuleUpsert) UpdateUpdatedAt() *BehavioralRuleUpsert {
+	u.SetExcluded(behavioralrule.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create except the ID field.
+// Using this option is equivalent to using:
+//
+//	client.BehavioralRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(behavioralrule.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *BehavioralRuleUpsertOne) UpdateNewValues() *BehavioralRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ID(); exists {
+			s.SetIgnore(behavioralrule.FieldID)
+		}
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(behavioralrule.FieldCreatedAt)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.BehavioralRule.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *BehavioralRuleUpsertOne) Ignore() *BehavioralRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *BehavioralRuleUpsertOne) DoNothing() *BehavioralRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the BehavioralRuleCreate.OnConflict
+// documentation for more info.
+func (u *BehavioralRuleUpsertOne) Update(set func(*BehavioralRuleUpsert)) *BehavioralRuleUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&BehavioralRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetActionType sets the "action_type" field.
+func (u *BehavioralRuleUpsertOne) SetActionType(v behavioralrule.ActionType) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetActionType(v)
+	})
+}
+
+// UpdateActionType sets the "action_type" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertOne) UpdateActionType() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateActionType()
+	})
+}
+
+// SetRuleContent sets the "rule_content" field.
+func (u *BehavioralRuleUpsertOne) SetRuleContent(v string) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetRuleContent(v)
+	})
+}
+
+// UpdateRuleContent sets the "rule_content" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertOne) UpdateRuleContent() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateRuleContent()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *BehavioralRuleUpsertOne) SetPriority(v int) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *BehavioralRuleUpsertOne) AddPriority(v int) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertOne) UpdatePriority() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *BehavioralRuleUpsertOne) SetIsActive(v bool) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertOne) UpdateIsActive() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetScope sets the "scope" field.
+func (u *BehavioralRuleUpsertOne) SetScope(v behavioralrule.Scope) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetScope(v)
+	})
+}
+
+// UpdateScope sets the "scope" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertOne) UpdateScope() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateScope()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *BehavioralRuleUpsertOne) SetUpdatedAt(v time.Time) *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertOne) UpdateUpdatedAt() *BehavioralRuleUpsertOne {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *BehavioralRuleUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for BehavioralRuleCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *BehavioralRuleUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *BehavioralRuleUpsertOne) ID(ctx context.Context) (id int64, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *BehavioralRuleUpsertOne) IDX(ctx context.Context) int64 {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // BehavioralRuleCreateBulk is the builder for creating many BehavioralRule entities in bulk.
 type BehavioralRuleCreateBulk struct {
 	config
 	err      error
 	builders []*BehavioralRuleCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the BehavioralRule entities in the database.
@@ -295,6 +601,7 @@ func (_c *BehavioralRuleCreateBulk) Save(ctx context.Context) ([]*BehavioralRule
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -345,6 +652,214 @@ func (_c *BehavioralRuleCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *BehavioralRuleCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.BehavioralRule.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.BehavioralRuleUpsert) {
+//			SetActionType(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *BehavioralRuleCreateBulk) OnConflict(opts ...sql.ConflictOption) *BehavioralRuleUpsertBulk {
+	_c.conflict = opts
+	return &BehavioralRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.BehavioralRule.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *BehavioralRuleCreateBulk) OnConflictColumns(columns ...string) *BehavioralRuleUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &BehavioralRuleUpsertBulk{
+		create: _c,
+	}
+}
+
+// BehavioralRuleUpsertBulk is the builder for "upsert"-ing
+// a bulk of BehavioralRule nodes.
+type BehavioralRuleUpsertBulk struct {
+	create *BehavioralRuleCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.BehavioralRule.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//			sql.ResolveWith(func(u *sql.UpdateSet) {
+//				u.SetIgnore(behavioralrule.FieldID)
+//			}),
+//		).
+//		Exec(ctx)
+func (u *BehavioralRuleUpsertBulk) UpdateNewValues() *BehavioralRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ID(); exists {
+				s.SetIgnore(behavioralrule.FieldID)
+			}
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(behavioralrule.FieldCreatedAt)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.BehavioralRule.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *BehavioralRuleUpsertBulk) Ignore() *BehavioralRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *BehavioralRuleUpsertBulk) DoNothing() *BehavioralRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the BehavioralRuleCreateBulk.OnConflict
+// documentation for more info.
+func (u *BehavioralRuleUpsertBulk) Update(set func(*BehavioralRuleUpsert)) *BehavioralRuleUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&BehavioralRuleUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetActionType sets the "action_type" field.
+func (u *BehavioralRuleUpsertBulk) SetActionType(v behavioralrule.ActionType) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetActionType(v)
+	})
+}
+
+// UpdateActionType sets the "action_type" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertBulk) UpdateActionType() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateActionType()
+	})
+}
+
+// SetRuleContent sets the "rule_content" field.
+func (u *BehavioralRuleUpsertBulk) SetRuleContent(v string) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetRuleContent(v)
+	})
+}
+
+// UpdateRuleContent sets the "rule_content" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertBulk) UpdateRuleContent() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateRuleContent()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *BehavioralRuleUpsertBulk) SetPriority(v int) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *BehavioralRuleUpsertBulk) AddPriority(v int) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertBulk) UpdatePriority() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *BehavioralRuleUpsertBulk) SetIsActive(v bool) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertBulk) UpdateIsActive() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetScope sets the "scope" field.
+func (u *BehavioralRuleUpsertBulk) SetScope(v behavioralrule.Scope) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetScope(v)
+	})
+}
+
+// UpdateScope sets the "scope" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertBulk) UpdateScope() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateScope()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *BehavioralRuleUpsertBulk) SetUpdatedAt(v time.Time) *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *BehavioralRuleUpsertBulk) UpdateUpdatedAt() *BehavioralRuleUpsertBulk {
+	return u.Update(func(s *BehavioralRuleUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *BehavioralRuleUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the BehavioralRuleCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for BehavioralRuleCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *BehavioralRuleUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

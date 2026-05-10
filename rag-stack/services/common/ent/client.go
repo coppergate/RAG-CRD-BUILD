@@ -11,6 +11,8 @@ import (
 
 	"app-builds/common/ent/migrate"
 
+	"app-builds/common/ent/behaviorallog"
+	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
 	"app-builds/common/ent/buildlock"
 	"app-builds/common/ent/buildversion"
@@ -39,6 +41,10 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// BehavioralLog is the client for interacting with the BehavioralLog builders.
+	BehavioralLog *BehavioralLogClient
+	// BehavioralRule is the client for interacting with the BehavioralRule builders.
+	BehavioralRule *BehavioralRuleClient
 	// BuildJournal is the client for interacting with the BuildJournal builders.
 	BuildJournal *BuildJournalClient
 	// BuildLock is the client for interacting with the BuildLock builders.
@@ -82,6 +88,8 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.BehavioralLog = NewBehavioralLogClient(c.config)
+	c.BehavioralRule = NewBehavioralRuleClient(c.config)
 	c.BuildJournal = NewBuildJournalClient(c.config)
 	c.BuildLock = NewBuildLockClient(c.config)
 	c.BuildVersion = NewBuildVersionClient(c.config)
@@ -190,6 +198,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:                  ctx,
 		config:               cfg,
+		BehavioralLog:        NewBehavioralLogClient(cfg),
+		BehavioralRule:       NewBehavioralRuleClient(cfg),
 		BuildJournal:         NewBuildJournalClient(cfg),
 		BuildLock:            NewBuildLockClient(cfg),
 		BuildVersion:         NewBuildVersionClient(cfg),
@@ -225,6 +235,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:                  ctx,
 		config:               cfg,
+		BehavioralLog:        NewBehavioralLogClient(cfg),
+		BehavioralRule:       NewBehavioralRuleClient(cfg),
 		BuildJournal:         NewBuildJournalClient(cfg),
 		BuildLock:            NewBuildLockClient(cfg),
 		BuildVersion:         NewBuildVersionClient(cfg),
@@ -247,7 +259,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		BuildJournal.
+//		BehavioralLog.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -270,9 +282,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding, c.CodeIngestion,
-		c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.ModelDefinition,
-		c.ModelExecutionMetric, c.Prompt, c.Response, c.RetrievalLog, c.Session, c.Tag,
+		c.BehavioralLog, c.BehavioralRule, c.BuildJournal, c.BuildLock, c.BuildVersion,
+		c.CodeEmbedding, c.CodeIngestion, c.InferenceNode, c.MemoryEvent, c.MemoryItem,
+		c.MemoryLink, c.ModelDefinition, c.ModelExecutionMetric, c.Prompt, c.Response,
+		c.RetrievalLog, c.Session, c.Tag,
 	} {
 		n.Use(hooks...)
 	}
@@ -282,9 +295,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding, c.CodeIngestion,
-		c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.ModelDefinition,
-		c.ModelExecutionMetric, c.Prompt, c.Response, c.RetrievalLog, c.Session, c.Tag,
+		c.BehavioralLog, c.BehavioralRule, c.BuildJournal, c.BuildLock, c.BuildVersion,
+		c.CodeEmbedding, c.CodeIngestion, c.InferenceNode, c.MemoryEvent, c.MemoryItem,
+		c.MemoryLink, c.ModelDefinition, c.ModelExecutionMetric, c.Prompt, c.Response,
+		c.RetrievalLog, c.Session, c.Tag,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -293,6 +307,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *BehavioralLogMutation:
+		return c.BehavioralLog.mutate(ctx, m)
+	case *BehavioralRuleMutation:
+		return c.BehavioralRule.mutate(ctx, m)
 	case *BuildJournalMutation:
 		return c.BuildJournal.mutate(ctx, m)
 	case *BuildLockMutation:
@@ -327,6 +345,272 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Tag.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// BehavioralLogClient is a client for the BehavioralLog schema.
+type BehavioralLogClient struct {
+	config
+}
+
+// NewBehavioralLogClient returns a client for the BehavioralLog from the given config.
+func NewBehavioralLogClient(c config) *BehavioralLogClient {
+	return &BehavioralLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `behaviorallog.Hooks(f(g(h())))`.
+func (c *BehavioralLogClient) Use(hooks ...Hook) {
+	c.hooks.BehavioralLog = append(c.hooks.BehavioralLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `behaviorallog.Intercept(f(g(h())))`.
+func (c *BehavioralLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BehavioralLog = append(c.inters.BehavioralLog, interceptors...)
+}
+
+// Create returns a builder for creating a BehavioralLog entity.
+func (c *BehavioralLogClient) Create() *BehavioralLogCreate {
+	mutation := newBehavioralLogMutation(c.config, OpCreate)
+	return &BehavioralLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BehavioralLog entities.
+func (c *BehavioralLogClient) CreateBulk(builders ...*BehavioralLogCreate) *BehavioralLogCreateBulk {
+	return &BehavioralLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BehavioralLogClient) MapCreateBulk(slice any, setFunc func(*BehavioralLogCreate, int)) *BehavioralLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BehavioralLogCreateBulk{err: fmt.Errorf("calling to BehavioralLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BehavioralLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BehavioralLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BehavioralLog.
+func (c *BehavioralLogClient) Update() *BehavioralLogUpdate {
+	mutation := newBehavioralLogMutation(c.config, OpUpdate)
+	return &BehavioralLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BehavioralLogClient) UpdateOne(_m *BehavioralLog) *BehavioralLogUpdateOne {
+	mutation := newBehavioralLogMutation(c.config, OpUpdateOne, withBehavioralLog(_m))
+	return &BehavioralLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BehavioralLogClient) UpdateOneID(id int64) *BehavioralLogUpdateOne {
+	mutation := newBehavioralLogMutation(c.config, OpUpdateOne, withBehavioralLogID(id))
+	return &BehavioralLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BehavioralLog.
+func (c *BehavioralLogClient) Delete() *BehavioralLogDelete {
+	mutation := newBehavioralLogMutation(c.config, OpDelete)
+	return &BehavioralLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BehavioralLogClient) DeleteOne(_m *BehavioralLog) *BehavioralLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BehavioralLogClient) DeleteOneID(id int64) *BehavioralLogDeleteOne {
+	builder := c.Delete().Where(behaviorallog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BehavioralLogDeleteOne{builder}
+}
+
+// Query returns a query builder for BehavioralLog.
+func (c *BehavioralLogClient) Query() *BehavioralLogQuery {
+	return &BehavioralLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBehavioralLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BehavioralLog entity by its id.
+func (c *BehavioralLogClient) Get(ctx context.Context, id int64) (*BehavioralLog, error) {
+	return c.Query().Where(behaviorallog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BehavioralLogClient) GetX(ctx context.Context, id int64) *BehavioralLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BehavioralLogClient) Hooks() []Hook {
+	return c.hooks.BehavioralLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *BehavioralLogClient) Interceptors() []Interceptor {
+	return c.inters.BehavioralLog
+}
+
+func (c *BehavioralLogClient) mutate(ctx context.Context, m *BehavioralLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BehavioralLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BehavioralLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BehavioralLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BehavioralLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BehavioralLog mutation op: %q", m.Op())
+	}
+}
+
+// BehavioralRuleClient is a client for the BehavioralRule schema.
+type BehavioralRuleClient struct {
+	config
+}
+
+// NewBehavioralRuleClient returns a client for the BehavioralRule from the given config.
+func NewBehavioralRuleClient(c config) *BehavioralRuleClient {
+	return &BehavioralRuleClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `behavioralrule.Hooks(f(g(h())))`.
+func (c *BehavioralRuleClient) Use(hooks ...Hook) {
+	c.hooks.BehavioralRule = append(c.hooks.BehavioralRule, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `behavioralrule.Intercept(f(g(h())))`.
+func (c *BehavioralRuleClient) Intercept(interceptors ...Interceptor) {
+	c.inters.BehavioralRule = append(c.inters.BehavioralRule, interceptors...)
+}
+
+// Create returns a builder for creating a BehavioralRule entity.
+func (c *BehavioralRuleClient) Create() *BehavioralRuleCreate {
+	mutation := newBehavioralRuleMutation(c.config, OpCreate)
+	return &BehavioralRuleCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of BehavioralRule entities.
+func (c *BehavioralRuleClient) CreateBulk(builders ...*BehavioralRuleCreate) *BehavioralRuleCreateBulk {
+	return &BehavioralRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *BehavioralRuleClient) MapCreateBulk(slice any, setFunc func(*BehavioralRuleCreate, int)) *BehavioralRuleCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &BehavioralRuleCreateBulk{err: fmt.Errorf("calling to BehavioralRuleClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*BehavioralRuleCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &BehavioralRuleCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for BehavioralRule.
+func (c *BehavioralRuleClient) Update() *BehavioralRuleUpdate {
+	mutation := newBehavioralRuleMutation(c.config, OpUpdate)
+	return &BehavioralRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *BehavioralRuleClient) UpdateOne(_m *BehavioralRule) *BehavioralRuleUpdateOne {
+	mutation := newBehavioralRuleMutation(c.config, OpUpdateOne, withBehavioralRule(_m))
+	return &BehavioralRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *BehavioralRuleClient) UpdateOneID(id int64) *BehavioralRuleUpdateOne {
+	mutation := newBehavioralRuleMutation(c.config, OpUpdateOne, withBehavioralRuleID(id))
+	return &BehavioralRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for BehavioralRule.
+func (c *BehavioralRuleClient) Delete() *BehavioralRuleDelete {
+	mutation := newBehavioralRuleMutation(c.config, OpDelete)
+	return &BehavioralRuleDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *BehavioralRuleClient) DeleteOne(_m *BehavioralRule) *BehavioralRuleDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *BehavioralRuleClient) DeleteOneID(id int64) *BehavioralRuleDeleteOne {
+	builder := c.Delete().Where(behavioralrule.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &BehavioralRuleDeleteOne{builder}
+}
+
+// Query returns a query builder for BehavioralRule.
+func (c *BehavioralRuleClient) Query() *BehavioralRuleQuery {
+	return &BehavioralRuleQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeBehavioralRule},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a BehavioralRule entity by its id.
+func (c *BehavioralRuleClient) Get(ctx context.Context, id int64) (*BehavioralRule, error) {
+	return c.Query().Where(behavioralrule.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *BehavioralRuleClient) GetX(ctx context.Context, id int64) *BehavioralRule {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *BehavioralRuleClient) Hooks() []Hook {
+	return c.hooks.BehavioralRule
+}
+
+// Interceptors returns the client interceptors.
+func (c *BehavioralRuleClient) Interceptors() []Interceptor {
+	return c.inters.BehavioralRule
+}
+
+func (c *BehavioralRuleClient) mutate(ctx context.Context, m *BehavioralRuleMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&BehavioralRuleCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&BehavioralRuleUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&BehavioralRuleUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&BehavioralRuleDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown BehavioralRule mutation op: %q", m.Op())
 	}
 }
 
@@ -2845,14 +3129,15 @@ func (c *TagClient) mutate(ctx context.Context, m *TagMutation) (Value, error) {
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		BuildJournal, BuildLock, BuildVersion, CodeEmbedding, CodeIngestion,
-		InferenceNode, MemoryEvent, MemoryItem, MemoryLink, ModelDefinition,
-		ModelExecutionMetric, Prompt, Response, RetrievalLog, Session, Tag []ent.Hook
+		BehavioralLog, BehavioralRule, BuildJournal, BuildLock, BuildVersion,
+		CodeEmbedding, CodeIngestion, InferenceNode, MemoryEvent, MemoryItem,
+		MemoryLink, ModelDefinition, ModelExecutionMetric, Prompt, Response,
+		RetrievalLog, Session, Tag []ent.Hook
 	}
 	inters struct {
-		BuildJournal, BuildLock, BuildVersion, CodeEmbedding, CodeIngestion,
-		InferenceNode, MemoryEvent, MemoryItem, MemoryLink, ModelDefinition,
-		ModelExecutionMetric, Prompt, Response, RetrievalLog, Session,
-		Tag []ent.Interceptor
+		BehavioralLog, BehavioralRule, BuildJournal, BuildLock, BuildVersion,
+		CodeEmbedding, CodeIngestion, InferenceNode, MemoryEvent, MemoryItem,
+		MemoryLink, ModelDefinition, ModelExecutionMetric, Prompt, Response,
+		RetrievalLog, Session, Tag []ent.Interceptor
 	}
 )

@@ -50,6 +50,13 @@ func main() {
 	mux.HandleFunc("/sessions", memoryHandler.HandleSessions)
 	mux.HandleFunc("/sessions/", memoryHandler.HandleSessions)
 
+	// Behavioral Rule Management (Iteration 9)
+	behavioralHandler := handlers.NewBehavioralHandler(entClient)
+	mux.HandleFunc("/behavior/rules", behavioralHandler.HandleRules)
+	mux.HandleFunc("/behavior/rules/", behavioralHandler.HandleRules)
+	mux.HandleFunc("/behavior/audit", behavioralHandler.HandleAudit)
+	mux.HandleFunc("/behavior/learn", behavioralHandler.HandleLearn)
+
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,
 		Handler: mux,

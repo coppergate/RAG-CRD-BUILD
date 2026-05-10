@@ -1,0 +1,139 @@
+package handlers
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"app-builds/common/ent"
+	"app-builds/memory-controller/internal/behavioral"
+)
+
+type BehavioralHandler struct {
+	manager *behavioral.BehaviorManager
+}
+
+func NewBehavioralHandler(client *ent.Client) *BehavioralHandler {
+	return &BehavioralHandler{
+		manager: behavioral.NewBehaviorManager(client),
+	}
+}
+
+func (h *BehavioralHandler) HandleRules(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.listRules(w, r)
+	case http.MethodPost:
+		h.createRule(w, r)
+	case http.MethodPatch:
+		h.updateRule(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *BehavioralHandler) listRules(w http.ResponseWriter, r *http.Request) {
+	actionType := r.URL.Query().Get("action_type")
+	rules, err := h.manager.ListRules(r.Context(), actionType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rules)
+}
+
+func (h *BehavioralHandler) createRule(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ActionType  string `json:"action_type"`
+		RuleContent string `json:"rule_content"`
+		Priority    int    `json:"priority"`
+		Scope       string `json:"scope"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	rule, err := h.manager.CreateRule(r.Context(), req.ActionType, req.RuleContent, req.Priority, req.Scope)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(rule)
+}
+
+func (h *BehavioralHandler) updateRule(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/behavior/rules/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid rule ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		RuleContent string `json:"rule_content"`
+		Priority    int    `json:"priority"`
+		IsActive    bool   `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	rule, err := h.manager.UpdateRule(r.Context(), id, req.RuleContent, req.Priority, req.IsActive)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rule)
+}
+
+func (h *BehavioralHandler) HandleAudit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		PromptID   string                 `json:"prompt_id"`
+		RuleID     int64                  `json:"rule_id"`
+		ActionType string                 `json:"action_type"`
+		Context    map[string]interface{} `json:"context"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := h.manager.LogRuleApplication(r.Context(), req.PromptID, req.RuleID, req.ActionType, req.Context); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *BehavioralHandler) HandleLearn(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Feedback   string `json:"feedback"`
+		ActionType string `json:"action_type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	rule, err := h.manager.RecordLearning(r.Context(), req.Feedback, req.ActionType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	log.Printf("[MEMCTRL] Recorded new learning for %s: %d", req.ActionType, rule.ID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(rule)
+}

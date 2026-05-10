@@ -6,6 +6,12 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// BehavioralLog is the predicate function for behaviorallog builders.
+type BehavioralLog func(*sql.Selector)
+
+// BehavioralRule is the predicate function for behavioralrule builders.
+type BehavioralRule func(*sql.Selector)
+
 // BuildJournal is the predicate function for buildjournal builders.
 type BuildJournal func(*sql.Selector)
 
