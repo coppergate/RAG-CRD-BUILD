@@ -54,6 +54,7 @@ func main() {
 	behavioralHandler := handlers.NewBehavioralHandler(entClient)
 	mux.HandleFunc("/behavior/rules", behavioralHandler.HandleRules)
 	mux.HandleFunc("/behavior/rules/", behavioralHandler.HandleRules)
+	mux.HandleFunc("/behavior/identifiers", behavioralHandler.HandleIdentifiers)
 	mux.HandleFunc("/behavior/audit", behavioralHandler.HandleAudit)
 	mux.HandleFunc("/behavior/learn", behavioralHandler.HandleLearn)
 

@@ -21,41 +21,20 @@ const (
 )
 
 // DetectActionType attempts to identify the ActionType based on keywords in the prompt.
-func DetectActionType(prompt string) ActionType {
+func DetectActionType(prompt string, actionMap map[string][]string) string {
 	p := strings.ToLower(prompt)
 
-	if containsAny(p, "resume", "cover letter", "qualifications", "job req") {
-		return ActionJobResume
-	}
-	if containsAny(p, "kubernetes", "kubectl", "k8s", "pod", "deployment", "service", "namespace", "talosctl") {
-		return ActionK8sOrchestrate
-	}
-	if containsAny(p, "git", "branch", "commit", "push", "pull request", "vcs") {
-		return ActionFileVCS
-	}
-	if containsAny(p, "edit", "modify", "change", "update file", "search_replace", "multi_edit") {
-		return ActionFileEdit
-	}
-	if containsAny(p, "search", "find", "grep", "token", "pattern") {
-		return ActionFileSearch
-	}
-	if containsAny(p, "ssh", "hierophant", "remote", "execute on host") {
-		return ActionRemoteExec
-	}
-	if containsAny(p, "build", "deploy", "package", "kaniko", "version") {
-		return ActionBuildDeploy
-	}
-	if containsAny(p, "database", "sql", "psql", "query", "timescaledb", "select ", "insert ", "update ") {
-		return ActionDBAccess
-	}
-	if containsAny(p, "pdf", "pdftotext", "paps", "document") {
-		return ActionDocProcess
-	}
-	if containsAny(p, "http", "get ", "post ", "url", "curl", "wget", "fetch") {
-		return ActionWebFetch
+	if actionMap == nil {
+		return "UNKNOWN"
 	}
 
-	return ActionUnknown
+	for actionType, identifiers := range actionMap {
+		if containsAny(p, identifiers...) {
+			return actionType
+		}
+	}
+
+	return "UNKNOWN"
 }
 
 func containsAny(s string, keywords ...string) bool {

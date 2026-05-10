@@ -64,6 +64,7 @@ type QdrantSearcher interface {
 type MemoryClient interface {
 	Retrieve(ctx context.Context, sessionID int64, tags []int64, query string) (*contracts.MemoryPack, error)
 	AuditRuleApplication(ctx context.Context, promptID string, ruleID int64, actionType string, metadata map[string]interface{}) error
+	GetActionIdentifiers(ctx context.Context) (map[string][]string, error)
 }
 
 type ModelRegistry interface {
@@ -187,7 +188,8 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	}
 
 	// Filter behavioral rules by detected action type (Iteration 9)
-	actionType := behavioral.DetectActionType(req.Prompt)
+	actionMap, _ := h.memoryClient.GetActionIdentifiers(ctx)
+	actionType := behavioral.DetectActionType(req.Prompt, actionMap)
 	log.Printf("[%s] Detected ActionType: %s", req.Id, actionType)
 
 	// ...

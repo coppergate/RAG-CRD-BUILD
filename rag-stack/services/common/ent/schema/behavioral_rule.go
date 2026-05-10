@@ -16,19 +16,7 @@ func (BehavioralRule) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id").
 			StorageKey("id"),
-		field.Enum("action_type").
-			Values(
-				"FILE_SEARCH",
-				"FILE_EDIT",
-				"FILE_VCS",
-				"REMOTE_EXEC",
-				"K8S_ORCHESTRATE",
-				"DB_ACCESS",
-				"BUILD_DEPLOY",
-				"DOC_PROCESS",
-				"JOB_RESUME",
-				"WEB_FETCH",
-			).
+		field.String("action_type").
 			StorageKey("action_type"),
 		field.Text("rule_content").
 			StorageKey("rule_content"),

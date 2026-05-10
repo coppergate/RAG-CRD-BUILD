@@ -57,6 +57,14 @@ func (m *MockMemoryClient) AuditRuleApplication(ctx context.Context, promptID st
 	return args.Error(0)
 }
 
+func (m *MockMemoryClient) GetActionIdentifiers(ctx context.Context) (map[string][]string, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string][]string), args.Error(1)
+}
+
 // MockRegistry is a mock implementation of ModelRegistry interface
 type MockRegistry struct {
 	mock.Mock
@@ -318,6 +326,7 @@ func TestHandlePlan(t *testing.T) {
 			{Content: "history item", MemoryType: "episodic", Metadata: contracts.ToStruct(map[string]interface{}{"role": "user"})},
 		},
 	}, nil)
+	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{"FILE_EDIT": {"edit"}}, nil)
 	mockPlanner.On("Plan", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return([]string{"subquery 1"}, nil, nil)
 
 	// Mock status and planning response

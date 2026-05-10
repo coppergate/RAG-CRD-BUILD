@@ -36,19 +36,19 @@ class ObservabilityPage extends ConsumerWidget {
             _buildGrafanaPanel(
               title: 'GPU Utilization',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2',
-              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2&scale=2&width=2000&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2&scale=2&width={width}&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
             ),
             const SizedBox(height: 16),
             _buildGrafanaPanel(
               title: 'GPU Memory Usage',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4',
-              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4&scale=2&width=2000&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4&scale=2&width={width}&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
             ),
             const SizedBox(height: 16),
             _buildGrafanaPanel(
               title: 'CPU & System Load',
               url: '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6',
-              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6&scale=2&width=2000&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
+              renderUrl: '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6&scale=2&width={width}&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
             ),
             
             const SizedBox(height: 40),
@@ -97,28 +97,36 @@ class ObservabilityPage extends ConsumerWidget {
               ],
             ),
           ),
-          Container(
-            height: 250,
-            width: double.infinity,
-            color: Colors.grey.shade100,
-            child: Image.network(
-              renderUrl,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.dashboard, size: 40, color: Colors.blue),
-                    const SizedBox(height: 8),
-                    Text('Grafana Panel Preview', style: TextStyle(color: Colors.grey.shade600)),
-                  ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth.toInt();
+              // Use scale=2 so we multiply the requested width to get high-res images
+              final dynamicRenderUrl = renderUrl.replaceAll('{width}', (width * 2).toString());
+              
+              return Container(
+                height: 250,
+                width: double.infinity,
+                color: Colors.grey.shade100,
+                child: Image.network(
+                  dynamicRenderUrl,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.dashboard, size: 40, color: Colors.blue),
+                        const SizedBox(height: 8),
+                        Text('Grafana Panel Preview', style: TextStyle(color: Colors.grey.shade600)),
+                      ],
+                    ),
+                  ),
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(child: CircularProgressIndicator());
+                  },
                 ),
-              ),
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return const Center(child: CircularProgressIndicator());
-              },
-            ),
+              );
+            },
           ),
         ],
       ),

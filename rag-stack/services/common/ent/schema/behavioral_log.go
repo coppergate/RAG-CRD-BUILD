@@ -20,19 +20,7 @@ func (BehavioralLog) Fields() []ent.Field {
 			StorageKey("prompt_id"),
 		field.Int64("rule_id").
 			StorageKey("rule_id"),
-		field.Enum("action_type").
-			Values(
-				"FILE_SEARCH",
-				"FILE_EDIT",
-				"FILE_VCS",
-				"REMOTE_EXEC",
-				"K8S_ORCHESTRATE",
-				"DB_ACCESS",
-				"BUILD_DEPLOY",
-				"DOC_PROCESS",
-				"JOB_RESUME",
-				"WEB_FETCH",
-			).
+		field.String("action_type").
 			StorageKey("action_type"),
 		field.Time("applied_at").
 			Default(time.Now).

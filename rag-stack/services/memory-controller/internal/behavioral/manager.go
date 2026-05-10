@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"app-builds/common/ent"
-	"app-builds/common/ent/behavioralrule"
+	"app-builds/common/ent/actionidentifier"
+	"app-builds/common/ent/actiontype"
 	"app-builds/common/ent/behaviorallog"
+	"app-builds/common/ent/behavioralrule"
 )
 
 type BehaviorManager struct {
@@ -23,14 +25,14 @@ func NewBehaviorManager(client *ent.Client) *BehaviorManager {
 func (m *BehaviorManager) ListRules(ctx context.Context, actionType string) ([]*ent.BehavioralRule, error) {
 	query := m.client.BehavioralRule.Query().Where(behavioralrule.IsActive(true))
 	if actionType != "" {
-		query = query.Where(behavioralrule.ActionTypeEQ(behavioralrule.ActionType(actionType)))
+		query = query.Where(behavioralrule.ActionType(actionType))
 	}
 	return query.Order(ent.Desc(behavioralrule.FieldPriority)).All(ctx)
 }
 
 func (m *BehaviorManager) CreateRule(ctx context.Context, actionType, content string, priority int, scope string) (*ent.BehavioralRule, error) {
 	return m.client.BehavioralRule.Create().
-		SetActionType(behavioralrule.ActionType(actionType)).
+		SetActionType(actionType).
 		SetRuleContent(content).
 		SetPriority(priority).
 		SetScope(behavioralrule.Scope(scope)).
@@ -52,10 +54,29 @@ func (m *BehaviorManager) LogRuleApplication(ctx context.Context, promptID strin
 	_, err := m.client.BehavioralLog.Create().
 		SetPromptID(promptID).
 		SetRuleID(ruleID).
-		SetActionType(behaviorallog.ActionType(actionType)).
+		SetActionType(actionType).
 		SetContext(metadata).
 		Save(ctx)
 	return err
+}
+
+// Action Taxonomy Management (Iteration 9b)
+
+func (m *BehaviorManager) GetActionIdentifiers(ctx context.Context) (map[string][]string, error) {
+	types, err := m.client.ActionType.Query().WithIdentifiers().All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string][]string)
+	for _, t := range types {
+		var ids []string
+		for _, identifier := range t.Edges.Identifiers {
+			ids = append(ids, identifier.Identifier)
+		}
+		result[t.Name] = ids
+	}
+	return result, nil
 }
 
 // Learning Loop (Initial Implementation)

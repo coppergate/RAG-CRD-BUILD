@@ -105,3 +105,27 @@ func (m *MemoryClient) AuditRuleApplication(ctx context.Context, promptID string
 
 	return nil
 }
+
+func (m *MemoryClient) GetActionIdentifiers(ctx context.Context) (map[string][]string, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", m.url+"/behavior/identifiers", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := m.client.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("memory-controller identifiers returned status %d", resp.StatusCode)
+	}
+
+	var result map[string][]string
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
