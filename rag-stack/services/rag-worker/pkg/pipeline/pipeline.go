@@ -65,6 +65,8 @@ type MemoryClient interface {
 	Retrieve(ctx context.Context, sessionID int64, tags []int64, query string) (*contracts.MemoryPack, error)
 	AuditRuleApplication(ctx context.Context, promptID string, ruleID int64, actionType string, metadata map[string]interface{}) error
 	GetActionIdentifiers(ctx context.Context) (map[string][]string, error)
+	RecordLearning(ctx context.Context, feedback string, actionType, category string, priority int) error
+	ResetSessionBehavior(ctx context.Context, sessionID int64) error
 }
 
 type ModelRegistry interface {
@@ -191,6 +193,30 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	actionMap, _ := h.memoryClient.GetActionIdentifiers(ctx)
 	actionType := behavioral.DetectActionType(req.Prompt, actionMap)
 	log.Printf("[%s] Detected ActionType: %s", req.Id, actionType)
+
+	// Detect Memory Suggestions (Iteration 9b: The Learning Loop)
+	if suggestion := behavioral.DetectMemorySuggestion(req.Prompt); suggestion != nil {
+		log.Printf("[%s] Detected memory suggestion for %s: %s (Priority: %d, Category: %s)",
+			req.Id, suggestion.ActionType, suggestion.Instruction, suggestion.Priority, suggestion.Category)
+
+		err := h.memoryClient.RecordLearning(ctx, suggestion.Instruction, suggestion.ActionType, suggestion.Category, suggestion.Priority)
+		if err != nil {
+			log.Printf("[%s] Failed to record learning: %v", req.Id, err)
+		} else {
+			h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId,
+				fmt.Sprintf("\n\U0001f4a1 *I've staged a new behavioral rule for %s.* (Category: %s, Priority: %d)\nWould you like to accept this memory?",
+					suggestion.ActionType, suggestion.Category, suggestion.Priority))
+		}
+	}
+
+	// Handle Session Behavior Reset
+	if strings.Contains(strings.ToUpper(req.Prompt), "RESET BEHAVIOR") {
+		if err := h.memoryClient.ResetSessionBehavior(ctx, req.SessionId); err != nil {
+			log.Printf("[%s] Failed to reset session behavior: %v", req.Id, err)
+		} else {
+			h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, "\n\u2705 *Session behavior priorities have been reset to defaults.*")
+		}
+	}
 
 	// ...
 

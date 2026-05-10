@@ -10,6 +10,7 @@ import (
 	"app-builds/common/ent/actiontype"
 	"app-builds/common/ent/behaviorallog"
 	"app-builds/common/ent/behavioralrule"
+	"app-builds/common/ent/sessiongovernance"
 )
 
 type BehaviorManager struct {
@@ -23,27 +24,45 @@ func NewBehaviorManager(client *ent.Client) *BehaviorManager {
 // Rule Management
 
 func (m *BehaviorManager) ListRules(ctx context.Context, actionType string) ([]*ent.BehavioralRule, error) {
-	query := m.client.BehavioralRule.Query().Where(behavioralrule.IsActive(true))
+	query := m.client.BehavioralRule.Query().Where(behavioralrule.StateEQ(behavioralrule.StateACTIVE))
 	if actionType != "" {
 		query = query.Where(behavioralrule.ActionType(actionType))
 	}
 	return query.Order(ent.Desc(behavioralrule.FieldPriority)).All(ctx)
 }
 
-func (m *BehaviorManager) CreateRule(ctx context.Context, actionType, content string, priority int, scope string) (*ent.BehavioralRule, error) {
+func (m *BehaviorManager) CreateRule(ctx context.Context, actionType, content, category string, priority int, scope string, state string) (*ent.BehavioralRule, error) {
+	// Option B: Check for existing rule with same content and actionType
+	existing, err := m.client.BehavioralRule.Query().
+		Where(behavioralrule.ActionType(actionType), behavioralrule.RuleContent(content)).
+		First(ctx)
+
+	if err == nil && existing != nil {
+		// Rule exists, update it but set to PENDING if state is not ACTIVE
+		return m.client.BehavioralRule.UpdateOne(existing).
+			SetPriority(priority).
+			SetCategory(category).
+			SetScope(behavioralrule.Scope(scope)).
+			SetState(behavioralrule.State(state)).
+			SetUpdatedAt(time.Now()).
+			Save(ctx)
+	}
+
 	return m.client.BehavioralRule.Create().
 		SetActionType(actionType).
 		SetRuleContent(content).
+		SetCategory(category).
 		SetPriority(priority).
 		SetScope(behavioralrule.Scope(scope)).
+		SetState(behavioralrule.State(state)).
 		Save(ctx)
 }
 
-func (m *BehaviorManager) UpdateRule(ctx context.Context, id int64, content string, priority int, active bool) (*ent.BehavioralRule, error) {
+func (m *BehaviorManager) UpdateRule(ctx context.Context, id int64, content string, priority int, state string) (*ent.BehavioralRule, error) {
 	return m.client.BehavioralRule.UpdateOneID(id).
 		SetRuleContent(content).
 		SetPriority(priority).
-		SetIsActive(active).
+		SetState(behavioralrule.State(state)).
 		SetUpdatedAt(time.Now()).
 		Save(ctx)
 }
@@ -79,10 +98,44 @@ func (m *BehaviorManager) GetActionIdentifiers(ctx context.Context) (map[string]
 	return result, nil
 }
 
+// Session Governance (Iteration 9b)
+
+func (m *BehaviorManager) SetSessionOverride(ctx context.Context, sessionID, ruleID int64, priority int) error {
+	return m.client.SessionGovernance.Create().
+		SetSessionID(sessionID).
+		SetRuleID(ruleID).
+		SetPriorityOverride(priority).
+		OnConflictColumns(sessiongovernance.FieldSessionID, sessiongovernance.FieldRuleID).
+		UpdatePriorityOverride().
+		SetUpdatedAt(time.Now()).
+		Exec(ctx)
+}
+
+func (m *BehaviorManager) GetSessionOverrides(ctx context.Context, sessionID int64) (map[int64]int, error) {
+	overrides, err := m.client.SessionGovernance.Query().
+		Where(sessiongovernance.SessionID(sessionID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[int64]int)
+	for _, o := range overrides {
+		result[o.RuleID] = o.PriorityOverride
+	}
+	return result, nil
+}
+
+func (m *BehaviorManager) ClearSessionOverrides(ctx context.Context, sessionID int64) error {
+	_, err := m.client.SessionGovernance.Delete().
+		Where(sessiongovernance.SessionID(sessionID)).
+		Exec(ctx)
+	return err
+}
+
 // Learning Loop (Initial Implementation)
 
-func (m *BehaviorManager) RecordLearning(ctx context.Context, feedback string, actionType string) (*ent.BehavioralRule, error) {
-	// In a real implementation, we might use an LLM to refine the feedback into a structured rule.
-	// For now, we store it as a high-priority "LEARNED" rule for the specified action type.
-	return m.CreateRule(ctx, actionType, fmt.Sprintf("LEARNED BEHAVIOR: %s", feedback), 100, "GLOBAL")
+func (m *BehaviorManager) RecordLearning(ctx context.Context, feedback string, actionType string, category string, priority int) (*ent.BehavioralRule, error) {
+	// learned behaviors start as PENDING for user approval
+	return m.CreateRule(ctx, actionType, feedback, category, priority, "GLOBAL", "PENDING")
 }

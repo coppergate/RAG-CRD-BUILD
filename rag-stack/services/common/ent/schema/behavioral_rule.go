@@ -18,6 +18,13 @@ func (BehavioralRule) Fields() []ent.Field {
 			StorageKey("id"),
 		field.String("action_type").
 			StorageKey("action_type"),
+		field.String("category").
+			Optional().
+			StorageKey("category"),
+		field.Enum("state").
+			Values("PENDING", "ACTIVE", "REJECTED", "EXPIRED").
+			Default("ACTIVE"). // Default to ACTIVE for existing rules
+			StorageKey("state"),
 		field.Text("rule_content").
 			StorageKey("rule_content"),
 		field.Int("priority").

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"app-builds/common/ent"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/prompt"
@@ -306,11 +308,23 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 
 	// 3. Fetch Behavioral Rules (Iteration 9)
 	rules, err := m.client.BehavioralRule.Query().
-		Where(behavioralrule.IsActive(true)).
-		Order(ent.Desc(behavioralrule.FieldPriority)).
+		Where(behavioralrule.StateEQ(behavioralrule.StateACTIVE)).
 		All(ctx)
 	if err != nil {
 		log.Printf("[MEMCTRL] Error fetching behavioral rules: %v", err)
+	}
+
+	// 3b. Fetch Session Overrides (Iteration 9b)
+	overrides := make(map[int64]int)
+	if sessionID > 0 {
+		ovs, err := m.client.SessionGovernance.Query().
+			Where(sessiongovernance.SessionID(sessionID)).
+			All(ctx)
+		if err == nil {
+			for _, o := range ovs {
+				overrides[o.RuleID] = o.PriorityOverride
+			}
+		}
 	}
 
 	// 4. Assemble MemoryPack
@@ -319,15 +333,35 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 	}
 
 	// Add Behavioral Rules first (System instructions)
+	// Apply overrides and filter/sort by priority
+	type ruleWithPriority struct {
+		rule     *ent.BehavioralRule
+		priority int
+	}
+	var prioritizedRules []ruleWithPriority
 	for _, rule := range rules {
+		p := rule.Priority
+		if ov, ok := overrides[rule.ID]; ok {
+			p = ov
+		}
+		prioritizedRules = append(prioritizedRules, ruleWithPriority{rule: rule, priority: p})
+	}
+
+	// Sort by priority descending
+	sort.Slice(prioritizedRules, func(i, j int) bool {
+		return prioritizedRules[i].priority > prioritizedRules[j].priority
+	})
+
+	for _, pr := range prioritizedRules {
 		pack.Items = append(pack.Items, &contracts.MemoryWriteItem{
-			MemoryId:   rule.ID,
+			MemoryId:   pr.rule.ID,
 			MemoryType: "behavioral_rule",
-			Content:    rule.RuleContent,
+			Content:    pr.rule.RuleContent,
 			Metadata: contracts.ToStruct(map[string]interface{}{
-				"action_type": string(rule.ActionType),
-				"priority":    rule.Priority,
-				"scope":       string(rule.Scope),
+				"action_type": string(pr.rule.ActionType),
+				"priority":    pr.priority,
+				"scope":       string(pr.rule.Scope),
+				"category":    pr.rule.Category,
 			}),
 		})
 	}

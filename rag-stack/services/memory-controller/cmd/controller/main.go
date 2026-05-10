@@ -57,6 +57,8 @@ func main() {
 	mux.HandleFunc("/behavior/identifiers", behavioralHandler.HandleIdentifiers)
 	mux.HandleFunc("/behavior/audit", behavioralHandler.HandleAudit)
 	mux.HandleFunc("/behavior/learn", behavioralHandler.HandleLearn)
+	mux.HandleFunc("/behavior/session/override", behavioralHandler.HandleSessionOverride)
+	mux.HandleFunc("/behavior/session/reset", behavioralHandler.HandleResetSession)
 
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,

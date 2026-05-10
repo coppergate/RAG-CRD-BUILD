@@ -65,6 +65,16 @@ func (m *MockMemoryClient) GetActionIdentifiers(ctx context.Context) (map[string
 	return args.Get(0).(map[string][]string), args.Error(1)
 }
 
+func (m *MockMemoryClient) RecordLearning(ctx context.Context, feedback string, actionType, category string, priority int) error {
+	args := m.Called(ctx, feedback, actionType, category, priority)
+	return args.Error(0)
+}
+
+func (m *MockMemoryClient) ResetSessionBehavior(ctx context.Context, sessionID int64) error {
+	args := m.Called(ctx, sessionID)
+	return args.Error(0)
+}
+
 // MockRegistry is a mock implementation of ModelRegistry interface
 type MockRegistry struct {
 	mock.Mock
@@ -346,6 +356,98 @@ func TestHandlePlan(t *testing.T) {
 	mockMem.AssertExpectations(t)
 	mockPlanner.AssertExpectations(t)
 	mockSearchProd.AssertExpectations(t)
+}
+
+func TestHandlePlan_LearningLoop(t *testing.T) {
+	mockRegistry := new(MockRegistry)
+	mockPlanner := new(MockPlanner)
+	mockMem := new(MockMemoryClient)
+	mockStatusProd := new(MockProducer)
+	mockSearchProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+
+	h := &Handler{
+		cfg:      &config.Config{PlannerModel: "p-model"},
+		registry: mockRegistry,
+		memoryClient: mockMem,
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:  mockStatusProd,
+				Search:  mockSearchProd,
+				Results: mockResultsProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("test-id"), mockResultsProd)
+
+	req := &contracts.InternalRequest{
+		Id:        "test-id",
+		SessionId: 1,
+		Prompt:    "REMEMBER WHEN FILE_EDIT # Optimization - minimize horizontal scrolling",
+	}
+
+	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
+	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{}, nil)
+	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return([]string{"plan"}, nil, nil)
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockSearchProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	// expectation for learning
+	mockMem.On("RecordLearning", mock.Anything, "minimize horizontal scrolling", "FILE_EDIT", "Optimization", 100).Return(nil)
+
+	result, err := h.handlePlan(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+	mockMem.AssertExpectations(t)
+}
+
+func TestHandlePlan_ResetBehavior(t *testing.T) {
+	mockRegistry := new(MockRegistry)
+	mockPlanner := new(MockPlanner)
+	mockMem := new(MockMemoryClient)
+	mockStatusProd := new(MockProducer)
+	mockSearchProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+
+	h := &Handler{
+		cfg:      &config.Config{PlannerModel: "p-model"},
+		registry: mockRegistry,
+		memoryClient: mockMem,
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:  mockStatusProd,
+				Search:  mockSearchProd,
+				Results: mockResultsProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("test-id"), mockResultsProd)
+
+	req := &contracts.InternalRequest{
+		Id:        "test-id",
+		SessionId: 1,
+		Prompt:    "RESET BEHAVIOR",
+	}
+
+	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
+	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{}, nil)
+	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return([]string{"plan"}, nil, nil)
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockSearchProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	// expectation for reset
+	mockMem.On("ResetSessionBehavior", mock.Anything, int64(1)).Return(nil)
+
+	result, err := h.handlePlan(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+	mockMem.AssertExpectations(t)
 }
 
 func TestHandleExec_Recursion(t *testing.T) {

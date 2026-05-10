@@ -77,13 +77,13 @@ func (h *BehavioralHandler) updateRule(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		RuleContent string `json:"rule_content"`
 		Priority    int    `json:"priority"`
-		IsActive    bool   `json:"is_active"`
+		State       string `json:"state"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	rule, err := h.manager.UpdateRule(r.Context(), id, req.RuleContent, req.Priority, req.IsActive)
+	rule, err := h.manager.UpdateRule(r.Context(), id, req.RuleContent, req.Priority, req.State)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -136,18 +136,60 @@ func (h *BehavioralHandler) HandleLearn(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		Feedback   string `json:"feedback"`
 		ActionType string `json:"action_type"`
+		Category   string `json:"category"`
+		Priority   int    `json:"priority"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	rule, err := h.manager.RecordLearning(r.Context(), req.Feedback, req.ActionType)
+	rule, err := h.manager.RecordLearning(r.Context(), req.Feedback, req.ActionType, req.Category, req.Priority)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[MEMCTRL] Recorded new learning for %s: %d", req.ActionType, rule.ID)
+	log.Printf("[MEMCTRL] Recorded new learning for %s: %d (State: %s)", req.ActionType, rule.ID, rule.State)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(rule)
+}
+
+func (h *BehavioralHandler) HandleSessionOverride(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		SessionID int64 `json:"session_id"`
+		RuleID    int64 `json:"rule_id"`
+		Priority  int   `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := h.manager.SetSessionOverride(r.Context(), req.SessionID, req.RuleID, req.Priority); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *BehavioralHandler) HandleResetSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		SessionID int64 `json:"session_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := h.manager.ClearSessionOverrides(r.Context(), req.SessionID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
 }
