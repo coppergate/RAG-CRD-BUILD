@@ -9,7 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"app-builds/common/telemetry"
 	"github.com/apache/pulsar-client-go/pulsar"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 const (
@@ -25,6 +28,10 @@ type Handler struct {
 	maxRetries  int
 	dlqProducer pulsar.Producer
 	serviceName string
+
+	dlqRouted    metric.Int64Counter
+	dlqRetried   metric.Int64Counter
+	dlqSucceeded metric.Int64Counter
 }
 
 // NewHandler creates a DLQ handler. It creates a DLQ producer on the
@@ -48,10 +55,21 @@ func NewHandler(client pulsar.Client, serviceName string) (*Handler, error) {
 
 	log.Printf("DLQ handler initialized for %s (max_retries=%d, dlq_topic=%s)", serviceName, maxRetries, dlqTopic)
 
+	meter := telemetry.Meter("dlq")
+	dlqRouted, _ := meter.Int64Counter("dlq_routed_total",
+		metric.WithDescription("Messages routed to DLQ (permanent failure)"))
+	dlqRetried, _ := meter.Int64Counter("dlq_retried_total",
+		metric.WithDescription("Messages NACK'd for retry (transient failure)"))
+	dlqSucceeded, _ := meter.Int64Counter("dlq_succeeded_total",
+		metric.WithDescription("Messages processed successfully"))
+
 	return &Handler{
-		maxRetries:  maxRetries,
-		dlqProducer: prod,
-		serviceName: serviceName,
+		maxRetries:   maxRetries,
+		dlqProducer:  prod,
+		serviceName:  serviceName,
+		dlqRouted:    dlqRouted,
+		dlqRetried:   dlqRetried,
+		dlqSucceeded: dlqSucceeded,
 	}, nil
 }
 
@@ -79,12 +97,16 @@ func (h *Handler) HandleMessage(
 ) {
 	result, processErr := processFunc(ctx, msg)
 
+	attrs := metric.WithAttributes(attribute.String("service", h.serviceName))
+
 	switch result {
 	case Success:
+		h.dlqSucceeded.Add(ctx, 1, attrs)
 		consumer.Ack(msg)
 		return
 
 	case PermanentFailure:
+		h.dlqRouted.Add(ctx, 1, attrs)
 		log.Printf("[DLQ] Permanent failure processing message on %s: %v", msg.Topic(), processErr)
 		h.routeToDLQ(ctx, msg, processErr)
 		consumer.Ack(msg) // ACK after DLQ routing to prevent redelivery
@@ -93,12 +115,14 @@ func (h *Handler) HandleMessage(
 	case TransientFailure:
 		retryCount := h.getRetryCount(msg)
 		if retryCount >= h.maxRetries {
+			h.dlqRouted.Add(ctx, 1, attrs)
 			log.Printf("[DLQ] Max retries (%d) exhausted for message on %s: %v", h.maxRetries, msg.Topic(), processErr)
 			h.routeToDLQ(ctx, msg, processErr)
 			consumer.Ack(msg)
 			return
 		}
 
+		h.dlqRetried.Add(ctx, 1, attrs)
 		log.Printf("[DLQ] Transient failure (retry %d/%d) on %s: %v", retryCount+1, h.maxRetries, msg.Topic(), processErr)
 		consumer.Nack(msg)
 	}
