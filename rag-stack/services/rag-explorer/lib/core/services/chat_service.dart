@@ -24,9 +24,9 @@ class ChatService {
   ChatService(this._dio, this._config, this._logger);
 
   Future<List<Session>> getSessions() async {
-    _logger.debug('Fetching sessions from ${_config.ragAdminApiUrl}/api/memory/sessions');
+    _logger.debug('Fetching sessions from ${_config.memoryUrl}/sessions');
     try {
-      final response = await _dio.get('${_config.ragAdminApiUrl}/api/memory/sessions');
+      final response = await _dio.get('${_config.memoryUrl}/sessions');
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
         _logger.info('Successfully fetched ${data.length} sessions');
@@ -44,7 +44,7 @@ class ChatService {
     _logger.info('Creating session: $name');
     try {
       final response = await _dio.post(
-        '${_config.ragAdminApiUrl}/api/memory/sessions',
+        '${_config.memoryUrl}/sessions',
         data: {'name': name},
       );
       if (response.statusCode == 201 || response.statusCode == 200) {
@@ -62,7 +62,7 @@ class ChatService {
   Future<bool> deleteSession(int sessionId) async {
     _logger.info('Deleting session: $sessionId');
     try {
-      final response = await _dio.delete('${_config.ragAdminApiUrl}/api/memory/sessions/$sessionId');
+      final response = await _dio.delete('${_config.memoryUrl}/sessions/$sessionId');
       final success = response.statusCode == 204 || response.statusCode == 200;
       if (success) {
         _logger.info('Session deleted successfully');
@@ -79,7 +79,7 @@ class ChatService {
   Future<List<ResponseMessage>> getMessages(int sessionId) async {
     _logger.debug('Fetching messages for session: $sessionId');
     try {
-      final response = await _dio.get('${_config.ragAdminApiUrl}/api/db/sessions/$sessionId/messages');
+      final response = await _dio.get('${_config.dbUrl}/sessions/$sessionId/messages');
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
         _logger.info('Successfully fetched ${data.length} messages for session: $sessionId');
@@ -102,9 +102,9 @@ class ChatService {
   }
 
   Future<List<Tag>> getTags() async {
-    _logger.debug('Fetching tags from ${_config.ragAdminApiUrl}/api/db/tags');
+    _logger.debug('Fetching tags from ${_config.dbUrl}/tags');
     try {
-      final response = await _dio.get('${_config.ragAdminApiUrl}/api/db/tags');
+      final response = await _dio.get('${_config.dbUrl}/tags');
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
         _logger.info('Successfully fetched ${data.length} tags');
@@ -190,7 +190,7 @@ class ChatService {
     _logger.info('Updating tags for session $sessionId: $tagIds');
     try {
       final response = await _dio.post(
-        '${_config.ragAdminApiUrl}/api/db/sessions/tags?session_id=$sessionId',
+        '${_config.dbUrl}/sessions/tags?session_id=$sessionId',
         data: {'tag_ids': tagIds},
       );
       return response.statusCode == 204;

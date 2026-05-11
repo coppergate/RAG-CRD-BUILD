@@ -119,7 +119,7 @@ func TestRetrieveByPaths(t *testing.T) {
 		httpClient: &http.Client{Transport: mockRT},
 	}
 
-	results, err := client.RetrieveByPaths("test-coll", 128, []string{"file1.txt"})
+	results, err := client.RetrieveByPaths("test-coll", 128, []string{"file1.txt"}, 0)
 	
 	assert.NoError(t, err)
 	assert.Len(t, results, 1)

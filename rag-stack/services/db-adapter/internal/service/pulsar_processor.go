@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +12,7 @@ import (
 
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
+	"app-builds/common/telemetry"
 	"app-builds/common/ent"
 	"app-builds/common/ent/inferencenode"
 	"app-builds/common/ent/modelexecutionmetric"
@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	"app-builds/common/logging"
 )
 
 type PulsarProcessor struct {
@@ -53,9 +54,23 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 	msgCtx, span := tracer.Start(msgCtx, "HandleDBOp")
 	defer span.End()
 
-	log.Printf("Received DB op message: %s", string(msg.Payload()))
+	var payload struct {
+		Op        string `json:"op"`
+		Id        string `json:"id"`
+		SessionId int64  `json:"session_id"`
+	}
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		return dlq.PermanentFailure, fmt.Errorf("unmarshal DB op payload: %w", err)
+	}
 
-	attrs := []attribute.KeyValue{attribute.String("op", "unknown")}
+	logging.Printf("[SID:%d] Received DB op message: %s", payload.SessionId, string(msg.Payload()))
+
+	attrs := []attribute.KeyValue{
+		attribute.String("op", payload.Op),
+		attribute.Int64("session_id", payload.SessionId),
+	}
+	span.SetAttributes(attrs...)
+
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
 		if p.queryLatency != nil {
@@ -66,24 +81,14 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 		p.queryCounter.Add(msgCtx, 1, metric.WithAttributes(attrs...))
 	}
 
-	var payload struct {
-		Op string `json:"op"`
-		Id string `json:"id"`
-	}
-	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
-		return dlq.PermanentFailure, fmt.Errorf("unmarshal DB op payload: %w", err)
-	}
-
-	attrs[0] = attribute.String("op", payload.Op)
-
 	if payload.Op == "delete_session" {
 		sessID, parseErr := strconv.ParseInt(payload.Id, 10, 64)
 		if parseErr != nil {
-			log.Printf("Invalid ID for delete_session: %q", payload.Id)
+			logging.Printf("Invalid ID for delete_session: %q", payload.Id)
 			return dlq.PermanentFailure, fmt.Errorf("invalid ID in delete_session: %q: %w", payload.Id, parseErr)
 		}
 
-		log.Printf("Attempting to delete session %d and its dependents", sessID)
+		logging.Printf("Attempting to delete session %d and its dependents", sessID)
 
 		tx, err := p.client.Tx(msgCtx)
 		if err != nil {
@@ -98,26 +103,26 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 
 		// Delete metrics
 		_, err = tx.ModelExecutionMetric.Delete().Where(modelexecutionmetric.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { log.Printf("Warning: failed to delete metrics for session %d: %v", sessID, err) }
+		if err != nil { logging.Printf("Warning: failed to delete metrics for session %d: %v", sessID, err) }
 
 		// Delete retrieval logs
 		_, err = tx.RetrievalLog.Delete().Where(retrievallog.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { log.Printf("Warning: failed to delete retrieval logs for session %d: %v", sessID, err) }
+		if err != nil { logging.Printf("Warning: failed to delete retrieval logs for session %d: %v", sessID, err) }
 
 		// Delete prompts & responses (using raw SQL as they don't have edges in Ent)
 		// Assuming 'prompts' and 'responses' are the table names.
 		// Note: Ent might use singular/plural names.
 		_, err = tx.Prompt.Delete().Where(prompt.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { log.Printf("Warning: failed to delete prompts for session %d: %v", sessID, err) }
+		if err != nil { logging.Printf("Warning: failed to delete prompts for session %d: %v", sessID, err) }
 
 		_, err = tx.Response.Delete().Where(response.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { log.Printf("Warning: failed to delete responses for session %d: %v", sessID, err) }
+		if err != nil { logging.Printf("Warning: failed to delete responses for session %d: %v", sessID, err) }
 
 		// Finally delete the session
 		_, err = tx.Session.Delete().Where(session.ID(sessID)).Exec(msgCtx)
 		if err != nil {
 			tx.Rollback()
-			log.Printf("Error deleting session %d: %v", sessID, err)
+			logging.Printf("Error deleting session %d: %v", sessID, err)
 			return dlq.TransientFailure, fmt.Errorf("delete session %d: %w", sessID, err)
 		}
 
@@ -125,9 +130,9 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 			return dlq.TransientFailure, fmt.Errorf("commit delete session %d: %w", sessID, err)
 		}
 
-		log.Printf("Successfully deleted session %d and dependents via Pulsar op", sessID)
+		logging.Printf("Successfully deleted session %d and dependents via Pulsar op", sessID)
 	} else {
-		log.Printf("Unknown DB op: %s", payload.Op)
+		logging.Printf("Unknown DB op: %s", payload.Op)
 	}
 
 	return dlq.Success, nil
@@ -153,6 +158,7 @@ func (p *PulsarProcessor) ensureSessionExists(ctx context.Context, sessionID int
 
 func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
+	telemetry.RecordMessage(msgCtx, "user")
 	tracer := otel.Tracer("db-adapter")
 	msgCtx, span := tracer.Start(msgCtx, "HandlePrompt")
 	defer span.End()
@@ -185,7 +191,7 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 			AddTagIDs(payload.Tags...).
 			Exec(msgCtx)
 		if err != nil {
-			log.Printf("Warning: failed to associate tags with session %d from prompt: %v", sessID, err)
+			logging.Printf("Warning: failed to associate tags with session %d from prompt: %v", sessID, err)
 		}
 	}
 
@@ -204,10 +210,10 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 			if err != nil {
 				return dlq.TransientFailure, fmt.Errorf("update ghost prompt: %w", err)
 			}
-			log.Printf("Updated ghost prompt %s with content", payload.Id)
+			logging.Printf("Updated ghost prompt %s with content", payload.Id)
 			return dlq.Success, nil
 		}
-		log.Printf("Prompt %s already exists with content, skipping", payload.Id)
+		logging.Printf("Prompt %s already exists with content, skipping", payload.Id)
 		return dlq.Success, nil
 	}
 
@@ -217,16 +223,17 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 		SetContent(content).
 		Save(msgCtx)
 	if err != nil {
-		log.Printf("Failed to insert prompt %s for session %d: %v", payload.Id, payload.SessionId, err)
+		logging.Printf("Failed to insert prompt %s for session %d: %v", payload.Id, payload.SessionId, err)
 		return dlq.TransientFailure, fmt.Errorf("insert prompt: %w", err)
 	}
 
-	log.Printf("Inserted prompt %s for session %d", payload.Id, payload.SessionId)
+	logging.Printf("Inserted prompt %s for session %d", payload.Id, payload.SessionId)
 	return dlq.Success, nil
 }
 
 func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
+	telemetry.RecordMessage(msgCtx, "assistant")
 	tracer := otel.Tracer("db-adapter")
 	msgCtx, span := tracer.Start(msgCtx, "HandleResponse")
 	defer span.End()
@@ -240,7 +247,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		return dlq.Success, nil
 	}
 
-	log.Printf("Processing response: ID=%s, SessionID=%d, Model=%s", payload.Id, payload.SessionId, payload.Model)
+	logging.Printf("Processing response: ID=%s, SessionID=%d, Model=%s", payload.Id, payload.SessionId, payload.Model)
 
 	promptUUID, parseErr := uuid.Parse(payload.Id)
 	if parseErr != nil {
@@ -265,7 +272,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		}
 
 		if isNotFound {
-			log.Printf("Prompt %s not found for response, creating ghost prompt", payload.Id)
+			logging.Printf("Prompt %s not found for response, creating ghost prompt", payload.Id)
 
 			if err := p.ensureSessionExists(msgCtx, sessID); err != nil {
 				return dlq.TransientFailure, fmt.Errorf("ensure session exists for ghost prompt: %w", err)
@@ -417,7 +424,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 				}
 			}
 			if logCount > 0 {
-				log.Printf("Stored %d retrieval logs (queries/contexts) for session %d", logCount, sessID)
+				logging.Printf("Stored %d retrieval logs (queries/contexts) for session %d", logCount, sessID)
 			}
 		}
 	}
@@ -431,7 +438,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 	_, span := tracer.Start(msgCtx, "HandleCompletion")
 	defer span.End()
 
-	log.Printf("Received completion event for processing")
+	logging.Printf("Received completion event for processing")
 
 	var payload contracts.ResponseCompletion
 	if err := protojson.Unmarshal(msg.Payload(), &payload); err != nil {
@@ -464,7 +471,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 		UpdateNewValues().
 		ID(ctx)
 	if err != nil {
-		log.Printf("Failed to upsert model definition: %v", err)
+		logging.Printf("Failed to upsert model definition: %v", err)
 	}
 
 	hostname := m.Hostname
@@ -479,7 +486,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 		UpdateNewValues().
 		ID(ctx)
 	if err != nil {
-		log.Printf("Failed to upsert inference node: %v", err)
+		logging.Printf("Failed to upsert inference node: %v", err)
 	}
 
 	_, err = p.client.ModelExecutionMetric.Create().
@@ -497,10 +504,10 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 		Save(ctx)
 
 	if err != nil {
-		log.Printf("Failed to insert execution metrics: %v", err)
+		logging.Printf("Failed to insert execution metrics: %v", err)
 		return dlq.TransientFailure, err
 	}
 
-	log.Printf("Stored execution metrics for response %s", payload.Id)
+	logging.Printf("Stored execution metrics for response %s", payload.Id)
 	return dlq.Success, nil
 }

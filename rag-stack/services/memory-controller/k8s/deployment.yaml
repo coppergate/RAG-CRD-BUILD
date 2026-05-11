@@ -15,6 +15,7 @@ spec:
     spec:
       nodeSelector:
         role: storage-node
+      serviceAccountName: rag-service-sa
       containers:
       - name: controller
         image: registry.container-registry.svc.cluster.local:5000/memory-controller:__VERSION__
@@ -80,10 +81,12 @@ kind: Service
 metadata:
   name: memory-controller
   namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
 spec:
   selector:
     app: memory-controller
   ports:
   - port: 443
     targetPort: 8080
-    name: https
+    name: health

@@ -32,7 +32,7 @@ type ModelExecutionMetric struct {
 	PromptTokens int `json:"prompt_tokens,omitempty"`
 	// CompletionTokens holds the value of the "completion_tokens" field.
 	CompletionTokens int `json:"completion_tokens,omitempty"`
-	// TotalTokens holds the value of the "total_tokens" field.
+	// Generated always as (prompt_tokens + completion_tokens) stored
 	TotalTokens int `json:"total_tokens,omitempty"`
 	// TotalDurationUsec holds the value of the "total_duration_usec" field.
 	TotalDurationUsec int64 `json:"total_duration_usec,omitempty"`

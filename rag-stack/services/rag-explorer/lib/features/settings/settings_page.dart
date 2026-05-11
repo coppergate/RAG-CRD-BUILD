@@ -20,41 +20,13 @@ class SettingsPage extends ConsumerWidget {
             value: config.ragAdminApiUrl,
             onChanged: (val) => ref.read(appConfigProvider.notifier).updateRagAdminApi(val),
           ),
-          _buildTextField(
-            label: 'LLM Gateway',
-            value: config.llmGatewayUrl,
-            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(llmGatewayUrl: val)),
-          ),
-          _buildTextField(
-            label: 'RAG Ingestion',
-            value: config.ragIngestionUrl,
-            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(ragIngestionUrl: val)),
-          ),
-          _buildTextField(
-            label: 'DB Adapter',
-            value: config.dbAdapterUrl,
-            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(dbAdapterUrl: val)),
-          ),
-          _buildTextField(
-            label: 'Object Store Mgr',
-            value: config.objectStoreMgrUrl,
-            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(objectStoreMgrUrl: val)),
-          ),
-          _buildTextField(
-            label: 'Qdrant Adapter',
-            value: config.qdrantAdapterUrl,
-            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(qdrantAdapterUrl: val)),
-          ),
-          _buildTextField(
-            label: 'Memory Controller',
-            value: config.memoryControllerUrl,
-            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(memoryControllerUrl: val)),
-          ),
-          _buildTextField(
-            label: 'Grafana',
-            value: config.grafanaUrl,
-            onChanged: (val) => ref.read(appConfigProvider.notifier).update(config.copyWith(grafanaUrl: val)),
-          ),
+          _buildReadOnlyField(label: 'Derived Chat URL', value: config.chatUrl),
+          _buildReadOnlyField(label: 'Derived Ingest URL', value: config.ingestUrl),
+          _buildReadOnlyField(label: 'Derived DB URL', value: config.dbUrl),
+          _buildReadOnlyField(label: 'Derived S3 URL', value: config.s3Url),
+          _buildReadOnlyField(label: 'Derived Qdrant URL', value: config.qdrantUrl),
+          _buildReadOnlyField(label: 'Derived Memory URL', value: config.memoryUrl),
+          _buildReadOnlyField(label: 'Derived Grafana URL', value: config.grafanaUrl),
           const SizedBox(height: 24),
           _buildSectionHeader('TLS Configuration'),
           SwitchListTile(
@@ -99,6 +71,23 @@ class SettingsPage extends ConsumerWidget {
           border: const OutlineInputBorder(),
         ),
         onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyField({required String label, required String value}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: TextFormField(
+        initialValue: value,
+        readOnly: true,
+        enabled: false,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const UnderlineInputBorder(),
+          filled: true,
+          fillColor: Colors.grey.shade100,
+        ),
       ),
     );
   }

@@ -1,4 +1,4 @@
-### Executive Summary: Intelligent Contextual RAG Architecture (v4)
+### Executive Summary: Intelligent Contextual RAG Architecture (v3.1.x)
 
 This project implements a high-performance, scalable **Retrieval-Augmented Generation (RAG)** system with integrated **Contextual Memory (Miras/Titans-inspired)**. The architecture has evolved into a fully organized, tag-aware, and memory-persistent ecosystem that prioritizes long-session consistency, data traceability, and resource efficiency.
 
@@ -8,9 +8,9 @@ The system utilizes a modular Go-first micro-services approach, with specialized
 
 *   **LLM Gateway (Go)**: OpenAI-compatible entry point. It manages session state in TimescaleDB and publishes tasks to **Apache Pulsar**, enabling fully asynchronous request processing.
 *   **Contextual Memory Controller (Go)**: A sophisticated memory orchestration layer that manages **Short-Term**, **Long-Term**, and **Persistent** memories. It performs salience scoring, retention/decay logic, and assembles deterministic "Memory Packs" for inference.
-*   **RAG Worker (Go)**: The core retrieval and execution engine. It uses a modular factory to support multiple LLM backends (Llama, Granite) and integrates memory recall into the final prompt assembly.
+*   **RAG Worker (Go)**: The core retrieval and execution engine. Now uses high-speed direct HTTP retrieval for vector searches, eliminating Pulsar-roundtrip latency for real-time inference.
 *   **Ingestion Service (FastAPI)**: Persistent service for multi-source data ingestion, leveraging **Ollama** for consistent embedding generation.
-*   **Vector Database (Qdrant)**: High-performance vector store hosting code-chunk embeddings and semantic memory items, organized by `ingestion_id` and metadata tags.
+*   **Vector Database (Qdrant)**: High-performance vector store hosting code-chunk embeddings and semantic memory items. Supported by `qdrant-adapter` which provides a high-speed HTTP search interface.
 *   **Relational & Timeline Store (TimescaleDB)**: Manages structured metadata, session state, and the advanced memory model (`memory_items`, `memory_links`, `memory_events`).
 *   **Local Object Store (Rook-Ceph S3)**: Native S3 storage for codebase persistence and lifecycle management.
 

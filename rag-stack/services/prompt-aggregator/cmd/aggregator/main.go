@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,6 +22,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/structpb"
+	"app-builds/common/logging"
 )
 
 func SessionTopic(id string) string {
@@ -31,34 +31,34 @@ func SessionTopic(id string) string {
 
 func main() {
 	cfg := config.LoadConfig()
-	log.Printf("Starting prompt-aggregator for topic: %s", cfg.PulsarCompletionTopic)
+	logging.Printf("Starting prompt-aggregator for topic: %s", cfg.PulsarCompletionTopic)
 
 	healthSrv := health.NewServer()
 
 	shutdown, err := telemetry.InitTracer("prompt-aggregator")
 	if err != nil {
-		log.Printf("Warning: failed to initialize tracer: %v", err)
+		logging.Printf("Warning: failed to initialize tracer: %v", err)
 	} else {
 		defer shutdown(context.Background())
 	}
 
 	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
-		log.Fatalf("Could not instantiate Pulsar client: %v", err)
+		logging.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
 	defer client.Close()
 
 	// 1. Consumer for Completion Events
 	consumer, err := client.NewSharedConsumer(cfg.PulsarCompletionTopic, cfg.PulsarSubscription)
 	if err != nil {
-		log.Fatalf("Could not subscribe to completion topic: %v", err)
+		logging.Fatalf("Could not subscribe to completion topic: %v", err)
 	}
 	defer consumer.Close()
 
 	// 2. Producer for Final Results (sent back to Results topic for db-adapter)
 	producer, err := client.NewProducer(cfg.PulsarResultsTopic)
 	if err != nil {
-		log.Fatalf("Could not create results producer: %v", err)
+		logging.Fatalf("Could not create results producer: %v", err)
 	}
 	defer producer.Close()
 
@@ -80,21 +80,21 @@ func main() {
 		if certFile != "" && keyFile != "" {
 			tlsCfg, err := tlsutil.NewTLSConfig()
 			if err != nil {
-				log.Fatalf("Failed to create TLS config: %v", err)
+				logging.Fatalf("Failed to create TLS config: %v", err)
 			}
-			log.Printf("Health server listening with TLS on :8080")
+			logging.Printf("Health server listening with TLS on :8080")
 			server := &http.Server{
 				Addr:      ":8080",
 				Handler:   otelHandler,
 				TLSConfig: tlsCfg,
 			}
 			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-				log.Printf("Health server failed: %v", err)
+				logging.Printf("Health server failed: %v", err)
 			}
 		} else {
-			log.Printf("Health server listening on :8080")
+			logging.Printf("Health server listening on :8080")
 			if err := http.ListenAndServe(":8080", otelHandler); err != nil {
-				log.Printf("Health server failed: %v", err)
+				logging.Printf("Health server failed: %v", err)
 			}
 		}
 	}()
@@ -106,55 +106,55 @@ func main() {
 				if ctx.Err() != nil {
 					return
 				}
-				log.Printf("Error receiving completion event: %v", err)
+				logging.Printf("Error receiving completion event: %v", err)
 				continue
 			}
 
 			var comp contracts.ResponseCompletion
 			if err := protojson.Unmarshal(msg.Payload(), &comp); err != nil {
-				log.Printf("Error unmarshaling completion payload: %v", err)
+				logging.Printf("Error unmarshaling completion payload: %v", err)
 				consumer.Ack(msg)
 				continue
 			}
 
 			if comp.Status == "FAILED" {
-				log.Printf("[%s] Completion event status is FAILED, skipping aggregation", comp.Id)
+				logging.Printf("[%s] Completion event status is FAILED, skipping aggregation", comp.Id)
 				consumer.Ack(msg)
 				continue
 			}
 
-	log.Printf("[%s] Received completion (Status: %s), aggregating chunks from session topic", comp.Id, comp.Status)
+	logging.Printf("[%s] Received completion (Status: %s), aggregating chunks from session topic", comp.Id, comp.Status)
 
 	// Aggregate chunks from session topic
 	sessionTopic := SessionTopic(comp.Id)
 	fullResult, metadata, err := aggregateChunks(ctx, client, sessionTopic, &comp)
 	if err != nil {
-		log.Printf("[%s] Aggregation error on %s: %v (Partial result: %d chars)", comp.Id, sessionTopic, err, len(fullResult))
+		logging.Printf("[%s] Aggregation error on %s: %v (Partial result: %d chars)", comp.Id, sessionTopic, err, len(fullResult))
 		// We could send partial result or nack
 		consumer.Nack(msg)
 		continue
 	}
 
 	if fullResult == "" {
-		log.Printf("[%s] Warning: Result was empty after aggregation, ignoring", comp.Id)
+		logging.Printf("[%s] Warning: Result was empty after aggregation, ignoring", comp.Id)
 		consumer.Ack(msg)
 		continue
 	}
 
 	// Send final result to db-adapter topic
 	if err := sendFinalResult(ctx, producer, &comp, fullResult, metadata); err != nil {
-		log.Printf("[%s] Failed to send final result: %v", comp.Id, err)
+		logging.Printf("[%s] Failed to send final result: %v", comp.Id, err)
 		consumer.Nack(msg)
 		continue
 	}
 
-	log.Printf("[%s] Successfully aggregated and sent result (%d chars)", comp.Id, len(fullResult))
+	logging.Printf("[%s] Successfully aggregated and sent result (%d chars)", comp.Id, len(fullResult))
 			consumer.Ack(msg)
 		}
 	}()
 
 	<-sigChan
-	log.Printf("Shutting down...")
+	logging.Printf("Shutting down...")
 }
 
 func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, comp *contracts.ResponseCompletion) (string, *structpb.Struct, error) {
@@ -169,56 +169,39 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 
 	var chunks = make(map[int32]*contracts.StreamChunk)
 	var lastMetadata *structpb.Struct
-	timeout := time.After(30 * time.Second) // Safety timeout for the scan
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 
 	for {
-		select {
-		case <-timeout:
-			return "", nil, fmt.Errorf("timed out scanning for chunks in %s", topic)
-		case <-ctx.Done():
-			return "", nil, ctx.Err()
-		default:
-			if !reader.HasNext() {
-				// Wait a bit for more chunks
-				time.Sleep(100 * time.Millisecond)
-				if !reader.HasNext() {
-					// Check if we have anything
-					if len(chunks) > 0 {
-						return assemble(chunks), lastMetadata, nil
-					}
-					return "", nil, fmt.Errorf("reached end of topic %s without finding chunks", topic)
-				}
-				continue
-			}
-
-			msg, err := reader.Next(ctx)
-			if err != nil {
-				return "", nil, fmt.Errorf("reader next: %w", err)
-			}
-
-			chunk := &contracts.StreamChunk{}
-			if err := protojson.Unmarshal(msg.Payload(), chunk); err != nil {
-				continue
-			}
-
-			if chunk.Id != comp.Id {
-				// Not our prompt, but maybe if we see chunks with much later timestamps we can stop?
-				// For now, just continue.
-				continue
-			}
-
-			if chunk.Metadata != nil {
-				lastMetadata = chunk.Metadata
-			}
-
-			if chunk.Result != "" {
-				// Deduplicate by sequence number
-				chunks[chunk.SequenceNumber] = chunk
-			}
-
-			if chunk.IsLast {
+		msg, err := reader.Next(ctx)
+		if err != nil {
+			// If we timed out or context cancelled, we might have partial chunks
+			if (ctx.Err() != nil) && len(chunks) > 0 {
+				logging.Printf("[%s] Context cancelled or timed out, returning partial result (%d chunks)", comp.Id, len(chunks))
 				return assemble(chunks), lastMetadata, nil
 			}
+			return "", nil, fmt.Errorf("reader next: %w", err)
+		}
+
+		chunk := &contracts.StreamChunk{}
+		if err := protojson.Unmarshal(msg.Payload(), chunk); err != nil {
+			continue
+		}
+
+		if chunk.Id != comp.Id {
+			continue
+		}
+
+		if chunk.Metadata != nil {
+			lastMetadata = chunk.Metadata
+		}
+
+		if chunk.Result != "" {
+			chunks[chunk.SequenceNumber] = chunk
+		}
+
+		if chunk.IsLast {
+			return assemble(chunks), lastMetadata, nil
 		}
 	}
 }
@@ -257,7 +240,7 @@ func sendFinalResult(ctx context.Context, producer pulsar.Producer, comp *contra
 		return fmt.Errorf("failed to marshal final result: %w", err)
 	}
 
-	log.Printf("[%s] Sending final result (snake_case): %s", comp.Id, string(data))
+	logging.Printf("[%s] Sending final result (snake_case): %s", comp.Id, string(data))
 
 	_, err = producer.Send(ctx, &pulsar.ProducerMessage{
 		Payload: data,

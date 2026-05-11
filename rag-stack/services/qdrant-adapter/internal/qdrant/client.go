@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"app-builds/common/contracts"
 	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
+	"app-builds/common/logging"
 )
 
 type QdrantClient struct {
@@ -22,7 +22,7 @@ type QdrantClient struct {
 func NewClient(cfg *config.Config) *QdrantClient {
 	httpClient, err := tlsutil.NewHTTPClient(cfg.QdrantUseTLS, 10*time.Second)
 	if err != nil {
-		log.Fatalf("Failed to create Qdrant HTTP client with TLS: %v", err)
+		logging.Fatalf("Failed to create Qdrant HTTP client with TLS: %v", err)
 	}
 	return &QdrantClient{
 		cfg:        cfg,
@@ -31,13 +31,16 @@ func NewClient(cfg *config.Config) *QdrantClient {
 }
 
 func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error) {
+	if limit <= 0 {
+		limit = 20 // Default limit
+	}
 	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
 }
 
 func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]interface{}, error) {
 	if len(vector) == 0 {
 		if len(tags) > 0 {
-			log.Printf("Empty vector but tags provided, falling back to filter-only retrieval")
+			logging.Printf("Empty vector but tags provided, falling back to filter-only retrieval")
 			return q.RetrieveByFilter(collection, vectorSize, tags, sessionID, includeGlobal, limit)
 		}
 		return nil, nil // Cannot search with empty vector and no tags
@@ -114,7 +117,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		query["filter"] = map[string]interface{}{
 			"must": mustFilters,
 		}
-		log.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%d): %+v", tags, sessionID, query["filter"])
+		logging.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%d): %+v", tags, sessionID, query["filter"])
 	}
 
 	body, err := json.Marshal(query)
@@ -258,7 +261,7 @@ func (q *QdrantClient) RetrieveByFilter(collection string, vectorSize int, tags 
 	return results, nil
 }
 
-func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths []string) ([]interface{}, error) {
+func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths []string, limit int) ([]interface{}, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
@@ -276,8 +279,12 @@ func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/scroll", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
 
+	if limit <= 0 {
+		limit = 1000 // Large default for full files
+	}
+
 	query := map[string]interface{}{
-		"limit":        1000, // Large limit for full files
+		"limit":        limit,
 		"with_payload": true,
 		"filter": map[string]interface{}{
 			"must": []map[string]interface{}{

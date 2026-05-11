@@ -31,13 +31,20 @@ type Config struct {
 	// Configurable values (previously hardcoded)
 	QdrantCollection   string
 	QdrantSearchLimit  int
+	QdrantRetrievalLimit int
+	ChunkVectorLimit    int
 	QdrantSearchTimeout time.Duration
 	RecursionBudget    float64
+	MaxRecursionCount  int
+	MaxTotalChunks     int
+	MaxChunksPerRecursion int
 	ShutdownTimeout    time.Duration
+	StreamIntermediate  bool
 
 	StreamAccumulationCount int
 
 	MemoryControllerURL string
+	QdrantAdapterURL    string
 
 	TLSCert            string
 	TLSKey             string
@@ -77,13 +84,20 @@ func LoadConfig() *Config {
 		QdrantResultsTopic: envutil.GetEnv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops-results"),
 
 		QdrantCollection:    envutil.GetEnv("QDRANT_COLLECTION", "vectors"),
-		QdrantSearchLimit:   envutil.GetEnvInt("QDRANT_SEARCH_LIMIT", 5),
+		QdrantSearchLimit:   envutil.GetEnvInt("QDRANT_SEARCH_LIMIT", 50),
+		QdrantRetrievalLimit: envutil.GetEnvInt("QDRANT_RETRIEVAL_LIMIT", 10000),
+		ChunkVectorLimit:    envutil.GetEnvInt("CHUNK_VECTOR_LIMIT", 50),
 		QdrantSearchTimeout: envutil.GetEnvDuration("QDRANT_SEARCH_TIMEOUT", 30*time.Second),
 		RecursionBudget:     envutil.GetEnvFloat("RECURSION_BUDGET", 2.0),
+		MaxRecursionCount:   envutil.GetEnvInt("MAX_RECURSION_COUNT", 3),
+		MaxTotalChunks:      envutil.GetEnvInt("MAX_TOTAL_CHUNKS", 100),
+		MaxChunksPerRecursion: envutil.GetEnvInt("MAX_CHUNKS_PER_RECURSION", 10),
 		ShutdownTimeout:     envutil.GetEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 		StreamAccumulationCount: envutil.GetEnvInt("STREAM_ACCUMULATION_COUNT", 10),
+		StreamIntermediate:  envutil.GetEnvBool("STREAM_INTERMEDIATE", true),
 
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "http://memory-controller.rag-system.svc.cluster.local:8080"),
+		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "http://qdrant-adapter.rag-system.svc.cluster.local:8080"),
 
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:              envutil.GetEnv("TLS_KEY", ""),

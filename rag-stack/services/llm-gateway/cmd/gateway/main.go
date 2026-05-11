@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,7 @@ import (
 
 	"app-builds/common/ent"
 	"app-builds/common/health"
+	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 	"app-builds/llm-gateway/internal/config"
 	"app-builds/llm-gateway/internal/handlers"
@@ -27,24 +27,24 @@ func main() {
 
 	shutdown, err := telemetry.InitTracer("llm-gateway")
 	if err != nil {
-		log.Printf("Warning: failed to initialize tracer: %v", err)
+		logging.Warn("failed to initialize tracer", "error", err)
 	} else {
 		defer shutdown(context.Background())
 	}
 
-	log.Printf("Starting LLM Gateway on %s", cfg.ListenAddr)
-	log.Printf("Pulsar URL: %s", cfg.PulsarURL)
-	log.Printf("Request Topic: %s", cfg.RequestTopic)
+	logging.Info("starting LLM Gateway", "addr", cfg.ListenAddr, "pulsar_url", cfg.PulsarURL, "request_topic", cfg.RequestTopic)
 
 	entClient, err := ent.Open("postgres", cfg.DBConnString)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logging.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer entClient.Close()
 
 	pc, err := pulsar.NewPulsarClient(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize Pulsar: %v", err)
+		logging.Error("failed to initialize Pulsar", "error", err)
+		os.Exit(1)
 	}
 	defer pc.Close()
 
@@ -81,14 +81,16 @@ func main() {
 		certFile := os.Getenv("TLS_CERT")
 		keyFile := os.Getenv("TLS_KEY")
 		if certFile != "" && keyFile != "" {
-			log.Printf("Listening with TLS on %s", cfg.ListenAddr)
+			logging.Info("listening with TLS", "addr", cfg.ListenAddr)
 			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Listen error: %v", err)
+				logging.Error("listen error", "error", err)
+				os.Exit(1)
 			}
 		} else {
-			log.Printf("Listening without TLS on %s", cfg.ListenAddr)
+			logging.Info("listening without TLS", "addr", cfg.ListenAddr)
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Listen error: %v", err)
+				logging.Error("listen error", "error", err)
+				os.Exit(1)
 			}
 		}
 	}()
@@ -98,25 +100,25 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	log.Println("Shutting down gateway...")
+	logging.Info("shutting down gateway")
 
 	// 1. Stop accepting new HTTP requests, drain in-flight requests
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
+		logging.Error("HTTP server shutdown error", "error", err)
 	} else {
-		log.Println("HTTP server shut down gracefully")
+		logging.Info("HTTP server shut down gracefully")
 	}
 
 	// 2. Close Pulsar resources (consumer, producers, client)
 	pc.Close()
-	log.Println("Pulsar resources closed")
+	logging.Info("pulsar resources closed")
 
 	// 3. Close DB
 	entClient.Close()
-	log.Println("Database connection closed")
+	logging.Info("database connection closed")
 
-	log.Println("Gateway shutdown complete")
+	logging.Info("gateway shutdown complete")
 }

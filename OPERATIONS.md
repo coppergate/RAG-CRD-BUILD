@@ -223,7 +223,7 @@ Every new session for the **Junie** agent MUST establish the operational context
         - Create a merge request (if applicable) and ensure it's ready for merge.
     - Create a new session branch named `work-YYYY-MM-DD` (e.g., `work-2026-03-02`).
     - During the session, commit with timestamp messages (e.g., `2026-03-02 08:30`).
-    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies"`.
+    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies:"`.
 2. **File Size Limit**: Do not commit any files larger than 1MB without asking first.
    - **Clean History (Rebase & Squash)**:
    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
@@ -458,7 +458,13 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 
 ### 5.1 Service Configuration (Externalized Values)
 - **RAG Ingestion**: `QDRANT_COLLECTION`, `INGEST_BATCH_SIZE`, `CHUNK_SIZE`, `CHUNK_OVERLAP`.
-- **RAG Worker**: `QDRANT_COLLECTION`, `QDRANT_SEARCH_LIMIT`, `RECURSION_BUDGET`.
+- **RAG Worker**:
+  - `QDRANT_RETRIEVAL_LIMIT` (Default: 10,000): Max points to pull from Qdrant for tag-based searches.
+  - `CHUNK_VECTOR_LIMIT` (Default: 50): Max vectors per context chunk.
+  - `MAX_RECURSION_COUNT` (Default: 3): Max number of re-planning cycles.
+  - `MAX_TOTAL_CHUNKS` (Default: 100): Max cumulative chunks processed across all iterations.
+  - `RECURSION_BUDGET` (Default: 2.0): Deducted 1.0 per re-plan and 0.1 per chunk pagination.
+  - `MAX_CHUNKS_PER_RECURSION` (Default: 10): Chunks processed in a single sequential batch.
 - **LLM Gateway**: `REQUEST_TIMEOUT` (Pulsar inference).
 
 ### 5.2 Prompt Aggregation (Session Topics)
@@ -666,11 +672,12 @@ PATH=$PATH:/home/wjones/go/bin protoc \
   rag-stack/contracts/rag_stack.proto
 ```
 
-### 9.3 Tiered Streaming Response
+### 9.3 Tiered Streaming Response & Waiting Notations
 - **Metadata (Seq 0)**: Contains the grounding context (`contexts`) and recursion info.
 - **Content (Seq 1..N)**: Contains LLM tokens accumulated based on `STREAM_ACCUMULATION_COUNT` (default: 10).
 - **Final (Seq N+1)**: Empty chunk with `is_last: true` to signal completion.
 - **Planning (Seq -1)**: Intermediate planning responses.
+- **Waiting Notations**: During long-running tasks (planning, searching, multi-chunk execution), the `rag-worker` sends periodic updates with `SequenceNumber: -1` and the `planning_response` field populated with a waiting notation (e.g., `⌛ *Status message*...`). These are displayed in the UI's Planner box to provide visual feedback while the main response is "developing".
 
 ### 9.4 Response Aggregation
 To prevent duplicate "chunks" in chat history, the `db-adapter` consolidates multiple Pulsar messages for the same prompt into a single database record.
@@ -686,3 +693,112 @@ Session context is managed by the `memory-controller` service and consumed by th
 - **Assembly**: The `memory-controller` fetches the last 10 pairs of prompts and responses for a session and packages them into a `MemoryPack`.
 - **LLM Context**: `rag-worker` converts the `MemoryPack` into a list of messages (role/content) which are prepended to the final LLM prompt.
 - **Configuration**: `MEMORY_CONTROLLER_URL` environment variable must be set in `rag-worker`.
+
+## 10. RAG Pipeline Testing & Validation
+
+### 10.1 Context Paging and Chunking Verification
+The RAG pipeline supports exhaustive context retrieval (up to 10,000 vectors) and partitioning into 50-vector chunks for LLM processing. This ensures that large tag-based collections can be processed within the model's context window.
+
+#### 10.2 Behavioral Governance (Iteration 9)
+
+##### 10.2.1 Action Taxonomy
+The system identifies the type of action requested in a prompt using keywords defined in the `action_identifiers` table. Current types include:
+- `FILE_SEARCH`, `FILE_EDIT`, `FILE_VCS`, `REMOTE_EXEC`, `K8S_ORCHESTRATE`, `DB_ACCESS`, `BUILD_DEPLOY`, `DOC_PROCESS`, `JOB_RESUME`, `WEB_FETCH`.
+
+##### 10.2.2 Interactive Learning Loop
+You can teach the agent new behaviors or adjust priorities using the following syntax:
+`REMEMBER [WHEN|BEFORE|AFTER|DURING|WHILE|ONCE|FOR] [ACTION_TYPE] [INSTRUCTION]`
+
+- **Priority Markers**: Use Markdown headers at the start of the instruction:
+    - `#` -> Priority 100 (Highest)
+    - `##` -> Priority 50
+    - `###` -> Priority 20
+- **Staging**: New rules are created in `PENDING` state and must be accepted via the `rag-admin-api` or confirmed in the UI.
+
+##### 10.2.3 Session Governance Overrides
+To temporarily prioritize a specific behavior (e.g., "Optimize for memory") for the current session:
+1. Use a standard learning trigger with high priority.
+2. The `memory-controller` will apply this override only to the current `SessionID`.
+3. To revert to global defaults, use the command: `RESET BEHAVIOR`.
+
+##### 10.2.4 Management API Endpoints
+All governance data is managed via the `memory-controller` (proxied by `rag-admin-api` at `/api/behavior/`):
+- `GET /behavior/rules`: List active global rules.
+- `GET /behavior/identifiers`: Fetch the action-to-keyword identification map.
+- `POST /behavior/learn`: Stage a new learned behavior.
+- `POST /behavior/session/reset`: Clear current session priority overrides.
+
+#### 10.4 Automated Test Suite
+- **Location**: `rag-stack/services/rag-worker/pkg/pipeline/chunking_test.go`
+- **Execution**:
+  ```bash
+  cd rag-stack/services/rag-worker
+  go test -v ./pkg/pipeline/...
+  ```
+
+#### 10.5 Test Scenarios Covered:
+1.  **Exhaustive Retrieval (`TestHandleSearch_LargeVectorStore`)**: 
+    - Simulates a tag-based search returning >100 vectors across multiple files.
+    - Verifies that files larger than the `ChunkVectorLimit` (50) are correctly split.
+    - Verifies that small files are grouped together to fill the 50-vector capacity.
+    - Confirms that the resulting `InternalRequest` contains the expected metadata structure for the execution stage.
+2.  **Sequential Chunk Execution (`TestHandleExec_MultiChunk`)**:
+    - Verifies that `handleExec` iterates through each context chunk sequentially.
+    - Confirms that the `Planner.Plan` method is called for each chunk to "refine" the response based on that specific context.
+    - Verifies that intermediate results are accumulated and correctly formatted with newlines.
+    - Confirms that the final response is stored and completion metrics are emitted.
+3.  **Boundary Logic (`TestChunkResults`)**:
+    - Verifies that reassembled files are kept together in chunks when possible.
+    - Verifies that non-file context (e.g., from prompt search) is correctly integrated into the chunks.
+
+### 10.3 Testing with Mock Messaging
+When writing unit tests for the pipeline that involve session-specific topics (e.g., `SendResult`), use the `SetSessionProducer` helper to avoid dependency on a running Pulsar cluster:
+
+```go
+msgClient := &messaging.Client{}
+topic := msgClient.SessionTopic("test-id")
+msgClient.SetSessionProducer(topic, mockProducer)
+```
+
+## 11. Observability & Troubleshooting
+
+### 11.1 Session-Based Troubleshooting
+All telemetry data (metrics, logs, and traces) in the RAG stack is enriched with the `session_id` to allow end-to-end performance analysis and troubleshooting.
+
+#### Log Enrichment
+Key log lines across all services include the session ID in the format `[SID:%d]`. This allows you to filter logs for a specific user session:
+- **Command**: `kubectl logs -n rag-system -l app=rag-worker | grep "[SID:123]"`
+
+#### Trace Enrichment
+All OpenTelemetry spans generated during a request include the `session_id` attribute. You can search for these in Grafana Tempo or the APM dashboard.
+- **Attribute**: `session_id` (Type: `int64`)
+
+#### Metrics Enrichment
+OpenTelemetry metrics (request counters, latency histograms) include the `session_id` as a label/dimension. This allows for per-session performance monitoring in Grafana Mimir.
+- **Metric Label**: `session_id`
+
+## 12. Resume Generation Environment
+
+### 12.1 Generation Workflow
+The resume and cover letter generation follows a strict Markdown-first workflow to ensure user oversight.
+1.  **Ingestion**: Import qualifications from the `./working` directory.
+2.  **Markdown Generation**: Generate documents in Markdown format within the `./working` directory.
+3.  **User Review**: **STOP** and wait for user review of the Markdown files.
+4.  **PDF Conversion**: Upon approval, convert to PDF using `paps`.
+    ```bash
+    paps --format=pdf --paper=letter --font="Monospace 10" input.txt -o output.pdf
+    ```
+5.  **Finalization**: Move original job requirements to `./JOB-REQS` and clean up the `./working` directory.
+
+### 12.2 Content Guidelines
+- **Authenticity**: Treat the RAG pipeline and AI stack as personal projects. Do not attribute them to previous employers unless applicable.
+- **Accuracy**: Do not claim experience or achievements not present in source documents.
+- **Language**: Only include languages the subject actually uses.
+
+## 13. Security & Access Control
+
+### 13.1 Admin API Authentication
+The `rag-admin-api` now supports API key authentication via the `ADMIN_API_KEY` environment variable.
+- **Transition State**: Currently configured as "fail-open" (optional: true in deployment). If the `rag-admin-api-auth` secret is missing, the service will allow unauthenticated access.
+- **Enforcement**: Once stable, the `optional: true` flag should be removed from the deployment.
+- **Setup**: Run `scripts/setup-admin-auth.sh` on **hierophant** to generate and apply the API key secret.

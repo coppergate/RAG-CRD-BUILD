@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -12,6 +11,7 @@ import (
 	"app-builds/rag-admin-api/internal/config"
 	"app-builds/common/tlsutil"
 	"time"
+	"app-builds/common/logging"
 )
 
 type AdminHandler struct {
@@ -28,7 +28,7 @@ func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.Hand
 		if err == nil {
 			proxy.Transport = client.Transport
 		} else {
-			log.Printf("[PROXY] Warning: failed to initialize TLS transport for %s: %v", targetURL, err)
+			logging.Printf("[PROXY] Warning: failed to initialize TLS transport for %s: %v", targetURL, err)
 		}
 	}
 
@@ -42,17 +42,17 @@ func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.Hand
 			if !strings.HasPrefix(req.URL.Path, "/") {
 				req.URL.Path = "/" + req.URL.Path
 			}
-			log.Printf("[PROXY] Stripped prefix %s: %s -> %s", prefixToStrip, oldPath, req.URL.Path)
+			logging.Printf("[PROXY] Stripped prefix %s: %s -> %s", prefixToStrip, oldPath, req.URL.Path)
 		}
 	}
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("[PROXY] Error proxying %s %s to %s: %v", r.Method, r.URL.Path, targetURL, err)
+		logging.Printf("[PROXY] Error proxying %s %s to %s: %v", r.Method, r.URL.Path, targetURL, err)
 		http.Error(w, "Proxy error: "+err.Error(), http.StatusBadGateway)
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[PROXY] %s %s -> %s", r.Method, r.URL.Path, targetURL)
+		logging.Printf("[PROXY] %s %s -> %s", r.Method, r.URL.Path, targetURL)
 		
 		// For WebSockets or other protocols that need hijacking, do not wrap the response writer
 		// as httputil.ReverseProxy needs the original hijacker.
@@ -66,13 +66,13 @@ func (h *AdminHandler) ProxyTo(targetURL string, prefixToStrip string) http.Hand
 		srw := &statusResponseWriter{ResponseWriter: w, status: http.StatusOK, body: buf}
 		proxy.ServeHTTP(srw, r)
 		
-		log.Printf("[PROXY] %s %s completed with status %d", r.Method, r.URL.Path, srw.status)
+		logging.Printf("[PROXY] %s %s completed with status %d", r.Method, r.URL.Path, srw.status)
 		if srw.status == http.StatusOK && buf.Len() > 0 {
 			displayBody := buf.String()
 			if len(displayBody) > 200 {
 				displayBody = displayBody[:200] + "..."
 			}
-			log.Printf("[PROXY] Response body: %s", displayBody)
+			logging.Printf("[PROXY] Response body: %s", displayBody)
 		}
 	}
 }

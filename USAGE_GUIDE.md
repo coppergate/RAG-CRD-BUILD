@@ -1,6 +1,6 @@
 # RAG Pipeline Usage Guide
 
-This document provides a step-by-step guide for using the RAG (Retrieval-Augmented Generation) system (v2.12.0).
+This document provides a step-by-step guide for using the RAG (Retrieval-Augmented Generation) system (v3.1.x).
 
 ## 1. Environment Preparation
 All system-wide operations, builds, and cluster management are performed on the **hierophant** host.
@@ -67,10 +67,10 @@ curl -sk https://rag-admin-api.rag.hierocracy.home/api/health/all
 ### 5.1 Rebuilding Services
 To update the system with new code changes:
 1. Update code in `rag-stack/services/`.
-2. Increment `VERSION` in `setup-complete.sh`.
-3. Run the cluster-native build:
+2. Check and increment version in `CURRENT_VERSION`.
+3. Run the cluster-native build from **hierophant**:
    ```bash
-   ssh junie@hierophant "VERSION=X.Y.Z bash /mnt/hegemon-share/share/code/complete-build/rag-stack/build-all-on-cluster.sh --wait"
+   ssh junie@hierophant "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && ./build.sh --override-version 3.1.3"
    ```
 
 ### 5.2 Common Issues

@@ -229,7 +229,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
         if effective_prefix.startswith("/"):
             effective_prefix = effective_prefix.lstrip("/")
 
-        logger.info(f"Starting ingestion task for {ingestion_id} using Ollama model {QDRANT_MODEL} (dims: {current_vs}) on bucket {effective_bucket} (prefix: {effective_prefix})")
+        logger.info(f"[SID:{session_id}] Starting ingestion task for {ingestion_id} using Ollama model {QDRANT_MODEL} (dims: {current_vs}) on bucket {effective_bucket} (prefix: {effective_prefix}), tags: {tag_ids}")
 
         pulsar_client = _create_pulsar_client()
         q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
@@ -265,18 +265,47 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
 
         conn = pool.getconn()
 
+        # Resolve tag names if provided
+        if tag_names:
+            logger.info(f"Resolving tag names: {tag_names}")
+            try:
+                with conn.cursor() as cur:
+                    for name in tag_names:
+                        cur.execute("SELECT tag_id FROM tag WHERE tag_name = %s", (name,))
+                        row = cur.fetchone()
+                        if row:
+                            if row[0] not in tag_ids:
+                                tag_ids.append(row[0])
+                        else:
+                            logger.warning(f"Tag name '{name}' not found in database")
+            except Exception as e:
+                logger.error(f"Error resolving tag names: {e}")
+
+        # Ensure tag_ids are unique integers
+        tag_ids = list(set([int(tid) for tid in tag_ids if tid is not None]))
+
         # Ingestion entry is now created in trigger_ingest, but we ensure it here just in case
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO code_ingestion (ingestion_id, s3_bucket_id) VALUES (%s, %s) ON CONFLICT (ingestion_id) DO NOTHING",
                 (ingestion_id, effective_bucket)
             )
+            
+            # Populate code_ingestion_tag mapping
+            for t_id in tag_ids:
+                cur.execute(
+                    "INSERT INTO code_ingestion_tag (ingestion_id, tag_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                    (ingestion_id, t_id)
+                )
             conn.commit()
+            if tag_ids:
+                logger.info(f"Mapped ingestion {ingestion_id} to tags: {tag_ids}")
 
         points = []
         idx = 0
 
         for s3_key in files:
+            logger.info(f"Processing file: {s3_key}")
             try:
                 response = s3_client.get_object(Bucket=effective_bucket, Key=s3_key)
                 content = response['Body'].read().decode('utf-8')
@@ -394,7 +423,7 @@ async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
             logger.error(f"Failed to create ingestion record: {e}")
             # Fallback to 0 if DB fails, though task might fail too
     
-    logger.info(f"Received ingestion request for ID: {ingestion_id} (bucket: {effective_bucket}, index/prefix: {req.index or req.prefix}, files: {req.file_names})")
+    logger.info(f"Received ingestion request for ID: {ingestion_id} (bucket: {effective_bucket}, index/prefix: {req.index or req.prefix}, tags: {req.tag_ids}, names: {tag_names}, files: {req.file_names})")
     background_tasks.add_task(
         run_ingestion, 
         ingestion_id, 

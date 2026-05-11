@@ -18,7 +18,7 @@ import (
 type Session struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int64 `json:"id,omitempty"`
+	ID int64 `json:"id"`
 	// ProjectID holds the value of the "project_id" field.
 	ProjectID int64 `json:"project_id,omitempty"`
 	// Name holds the value of the "name" field.

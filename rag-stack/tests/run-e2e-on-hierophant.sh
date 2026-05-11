@@ -14,10 +14,20 @@ mkdir -p "$OUT_DIR"
 NAMESPACE="rag-system"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION_FILE="/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION"
+# Try to resolve build-orchestrator.hierocracy.home, fallback to LoadBalancer IP if needed
+DEFAULT_METADATA_URL="http://build-orchestrator.hierocracy.home/api/build"
+CURL_H_HEADER=""
+if ! host build-orchestrator.hierocracy.home >/dev/null 2>&1; then
+    LB_IP=$($KUBECTL get svc traefik -n traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "172.20.1.16")
+    DEFAULT_METADATA_URL="http://${LB_IP}/api/build"
+    CURL_H_HEADER="Host: build-orchestrator.hierocracy.home"
+fi
+
 VERSION="${VERSION:-}"
 if [ -z "$VERSION" ]; then
-    VERSION=$(jq -r '."rag-test-runner".version' "$VERSION_FILE")
+    h_args=()
+    [[ -n "$CURL_H_HEADER" ]] && h_args=(-H "$CURL_H_HEADER")
+    VERSION=$(curl -s "${h_args[@]}" "$DEFAULT_METADATA_URL/versions/rag-test-runner" | jq -r ".version // \"1.0.0\"")
 fi
 echo "[INFO] Using rag-test-runner version: ${VERSION}"
 

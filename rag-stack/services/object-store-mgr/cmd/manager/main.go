@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"app-builds/common/logging"
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 
 	shutdown, err := telemetry.InitTracer("object-store-mgr")
 	if err != nil {
-		log.Printf("Warning: failed to initialize tracer: %v", err)
+		logging.Printf("Warning: failed to initialize tracer: %v", err)
 	} else {
 		defer shutdown(context.Background())
 	}
@@ -51,7 +51,7 @@ func main() {
 		config.WithRegion("us-east-1"),
 	)
 	if err != nil {
-		log.Fatalf("unable to load SDK config, %v", err)
+		logging.Fatalf("unable to load SDK config, %v", err)
 	}
 
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
@@ -95,13 +95,13 @@ func main() {
 
 		if len(parts) == 1 { // List objects
 			prefix := r.URL.Query().Get("prefix")
-			log.Printf("[S3] ListObjectsV2: bucket=%s, prefix=%s", bucketName, prefix)
+			logging.Printf("[S3] ListObjectsV2: bucket=%s, prefix=%s", bucketName, prefix)
 			resp, err := client.ListObjectsV2(r.Context(), &s3.ListObjectsV2Input{
 				Bucket: aws.String(bucketName),
 				Prefix: aws.String(prefix),
 			})
 			if err != nil {
-				log.Printf("[S3] Error listing objects: %v", err)
+				logging.Printf("[S3] Error listing objects: %v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -109,7 +109,7 @@ func main() {
 			if contents == nil {
 				contents = []types.Object{}
 			}
-			log.Printf("[S3] Returning %d objects", len(contents))
+			logging.Printf("[S3] Returning %d objects", len(contents))
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(contents)
 			return
@@ -130,14 +130,14 @@ func main() {
 			defer resp.Body.Close()
 			io.Copy(w, resp.Body)
 		case http.MethodPut:
-			log.Printf("[S3] PutObject: bucket=%s, key=%s", bucketName, objectKey)
+			logging.Printf("[S3] PutObject: bucket=%s, key=%s", bucketName, objectKey)
 			_, err = client.PutObject(r.Context(), &s3.PutObjectInput{
 				Bucket: aws.String(bucketName),
 				Key:    aws.String(objectKey),
 				Body:   r.Body,
 			})
 			if err != nil {
-				log.Printf("[S3] Error putting object: %v", err)
+				logging.Printf("[S3] Error putting object: %v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -171,12 +171,12 @@ func main() {
 	if tlsCert != "" && tlsKey != "" {
 		fmt.Printf("Server starting with TLS on %s\n", listenAddr)
 		if err := server.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
-			log.Fatalf("Server failed: %v", err)
+			logging.Fatalf("Server failed: %v", err)
 		}
 	} else {
 		fmt.Printf("Server starting on %s\n", listenAddr)
 		if err := server.ListenAndServe(); err != nil {
-			log.Fatalf("Server failed: %v", err)
+			logging.Fatalf("Server failed: %v", err)
 		}
 	}
 }

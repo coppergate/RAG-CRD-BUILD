@@ -50,3 +50,18 @@ func GetEnvDuration(key string, fallback time.Duration) time.Duration {
 	}
 	return fallback
 }
+
+// GetEnvBool returns the boolean value of the environment variable named by key,
+// or fallback if the variable is not set or cannot be parsed.
+// Recognized values: "true", "1", "yes", "on" (case-insensitive).
+func GetEnvBool(key string, fallback bool) bool {
+	if value, ok := os.LookupEnv(key); ok {
+		switch value {
+		case "true", "1", "yes", "ON", "TRUE", "Yes":
+			return true
+		case "false", "0", "no", "OFF", "FALSE", "No":
+			return false
+		}
+	}
+	return fallback
+}

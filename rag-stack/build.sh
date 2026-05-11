@@ -14,8 +14,15 @@ export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 
 # Build settings
 MODE="${MODE:-cluster}"
-VERSION_FILE="${VERSION_FILE:-$BASE_DIR/CURRENT_VERSION}"
-JOURNAL_DIR="${JOURNAL_DIR:-/tmp/.build_journal_junie}"
+# Try to resolve build-orchestrator.hierocracy.home, fallback to LoadBalancer IP if needed
+DEFAULT_METADATA_URL="http://build-orchestrator.hierocracy.home/api/build"
+if ! host build-orchestrator.hierocracy.home >/dev/null 2>&1; then
+    LB_IP=$($KUBECTL get svc traefik -n traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "172.20.1.16")
+    DEFAULT_METADATA_URL="http://${LB_IP}/api/build"
+    # We'll need to pass the Host header in curl calls if using IP
+    CURL_H_HEADER="Host: build-orchestrator.hierocracy.home"
+fi
+BUILD_METADATA_URL="${BUILD_METADATA_URL:-$DEFAULT_METADATA_URL}"
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
 FORCE_BUILD="${FORCE_BUILD:-false}"
 WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
@@ -23,80 +30,71 @@ OVERRIDE_VERSION="${OVERRIDE_VERSION:-}"
 PARALLELISM="${PARALLELISM:-4}"
 
 # --- Locking Configuration ---
-LOCK_FILE="/tmp/rag-stack-build.lock"
-LOCK_LEDGER="/tmp/rag-stack-build-ledger.json"
-LOCK_HEARTBEAT="/tmp/rag-stack-build-heartbeat"
-mkdir -p "$JOURNAL_DIR"
-
 acquire_lock() {
+    local svc="$1"
     local timeout_seconds=900 # 15 minutes
     local elapsed=0
     local wait_step=10
+    local h_args=()
+    [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
     
-    # Ensure lock file is accessible to the group
-    (umask 000; touch "$LOCK_FILE" 2>/dev/null || true)
-    chmod 666 "$LOCK_FILE" 2>/dev/null || true
-
-    # We use a non-inherited FD for the lock check
-    log "Attempting to acquire build lock..."
+    log "Attempting to acquire build lock for $svc..."
     
-    # We'll use a simpler loop that doesn't keep the FD open until we actually get the lock
     while true; do
-        if exec 200>"$LOCK_FILE" && flock -x -n 200; then
-             # Lock acquired!
+        local response=$(curl -s "${h_args[@]}" -X POST "$BUILD_METADATA_URL/locks/acquire" \
+            -d "{\"service_name\": \"$svc\", \"owner\": \"$(id -un)\", \"host\": \"${HOSTNAME:-unknown}\", \"pid\": $$}")
+        
+        local status=$?
+        if [[ $status -eq 0 ]] && [[ -z $(echo "$response" | grep "service_name") ]]; then
+             # Lock acquired! (Empty response with success status)
              break
         fi
         
         if [[ $elapsed -ge $timeout_seconds ]]; then
-            log "ERROR: Could not acquire build lock after ${timeout_seconds}s."
-            if [[ -f "$LOCK_LEDGER" ]]; then
-                log "Current lock owner details: $(cat "$LOCK_LEDGER")"
-            fi
+            log "ERROR: Could not acquire build lock for $svc after ${timeout_seconds}s."
+            log "Current lock owner details: $response"
             exit 1
         fi
         
         if [[ $((elapsed % 30)) -eq 0 ]]; then
-            log "Waiting for build lock... (elapsed: ${elapsed}s)"
-            if [[ -f "$LOCK_LEDGER" ]]; then
-                local owner_info=$(jq -r '.user + "@" + .host + " (PID " + (.pid|tostring) + ") started at " + .start' "$LOCK_LEDGER" 2>/dev/null || cat "$LOCK_LEDGER")
-                log "Current Owner: $owner_info"
-            fi
+            log "Waiting for build lock for $svc... (elapsed: ${elapsed}s)"
+            log "Conflict info: $response"
         fi
         
         sleep "$wait_step"
         elapsed=$((elapsed + wait_step))
     done
     
-    # Write to ledger
-    local start_time=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-    echo "{\"pid\": $$, \"user\": \"$(id -un)\", \"host\": \"${HOSTNAME:-unknown}\", \"start\": \"$start_time\"}" > "$LOCK_LEDGER"
-    
-    # Start heartbeat in background (make sure it DOES NOT inherit FD 200)
+    # Start heartbeat in background
     ( 
-        while [[ -f "$LOCK_LEDGER" ]]; do 
-            date -u +'%Y-%m-%dT%H:%M:%SZ' > "$LOCK_HEARTBEAT"
+        while true; do 
+            curl -s "${h_args[@]}" -X POST "$BUILD_METADATA_URL/locks/heartbeat/$svc" >/dev/null
             sleep 15
         done 
-    ) 200>&- &
-    HB_PID=$!
+    ) &
+    HB_PIDS["$svc"]=$!
     
-    log "Build lock acquired (Start: $start_time)."
+    log "Build lock acquired for $svc."
 }
 
 release_lock() {
+    local svc="$1"
+    local h_args=()
+    [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
+
     # Stop heartbeat
-    if [[ -n "${HB_PID:-}" ]]; then
-        kill "$HB_PID" 2>/dev/null || true
+    if [[ -n "${HB_PIDS[$svc]:-}" ]]; then
+        kill "${HB_PIDS[$svc]}" 2>/dev/null || true
     fi
     
-    # Clean up ledger
-    rm -f "$LOCK_LEDGER" "$LOCK_HEARTBEAT"
-    
-    # Release flock (Closing FD 200)
-    exec 200>&-
-    log "Build lock released."
+    curl -s "${h_args[@]}" -X POST "$BUILD_METADATA_URL/locks/release/$svc" >/dev/null
+    log "Build lock released for $svc."
 }
-trap release_lock EXIT
+
+# For backward compatibility if needed, but we prefer per-service
+declare -A HB_PIDS
+# trap 'for svc in "${!HB_PIDS[@]}"; do release_lock "$svc"; done' EXIT
+# Actually, the trap in build_service will handle it better for parallel builds.
 
 SERVICES=(
     "rag-worker" 
@@ -122,38 +120,23 @@ log() { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
 # --- Versioning Helpers ---
 get_svc_version() {
     local svc="$1"
-    jq -r ".\"$svc\".version // \"1.0.0\"" "$VERSION_FILE"
+    local h_args=()
+    [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
+    curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" | jq -r ".version // \"1.0.0\""
 }
 
 get_svc_last_build() {
     local svc="$1"
-    jq -r ".\"$svc\".last_build // empty" "$VERSION_FILE"
+    local h_args=()
+    [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
+    curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" | jq -r ".last_build // empty"
 }
 
 update_svc_info() {
     local svc="$1"; local ver="$2"; local build_time="$3"
-    local tmp=$(mktemp)
-    local lockfile="/tmp/rag-stack-version-shared.lock"
-    
-    (
-        # Ensure lock file is accessible to the group
-        umask 000
-        touch "$lockfile" 2>/dev/null || true
-        chmod 666 "$lockfile" 2>/dev/null || true
-
-        if ! flock -x -w 10 201; then
-            log "ERROR: Failed to acquire lock on $lockfile after 10s"
-            exit 1
-        fi
-
-        if [[ ! -f "$VERSION_FILE" ]]; then echo "{}" > "$VERSION_FILE"; fi
-        if jq ".\"$svc\".version = \"$ver\" | .\"$svc\".last_build = $build_time" "$VERSION_FILE" > "$tmp" 2>/dev/null; then
-            cat "$tmp" > "$VERSION_FILE" || log "WARN: Failed to update $VERSION_FILE (Permissions?)"
-        else
-            log "WARN: Failed to generate updated version JSON"
-        fi
-    ) 201>"$lockfile"
-    rm -f "$tmp"
+    local h_args=()
+    [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
+    curl -s "${h_args[@]}" -X POST "$BUILD_METADATA_URL/versions/$svc" -d "{\"version\": \"$ver\"}" >/dev/null
 }
 
 cleanup_old_jobs() {
@@ -209,13 +192,17 @@ hash_context() {
 
 is_unchanged() {
     local svc="$1"; local hash="$2"
-    local journal_file="$JOURNAL_DIR/${svc}.last_hash"
-    [[ -f "$journal_file" ]] && [[ "$(cat "$journal_file")" == "$hash" ]]
+    local h_args=()
+    [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
+    local last_hash=$(curl -s "${h_args[@]}" "$BUILD_METADATA_URL/journals/$svc" | jq -r ".last_hash // empty")
+    [[ -n "$last_hash" ]] && [[ "$last_hash" == "$hash" ]]
 }
 
 mark_unchanged() {
     local svc="$1"; local hash="$2"
-    echo -n "$hash" > "$JOURNAL_DIR/${svc}.last_hash"
+    local h_args=()
+    [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
+    curl -s "${h_args[@]}" -X POST "$BUILD_METADATA_URL/journals/$svc" -d "{\"last_hash\": \"$hash\"}" >/dev/null
 }
 
 deploy_update() {
@@ -243,6 +230,11 @@ deploy_update() {
 
 build_service() {
     local svc="$1"
+    acquire_lock "$svc"
+    
+    # Internal trap to release lock on exit
+    trap "release_lock '$svc'" EXIT
+    
     local ver=$(get_svc_version "$svc")
     local last_build=$(get_svc_last_build "$svc")
     local current_hash=$(hash_context "$svc")
@@ -343,7 +335,6 @@ main() {
         shift
     done
 
-	acquire_lock
 	cleanup_old_jobs
 
 	if [[ ${#SELECTED_SERVICES[@]} -gt 0 ]]; then
@@ -403,7 +394,10 @@ main() {
 				local bver=$(get_svc_version "build-orchestrator")
 				local bver_safe="${bver//./-}"
 				log "Waiting for build-orchestrator Kaniko job..."
-				"$KUBECTL" wait --for=condition=complete job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" --timeout=600s || true
+				if ! "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" --timeout=600s; then
+                    log "ERROR: build-orchestrator Kaniko job did not complete in time."
+                    exit 1
+                fi
 				
 				# Verify success before deploying
 				if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep 1 >/dev/null; then
@@ -411,10 +405,14 @@ main() {
 					update_svc_info "build-orchestrator" "$bver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
 				else
 					log "ERROR: build-orchestrator build failed. Cannot update deployment."
+                    exit 1
 				fi
 
 				log "Waiting for build-orchestrator rollout..."
-				"$KUBECTL" rollout status deployment/build-orchestrator -n build-pipeline --timeout=300s || true
+				if ! "$KUBECTL" rollout status deployment/build-orchestrator -n build-pipeline --timeout=300s; then
+                    log "ERROR: build-orchestrator rollout failed."
+                    exit 1
+                fi
 				sleep 10 # Allow new orchestrator to stabilize
 			fi
 		fi
@@ -454,9 +452,11 @@ main() {
 	fi
 
     if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
-        log "Waiting for cluster builds to complete..."
+        log "Waiting for cluster builds to complete (timeout: 1800s)..."
         # Wait for all jobs with the app=kaniko-build label
-        "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l app=kaniko-build --timeout=900s || true
+        if ! "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l app=kaniko-build --timeout=1800s; then
+            log "WARN: Some build jobs did not complete successfully or timed out."
+        fi
         # After wait, we update timestamps and DEPLOY all services that were successfully built
         for svc in "${SERVICES[@]}" "${INFRA_SERVICES[@]}"; do
              local ver=$(get_svc_version "$svc")

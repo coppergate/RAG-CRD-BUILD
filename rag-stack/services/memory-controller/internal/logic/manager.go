@@ -3,13 +3,15 @@ package logic
 import (
 	"context"
 	"fmt"
-	"log"
+	"sort"
 	"strings"
 	"time"
 
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
+	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/memoryevent"
+	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/prompt"
@@ -18,6 +20,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqljson"
+	"app-builds/common/logging"
 )
 
 type MemoryManager struct {
@@ -25,7 +28,9 @@ type MemoryManager struct {
 }
 
 func NewMemoryManager(client *ent.Client) *MemoryManager {
-	return &MemoryManager{client: client}
+	return &MemoryManager{
+		client: client,
+	}
 }
 
 func (m *MemoryManager) ListItems(ctx context.Context, sessionID int64) ([]*ent.MemoryItem, error) {
@@ -267,7 +272,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		Limit(int(limit)).
 		All(ctx)
 	if err != nil {
-		log.Printf("[MEMCTRL] Error fetching memory items: %v", err)
+		logging.Printf("[MEMCTRL] Error fetching memory items: %v", err)
 	}
 
 	// 2. Fetch Chat History (Prompts and Responses)
@@ -277,7 +282,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		Limit(int(limit)).
 		All(ctx)
 	if err != nil {
-		log.Printf("[MEMCTRL] Error fetching prompts: %v", err)
+		logging.Printf("[MEMCTRL] Error fetching prompts: %v", err)
 	}
 
 	var promptIDs []int64
@@ -291,7 +296,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 			Where(response.PromptIDIn(promptIDs...)).
 			All(ctx)
 		if err != nil {
-			log.Printf("[MEMCTRL] Error fetching responses: %v", err)
+			logging.Printf("[MEMCTRL] Error fetching responses: %v", err)
 		} else {
 			for _, res := range responses {
 				if res.PromptID != 0 {
@@ -301,9 +306,64 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		}
 	}
 
-	// 3. Assemble MemoryPack
+	// 3. Fetch Behavioral Rules (Iteration 9)
+	rules, err := m.client.BehavioralRule.Query().
+		Where(behavioralrule.StateEQ(behavioralrule.StateACTIVE)).
+		All(ctx)
+	if err != nil {
+		logging.Printf("[MEMCTRL] Error fetching behavioral rules: %v", err)
+	}
+
+	// 3b. Fetch Session Overrides (Iteration 9b)
+	overrides := make(map[int64]int)
+	if sessionID > 0 {
+		ovs, err := m.client.SessionGovernance.Query().
+			Where(sessiongovernance.SessionID(sessionID)).
+			All(ctx)
+		if err == nil {
+			for _, o := range ovs {
+				overrides[o.RuleID] = o.PriorityOverride
+			}
+		}
+	}
+
+	// 4. Assemble MemoryPack
 	pack := &contracts.MemoryPack{
 		Items: []*contracts.MemoryWriteItem{},
+	}
+
+	// Add Behavioral Rules first (System instructions)
+	// Apply overrides and filter/sort by priority
+	type ruleWithPriority struct {
+		rule     *ent.BehavioralRule
+		priority int
+	}
+	var prioritizedRules []ruleWithPriority
+	for _, rule := range rules {
+		p := rule.Priority
+		if ov, ok := overrides[rule.ID]; ok {
+			p = ov
+		}
+		prioritizedRules = append(prioritizedRules, ruleWithPriority{rule: rule, priority: p})
+	}
+
+	// Sort by priority descending
+	sort.Slice(prioritizedRules, func(i, j int) bool {
+		return prioritizedRules[i].priority > prioritizedRules[j].priority
+	})
+
+	for _, pr := range prioritizedRules {
+		pack.Items = append(pack.Items, &contracts.MemoryWriteItem{
+			MemoryId:   pr.rule.ID,
+			MemoryType: "behavioral_rule",
+			Content:    pr.rule.RuleContent,
+			Metadata: contracts.ToStruct(map[string]interface{}{
+				"action_type": string(pr.rule.ActionType),
+				"priority":    pr.priority,
+				"scope":       string(pr.rule.Scope),
+				"category":    pr.rule.Category,
+			}),
+		})
 	}
 
 	// Add MemoryItems

@@ -1,11 +1,12 @@
 package models
 
 import (
+	"app-builds/common/contracts"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
+	"app-builds/common/logging"
 )
 
 // ModelConfig defines model-specific strings and behavior for the GenericModel
@@ -24,16 +25,27 @@ type GenericModel struct {
 }
 
 // Plan decomposes a user query into specific search queries using the configured template
-func (m *GenericModel) Plan(ctx context.Context, prompt string) ([]string, interface{}, error) {
-	planningPrompt := fmt.Sprintf(m.Config.PlanningPromptTemplate, prompt)
-	planResult, metrics, err := m.ChatSingleTurn(ctx, planningPrompt)
+func (m *GenericModel) Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) ([]string, interface{}, error) {
+	var sb strings.Builder
+	if len(contexts) > 0 {
+		sb.WriteString("Use the following context to refine your search queries for the user query:\n\nContext:\n")
+		for _, c := range contexts {
+			sb.WriteString(fmt.Sprintf("- %v\n", c))
+		}
+		sb.WriteString("\n\n")
+	}
+	sb.WriteString(fmt.Sprintf(m.Config.PlanningPromptTemplate, prompt))
+	planningPrompt := sb.String()
+
+	messages := m.assembleMessages(planningPrompt, nil, history)
+	planResult, metrics, err := m.Client.Chat(messages)
 	if err != nil {
 		return nil, nil, fmt.Errorf("planning Chat failed: %w", err)
 	}
 
 	subQueries := ParseJSONArray(planResult)
 	if len(subQueries) == 0 {
-		log.Printf("Planner output did not contain a valid JSON array or was empty: %s", planResult)
+		logging.Printf("Planner output did not contain a valid JSON array or was empty: %s", planResult)
 		subQueries = []string{prompt}
 	}
 	return subQueries, metrics, nil
@@ -54,33 +66,62 @@ func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, context
 func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, history []interface{}) []map[string]string {
 	var messages []map[string]string
 
-	// 1. Add History
+	// 1. Add Behavioral Rules as System Messages
 	for _, h := range history {
-		hMap, ok := h.(map[string]interface{})
-		if !ok {
-			continue
+		content, memType, role := m.extractMemoryFields(h)
+		if memType == "behavioral_rule" && content != "" {
+			messages = append(messages, map[string]string{"role": "system", "content": content})
 		}
+		_ = role // Not used for rules
+	}
 
-		content, _ := hMap["content"].(string)
-		var role string
-		if meta, ok := hMap["metadata"].(map[string]interface{}); ok {
-			role, _ = meta["role"].(string)
-		}
-
-		if role != "" && content != "" {
+	// 2. Add Episodic History (Chat History)
+	for _, h := range history {
+		content, memType, role := m.extractMemoryFields(h)
+		if memType != "behavioral_rule" && role != "" && content != "" {
 			messages = append(messages, map[string]string{"role": role, "content": content})
 		}
 	}
 
-	// 2. Add current augmented prompt
-	augmentedPrompt := m.Config.ExecutionHeader
-	for _, c := range contexts {
-		augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
+	// 3. Add current augmented prompt
+	var augmentedPrompt string
+	if len(contexts) > 0 {
+		augmentedPrompt = m.Config.ExecutionHeader
+		for _, c := range contexts {
+			augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
+		}
+		augmentedPrompt += m.Config.ExecutionFooter + prompt + m.Config.ExecutionSuffix
+	} else {
+		augmentedPrompt = prompt
 	}
-	augmentedPrompt += m.Config.ExecutionFooter + prompt + m.Config.ExecutionSuffix
 
 	messages = append(messages, map[string]string{"role": "user", "content": augmentedPrompt})
 	return messages
+}
+
+func (m *GenericModel) extractMemoryFields(item interface{}) (content, memType, role string) {
+	// Handle *contracts.MemoryWriteItem
+	if it, ok := item.(*contracts.MemoryWriteItem); ok {
+		content = it.Content
+		memType = it.MemoryType
+		if it.Metadata != nil {
+			meta := contracts.FromStruct(it.Metadata)
+			role, _ = meta["role"].(string)
+		}
+		return
+	}
+
+	// Handle map[string]interface{} (from protojson unmarshal)
+	if hMap, ok := item.(map[string]interface{}); ok {
+		content, _ = hMap["content"].(string)
+		memType, _ = hMap["memory_type"].(string)
+		if meta, ok := hMap["metadata"].(map[string]interface{}); ok {
+			role, _ = meta["role"].(string)
+		}
+		return
+	}
+
+	return
 }
 
 // IsInsufficientContext checks if the model result indicates missing information based on configured phrases

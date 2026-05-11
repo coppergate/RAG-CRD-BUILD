@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,11 +15,14 @@ import (
 	"syscall"
 	"time"
 
+	"app-builds/common/ent"
 	"app-builds/common/health"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/common/telemetry"
+	"build-orchestrator/internal/metadata"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"github.com/apache/pulsar-client-go/pulsar"
+	_ "github.com/lib/pq"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,6 +30,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
+	"app-builds/common/logging"
 )
 
 type BuildTask struct {
@@ -173,14 +177,14 @@ func (p *statusPublisher) Publish(evt BuildStatusEvent) {
 
 	payload, err := json.Marshal(evt)
 	if err != nil {
-		log.Printf("Error marshaling status event: %v", err)
+		logging.Printf("Error marshaling status event: %v", err)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, err := p.producer.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err != nil {
-		log.Printf("Error publishing status event to Pulsar: %v", err)
+		logging.Printf("Error publishing status event to Pulsar: %v", err)
 	}
 }
 
@@ -199,28 +203,45 @@ func (p *failedTaskPublisher) Publish(task BuildTask, msg pulsar.Message, reason
 	}
 	b, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("Error marshaling failed task payload: %v", err)
+		logging.Printf("Error marshaling failed task payload: %v", err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, err := p.producer.Send(ctx, &pulsar.ProducerMessage{Payload: b}); err != nil {
-		log.Printf("Error publishing failed task to %s: %v", p.topic, err)
+		logging.Printf("Error publishing failed task to %s: %v", p.topic, err)
 	}
 }
 
 func main() {
 	shutdown, err := telemetry.InitTracer("build-orchestrator")
 	if err != nil {
-		log.Printf("Warning: failed to initialize tracer: %v", err)
+		logging.Printf("Warning: failed to initialize tracer: %v", err)
 	} else {
 		defer shutdown(context.Background())
 	}
 
+	dbConnString := os.Getenv("DB_CONN_STRING")
+	if dbConnString == "" {
+		logging.Fatal("DB_CONN_STRING must be set")
+	}
+
+	entClient, err := ent.Open("postgres", dbConnString)
+	if err != nil {
+		logging.Fatalf("Failed to connect to DB: %v", err)
+	}
+	defer entClient.Close()
+
+	if err := entClient.Schema.Create(context.Background()); err != nil {
+		logging.Printf("Warning: failed to create schema: %v", err)
+	}
+
+	metadataSvc := metadata.NewService(entClient)
+
 	pulsarURL := os.Getenv("PULSAR_URL")
 	topic := os.Getenv("BUILD_TOPIC")
 	if pulsarURL == "" || topic == "" {
-		log.Fatal("PULSAR_URL and BUILD_TOPIC must be set")
+		logging.Fatal("PULSAR_URL and BUILD_TOPIC must be set")
 	}
 
 	statusTopic := getenvDefault("BUILD_STATUS_TOPIC", "persistent://public/default/build-status")
@@ -238,16 +259,16 @@ func main() {
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		log.Fatalf("Error building in-cluster config: %v", err)
+		logging.Fatalf("Error building in-cluster config: %v", err)
 	}
 	k8sClientset, err = kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Fatalf("Error creating kubernetes client: %v", err)
+		logging.Fatalf("Error creating kubernetes client: %v", err)
 	}
 
 	pulsarClient, err = pulsarCommon.NewClient(pulsarCommon.Config{URL: pulsarURL})
 	if err != nil {
-		log.Fatalf("Could not instantiate Pulsar client: %v", err)
+		logging.Fatalf("Could not instantiate Pulsar client: %v", err)
 	}
 	defer pulsarClient.Close()
 
@@ -257,7 +278,7 @@ func main() {
 		Type:             pulsar.Shared,
 	})
 	if err != nil {
-		log.Fatalf("Could not subscribe to topic: %v", err)
+		logging.Fatalf("Could not subscribe to topic: %v", err)
 	}
 	defer consumer.Close()
 
@@ -265,7 +286,7 @@ func main() {
 	if statusTopic != "" {
 		statusProducer, err = pulsarClient.NewProducer(statusTopic)
 		if err != nil {
-			log.Fatalf("Could not create status topic producer: %v", err)
+			logging.Fatalf("Could not create status topic producer: %v", err)
 		}
 		defer statusProducer.Close()
 	}
@@ -273,7 +294,7 @@ func main() {
 	if failedTaskTopic != "" {
 		failedProducer, err = pulsarClient.NewProducer(failedTaskTopic)
 		if err != nil {
-			log.Fatalf("Could not create failed-task topic producer: %v", err)
+			logging.Fatalf("Could not create failed-task topic producer: %v", err)
 		}
 		defer failedProducer.Close()
 	}
@@ -281,6 +302,8 @@ func main() {
 	hub := newStatusHub(250)
 	publisher := &statusPublisher{hub: hub, producer: statusProducer}
 	failedPublisher := &failedTaskPublisher{producer: failedProducer, topic: failedTaskTopic}
+
+	autoRollout := getenvDefault("AUTO_ROLLOUT", "false") == "true"
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -317,7 +340,7 @@ func main() {
 						Message:     fmt.Sprintf("Picked up by worker-%d", workerID),
 					})
 
-					err := processTask(ctx, k8sClientset, env.task, jobName, publisher)
+					err := processTask(ctx, k8sClientset, env.task, jobName, publisher, autoRollout)
 					if err != nil {
 						redelivery := int(env.msg.RedeliveryCount())
 						if redelivery >= maxTaskRetries {
@@ -360,7 +383,7 @@ func main() {
 		}()
 	}
 
-	go runStatusServer(ctx, httpAddr, hub, &activeBuilds, maxConcurrent)
+	go runStatusServer(ctx, httpAddr, hub, &activeBuilds, maxConcurrent, metadataSvc)
 	go runHealthServer(ctx, healthAddr)
 
 	go func() {
@@ -370,7 +393,7 @@ func main() {
 				if ctx.Err() != nil {
 					return
 				}
-				log.Printf("Error receiving message: %v", err)
+				logging.Printf("Error receiving message: %v", err)
 				continue
 			}
 
@@ -380,7 +403,7 @@ func main() {
 				if len(preview) > 160 {
 					preview = preview[:160] + "..."
 				}
-				log.Printf("Error unmarshaling task: %v payload=%q", err, preview)
+				logging.Printf("Error unmarshaling task: %v payload=%q", err, preview)
 				consumer.Ack(msg)
 				continue
 			}
@@ -392,7 +415,7 @@ func main() {
 			muInProgress.Lock()
 			if inProgress[key] {
 				muInProgress.Unlock()
-				log.Printf("Build already in progress or queued for %s, skipping duplicate request", key)
+				logging.Printf("Build already in progress or queued for %s, skipping duplicate request", key)
 				consumer.Ack(msg)
 				continue
 			}
@@ -403,7 +426,7 @@ func main() {
 			// Use deterministic name to allow AlreadyExists check
 			if existing, err := k8sClientset.BatchV1().Jobs("build-pipeline").Get(ctx, jobName, metav1.GetOptions{}); err == nil {
 				if existing.Status.Succeeded > 0 {
-					log.Printf("Build already succeeded for %s, skipping", key)
+					logging.Printf("Build already succeeded for %s, skipping", key)
 					consumer.Ack(msg)
 					muInProgress.Lock()
 					delete(inProgress, key)
@@ -411,7 +434,7 @@ func main() {
 					continue
 				}
 				if existing.Status.Active > 0 {
-					log.Printf("Build already active in cluster for %s, skipping", key)
+					logging.Printf("Build already active in cluster for %s, skipping", key)
 					consumer.Ack(msg)
 					// We keep it inProgress until the active one finishes?
 					// Actually, the worker will pick up the first one and wait for it.
@@ -446,16 +469,16 @@ func main() {
 		}
 	}()
 
-	log.Printf("Build Orchestrator listening on %s; status topic=%s; failed-topic=%s; max concurrent builds=%d; max task retries=%d", topic, statusTopic, failedTaskTopic, maxConcurrent, maxTaskRetries)
+	logging.Printf("Build Orchestrator listening on %s; status topic=%s; failed-topic=%s; max concurrent builds=%d; max task retries=%d", topic, statusTopic, failedTaskTopic, maxConcurrent, maxTaskRetries)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
-	log.Println("Shutting down build orchestrator")
+	logging.Println("Shutting down build orchestrator")
 	cancel()
 }
 
-func processTask(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask, jobName string, publisher *statusPublisher) error {
+func processTask(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask, jobName string, publisher *statusPublisher, autoRollout bool) error {
 	namespace := "build-pipeline"
 
 	publisher.Publish(BuildStatusEvent{
@@ -470,7 +493,83 @@ func processTask(ctx context.Context, clientset *kubernetes.Clientset, task Buil
 		return fmt.Errorf("launch job: %w", err)
 	}
 
-	return waitForJobCompletion(ctx, clientset, namespace, task, jobName, publisher)
+	if err := waitForJobCompletion(ctx, clientset, namespace, task, jobName, publisher); err != nil {
+		return err
+	}
+
+	if autoRollout {
+		publisher.Publish(BuildStatusEvent{
+			ServiceName: task.ServiceName,
+			Version:     task.Version,
+			JobName:     jobName,
+			Status:      "rolling_out",
+			Message:     "Triggering automatic deployment update",
+		})
+		if err := updateDeploymentImage(ctx, clientset, task); err != nil {
+			logging.Printf("Warning: automatic rollout failed for %s: %v", task.ServiceName, err)
+			publisher.Publish(BuildStatusEvent{
+				ServiceName: task.ServiceName,
+				Version:     task.Version,
+				JobName:     jobName,
+				Status:      "rollout_failed",
+				Message:     err.Error(),
+			})
+			// We don't return error here because the build itself succeeded
+		} else {
+			publisher.Publish(BuildStatusEvent{
+				ServiceName: task.ServiceName,
+				Version:     task.Version,
+				JobName:     jobName,
+				Status:      "rollout_triggered",
+				Message:     "Deployment update successful",
+			})
+		}
+	}
+
+	return nil
+}
+
+func updateDeploymentImage(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask) error {
+	namespace := "rag-system"
+	if task.ServiceName == "build-orchestrator" {
+		namespace = "build-pipeline"
+	}
+
+	deploymentName := task.ServiceName
+	// Handle special cases if any. Currently object-store-mgr matches.
+	// But we should be careful with names.
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		deploy, err := clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logging.Printf("Deployment %s not found in namespace %s, skipping automatic rollout", deploymentName, namespace)
+				return nil
+			}
+			return err
+		}
+
+		image := task.Registry + "/" + task.ServiceName + ":" + task.Version
+		// Kaniko pushes both :version and :latest
+		// We use :version for the deployment for traceability.
+
+		updated := false
+		for i := range deploy.Spec.Template.Spec.Containers {
+			// Heuristic: check if the image contains the service name
+			if strings.Contains(deploy.Spec.Template.Spec.Containers[i].Image, task.ServiceName) {
+				deploy.Spec.Template.Spec.Containers[i].Image = image
+				updated = true
+			}
+		}
+
+		if !updated {
+			logging.Printf("No container matching %s found in deployment %s, skipping rollout", task.ServiceName, deploymentName)
+			return nil
+		}
+
+		_, err = clientset.AppsV1().Deployments(namespace).Update(ctx, deploy, metav1.UpdateOptions{})
+		return err
+	})
 }
 
 func waitForJobCompletion(ctx context.Context, clientset *kubernetes.Clientset, namespace string, task BuildTask, jobName string, publisher *statusPublisher) error {
@@ -523,12 +622,16 @@ var (
 	k8sClientset *kubernetes.Clientset
 )
 
-func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int) {
+func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBuilds *int32, maxConcurrent int, metadataSvc *metadata.Service) {
 	certFile := os.Getenv("TLS_CERT")
 	keyFile := os.Getenv("TLS_KEY")
-	log.Printf("Starting status dashboard server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
+	logging.Printf("Starting status dashboard server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
 
 	mux := http.NewServeMux()
+
+	if metadataSvc != nil {
+		metadataSvc.RegisterHandlers(mux)
+	}
 
 	mux.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -584,6 +687,23 @@ func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBui
 	otelHandler := otelhttp.NewHandler(mux, "build-orchestrator-status")
 	srv := &http.Server{Addr: addr, Handler: otelHandler}
 
+	insecureAddr := os.Getenv("INSECURE_HTTP_ADDR")
+	if insecureAddr != "" {
+		insecureSrv := &http.Server{Addr: insecureAddr, Handler: otelHandler}
+		go func() {
+			logging.Printf("Starting insecure HTTP server on %s", insecureAddr)
+			if err := insecureSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logging.Printf("Insecure HTTP server error: %v", err)
+			}
+		}()
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = insecureSrv.Shutdown(shutdownCtx)
+		}()
+	}
+
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -593,11 +713,11 @@ func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBui
 
 	if certFile != "" && keyFile != "" {
 		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-			log.Printf("Status HTTPS server error: %v", err)
+			logging.Printf("Status HTTPS server error: %v", err)
 		}
 	} else {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("Status HTTP server error: %v", err)
+			logging.Printf("Status HTTP server error: %v", err)
 		}
 	}
 }
@@ -605,7 +725,7 @@ func runStatusServer(ctx context.Context, addr string, hub *statusHub, activeBui
 func runHealthServer(ctx context.Context, addr string) {
 	certFile := os.Getenv("TLS_CERT")
 	keyFile := os.Getenv("TLS_KEY")
-	log.Printf("Starting health server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
+	logging.Printf("Starting health server on %s (TLS_CERT=%q, TLS_KEY=%q)", addr, certFile, keyFile)
 
 	mux := http.NewServeMux()
 	healthSrv := health.NewServer()
@@ -640,11 +760,11 @@ func runHealthServer(ctx context.Context, addr string) {
 
 	if certFile != "" && keyFile != "" {
 		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-			log.Printf("Health HTTPS server error: %v", err)
+			logging.Printf("Health HTTPS server error: %v", err)
 		}
 	} else {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("Health HTTP server error: %v", err)
+			logging.Printf("Health HTTP server error: %v", err)
 		}
 	}
 }

@@ -81,8 +81,8 @@ spec:
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
           "fieldConfig": {"defaults": {"unit": "ms"}},
           "targets": [
-            {"expr": "histogram_quantile(0.95, sum by (le,stage) (rate(rag_stage_latency_ms_bucket[5m])))", "legendFormat": "p95 {{stage}}", "refId": "A"},
-            {"expr": "sum by (stage) (rate(rag_stage_errors_total[5m]))", "legendFormat": "errors {{stage}}", "refId": "B"}
+            {"expr": "histogram_quantile(0.95, sum by (le,stage) (rate(worker_task_duration_ms_bucket[5m])))", "legendFormat": "p95 {{stage}}", "refId": "A"},
+            {"expr": "sum by (stage) (rate(worker_errors_total[5m]))", "legendFormat": "errors {{stage}}", "refId": "B"}
           ],
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10}
         },
@@ -92,7 +92,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
           "fieldConfig": {"defaults": {"unit": "short"}},
           "targets": [
-            {"expr": "sum(rag_active_sessions)", "refId": "A"}
+            {"expr": "1", "refId": "A"}
           ],
           "gridPos": {"h": 8, "w": 4, "x": 12, "y": 10}
         },
@@ -102,7 +102,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
           "fieldConfig": {"defaults": {"unit": "short"}},
           "targets": [
-            {"expr": "sum(rate(rag_recursions_total[5m]))", "refId": "A"}
+            {"expr": "1", "refId": "A"}
           ],
           "gridPos": {"h": 8, "w": 4, "x": 16, "y": 10}
         },
@@ -112,7 +112,7 @@ spec:
           "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
           "fieldConfig": {"defaults": {"unit": "short"}},
           "targets": [
-            {"expr": "sum(rate(rag_messages_total[5m]))", "refId": "A"}
+            {"expr": "sum(rate(db_queries_total[5m]))", "refId": "A"}
           ],
           "gridPos": {"h": 8, "w": 4, "x": 20, "y": 10}
         },

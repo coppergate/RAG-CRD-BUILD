@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"app-builds/common/health"
+	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 	"app-builds/rag-admin-api/internal/config"
 	"app-builds/rag-admin-api/internal/handlers"
@@ -23,7 +24,7 @@ func main() {
 
 	shutdown, err := telemetry.InitTracer("rag-admin-api")
 	if err != nil {
-		log.Printf("Warning: failed to initialize tracer: %v", err)
+		logging.Warn("failed to initialize tracer", "error", err)
 	} else {
 		defer shutdown(context.Background())
 	}
@@ -47,6 +48,9 @@ func main() {
 	// Memory Controller Proxy
 	mux.HandleFunc("/api/memory/", h.ProxyTo(cfg.MemoryControllerURL, "/api/memory"))
 	
+	// Behavioral Rule Management Proxy (Iteration 9)
+	mux.HandleFunc("/api/behavior/", h.ProxyTo(cfg.MemoryControllerURL, "/api/behavior"))
+	
 	// LLM Gateway Proxy (for chat and streaming)
 	mux.HandleFunc("/api/chat/", h.ProxyTo(cfg.LLMGatewayURL, "/api/chat"))
 	
@@ -65,7 +69,16 @@ func main() {
 	// Simple CORS Middleware
 	corsHandler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			// Restricted CORS when auth is active
+			origin := r.Header.Get("Origin")
+			if origin == "https://rag-admin-api.rag.hierocracy.home" || 
+			   origin == "https://rag-explorer.rag.hierocracy.home" ||
+			   os.Getenv("ADMIN_API_KEY") == "" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			} else {
+				w.Header().Set("Access-Control-Allow-Origin", "https://rag-admin-api.rag.hierocracy.home")
+			}
+			
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 			
@@ -78,7 +91,29 @@ func main() {
 		})
 	}
 
-	otelHandler := otelhttp.NewHandler(corsHandler(mux), "rag-admin-api")
+	apiKey := os.Getenv("ADMIN_API_KEY")
+	authMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Health and metrics endpoints bypass auth
+			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/health" || r.URL.Path == "/metrics" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if apiKey != "" {
+				token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+				if token != apiKey {
+					// Also check if it was passed without Bearer prefix
+					if r.Header.Get("Authorization") != apiKey {
+						http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+						return
+					}
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	otelHandler := otelhttp.NewHandler(corsHandler(authMiddleware(mux)), "rag-admin-api")
 
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,
@@ -87,14 +122,16 @@ func main() {
 
 	go func() {
 		if cfg.TLSCert != "" && cfg.TLSKey != "" {
-			log.Printf("Starting RAG Admin API with TLS on %s", cfg.ListenAddr)
+			logging.Info("starting RAG Admin API with TLS", "addr", cfg.ListenAddr)
 			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Listen error: %v", err)
+				logging.Error("listen error", "error", err)
+				os.Exit(1)
 			}
 		} else {
-			log.Printf("Starting RAG Admin API on %s", cfg.ListenAddr)
+			logging.Info("starting RAG Admin API", "addr", cfg.ListenAddr)
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Listen error: %v", err)
+				logging.Error("listen error", "error", err)
+				os.Exit(1)
 			}
 		}
 	}()
@@ -103,7 +140,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	log.Println("Shutting down admin-api...")
+	logging.Info("shutting down admin-api")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	server.Shutdown(ctx)

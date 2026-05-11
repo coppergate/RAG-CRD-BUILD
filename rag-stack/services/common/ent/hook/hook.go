@@ -8,6 +8,90 @@ import (
 	"fmt"
 )
 
+// The ActionIdentifierFunc type is an adapter to allow the use of ordinary
+// function as ActionIdentifier mutator.
+type ActionIdentifierFunc func(context.Context, *ent.ActionIdentifierMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActionIdentifierFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActionIdentifierMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActionIdentifierMutation", m)
+}
+
+// The ActionTypeFunc type is an adapter to allow the use of ordinary
+// function as ActionType mutator.
+type ActionTypeFunc func(context.Context, *ent.ActionTypeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActionTypeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActionTypeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActionTypeMutation", m)
+}
+
+// The BehavioralLogFunc type is an adapter to allow the use of ordinary
+// function as BehavioralLog mutator.
+type BehavioralLogFunc func(context.Context, *ent.BehavioralLogMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BehavioralLogFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BehavioralLogMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BehavioralLogMutation", m)
+}
+
+// The BehavioralRuleFunc type is an adapter to allow the use of ordinary
+// function as BehavioralRule mutator.
+type BehavioralRuleFunc func(context.Context, *ent.BehavioralRuleMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BehavioralRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BehavioralRuleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BehavioralRuleMutation", m)
+}
+
+// The BuildJournalFunc type is an adapter to allow the use of ordinary
+// function as BuildJournal mutator.
+type BuildJournalFunc func(context.Context, *ent.BuildJournalMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BuildJournalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BuildJournalMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BuildJournalMutation", m)
+}
+
+// The BuildLockFunc type is an adapter to allow the use of ordinary
+// function as BuildLock mutator.
+type BuildLockFunc func(context.Context, *ent.BuildLockMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BuildLockFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BuildLockMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BuildLockMutation", m)
+}
+
+// The BuildVersionFunc type is an adapter to allow the use of ordinary
+// function as BuildVersion mutator.
+type BuildVersionFunc func(context.Context, *ent.BuildVersionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f BuildVersionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.BuildVersionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.BuildVersionMutation", m)
+}
+
 // The CodeEmbeddingFunc type is an adapter to allow the use of ordinary
 // function as CodeEmbedding mutator.
 type CodeEmbeddingFunc func(context.Context, *ent.CodeEmbeddingMutation) (ent.Value, error)
@@ -150,6 +234,18 @@ func (f SessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionMutation", m)
+}
+
+// The SessionGovernanceFunc type is an adapter to allow the use of ordinary
+// function as SessionGovernance mutator.
+type SessionGovernanceFunc func(context.Context, *ent.SessionGovernanceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SessionGovernanceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SessionGovernanceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SessionGovernanceMutation", m)
 }
 
 // The TagFunc type is an adapter to allow the use of ordinary

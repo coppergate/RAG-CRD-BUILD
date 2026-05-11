@@ -576,30 +576,6 @@ func (u *ModelExecutionMetricUpsert) ClearCompletionTokens() *ModelExecutionMetr
 	return u
 }
 
-// SetTotalTokens sets the "total_tokens" field.
-func (u *ModelExecutionMetricUpsert) SetTotalTokens(v int) *ModelExecutionMetricUpsert {
-	u.Set(modelexecutionmetric.FieldTotalTokens, v)
-	return u
-}
-
-// UpdateTotalTokens sets the "total_tokens" field to the value that was provided on create.
-func (u *ModelExecutionMetricUpsert) UpdateTotalTokens() *ModelExecutionMetricUpsert {
-	u.SetExcluded(modelexecutionmetric.FieldTotalTokens)
-	return u
-}
-
-// AddTotalTokens adds v to the "total_tokens" field.
-func (u *ModelExecutionMetricUpsert) AddTotalTokens(v int) *ModelExecutionMetricUpsert {
-	u.Add(modelexecutionmetric.FieldTotalTokens, v)
-	return u
-}
-
-// ClearTotalTokens clears the value of the "total_tokens" field.
-func (u *ModelExecutionMetricUpsert) ClearTotalTokens() *ModelExecutionMetricUpsert {
-	u.SetNull(modelexecutionmetric.FieldTotalTokens)
-	return u
-}
-
 // SetTotalDurationUsec sets the "total_duration_usec" field.
 func (u *ModelExecutionMetricUpsert) SetTotalDurationUsec(v int64) *ModelExecutionMetricUpsert {
 	u.Set(modelexecutionmetric.FieldTotalDurationUsec, v)
@@ -736,6 +712,9 @@ func (u *ModelExecutionMetricUpsertOne) UpdateNewValues() *ModelExecutionMetricU
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		if _, exists := u.create.mutation.ID(); exists {
 			s.SetIgnore(modelexecutionmetric.FieldID)
+		}
+		if _, exists := u.create.mutation.TotalTokens(); exists {
+			s.SetIgnore(modelexecutionmetric.FieldTotalTokens)
 		}
 		if _, exists := u.create.mutation.CreatedAt(); exists {
 			s.SetIgnore(modelexecutionmetric.FieldCreatedAt)
@@ -915,34 +894,6 @@ func (u *ModelExecutionMetricUpsertOne) UpdateCompletionTokens() *ModelExecution
 func (u *ModelExecutionMetricUpsertOne) ClearCompletionTokens() *ModelExecutionMetricUpsertOne {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.ClearCompletionTokens()
-	})
-}
-
-// SetTotalTokens sets the "total_tokens" field.
-func (u *ModelExecutionMetricUpsertOne) SetTotalTokens(v int) *ModelExecutionMetricUpsertOne {
-	return u.Update(func(s *ModelExecutionMetricUpsert) {
-		s.SetTotalTokens(v)
-	})
-}
-
-// AddTotalTokens adds v to the "total_tokens" field.
-func (u *ModelExecutionMetricUpsertOne) AddTotalTokens(v int) *ModelExecutionMetricUpsertOne {
-	return u.Update(func(s *ModelExecutionMetricUpsert) {
-		s.AddTotalTokens(v)
-	})
-}
-
-// UpdateTotalTokens sets the "total_tokens" field to the value that was provided on create.
-func (u *ModelExecutionMetricUpsertOne) UpdateTotalTokens() *ModelExecutionMetricUpsertOne {
-	return u.Update(func(s *ModelExecutionMetricUpsert) {
-		s.UpdateTotalTokens()
-	})
-}
-
-// ClearTotalTokens clears the value of the "total_tokens" field.
-func (u *ModelExecutionMetricUpsertOne) ClearTotalTokens() *ModelExecutionMetricUpsertOne {
-	return u.Update(func(s *ModelExecutionMetricUpsert) {
-		s.ClearTotalTokens()
 	})
 }
 
@@ -1268,6 +1219,9 @@ func (u *ModelExecutionMetricUpsertBulk) UpdateNewValues() *ModelExecutionMetric
 			if _, exists := b.mutation.ID(); exists {
 				s.SetIgnore(modelexecutionmetric.FieldID)
 			}
+			if _, exists := b.mutation.TotalTokens(); exists {
+				s.SetIgnore(modelexecutionmetric.FieldTotalTokens)
+			}
 			if _, exists := b.mutation.CreatedAt(); exists {
 				s.SetIgnore(modelexecutionmetric.FieldCreatedAt)
 			}
@@ -1447,34 +1401,6 @@ func (u *ModelExecutionMetricUpsertBulk) UpdateCompletionTokens() *ModelExecutio
 func (u *ModelExecutionMetricUpsertBulk) ClearCompletionTokens() *ModelExecutionMetricUpsertBulk {
 	return u.Update(func(s *ModelExecutionMetricUpsert) {
 		s.ClearCompletionTokens()
-	})
-}
-
-// SetTotalTokens sets the "total_tokens" field.
-func (u *ModelExecutionMetricUpsertBulk) SetTotalTokens(v int) *ModelExecutionMetricUpsertBulk {
-	return u.Update(func(s *ModelExecutionMetricUpsert) {
-		s.SetTotalTokens(v)
-	})
-}
-
-// AddTotalTokens adds v to the "total_tokens" field.
-func (u *ModelExecutionMetricUpsertBulk) AddTotalTokens(v int) *ModelExecutionMetricUpsertBulk {
-	return u.Update(func(s *ModelExecutionMetricUpsert) {
-		s.AddTotalTokens(v)
-	})
-}
-
-// UpdateTotalTokens sets the "total_tokens" field to the value that was provided on create.
-func (u *ModelExecutionMetricUpsertBulk) UpdateTotalTokens() *ModelExecutionMetricUpsertBulk {
-	return u.Update(func(s *ModelExecutionMetricUpsert) {
-		s.UpdateTotalTokens()
-	})
-}
-
-// ClearTotalTokens clears the value of the "total_tokens" field.
-func (u *ModelExecutionMetricUpsertBulk) ClearTotalTokens() *ModelExecutionMetricUpsertBulk {
-	return u.Update(func(s *ModelExecutionMetricUpsert) {
-		s.ClearTotalTokens()
 	})
 }
 

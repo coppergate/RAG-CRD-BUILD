@@ -1,80 +1,88 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import '../../core/api_client.dart';
-import '../../core/models/metrics.dart';
-import '../../core/models/tag.dart';
-import '../../core/models/session.dart';
-import '../../app_config_provider.dart';
+import 's3_notifier.dart';
+import 'widgets/file_list.dart';
+import 'widgets/s3_filter_bar.dart';
 
-class S3Page extends ConsumerStatefulWidget {
+class S3Page extends ConsumerWidget {
   const S3Page({super.key});
 
   @override
-  ConsumerState<S3Page> createState() => _S3PageState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s3Async = ref.watch(s3NotifierProvider);
+    final notifier = ref.read(s3NotifierProvider.notifier);
 
-class _S3PageState extends ConsumerState<S3Page> {
-  late Future<List<VirtualFile>> _filesFuture;
-  final List<Tag> _selectedTags = [];
-  Session? _selectedSession;
-  late Future<List<Tag>> _tagsFuture;
-  late Future<List<Session>> _sessionsFuture;
-  final Set<String> _selectedFiles = {};
-  List<VirtualFile> _cachedFiles = [];
-  int? _lastSelectedIndex;
-  bool _isDeleting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _refresh();
-    
-    // Check for tag filter in query params after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final tagFilter = GoRouterState.of(context).uri.queryParameters['tag'];
-        if (tagFilter != null) {
-          _applyTagFilter(tagFilter);
-        }
-      }
-    });
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('S3 Browser'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => notifier.refresh(),
+          ),
+          if (s3Async.value?.selectedFilePaths.isNotEmpty ?? false)
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _confirmDelete(context, notifier, s3Async.value!.selectedFilePaths.length),
+            ),
+        ],
+      ),
+      body: s3Async.when(
+        data: (state) => Column(
+          children: [
+            S3FilterBar(
+              availableTags: state.availableTags,
+              selectedTags: state.selectedTags,
+              availableSessions: state.availableSessions,
+              selectedSession: state.selectedSession,
+              onTagsChanged: (tags) => notifier.setTags(tags),
+              onSessionChanged: (sess) => notifier.setSession(sess),
+            ),
+            const Divider(height: 1),
+            if (state.selectedFilePaths.isNotEmpty)
+              _buildSelectionActions(state, notifier),
+            Expanded(
+              child: state.isLoading 
+                ? const Center(child: CircularProgressIndicator())
+                : FileList(
+                    files: state.files,
+                    selectedPaths: state.selectedFilePaths,
+                    onToggle: (path) => notifier.toggleFileSelection(path),
+                  ),
+            ),
+          ],
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Error: $err')),
+      ),
+    );
   }
 
-  void _applyTagFilter(String tagName) async {
-    try {
-      final tags = await _tagsFuture;
-      final tag = tags.firstWhere((t) => t.name == tagName);
-      if (!_selectedTags.contains(tag)) {
-        setState(() {
-          _selectedTags.clear();
-          _selectedTags.add(tag);
-          _filesFuture = _fetchFiles();
-        });
-      }
-    } catch (_) {
-      // Tag not found or error fetching
-    }
+  Widget _buildSelectionActions(S3State state, S3Notifier notifier) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.blue.shade50,
+      child: Row(
+        children: [
+          Text('${state.selectedFilePaths.length} files selected'),
+          const Spacer(),
+          TextButton(onPressed: () => notifier.clearSelection(), child: const Text('Clear')),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () => notifier.selectAll(state.files),
+            child: const Text('Select All'),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _refresh() {
-    setState(() {
-      _filesFuture = _fetchFiles();
-      _tagsFuture = _fetchTags();
-      _sessionsFuture = _fetchSessions();
-      _selectedFiles.clear();
-    });
-  }
-
-  Future<void> _deleteSelectedFiles() async {
-    if (_selectedFiles.isEmpty) return;
-
+  void _confirmDelete(BuildContext context, S3Notifier notifier, int count) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirm Delete'),
-        content: Text('Are you sure you want to delete ${_selectedFiles.length} objects from S3?'),
+        content: Text('Are you sure you want to delete $count objects from S3?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
@@ -86,442 +94,8 @@ class _S3PageState extends ConsumerState<S3Page> {
       ),
     );
 
-    if (confirmed != true) return;
-
-    setState(() => _isDeleting = true);
-
-    try {
-      final config = ref.read(appConfigProvider);
-      final client = ApiClient(config);
-      
-      final files = await _filesFuture;
-      for (final path in _selectedFiles) {
-        final file = files.firstWhere((f) => f.path == path);
-        await client.delete('${config.ragAdminApiUrl}/api/s3/buckets/${file.bucket}/${file.path}');
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Successfully deleted ${_selectedFiles.length} objects')),
-      );
-      _refresh();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting objects: $e'), backgroundColor: Colors.red),
-      );
-    } finally {
-      setState(() => _isDeleting = false);
+    if (confirmed == true) {
+      notifier.deleteSelected();
     }
-  }
-
-  Future<void> _viewFileContent(VirtualFile file) async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(file.path, style: const TextStyle(fontSize: 14)),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: FutureBuilder<String>(
-            future: _fetchFileContent(file),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-              return SingleChildScrollView(
-                child: SelectableText(
-                  snapshot.data ?? 'No content',
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                ),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-        ],
-      ),
-    );
-  }
-
-  Future<String> _fetchFileContent(VirtualFile file) async {
-    final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
-    final response = await client.get('${config.ragAdminApiUrl}/api/s3/buckets/${file.bucket}/${file.path}');
-    if (response.data is String) return response.data;
-    return response.data.toString();
-  }
-
-  Future<List<CodeVector>> _fetchFileVectors(String path) async {
-    final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
-    final response = await client.get('${config.ragAdminApiUrl}/api/db/storage/vectors?path=${Uri.encodeComponent(path)}');
-    if (response.data == null) return [];
-    return (response.data as List).map((e) => CodeVector.fromJson(e)).toList();
-  }
-
-  Future<void> _viewFileVectors(VirtualFile file) async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Associated Vectors: ${file.path}', style: const TextStyle(fontSize: 14)),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 500,
-          child: FutureBuilder<List<CodeVector>>(
-            future: _fetchFileVectors(file.path),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-              final vectors = snapshot.data ?? [];
-              if (vectors.isEmpty) return const Center(child: Text('No vectors found associated with this file path.'));
-              
-              return ListView.builder(
-                itemCount: vectors.length,
-                itemBuilder: (context, index) {
-                  final v = vectors[index];
-                  final chunk = v.metadata?['chunk'] ?? 'N/A';
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Vector ID: ${v.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              Chip(label: Text('Chunk $chunk', style: const TextStyle(fontSize: 10))),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          if (v.tags.isNotEmpty)
-                            Wrap(
-                              spacing: 4,
-                              children: v.tags.map((t) => Chip(
-                                label: Text(t, style: const TextStyle(fontSize: 10)),
-                                padding: EdgeInsets.zero,
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              )).toList(),
-                            ),
-                          const SizedBox(height: 8),
-                          Text('Created: ${v.createdAt.toLocal().toString().split('.')[0]}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-        ],
-      ),
-    );
-  }
-
-  Future<List<VirtualFile>> _fetchFiles() async {
-    final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
-    Map<String, dynamic> queryParams = {};
-    if (_selectedTags.isNotEmpty) {
-      queryParams['tag_id'] = _selectedTags.map((t) => t.id).toList();
-    }
-    if (_selectedSession != null) queryParams['session_id'] = _selectedSession!.id;
-    
-    final response = await client.get('${config.ragAdminApiUrl}/api/db/storage/files', queryParameters: queryParams);
-    final data = response.data;
-    if (data == null) {
-      _cachedFiles = [];
-      return [];
-    }
-    final files = (data as List).map((e) => VirtualFile.fromJson(e)).toList();
-    _cachedFiles = files;
-    return files;
-  }
-
-  void _selectAll(bool select) {
-    setState(() {
-      if (select) {
-        for (var f in _cachedFiles) {
-          _selectedFiles.add(f.path);
-        }
-      } else {
-        _selectedFiles.clear();
-      }
-    });
-  }
-
-  Future<List<Tag>> _fetchTags() async {
-    final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
-    final response = await client.get('${config.ragAdminApiUrl}/api/db/tags');
-    return (response.data as List).map((e) => Tag.fromJson(e)).toList();
-  }
-
-  Future<List<Session>> _fetchSessions() async {
-    final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
-    final response = await client.get('${config.ragAdminApiUrl}/api/db/sessions');
-    return (response.data as List).map((e) => Session.fromJson(e)).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Virtual S3 Browser'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refresh,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilters(),
-          Expanded(
-            child: FutureBuilder<List<VirtualFile>>(
-              future: _filesFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                
-                final files = snapshot.data!;
-                if (files.isEmpty) {
-                  return const Center(child: Text('No files found for current filters.'));
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: files.length,
-                  separatorBuilder: (context, index) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final file = files[index];
-                    final isSelected = _selectedFiles.contains(file.path);
-                    
-                    return InkWell(
-                      onDoubleTap: () => _viewFileContent(file),
-                      child: ListTile(
-                        selected: isSelected,
-                        onTap: () {
-                          final keys = HardwareKeyboard.instance.logicalKeysPressed;
-                          final isShift = keys.contains(LogicalKeyboardKey.shiftLeft) || keys.contains(LogicalKeyboardKey.shiftRight);
-                          final isControl = keys.contains(LogicalKeyboardKey.controlLeft) || keys.contains(LogicalKeyboardKey.controlRight) ||
-                                            keys.contains(LogicalKeyboardKey.metaLeft) || keys.contains(LogicalKeyboardKey.metaRight);
-
-                          setState(() {
-                            if (isShift && _lastSelectedIndex != null) {
-                              final start = _lastSelectedIndex! < index ? _lastSelectedIndex! : index;
-                              final end = _lastSelectedIndex! < index ? index : _lastSelectedIndex!;
-                              for (int i = start; i <= end; i++) {
-                                _selectedFiles.add(files[i].path);
-                              }
-                            } else if (isControl) {
-                              if (_selectedFiles.contains(file.path)) {
-                                _selectedFiles.remove(file.path);
-                              } else {
-                                _selectedFiles.add(file.path);
-                              }
-                              _lastSelectedIndex = index;
-                            } else {
-                              _selectedFiles.clear();
-                              _selectedFiles.add(file.path);
-                              _lastSelectedIndex = index;
-                            }
-                          });
-                        },
-                        leading: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Checkbox(
-                              value: isSelected,
-                              onChanged: (val) {
-                                setState(() {
-                                  if (val == true) {
-                                    _selectedFiles.add(file.path);
-                                  } else {
-                                    _selectedFiles.remove(file.path);
-                                  }
-                                  _lastSelectedIndex = index;
-                                });
-                              },
-                            ),
-                            const Icon(Icons.insert_drive_file, color: Colors.blue),
-                          ],
-                        ),
-                        title: Text(file.path, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Bucket: ${file.bucket}'),
-                            Text('Created: ${file.createdAt.toLocal().toString().split('.')[0]}'),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 4,
-                              children: file.tags.map((t) => Chip(
-                                label: Text(t, style: TextStyle(fontSize: 10, color: isDark ? Colors.blue.shade200 : Colors.blue.shade900)),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                backgroundColor: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
-                                side: BorderSide.none,
-                              )).toList(),
-                            ),
-                          ],
-                        ),
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (val) {
-                            if (val == 'view') _viewFileContent(file);
-                            if (val == 'vectors') _viewFileVectors(file);
-                            if (val == 'delete') {
-                              setState(() => _selectedFiles.add(file.path));
-                              _deleteSelectedFiles();
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(value: 'view', child: Text('View Content')),
-                            const PopupMenuItem(value: 'vectors', child: Text('View Associated Vectors')),
-                            const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
-                          ],
-                          child: Chip(
-                            label: Text(file.status),
-                            backgroundColor: isDark ? Colors.green.shade900.withOpacity(0.3) : Colors.green.shade50,
-                            labelStyle: TextStyle(color: isDark ? Colors.green.shade300 : Colors.green, fontSize: 10),
-                            side: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilters() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
-        border: Border(bottom: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade300)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Filter by Tag (AND)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          FutureBuilder<List<Tag>>(
-            future: _tagsFuture,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox.shrink();
-              final tags = snapshot.data!;
-              return Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: tags.map((t) {
-                  final isSelected = _selectedTags.any((st) => st.id == t.id);
-                  return FilterChip(
-                    label: Text(t.name),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        if (selected) {
-                          _selectedTags.add(t);
-                        } else {
-                          _selectedTags.removeWhere((st) => st.id == t.id);
-                        }
-                        _filesFuture = _fetchFiles();
-                        _selectedFiles.clear();
-                      });
-                    },
-                    selectedColor: Colors.blue.withOpacity(0.2),
-                    checkmarkColor: Colors.blue,
-                  );
-                }).toList(),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: FutureBuilder<List<Session>>(
-                  future: _sessionsFuture,
-                  builder: (context, snapshot) {
-                    return DropdownButtonFormField<Session>(
-                      decoration: const InputDecoration(labelText: 'Filter by Session', border: OutlineInputBorder(), isDense: true),
-                      value: _selectedSession,
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('All Sessions')),
-                        ...?snapshot.data?.map((s) => DropdownMenuItem(value: s, child: Text('Session ${s.id}'))),
-                      ],
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedSession = val;
-                          _filesFuture = _fetchFiles();
-                          _selectedFiles.clear();
-                        });
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              SizedBox(
-                width: 32,
-                child: Checkbox(
-                  value: _cachedFiles.isNotEmpty && _selectedFiles.length == _cachedFiles.length,
-                  tristate: _selectedFiles.isNotEmpty && _selectedFiles.length < _cachedFiles.length,
-                  onChanged: (val) => _selectAll(val ?? false),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${_selectedFiles.length} items selected',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const Spacer(),
-              if (_selectedFiles.isNotEmpty) ...[
-                TextButton(
-                  onPressed: () => setState(() => _selectedFiles.clear()),
-                  child: const Text('Clear Selection'),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: _isDeleting ? null : _deleteSelectedFiles,
-                  icon: const Icon(Icons.delete, color: Colors.red, size: 18),
-                  label: const Text('Delete Selected', style: TextStyle(color: Colors.red)),
-                ),
-              ] else
-                const SizedBox(width: 150), // Placeholder to help center the count
-            ],
-          ),
-        ],
-      ),
-    );
   }
 }

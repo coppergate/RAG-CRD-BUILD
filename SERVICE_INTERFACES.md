@@ -1,6 +1,6 @@
 # RAG Stack Service Interfaces
 
-This document details the HTTP endpoints and Pulsar topics for all services in the RAG stack (v2.12.0).
+This document details the HTTP endpoints and Pulsar topics for all services in the RAG stack (v3.1.x).
 
 ## 1. LLM Gateway (`llm-gateway`)
 The entry point for all LLM and RAG requests. It provides an OpenAI-compatible API and handles session management.
@@ -24,9 +24,9 @@ The entry point for all LLM and RAG requests. It provides an OpenAI-compatible A
     - `tags`: (Array) List of tags to filter context.
     - `memory_mode`: (String) `off`, `session`, or `full`.
 - **GET `/v1/rag/chat/stream`** (Websocket)
-  - **Description**: Streaming chat over Websocket.
-- **GET `/healthz`, `/readyz`, `/health`**
-  - **Description**: Standard health and readiness probes.
+  - **Description**: Streaming chat over Websocket. Enforces `*.hierocracy.home` CORS origin.
+- **GET `/healthz`, `/readyz`, `/health`, `/metrics`**
+  - **Description**: Standard health, readiness, and Prometheus metrics endpoints.
 
 ### Pulsar Topics
 - **Publish**: `persistent://rag-pipeline/stage/ingress` (Request start)
@@ -47,10 +47,12 @@ Asynchronous persistence layer for database operations (TimescaleDB).
   - **Description**: List or create context tags.
 - **DELETE `/tags/{id}`**
   - **Description**: Delete a context tag.
-- **GET `/stats`**
-  - **Description**: Database statistics (counts for sessions, prompts, responses).
-- **GET `/healthz`, `/readyz`, `/health`**
-  - **Description**: Standard health and readiness probes.
+- **POST `/maintenance/tags/merge`**
+  - **Description**: Merge source tags into a target tag.
+- **GET `/stats`, `/metrics/summary`**
+  - **Description**: Database statistics and aggregated summary metrics.
+- **GET `/healthz`, `/readyz`, `/health`, `/metrics`**
+  - **Description**: Standard health, readiness, and Prometheus metrics endpoints.
 
 ### Pulsar Topics
 - **Subscribe**: `persistent://rag-pipeline/operations/db-ops` (Generic DB operations)
@@ -64,12 +66,19 @@ Asynchronous persistence layer for database operations (TimescaleDB).
 Interface for the Qdrant Vector Database, handling filtered searches and upserts.
 
 ### HTTP Endpoints
+- **POST `/search`**
+  - **Description**: Synchronous vector search.
+  - **Parameters**: `collection`, `vector`, `limit`, `filter`.
+- **POST `/upsert`**
+  - **Description**: Synchronous vector upsert.
+- **DELETE `/delete`**
+  - **Description**: Synchronous vector deletion.
 - **GET `/collections`**
   - **Description**: List all vector collections.
 - **GET `/collections/{name}`**
   - **Description**: Get details for a specific collection.
-- **GET `/healthz`, `/readyz`, `/health`**
-  - **Description**: Standard health and readiness probes.
+- **GET `/healthz`, `/readyz`, `/health`, `/metrics`**
+  - **Description**: Standard health, readiness, and Prometheus metrics endpoints.
 
 ### Pulsar Topics
 - **Subscribe**: `persistent://rag-pipeline/operations/qdrant-ops` (Search/Upsert operations)
@@ -79,6 +88,10 @@ Interface for the Qdrant Vector Database, handling filtered searches and upserts
 
 ## 4. RAG Worker (`rag-worker`)
 Core orchestration engine for the multi-stage RAG pipeline.
+
+### HTTP Endpoints
+- **GET `/healthz`, `/readyz`, `/metrics`**
+  - **Description**: Health/readiness probes and metrics server (Port 8080).
 
 ### Pulsar Topics
 - **Subscribe**: `persistent://rag-pipeline/stage/ingress`
@@ -105,8 +118,8 @@ Python service for document processing and embedding.
 - **POST `/ingest`**
   - **Description**: Process a file from S3 and generate embeddings.
   - **Parameters**: JSON payload with `bucket`, `key`, and `tags`.
-- **GET `/health`, `/healthz`, `/readyz`**
-  - **Description**: Health and readiness checks.
+- **GET `/healthz`, `/readyz`, `/health`, `/metrics`**
+  - **Description**: Health/readiness and metrics endpoints.
 
 ### Pulsar Topics
 - **Publish**: `persistent://rag-pipeline/operations/qdrant-ops` (Upsert embeddings)
@@ -128,15 +141,17 @@ Proxy and management interface for Rook-Ceph S3 storage.
 ---
 
 ## 7. Memory Controller (`memory-controller`)
-Management of structured memory items and session links for Titans/Miras-inspired memory.
+Management of structured memory items, session links, and behavioral rules.
 
 ### HTTP Endpoints
 - **GET/POST `/items`**
   - **Description**: List or create memory items.
+- **GET/POST `/behavioral-rules`**
+  - **Description**: List or create behavioral rules for the agent.
 - **GET `/sessions`**
   - **Description**: List sessions with associated memory items.
-- **GET `/healthz`, `/readyz`**
-  - **Description**: Standard health and readiness probes.
+- **GET `/healthz`, `/readyz`, `/metrics`**
+  - **Description**: Standard health, readiness, and Prometheus metrics endpoints.
 
 ### Pulsar Topics
 - **Subscribe**: `persistent://rag-pipeline/rag/memory/write` (MemoryWriteRequest)
@@ -148,10 +163,10 @@ Management of structured memory items and session links for Titans/Miras-inspire
 ---
 
 ## 8. Prompt Aggregator (`prompt-aggregator`)
-Aggregates streaming chunks into final responses.
+Aggregates streaming chunks into final responses. Uses optimized blocking Pulsar readers.
 
 ### HTTP Endpoints
-- **GET `/healthz`, `/readyz`**
+- **GET `/healthz`, `/readyz`, `/metrics`**
 
 ### Pulsar Topics
 - **Subscribe**: `persistent://rag-pipeline/stage/completion` (Completion signal)
@@ -161,11 +176,13 @@ Aggregates streaming chunks into final responses.
 ---
 
 ## 9. RAG Admin API (`rag-admin-api`)
-Management portal proxy and health aggregator.
+Management portal proxy and health aggregator. Enforces API Key auth via `Authorization: Bearer <key>`.
 
 ### HTTP Endpoints
 - **GET `/api/health/all`**
-  - **Description**: Aggregated health status of all RAG services.
+  - **Description**: Aggregated health status of all RAG services. (Auth bypass for health/metrics)
+- **GET `/metrics`**
+  - **Description**: Prometheus metrics endpoint.
 - **Proxies**:
   - `/api/s3/` -> `object-store-mgr`
   - `/api/db/` -> `db-adapter`

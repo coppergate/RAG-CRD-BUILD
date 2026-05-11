@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"strings"
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"app-builds/common/logging"
 	"app-builds/common/tlsutil"
 )
 
@@ -103,7 +104,7 @@ func SendProto(ctx context.Context, producer pulsar.Producer, payload proto.Mess
 		return nil, fmt.Errorf("failed to marshal proto payload: %w", err)
 	}
 
-	log.Printf("[PULSAR] Sending marshaled proto: %s", string(data))
+	logging.L.WithTrace(ctx).Info("sending marshaled proto", "payload_len", len(data))
 
 	msg := &pulsar.ProducerMessage{
 		Payload:    data,
@@ -121,12 +122,44 @@ func SendProto(ctx context.Context, producer pulsar.Producer, payload proto.Mess
 	return id, nil
 }
 
-// Ping checks if the client is healthy.
+const (
+	HealthTopic = "persistent://rag-pipeline/internal/health-ping"
+)
+
+// Ping checks if the client is healthy by checking topic partitions.
 func (c *Client) Ping() error {
 	if c.Client == nil {
 		return fmt.Errorf("pulsar client is nil")
 	}
-	// We can't easily check actual connectivity without sending a msg, 
-	// but we can at least verify it's initialized.
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// TopicPartitions is a lightweight call that requires broker connectivity.
+	partitions, err := c.Client.TopicPartitions(HealthTopic)
+	if err != nil {
+		// If topic doesn't exist, we try to create a producer briefly to ensure it exists for next time.
+		// Note: Most Pulsar setups auto-create topics.
+		if strings.Contains(err.Error(), "TopicNotFound") || strings.Contains(err.Error(), "not found") {
+			p, pErr := c.Client.CreateProducer(pulsar.ProducerOptions{
+				Topic: HealthTopic,
+			})
+			if pErr == nil {
+				p.Close()
+				return nil
+			}
+		}
+
+		// Only connection-level errors indicate a real failure.
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "connection refused") ||
+			strings.Contains(errMsg, "i/o timeout") ||
+			strings.Contains(errMsg, "no such host") ||
+			strings.Contains(errMsg, "Context deadline exceeded") {
+			return fmt.Errorf("pulsar broker unreachable: %w", err)
+		}
+	}
+	_ = partitions
+	_ = ctx
 	return nil
 }

@@ -4,11 +4,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+	"app-builds/common/logging"
 )
 
 // LoadCACertPool reads the CA certificate file specified by SSL_CERT_FILE
@@ -75,7 +75,7 @@ func PulsarTLSCertPath(pulsarURL string) string {
 	}
 	caFile := os.Getenv("SSL_CERT_FILE")
 	if caFile == "" {
-		log.Printf("WARNING: Pulsar URL uses TLS (%s) but SSL_CERT_FILE is not set", pulsarURL)
+		logging.Printf("WARNING: Pulsar URL uses TLS (%s) but SSL_CERT_FILE is not set", pulsarURL)
 	}
 	return caFile
 }
@@ -90,12 +90,12 @@ func IsInsecureAllowed() bool {
 // configured. Use this during service startup to enforce TLS.
 func RequireTLS(componentName string) {
 	if IsInsecureAllowed() {
-		log.Printf("WARNING: %s running in INSECURE mode (ALLOW_INSECURE=true)", componentName)
+		logging.Printf("WARNING: %s running in INSECURE mode (ALLOW_INSECURE=true)", componentName)
 		return
 	}
 	caFile := os.Getenv("SSL_CERT_FILE")
 	if caFile == "" {
-		log.Printf("WARNING: %s: SSL_CERT_FILE is not set. Set ALLOW_INSECURE=true to run without TLS.", componentName)
+		logging.Printf("WARNING: %s: SSL_CERT_FILE is not set. Set ALLOW_INSECURE=true to run without TLS.", componentName)
 	}
 }
 

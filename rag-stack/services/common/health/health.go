@@ -2,9 +2,11 @@ package health
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"sync"
+
+	"app-builds/common/logging"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // CheckFunc is a function that performs a health check and returns an error if unhealthy.
@@ -48,6 +50,9 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	// Readiness: checks all registered dependencies
 	mux.HandleFunc("/readyz", s.readyzHandler)
+
+	// Metrics: Prometheus pull endpoint
+	mux.Handle("/metrics", promhttp.Handler())
 }
 
 // Start launches the health server on the given address in a background goroutine.
@@ -57,9 +62,9 @@ func (s *Server) Start(addr string) {
 	s.RegisterRoutes(mux)
 
 	go func() {
-		log.Printf("Starting HTTP health server on %s", addr)
+		logging.L.Info("starting HTTP health server", "addr", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Printf("Health server stopped: %v", err)
+			logging.L.Error("health server stopped", "error", err)
 		}
 	}()
 }
@@ -70,9 +75,9 @@ func (s *Server) StartTLS(addr, certFile, keyFile string) {
 	s.RegisterRoutes(mux)
 
 	go func() {
-		log.Printf("Starting HTTPS health server on %s (cert=%s)", addr, certFile)
+		logging.L.Info("starting HTTPS health server", "addr", addr, "cert", certFile)
 		if err := http.ListenAndServeTLS(addr, certFile, keyFile, mux); err != nil {
-			log.Printf("Health server stopped: %v", err)
+			logging.L.Error("health server stopped", "error", err)
 		}
 	}()
 }
@@ -89,7 +94,7 @@ func (s *Server) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(errors) > 0 {
-		log.Printf("Health checks failed: %v", errors)
+		logging.L.Warn("readiness checks failed", "errors", errors)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(map[string]interface{}{

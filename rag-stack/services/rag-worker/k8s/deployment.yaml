@@ -15,6 +15,7 @@ spec:
     spec:
       nodeSelector:
         role: storage-node
+      serviceAccountName: rag-service-sa
       enableServiceLinks: false
       containers:
       - name: worker
@@ -63,6 +64,8 @@ spec:
             secretKeyRef:
               name: timescaledb-secret
               key: url
+        - name: QDRANT_ADAPTER_URL
+          value: "http://qdrant-adapter.rag-system.svc.cluster.local:8082"
         - name: QDRANT_HOST
           value: "qdrant"
         - name: PLANNER_URL
@@ -113,3 +116,18 @@ spec:
         secret:
           secretName: rag-worker-tls
           optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-worker
+  namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
+spec:
+  selector:
+    app: rag-worker
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: health

@@ -3,7 +3,6 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"app-builds/common/tlsutil"
@@ -11,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -18,6 +18,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"google.golang.org/grpc/credentials"
+	"app-builds/common/logging"
 )
 
 func InitTracer(serviceName string) (func(context.Context) error, error) {
@@ -44,7 +45,7 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 		if err != nil {
 			return nil, fmt.Errorf("OTEL TLS initialization failed for %s: %w", serviceName, err)
 		}
-		log.Printf("OTEL (gRPC): TLS enabled for %s using CA from SSL_CERT_FILE", serviceName)
+		logging.Printf("OTEL (gRPC): TLS enabled for %s using CA from SSL_CERT_FILE", serviceName)
 		traceOpts = append(traceOpts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(tlsConfig)))
 		metricOpts = append(metricOpts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(tlsConfig)))
 	}
@@ -72,9 +73,16 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 		sdktrace.WithBatcher(traceExp),
 		sdktrace.WithResource(res),
 	)
+
+	promExp, err := prometheus.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create prometheus exporter: %w", err)
+	}
+
 	mp := sdkmetric.NewMeterProvider(
 		sdkmetric.WithResource(res),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp)),
+		sdkmetric.WithReader(promExp),
 	)
 
 	otel.SetTracerProvider(tp)

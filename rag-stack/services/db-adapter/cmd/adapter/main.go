@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +17,7 @@ import (
 	"app-builds/common/ent"
 	"app-builds/common/ent/tag"
 	"app-builds/common/health"
+	"app-builds/common/logging"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/common/telemetry"
 	"app-builds/db-adapter/internal/config"
@@ -39,15 +40,15 @@ func init() {
 	var err error
 	queryCounter, err = meter.Int64Counter("db_queries_total")
 	if err != nil {
-		log.Printf("Warning: failed to create query counter metric: %v", err)
+		logging.Warn("failed to create query counter metric", "error", err)
 	}
 	errorCounter, err = meter.Int64Counter("db_errors_total")
 	if err != nil {
-		log.Printf("Warning: failed to create error counter metric: %v", err)
+		logging.Warn("failed to create error counter metric", "error", err)
 	}
 	queryLatency, err = meter.Float64Histogram("db_query_duration_ms", metric.WithUnit("ms"))
 	if err != nil {
-		log.Printf("Warning: failed to create query latency metric: %v", err)
+		logging.Warn("failed to create query latency metric", "error", err)
 	}
 }
 
@@ -57,7 +58,7 @@ func main() {
 
 	shutdown, err := telemetry.InitTracer("db-adapter")
 	if err != nil {
-		log.Printf("Warning: failed to initialize tracer: %v", err)
+		logging.Warn("failed to initialize tracer", "error", err)
 	} else {
 		defer shutdown(context.Background())
 	}
@@ -67,30 +68,33 @@ func main() {
 
 	entClient, err := ent.Open("postgres", cfg.DBConnString)
 	if err != nil {
-		log.Fatalf("Failed to connect to DB: %v", err)
+		logging.Error("failed to connect to DB", "error", err)
+		os.Exit(1)
 	}
 	defer entClient.Close()
 
 	// Run migrations
 	if err := entClient.Schema.Create(ctx); err != nil {
-		log.Printf("Warning: failed to create schema: %v", err)
+		logging.Warn("failed to create schema", "error", err)
 	}
 
 	pulsarClient, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
 	if err != nil {
-		log.Fatalf("Could not instantiate Pulsar client: %v", err)
+		logging.Error("could not instantiate Pulsar client", "error", err)
+		os.Exit(1)
 	}
 	defer pulsarClient.Close()
 
 	dlqHandler, err := dlq.NewHandler(pulsarClient, "db-adapter")
 	if err != nil {
-		log.Fatalf("Could not create DLQ handler: %v", err)
+		logging.Error("could not create DLQ handler", "error", err)
+		os.Exit(1)
 	}
 	defer dlqHandler.Close()
 
 	qdrantProducer, err := pulsarClient.NewProducer(cfg.QdrantOpsTopic)
 	if err != nil {
-		log.Printf("Warning: Could not create qdrant ops producer: %v", err)
+		logging.Warn("could not create qdrant ops producer", "error", err)
 	} else {
 		defer qdrantProducer.Close()
 	}
@@ -107,9 +111,13 @@ func main() {
 		_, err := entClient.Session.Query().Limit(1).Count(context.Background())
 		return err
 	})
+	healthSrv.RegisterCheck("pulsar", pulsarClient.Ping)
 
 	// Setup Pulsar Consumers
-	setupConsumers(ctx, pulsarClient, cfg, dlqHandler, processor)
+	if err := setupConsumers(ctx, pulsarClient, cfg, dlqHandler, processor); err != nil {
+		logging.Error("fatal: could not setup pulsar consumers", "error", err)
+		os.Exit(1)
+	}
 
 	// Setup HTTP Routes
 	mux := http.NewServeMux()
@@ -118,9 +126,9 @@ func main() {
 	// Logging Middleware
 	loggingMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		log.Printf("Incoming request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		logging.L.WithTrace(r.Context()).Info("incoming request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
 		mux.ServeHTTP(w, r)
-		log.Printf("Completed request: %s %s in %v", r.Method, r.URL.Path, time.Since(start))
+		logging.L.WithTrace(r.Context()).Info("completed request", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))
 	})
 
 	mux.HandleFunc("/sessions/", func(w http.ResponseWriter, r *http.Request) {
@@ -244,14 +252,16 @@ func main() {
 
 	go func() {
 		if cfg.TLSCert != "" && cfg.TLSKey != "" {
-			log.Printf("Starting DB Adapter REST API with TLS on :8080")
+			logging.Info("starting DB Adapter REST API with TLS", "addr", ":8080")
 			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("REST server failed: %v", err)
+				logging.Error("REST server failed", "error", err)
+				os.Exit(1)
 			}
 		} else {
-			log.Printf("Starting DB Adapter REST API on :8080")
+			logging.Info("starting DB Adapter REST API", "addr", ":8080")
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("REST server failed: %v", err)
+				logging.Error("REST server failed", "error", err)
+				os.Exit(1)
 			}
 		}
 	}()
@@ -259,44 +269,32 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-	log.Println("Shutting down DB Adapter...")
+	logging.Info("shutting down DB Adapter")
 	cancel()
 	time.Sleep(2 * time.Second)
-	log.Println("DB Adapter shutdown complete")
+	logging.Info("DB Adapter shutdown complete")
 }
 
-func setupConsumers(ctx context.Context, client *pulsarCommon.Client, cfg *config.Config, dlqHandler *dlq.Handler, processor *service.PulsarProcessor) {
-	// Prompts
-	pc, err := client.NewSharedConsumer(cfg.PromptTopic, cfg.Subscription)
-	if err == nil {
-		go consumeLoop(ctx, pc, dlqHandler, processor.HandlePrompt)
-	} else {
-		log.Printf("Error creating prompt consumer on %s: %v", cfg.PromptTopic, err)
+func setupConsumers(ctx context.Context, client *pulsarCommon.Client, cfg *config.Config, dlqHandler *dlq.Handler, processor *service.PulsarProcessor) error {
+	consumers := []struct {
+		topic        string
+		subscription string
+		handler      func(context.Context, pulsar.Message) (dlq.ProcessResult, error)
+	}{
+		{cfg.PromptTopic, cfg.Subscription, processor.HandlePrompt},
+		{cfg.ResponseTopic, cfg.Subscription, processor.HandleResponse},
+		{cfg.CompletionTopic, cfg.Subscription + "-metrics", processor.HandleCompletion},
+		{cfg.DBOpsTopic, cfg.Subscription + "-ops", processor.HandleDBOp},
 	}
 
-	// Responses
-	rc, err := client.NewSharedConsumer(cfg.ResponseTopic, cfg.Subscription)
-	if err == nil {
-		go consumeLoop(ctx, rc, dlqHandler, processor.HandleResponse)
-	} else {
-		log.Printf("Error creating response consumer on %s: %v", cfg.ResponseTopic, err)
+	for _, c := range consumers {
+		consumer, err := client.NewSharedConsumer(c.topic, c.subscription)
+		if err != nil {
+			return fmt.Errorf("failed to create consumer for topic %s: %w", c.topic, err)
+		}
+		go consumeLoop(ctx, consumer, dlqHandler, c.handler)
 	}
-
-	// Metrics
-	cc, err := client.NewSharedConsumer(cfg.CompletionTopic, cfg.Subscription+"-metrics")
-	if err == nil {
-		go consumeLoop(ctx, cc, dlqHandler, processor.HandleCompletion)
-	} else {
-		log.Printf("Error creating completion consumer on %s: %v", cfg.CompletionTopic, err)
-	}
-
-	// Ops
-	oc, err := client.NewSharedConsumer(cfg.DBOpsTopic, cfg.Subscription+"-ops")
-	if err == nil {
-		go consumeLoop(ctx, oc, dlqHandler, processor.HandleDBOp)
-	} else {
-		log.Printf("Error creating DB ops consumer on %s: %v", cfg.DBOpsTopic, err)
-	}
+	return nil
 }
 
 func consumeLoop(ctx context.Context, consumer pulsar.Consumer, dlqHandler *dlq.Handler, handler func(context.Context, pulsar.Message) (dlq.ProcessResult, error)) {
@@ -307,7 +305,7 @@ func consumeLoop(ctx context.Context, consumer pulsar.Consumer, dlqHandler *dlq.
 			if ctx.Err() != nil {
 				return
 			}
-			log.Printf("Error receiving message: %v", err)
+			logging.Error("error receiving message", "error", err)
 			continue
 		}
 		dlqHandler.HandleMessage(ctx, msg, consumer, handler)

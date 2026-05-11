@@ -6,6 +6,27 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// ActionIdentifier is the predicate function for actionidentifier builders.
+type ActionIdentifier func(*sql.Selector)
+
+// ActionType is the predicate function for actiontype builders.
+type ActionType func(*sql.Selector)
+
+// BehavioralLog is the predicate function for behaviorallog builders.
+type BehavioralLog func(*sql.Selector)
+
+// BehavioralRule is the predicate function for behavioralrule builders.
+type BehavioralRule func(*sql.Selector)
+
+// BuildJournal is the predicate function for buildjournal builders.
+type BuildJournal func(*sql.Selector)
+
+// BuildLock is the predicate function for buildlock builders.
+type BuildLock func(*sql.Selector)
+
+// BuildVersion is the predicate function for buildversion builders.
+type BuildVersion func(*sql.Selector)
+
 // CodeEmbedding is the predicate function for codeembedding builders.
 type CodeEmbedding func(*sql.Selector)
 
@@ -41,6 +62,9 @@ type RetrievalLog func(*sql.Selector)
 
 // Session is the predicate function for session builders.
 type Session func(*sql.Selector)
+
+// SessionGovernance is the predicate function for sessiongovernance builders.
+type SessionGovernance func(*sql.Selector)
 
 // Tag is the predicate function for tag builders.
 type Tag func(*sql.Selector)

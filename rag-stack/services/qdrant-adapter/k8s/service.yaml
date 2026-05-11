@@ -3,10 +3,15 @@ kind: Service
 metadata:
   name: qdrant-adapter
   namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
 spec:
   selector:
     app: qdrant-adapter
   ports:
   - port: 443
-    targetPort: 8080
-    name: https
+    targetPort: 8082
+    name: health
+  - port: 8082
+    targetPort: 8082
+    name: http

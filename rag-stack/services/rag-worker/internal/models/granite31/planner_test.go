@@ -36,7 +36,7 @@ func TestPlanner_Plan(t *testing.T) {
 				},
 			}
 			p := NewPlanner(mock)
-			got, _, err := p.Plan(context.Background(), "original prompt")
+			got, _, err := p.Plan(context.Background(), "original prompt", nil, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Planner.Plan() error = %v, wantErr %v", err, tt.wantErr)
 				return

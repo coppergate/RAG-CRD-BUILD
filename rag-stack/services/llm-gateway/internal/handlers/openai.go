@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"app-builds/common/contracts"
@@ -18,11 +18,24 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"app-builds/common/logging"
 )
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Adjust as needed for security
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		// Allow internal domain
+		if strings.HasSuffix(origin, ".hierocracy.home") {
+			return true
+		}
+		// Allow localhost for debugging
+		if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") {
+			return true
+		}
+		return false
 	},
 }
 
@@ -38,19 +51,19 @@ func init() {
 	var err error
 	requestCounter, err = meter.Int64Counter("gateway_requests_total")
 	if err != nil {
-		log.Printf("Warning: failed to create request counter metric: %v", err)
+		logging.Printf("Warning: failed to create request counter metric: %v", err)
 	}
 	errorCounter, err = meter.Int64Counter("gateway_errors_total")
 	if err != nil {
-		log.Printf("Warning: failed to create error counter metric: %v", err)
+		logging.Printf("Warning: failed to create error counter metric: %v", err)
 	}
 	latencyHist, err = meter.Float64Histogram("gateway_request_duration_ms", metric.WithUnit("ms"))
 	if err != nil {
-		log.Printf("Warning: failed to create latency histogram metric: %v", err)
+		logging.Printf("Warning: failed to create latency histogram metric: %v", err)
 	}
 	promptSizeHist, err = meter.Int64Histogram("gateway_prompt_size_bytes", metric.WithUnit("By"))
 	if err != nil {
-		log.Printf("Warning: failed to create prompt size histogram: %v", err)
+		logging.Printf("Warning: failed to create prompt size histogram: %v", err)
 	}
 }
 
@@ -113,7 +126,7 @@ func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sess
 			AddTagIDs(tags...).
 			Exec(ctx)
 		if err != nil {
-			log.Printf("Warning: failed to associate tags with session %d: %v", id, err)
+			logging.Printf("Warning: failed to associate tags with session %d: %v", id, err)
 		}
 	}
 
@@ -141,17 +154,17 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		latencyHist.Record(ctx, duration, metric.WithAttributes(attrs...))
 	}()
 
-	requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
-
 	if r.Method != http.MethodPost {
-		log.Printf("Method not allowed: %s %s", r.Method, r.URL.Path)
+		logging.Printf("Method not allowed: %s %s", r.Method, r.URL.Path)
+		requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req ChatCompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Bad request: %v", err)
+		logging.Printf("Bad request: %v", err)
+		requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -159,12 +172,18 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	// 1. Session tracking
 	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
-		log.Printf("Failed to ensure session exists: %v", err)
+		logging.Printf("Failed to ensure session exists: %v", err)
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
 		http.Error(w, fmt.Sprintf("Failed to ensure session: %v", err), http.StatusInternalServerError)
 		return
 	}
 	sessionID := sess.ID
+
+	// Add session_id to telemetry
+	attrs = append(attrs, attribute.Int64("session_id", sessionID))
+	span.SetAttributes(attribute.Int64("session_id", sessionID))
+
+	requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 
 	// Fetch all tags for the session
 	var sessionTags []int64
@@ -185,13 +204,19 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	if len(req.Messages) > 0 {
 		userMsg := req.Messages[len(req.Messages)-1].Content
 		if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, userMsg, sessionTags); err != nil {
-			log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
+			logging.Printf("[%s][SID:%d] Failed to send prompt event: %v", correlationID, sessionID, err)
 		}
 	}
 
 	// Map to InternalRequest for Pulsar
 	if len(req.Messages) > 0 {
 		prompt = req.Messages[len(req.Messages)-1].Content
+	}
+
+	// Use tags from request if session tags are empty (e.g. if DB association failed)
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
 	}
 
 	internalReq := &contracts.InternalRequest{
@@ -201,7 +226,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		Prompt:        prompt,
 		PlannerModel:  req.Model,
 		ExecutorModel: req.Model,
-		Tags:          sessionTags,
+		Tags:          effectiveTags,
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
@@ -212,7 +237,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)
 	if err != nil {
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "pulsar_send")))
-		log.Printf("[%s] Pulsar request failed for session %d: %v", correlationID, sessionID, err)
+		logging.Printf("[%s][SID:%d] Pulsar request failed: %v", correlationID, sessionID, err)
 		http.Error(w, "Service unavailable: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
@@ -239,28 +264,31 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("[%s] Failed to encode response: %v", correlationID, err)
+		logging.Printf("[%s][SID:%d] Failed to encode response: %v", correlationID, sessionID, err)
 	}
 }
 
 func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("Failed to upgrade to WebSocket: %v", err)
+		logging.Printf("Failed to upgrade to WebSocket: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	ctx := r.Context()
+	telemetry.RecordSessionStart(ctx)
+	defer telemetry.RecordSessionEnd(ctx)
+
 	var req GenericChatRequest
 	if err := conn.ReadJSON(&req); err != nil {
-		log.Printf("Failed to read JSON from WebSocket: %v", err)
+		logging.Printf("Failed to read JSON from WebSocket: %v", err)
 		return
 	}
 
 	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
-		log.Printf("Failed to ensure session: %v", err)
+		logging.Printf("Failed to ensure session: %v", err)
 		return
 	}
 	sessionID := sess.ID
@@ -278,7 +306,13 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 
 	// Save user message to DB via Pulsar event
 	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt, sessionTags); err != nil {
-		log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
+		logging.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
+	}
+
+	// Use tags from request if session tags are empty
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
 	}
 
 	internalReq := &contracts.InternalRequest{
@@ -288,7 +322,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
-		Tags:          sessionTags,
+		Tags:          effectiveTags,
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Stream:        true,
@@ -304,7 +338,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 
 	// Send initial request
 	if err := h.Pulsar.SendRawRequest(ctx, internalReq); err != nil {
-		log.Printf("Failed to send request to Pulsar: %v", err)
+		logging.Printf("Failed to send request to Pulsar: %v", err)
 		conn.WriteJSON(map[string]string{"error": "Failed to send request to backend"})
 		return
 	}
@@ -317,10 +351,10 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 				return
 			}
 			if chunk.SequenceNumber == 0 {
-				log.Printf("[%s] Forwarding Seq 0, has metadata: %v", correlationID, chunk.Metadata != nil)
+				logging.Printf("[%s] Forwarding Seq 0, has metadata: %v", correlationID, chunk.Metadata != nil)
 			}
 			if err := conn.WriteJSON(chunk); err != nil {
-				log.Printf("Failed to write to WebSocket: %v", err)
+				logging.Printf("Failed to write to WebSocket: %v", err)
 				return
 			}
 			if chunk.IsLast {
@@ -329,7 +363,7 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		case <-ctx.Done():
 			return
 		case <-time.After(60 * time.Second): // Timeout
-			log.Printf("[%s] WebSocket stream timed out", correlationID)
+			logging.Printf("[%s] WebSocket stream timed out", correlationID)
 			return
 		}
 	}
@@ -368,7 +402,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	// 1. Session tracking
 	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
-		log.Printf("Failed to ensure session exists: %v", err)
+		logging.Printf("Failed to ensure session exists: %v", err)
 		errorCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("type", "session_ensure")))
 		http.Error(w, fmt.Sprintf("Failed to ensure session: %v", err), http.StatusInternalServerError)
 		return
@@ -388,7 +422,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 
 	// Save user message to DB via Pulsar event
 	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt, sessionTags); err != nil {
-		log.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
+		logging.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 	}
 
 	if req.Planner == "" {
@@ -399,6 +433,12 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 
 	// Direct mapping to InternalRequest
+	// Use tags from request if session tags are empty
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
+	}
+
 	internalReq := &contracts.InternalRequest{
 		Id:            correlationID,
 		SessionId:     sessionID,
@@ -406,7 +446,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		Prompt:        req.Prompt,
 		PlannerModel:  req.Planner,
 		ExecutorModel: req.Executor,
-		Tags:          sessionTags,
+		Tags:          effectiveTags,
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
@@ -429,6 +469,6 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		"planning_response": result.PlanningResponse,
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("[%s] Failed to encode response: %v", correlationID, err)
+		logging.Printf("[%s] Failed to encode response: %v", correlationID, err)
 	}
 }

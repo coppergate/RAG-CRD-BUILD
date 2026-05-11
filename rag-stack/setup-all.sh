@@ -32,13 +32,40 @@ REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/journal-helper.sh"
 init_journal
 
+verify_image_ready() {
+  local svc="$1"
+  local ver="$2"
+  # Use the external registry name for verification from hierophant
+  local img="registry.hierocracy.home:5000/${svc}:${ver}"
+  
+  echo "--- Verifying image readiness: $img ---"
+  if ! command -v skopeo >/dev/null 2>&1; then
+      echo "WARN: skopeo not found, skipping readiness check."
+      return 0
+  fi
+  
+  # Retry a few times if it's not ready yet (e.g., if build just finished)
+  for i in $(seq 1 12); do
+    if skopeo inspect "docker://$img" --tls-verify=false >/dev/null 2>&1; then
+      echo "Image verified: $img"
+      return 0
+    fi
+    echo "  - Image not ready yet (or still pushing), retrying in 10s... ($i/12)"
+    sleep 10
+  done
+  
+  echo "ERROR: Image $img not found in registry after 120s. Aborting deployment to prevent ImagePullBackOff."
+  return 1
+}
+
 apply_manifest() {
   local manifest="$1"
   local ver="$VERSION"
+  local svc=""
   
   # Try to extract service name from path to get per-service version
   if [[ "$manifest" == *"/services/"* ]]; then
-      local svc=$(echo "$manifest" | sed -n 's#.*/services/\([^/]*\).*#\1#p' | cut -d/ -f1)
+      svc=$(echo "$manifest" | sed -n 's#.*/services/\([^/]*\).*#\1#p' | cut -d/ -f1)
       if [[ -f "$VERSION_FILE" ]] && jq . "$VERSION_FILE" >/dev/null 2>&1; then
           local svc_ver=$(jq -r ".\"$svc\".version // empty" "$VERSION_FILE")
           if [[ -n "$svc_ver" ]]; then
@@ -46,11 +73,18 @@ apply_manifest() {
           fi
       fi
   elif [[ "$manifest" == *"build-pipeline/orchestrator-deployment.yaml" ]]; then
+      svc="build-orchestrator"
       if [[ -f "$VERSION_FILE" ]] && jq . "$VERSION_FILE" >/dev/null 2>&1; then
           local svc_ver=$(jq -r ".\"build-orchestrator\".version // empty" "$VERSION_FILE")
           if [[ -n "$svc_ver" ]]; then
               ver="$svc_ver"
           fi
+      fi
+  fi
+
+  if [[ -n "$svc" && "$svc" != "rag-test-runner" ]]; then
+      if ! verify_image_ready "$svc" "$ver"; then
+          exit 1
       fi
   fi
 
@@ -278,6 +312,12 @@ DB_URL="postgres://app:${REAL_PW}@timescaledb-rw.timescaledb.svc.cluster.local:5
 $KUBECTL create secret generic timescaledb-secret -n $NAMESPACE \
   --from-literal=url="${DB_URL}" \
   --dry-run=client -o yaml | $KUBECTL apply -f -
+
+# Also create in build-pipeline namespace
+$KUBECTL create secret generic timescaledb-secret -n build-pipeline \
+  --from-literal=url="${DB_URL}" \
+  --dry-run=client -o yaml | $KUBECTL apply -f -
+
 mark_step_done "timescaledb-secret"
 fi
 
@@ -291,6 +331,41 @@ if ! is_step_done "build-orchestrator"; then
 echo "--- 6.5 Deploying Build Orchestrator (Go) ---"
 apply_manifest "$REPO_DIR/infrastructure/build-pipeline/orchestrator-deployment.yaml"
 mark_step_done "build-orchestrator"
+fi
+
+if ! is_step_done "migrate-build-metadata"; then
+echo "--- 6.6 Migrating Build Metadata to Database ---"
+# Wait for orchestrator to be ready
+$KUBECTL rollout status deployment/build-orchestrator -n build-pipeline --timeout=120s || true
+
+if [[ -f "$VERSION_FILE" ]]; then
+    echo "Seeding versions from $VERSION_FILE..."
+    # We use the LoadBalancer IP and Host header to ensure we can reach it from the host
+    LB_IP=$($KUBECTL get svc traefik -n traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "172.20.1.16")
+    ORCH_URL="http://${LB_IP}/api/build"
+    H_HEADER="Host: build-orchestrator.hierocracy.home"
+    
+    # Check if we can reach it
+    if curl -s -I -H "$H_HEADER" "$ORCH_URL/versions" >/dev/null; then
+        jq -r 'to_entries[] | "\(.key) \(.value.version)"' "$VERSION_FILE" | while read -r svc ver; do
+            echo "  Seeding $svc: $ver"
+            curl -s -X POST -H "$H_HEADER" "$ORCH_URL/versions/$svc" -d "{\"version\": \"$ver\"}" >/dev/null
+        done
+        
+        # Seed journals if available
+        if [[ -d "/tmp/.build_journal_junie" ]]; then
+            find "/tmp/.build_journal_junie" -name "*.last_hash" | while read -r jf; do
+                svc=$(basename "$jf" .last_hash)
+                hash=$(cat "$jf")
+                echo "  Seeding journal for $svc"
+                curl -s -X POST -H "$H_HEADER" "$ORCH_URL/journals/$svc" -d "{\"last_hash\": \"$hash\"}" >/dev/null
+            done
+        fi
+        mark_step_done "migrate-build-metadata"
+    else
+        echo "WARN: Could not reach build-orchestrator API at $ORCH_URL with Host $H_HEADER. Skipping migration for now."
+    fi
+fi
 fi
 
 if ! is_step_done "rag-worker"; then

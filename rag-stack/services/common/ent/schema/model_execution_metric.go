@@ -2,6 +2,8 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"time"
@@ -10,6 +12,13 @@ import (
 // ModelExecutionMetric holds the schema definition for the ModelExecutionMetric entity.
 type ModelExecutionMetric struct {
 	ent.Schema
+}
+
+// Annotations of the ModelExecutionMetric.
+func (ModelExecutionMetric) Annotations() []schema.Annotation {
+	return []schema.Annotation{
+		entsql.Annotation{Table: "model_execution_metrics"},
+	}
 }
 
 // Fields of the ModelExecutionMetric.
@@ -30,7 +39,9 @@ func (ModelExecutionMetric) Fields() []ent.Field {
 		field.Int("completion_tokens").
 			Optional(),
 		field.Int("total_tokens").
-			Optional(),
+			Optional().
+			Immutable().
+			Comment("Generated always as (prompt_tokens + completion_tokens) stored"),
 		field.Int64("total_duration_usec").
 			Optional(),
 		field.Int64("load_duration_usec").

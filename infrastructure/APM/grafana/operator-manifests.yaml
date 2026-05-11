@@ -88,6 +88,11 @@ spec:
     jsonData:
       tlsAuth: false
       tlsSkipVerify: true
+      derivedFields:
+        - datasourceName: Tempo
+          matcherRegex: "trace=(\\w+)"
+          name: trace_id
+          url: "${__value.raw}"
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
