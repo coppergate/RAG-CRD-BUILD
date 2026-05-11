@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rag_explorer/app_config_provider.dart';
 import 'chat_notifier.dart';
+import 'chat_dialogs.dart';
 import 'widgets/chat_input_bar.dart';
 import 'widgets/message_list.dart';
 import 'widgets/metadata_panel.dart';
 import 'widgets/session_drawer.dart';
-import '../../core/models/session.dart';
+import 'widgets/resizable_divider.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
@@ -26,11 +27,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     super.dispose();
   }
 
+  void _sendMessage() {
+    final prompt = _messageController.text;
+    if (prompt.isEmpty) return;
+    _messageController.clear();
+    ref.read(chatNotifierProvider.notifier).sendMessage(prompt);
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatAsync = ref.watch(chatNotifierProvider);
-    final darkMode = ref.watch(appConfigProvider).darkMode;
-    final availableModels = ref.watch(appConfigProvider).availableModels;
+    final config = ref.watch(appConfigProvider);
 
     return chatAsync.when(
       data: (state) => Scaffold(
@@ -50,16 +57,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               sessions: state.sessions,
               currentSessionId: state.currentSessionId,
               selectedIds: state.selectedSessionIds,
-              onSelectSession: (session, isMulti) {
-                if (isMulti) {
-                  ref.read(chatNotifierProvider.notifier).toggleSessionSelection(session.id);
-                } else {
-                  ref.read(chatNotifierProvider.notifier).selectSession(session.id);
-                }
-              },
-              onDeleteSession: (session) => _confirmDeleteSession(session),
-              onDeleteSelected: _deleteSelectedSessions,
-              onNewSession: _startNewSession,
+              onSelectSession: (session, isMulti) => isMulti 
+                ? ref.read(chatNotifierProvider.notifier).toggleSessionSelection(session.id)
+                : ref.read(chatNotifierProvider.notifier).selectSession(session.id),
+              onDeleteSession: (s) => ChatDialogs.showDeleteConfirm(context, s).then((val) => val == true ? ref.read(chatNotifierProvider.notifier).deleteSession(s.id) : null),
+              onDeleteSelected: () => ChatDialogs.showMultiDeleteConfirm(context, state.selectedSessionIds.length).then((val) => val == true ? _deleteSelected(state.selectedSessionIds) : null),
+              onNewSession: () => ChatDialogs.showNewSessionDialog(context).then((val) => val != null ? ref.read(chatNotifierProvider.notifier).createSession(val) : null),
               onRefresh: () => ref.read(chatNotifierProvider.notifier).loadSessions(),
             ),
             const VerticalDivider(width: 1),
@@ -74,7 +77,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       selectedMessageIndex: state.selectedMessageIndex,
                       onSelectMessage: (index) => ref.read(chatNotifierProvider.notifier).selectMessage(index),
                       scrollController: _chatScrollController,
-                      isDarkMode: darkMode,
+                      isDarkMode: config.darkMode,
                     ),
                   ),
                   ChatInputBar(
@@ -85,7 +88,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     onStop: () => ref.read(chatNotifierProvider.notifier).stopChat(),
                     planner: state.selectedPlanner,
                     executor: state.selectedExecutor,
-                    availableModels: availableModels,
+                    availableModels: config.availableModels,
                     availableTags: state.availableTags,
                     selectedTags: state.selectedTags,
                     onPlannerChanged: (val) => ref.read(chatNotifierProvider.notifier).setPlanner(val),
@@ -99,7 +102,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
             ),
             if (state.showMetadata) ...[
-              _buildResizableDivider(state),
+              const ResizableDivider(),
               MetadataPanel(
                 message: (state.selectedMessageIndex != null && state.selectedMessageIndex! < state.messages.length)
                     ? state.messages[state.selectedMessageIndex!]
@@ -107,7 +110,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 width: state.metadataPanelWidth,
                 onWidthChanged: (val) => ref.read(chatNotifierProvider.notifier).setMetadataPanelWidth(val),
                 onClose: () => ref.read(chatNotifierProvider.notifier).selectMessage(null),
-                isDarkMode: darkMode,
+                isDarkMode: config.darkMode,
               ),
             ],
           ],
@@ -118,101 +121,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
-  void _sendMessage() {
-    final prompt = _messageController.text;
-    if (prompt.isEmpty) return;
-    _messageController.clear();
-    ref.read(chatNotifierProvider.notifier).sendMessage(prompt);
-  }
-
-  Widget _buildResizableDivider(ChatState state) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeLeftRight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: (details) {
-          final newWidth = state.metadataPanelWidth - details.delta.dx;
-          ref.read(chatNotifierProvider.notifier).setMetadataPanelWidth(newWidth.clamp(100.0, 800.0));
-        },
-        child: Container(
-          width: 8,
-          color: Colors.transparent,
-          child: const VerticalDivider(width: 1),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _startNewSession() async {
-    final nameController = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Session'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(hintText: 'Session Name (Optional)'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, nameController.text),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-
-    if (name != null) {
-      ref.read(chatNotifierProvider.notifier).createSession(name.isEmpty ? 'New Session' : name);
-    }
-  }
-
-  Future<void> _confirmDeleteSession(Session session) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Session'),
-        content: Text('Are you sure you want to delete "${session.name ?? 'Session ${session.id}'}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      ref.read(chatNotifierProvider.notifier).deleteSession(session.id);
-    }
-  }
-
-  Future<void> _deleteSelectedSessions() async {
-    final state = ref.read(chatNotifierProvider).value;
-    if (state == null || state.selectedSessionIds.isEmpty) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Sessions'),
-        content: Text('Are you sure you want to delete ${state.selectedSessionIds.length} sessions?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      for (final id in state.selectedSessionIds) {
-        await ref.read(chatNotifierProvider.notifier).deleteSession(id);
-      }
+  void _deleteSelected(Set<int> ids) async {
+    for (final id in ids) {
+      await ref.read(chatNotifierProvider.notifier).deleteSession(id);
     }
   }
 }
