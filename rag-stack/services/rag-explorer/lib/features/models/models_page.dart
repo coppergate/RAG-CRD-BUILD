@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../config/service_endpoints.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
 import '../../app_config_provider.dart';
@@ -24,7 +23,7 @@ class _ModelsPageState extends ConsumerState<ModelsPage> {
   Future<List<ModelPerformance>> _fetchMetrics() async {
     final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
-    final response = await client.get('${ServiceEndpoints.dbAdapter}/metrics/summary');
+    final response = await client.get('${config.dbUrl}/metrics/summary');
     return (response.data as List).map((e) => ModelPerformance.fromJson(e)).toList();
   }
 

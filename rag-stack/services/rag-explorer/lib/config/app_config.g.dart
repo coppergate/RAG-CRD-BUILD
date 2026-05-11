@@ -7,14 +7,9 @@ part of 'app_config.dart';
 // **************************************************************************
 
 _AppConfig _$AppConfigFromJson(Map<String, dynamic> json) => _AppConfig(
-  llmGatewayUrl: json['llmGatewayUrl'] as String,
-  ragIngestionUrl: json['ragIngestionUrl'] as String,
-  objectStoreMgrUrl: json['objectStoreMgrUrl'] as String,
-  dbAdapterUrl: json['dbAdapterUrl'] as String,
-  qdrantAdapterUrl: json['qdrantAdapterUrl'] as String,
-  memoryControllerUrl: json['memoryControllerUrl'] as String,
-  grafanaUrl: json['grafanaUrl'] as String,
-  ragAdminApiUrl: json['ragAdminApiUrl'] as String,
+  ragAdminApiUrl:
+      json['ragAdminApiUrl'] as String? ??
+      'https://rag-admin-api.rag.hierocracy.home',
   skipTlsVerification: json['skipTlsVerification'] as bool? ?? true,
   caCertPath: json['caCertPath'] as String?,
   defaultBucketName:
@@ -32,13 +27,6 @@ _AppConfig _$AppConfigFromJson(Map<String, dynamic> json) => _AppConfig(
 
 Map<String, dynamic> _$AppConfigToJson(_AppConfig instance) =>
     <String, dynamic>{
-      'llmGatewayUrl': instance.llmGatewayUrl,
-      'ragIngestionUrl': instance.ragIngestionUrl,
-      'objectStoreMgrUrl': instance.objectStoreMgrUrl,
-      'dbAdapterUrl': instance.dbAdapterUrl,
-      'qdrantAdapterUrl': instance.qdrantAdapterUrl,
-      'memoryControllerUrl': instance.memoryControllerUrl,
-      'grafanaUrl': instance.grafanaUrl,
       'ragAdminApiUrl': instance.ragAdminApiUrl,
       'skipTlsVerification': instance.skipTlsVerification,
       'caCertPath': instance.caCertPath,
