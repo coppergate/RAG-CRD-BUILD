@@ -3,10 +3,12 @@ kind: Service
 metadata:
   name: db-adapter
   namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
 spec:
   selector:
     app: db-adapter
   ports:
   - port: 443
     targetPort: 8080
-    name: https
+    name: health

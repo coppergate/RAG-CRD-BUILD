@@ -13,6 +13,8 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"net/http"
+	"io"
 )
 
 const (
@@ -28,15 +30,16 @@ type Handler struct {
 	maxRetries  int
 	dlqProducer pulsar.Producer
 	serviceName string
+	adminURL    string
+	done        chan struct{}
 
 	dlqRouted    metric.Int64Counter
 	dlqRetried   metric.Int64Counter
 	dlqSucceeded metric.Int64Counter
+	dlqDepth     metric.Int64UpDownCounter
 }
 
-// NewHandler creates a DLQ handler. It creates a DLQ producer on the
-// topic "persistent://rag-pipeline/dlq/<serviceName>".
-// maxRetries defaults to 3 if <= 0.
+// NewHandler creates a DLQ handler.
 func NewHandler(client pulsar.Client, serviceName string) (*Handler, error) {
 	maxRetries := defaultMaxRetries
 	if v := os.Getenv("DLQ_MAX_RETRIES"); v != "" {
@@ -44,6 +47,8 @@ func NewHandler(client pulsar.Client, serviceName string) (*Handler, error) {
 			maxRetries = n
 		}
 	}
+
+	adminURL := os.Getenv("PULSAR_ADMIN_URL")
 
 	dlqTopic := fmt.Sprintf("persistent://rag-pipeline/dlq/%s", serviceName)
 	prod, err := client.CreateProducer(pulsar.ProducerOptions{
@@ -62,15 +67,26 @@ func NewHandler(client pulsar.Client, serviceName string) (*Handler, error) {
 		metric.WithDescription("Messages NACK'd for retry (transient failure)"))
 	dlqSucceeded, _ := meter.Int64Counter("dlq_succeeded_total",
 		metric.WithDescription("Messages processed successfully"))
+	dlqDepth, _ := meter.Int64UpDownCounter("rag_dlq_depth",
+		metric.WithDescription("Actual backlog depth of the DLQ topic"))
 
-	return &Handler{
+	h := &Handler{
 		maxRetries:   maxRetries,
 		dlqProducer:  prod,
 		serviceName:  serviceName,
+		adminURL:     adminURL,
+		done:         make(chan struct{}),
 		dlqRouted:    dlqRouted,
 		dlqRetried:   dlqRetried,
 		dlqSucceeded: dlqSucceeded,
-	}, nil
+		dlqDepth:     dlqDepth,
+	}
+
+	if adminURL != "" {
+		go h.pollBacklog()
+	}
+
+	return h, nil
 }
 
 // ProcessResult represents the outcome of message processing.
@@ -107,6 +123,7 @@ func (h *Handler) HandleMessage(
 
 	case PermanentFailure:
 		h.dlqRouted.Add(ctx, 1, attrs)
+		telemetry.UpdateDLQDepth(ctx, 1, h.serviceName)
 		log.Printf("[DLQ] Permanent failure processing message on %s: %v", msg.Topic(), processErr)
 		h.routeToDLQ(ctx, msg, processErr)
 		consumer.Ack(msg) // ACK after DLQ routing to prevent redelivery
@@ -116,6 +133,7 @@ func (h *Handler) HandleMessage(
 		retryCount := h.getRetryCount(msg)
 		if retryCount >= h.maxRetries {
 			h.dlqRouted.Add(ctx, 1, attrs)
+			telemetry.UpdateDLQDepth(ctx, 1, h.serviceName)
 			log.Printf("[DLQ] Max retries (%d) exhausted for message on %s: %v", h.maxRetries, msg.Topic(), processErr)
 			h.routeToDLQ(ctx, msg, processErr)
 			consumer.Ack(msg)
@@ -170,8 +188,53 @@ func (h *Handler) routeToDLQ(ctx context.Context, msg pulsar.Message, processErr
 	}
 }
 
+func (h *Handler) pollBacklog() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	url := fmt.Sprintf("%s/admin/v2/persistent/rag-pipeline/dlq/%s/stats", h.adminURL, h.serviceName)
+
+	var lastBacklog int64
+
+	for {
+		select {
+		case <-h.done:
+			return
+		case <-ticker.C:
+			resp, err := client.Get(url)
+			if err != nil {
+				log.Printf("[DLQ] Failed to poll backlog from %s: %v", url, err)
+				continue
+			}
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("[DLQ] Admin API returned status %d: %s", resp.StatusCode, string(body))
+				continue
+			}
+
+			var stats struct {
+				MsgBacklog int64 `json:"msgBacklog"`
+			}
+			if err := json.Unmarshal(body, &stats); err != nil {
+				log.Printf("[DLQ] Failed to unmarshal stats: %v", err)
+				continue
+			}
+
+			delta := stats.MsgBacklog - lastBacklog
+			if delta != 0 {
+				h.dlqDepth.Add(context.Background(), delta, metric.WithAttributes(attribute.String("service", h.serviceName)))
+				lastBacklog = stats.MsgBacklog
+			}
+		}
+	}
+}
+
 // Close closes the DLQ producer.
 func (h *Handler) Close() {
+	close(h.done)
 	h.dlqProducer.Close()
 }
 

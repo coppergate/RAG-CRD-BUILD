@@ -95,13 +95,15 @@ kind: Service
 metadata:
   name: llm-gateway
   namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
 spec:
   selector:
     app: llm-gateway
   ports:
   - port: 443
     targetPort: 8080
-    name: https
+    name: health
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -129,4 +131,4 @@ spec:
           service:
             name: llm-gateway
             port:
-              name: https
+              name: health

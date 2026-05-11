@@ -169,56 +169,39 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 
 	var chunks = make(map[int32]*contracts.StreamChunk)
 	var lastMetadata *structpb.Struct
-	timeout := time.After(30 * time.Second) // Safety timeout for the scan
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 
 	for {
-		select {
-		case <-timeout:
-			return "", nil, fmt.Errorf("timed out scanning for chunks in %s", topic)
-		case <-ctx.Done():
-			return "", nil, ctx.Err()
-		default:
-			if !reader.HasNext() {
-				// Wait a bit for more chunks
-				time.Sleep(100 * time.Millisecond)
-				if !reader.HasNext() {
-					// Check if we have anything
-					if len(chunks) > 0 {
-						return assemble(chunks), lastMetadata, nil
-					}
-					return "", nil, fmt.Errorf("reached end of topic %s without finding chunks", topic)
-				}
-				continue
-			}
-
-			msg, err := reader.Next(ctx)
-			if err != nil {
-				return "", nil, fmt.Errorf("reader next: %w", err)
-			}
-
-			chunk := &contracts.StreamChunk{}
-			if err := protojson.Unmarshal(msg.Payload(), chunk); err != nil {
-				continue
-			}
-
-			if chunk.Id != comp.Id {
-				// Not our prompt, but maybe if we see chunks with much later timestamps we can stop?
-				// For now, just continue.
-				continue
-			}
-
-			if chunk.Metadata != nil {
-				lastMetadata = chunk.Metadata
-			}
-
-			if chunk.Result != "" {
-				// Deduplicate by sequence number
-				chunks[chunk.SequenceNumber] = chunk
-			}
-
-			if chunk.IsLast {
+		msg, err := reader.Next(ctx)
+		if err != nil {
+			// If we timed out or context cancelled, we might have partial chunks
+			if (ctx.Err() != nil) && len(chunks) > 0 {
+				log.Printf("[%s] Context cancelled or timed out, returning partial result (%d chunks)", comp.Id, len(chunks))
 				return assemble(chunks), lastMetadata, nil
 			}
+			return "", nil, fmt.Errorf("reader next: %w", err)
+		}
+
+		chunk := &contracts.StreamChunk{}
+		if err := protojson.Unmarshal(msg.Payload(), chunk); err != nil {
+			continue
+		}
+
+		if chunk.Id != comp.Id {
+			continue
+		}
+
+		if chunk.Metadata != nil {
+			lastMetadata = chunk.Metadata
+		}
+
+		if chunk.Result != "" {
+			chunks[chunk.SequenceNumber] = chunk
+		}
+
+		if chunk.IsLast {
+			return assemble(chunks), lastMetadata, nil
 		}
 	}
 }

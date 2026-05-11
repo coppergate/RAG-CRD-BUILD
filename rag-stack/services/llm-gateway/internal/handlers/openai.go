@@ -277,6 +277,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	defer conn.Close()
 
 	ctx := r.Context()
+	telemetry.RecordSessionStart(ctx)
+	defer telemetry.RecordSessionEnd(ctx)
+
 	var req GenericChatRequest
 	if err := conn.ReadJSON(&req); err != nil {
 		log.Printf("Failed to read JSON from WebSocket: %v", err)

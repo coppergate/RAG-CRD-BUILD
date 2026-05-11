@@ -20,6 +20,7 @@ type Config struct {
 	QdrantResultsTopic  string
 	TLSCert             string
 	TLSKey              string
+	HTTPAddr            string
 }
 
 func LoadConfig() *Config {
@@ -49,5 +50,6 @@ func LoadConfig() *Config {
 		QdrantResultsTopic:  envutil.GetEnv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops-results"),
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:              envutil.GetEnv("TLS_KEY", ""),
+		HTTPAddr:            envutil.GetEnv("HTTP_ADDR", ":8082"),
 	}
 }

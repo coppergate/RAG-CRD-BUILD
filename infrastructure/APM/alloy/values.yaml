@@ -124,7 +124,20 @@ alloy:
       // Collect Kubernetes logs
       loki.source.kubernetes "pods" {
         targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.pods.receiver]
+      }
+
+      loki.process "pods" {
         forward_to = [loki.write.loki.receiver]
+        stage.regex {
+          expression = ".*trace=(?P<trace_id>[a-f0-9]{32}).*span=(?P<span_id>[a-f0-9]{16}).*"
+        }
+        stage.labels {
+          values = {
+            trace_id = "trace_id",
+            span_id  = "span_id",
+          }
+        }
       }
 
       discovery.relabel "pods" {

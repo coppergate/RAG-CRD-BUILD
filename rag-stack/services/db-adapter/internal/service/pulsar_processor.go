@@ -13,6 +13,7 @@ import (
 
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
+	"app-builds/common/telemetry"
 	"app-builds/common/ent"
 	"app-builds/common/ent/inferencenode"
 	"app-builds/common/ent/modelexecutionmetric"
@@ -157,6 +158,7 @@ func (p *PulsarProcessor) ensureSessionExists(ctx context.Context, sessionID int
 
 func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
+	telemetry.RecordMessage(msgCtx, "user")
 	tracer := otel.Tracer("db-adapter")
 	msgCtx, span := tracer.Start(msgCtx, "HandlePrompt")
 	defer span.End()
@@ -231,6 +233,7 @@ func (p *PulsarProcessor) HandlePrompt(ctx context.Context, msg pulsar.Message) 
 
 func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
 	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
+	telemetry.RecordMessage(msgCtx, "assistant")
 	tracer := otel.Tracer("db-adapter")
 	msgCtx, span := tracer.Start(msgCtx, "HandleResponse")
 	defer span.End()

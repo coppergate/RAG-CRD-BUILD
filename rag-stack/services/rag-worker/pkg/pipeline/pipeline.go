@@ -158,6 +158,7 @@ func (h *Handler) handleIngress(ctx context.Context, req *contracts.InternalRequ
 }
 
 func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
+	telemetry.RecordRecursion(ctx, "plan")
 	if req.Stream {
 		h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, "\n\u231B *Decomposing prompt into sub-tasks*...")
 	}

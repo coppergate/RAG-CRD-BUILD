@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 
+	"app-builds/common/clients"
 	"app-builds/common/dlq"
 	"app-builds/common/health"
 	"app-builds/common/telemetry"
@@ -53,7 +54,7 @@ func main() {
 	dlqHandler := initDLQHandler(msgClient)
 	defer dlqHandler.Close()
 
-	searcher := initQdrantSearcher(cfg, msgClient)
+	searcher := initQdrantSearcher(cfg)
 
 	memoryClient := memory.NewMemoryClient(cfg.MemoryControllerURL)
 
@@ -153,22 +154,10 @@ func initDLQHandler(msgClient *messaging.Client) *dlq.Handler {
 	return dlqHandler
 }
 
-// initQdrantSearcher creates the Qdrant searcher and starts its result consumer.
-func initQdrantSearcher(cfg *config.Config, msgClient *messaging.Client) *search.QdrantSearcher {
-	searcher := search.NewQdrantSearcher(cfg, msgClient.Producers.QdrantOps)
-
-	qResultsSub := fmt.Sprintf("rag-worker-q-res-%s", os.Getenv("HOSTNAME"))
-	qResConsumer, err := msgClient.PulsarClient().Subscribe(pulsar.ConsumerOptions{
-		Topic:            cfg.QdrantResultsTopic,
-		SubscriptionName: qResultsSub,
-		Type:             pulsar.Exclusive,
-	})
-	if err != nil {
-		log.Fatalf("Could not subscribe to Qdrant results: %v", err)
-	}
-	searcher.StartResultConsumer(qResConsumer)
-
-	return searcher
+// initQdrantSearcher creates the Qdrant searcher using HTTP.
+func initQdrantSearcher(cfg *config.Config) *search.QdrantSearcher {
+	client := clients.NewQdrantHTTPClient(cfg.QdrantAdapterURL)
+	return search.NewQdrantSearcher(cfg, client)
 }
 
 // subscribeToStageTopics creates a shared consumer for the RAG pipeline stage topics.
@@ -233,6 +222,7 @@ func runMessageLoop(cfg *config.Config, consumer pulsar.Consumer, handler *pipel
 			context.Background(),
 			propagation.MapCarrier(msg.Properties()),
 		)
+		telemetry.RecordMessage(msgCtx, "rag-worker")
 
 		wg.Add(1)
 		go func() {

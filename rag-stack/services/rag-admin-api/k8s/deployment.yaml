@@ -97,6 +97,8 @@ kind: Service
 metadata:
   name: rag-admin-api
   namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
   annotations:
     purelb.io/service-group: default
 spec:
@@ -105,5 +107,5 @@ spec:
   ports:
   - port: 443
     targetPort: 8080
-    name: https
+    name: health
   type: LoadBalancer

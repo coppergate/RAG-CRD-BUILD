@@ -81,10 +81,12 @@ kind: Service
 metadata:
   name: memory-controller
   namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
 spec:
   selector:
     app: memory-controller
   ports:
   - port: 443
     targetPort: 8080
-    name: https
+    name: health

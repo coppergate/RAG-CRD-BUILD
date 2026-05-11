@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -111,6 +112,10 @@ func main() {
 	mux := http.NewServeMux()
 	healthSrv.RegisterRoutes(mux)
 
+	mux.HandleFunc("/search", adapter.HandleSearch)
+	mux.HandleFunc("/upsert", adapter.HandleUpsert)
+	mux.HandleFunc("/delete", adapter.HandleDelete)
+
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
 		res, err := adapter.qdrant.ListCollections()
 		if err != nil {
@@ -162,18 +167,18 @@ func main() {
 	otelHandler := otelhttp.NewHandler(mux, "qdrant-adapter")
 
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    cfg.HTTPAddr,
 		Handler: otelHandler,
 	}
 
 	go func() {
 		if cfg.TLSCert != "" && cfg.TLSKey != "" {
-			log.Printf("Starting Qdrant Adapter REST API with TLS on :8080")
+			log.Printf("Starting Qdrant Adapter REST API with TLS on %s", cfg.HTTPAddr)
 			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("REST server failed: %v", err)
 			}
 		} else {
-			log.Printf("Starting Qdrant Adapter REST API on :8080")
+			log.Printf("Starting Qdrant Adapter REST API on %s", cfg.HTTPAddr)
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("REST server failed: %v", err)
 			}
@@ -234,18 +239,8 @@ func main() {
 }
 
 
-func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
+func (a *Adapter) executeOp(ctx context.Context, data *contracts.QdrantOp) (*contracts.QdrantResponse, error) {
 	start := time.Now()
-
-	var data contracts.QdrantOp
-	if err := protojson.Unmarshal(msg.Payload(), &data); err != nil {
-		return dlq.PermanentFailure, fmt.Errorf("bad payload: %w", err)
-	}
-
-	tracer := otel.Tracer("qdrant-adapter")
-	ctx, span := tracer.Start(ctx, "HandleOp")
-	defer span.End()
-
 	opID := data.Id
 	action := data.Action
 	collection := data.Collection
@@ -257,7 +252,6 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 		attribute.Int("vector_size", vs),
 		attribute.Int64("session_id", data.SessionId),
 	}
-	span.SetAttributes(attrs...)
 
 	defer func() {
 		duration := float64(time.Since(start).Milliseconds())
@@ -265,7 +259,7 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 	}()
 	opCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 
-	log.Printf("[SID:%d] Received Qdrant op %s for collection %s", data.SessionId, action, collection)
+	log.Printf("[SID:%d] Executing Qdrant op %s for collection %s", data.SessionId, action, collection)
 
 	var (
 		result interface{}
@@ -296,10 +290,9 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 	case "merge_tags":
 		opErr = a.qdrant.MergeTags(collection, vs, data.SourceTag, data.TargetTag)
 	default:
-		return dlq.PermanentFailure, fmt.Errorf("unsupported action: %s", action)
+		return nil, fmt.Errorf("unsupported action: %s", action)
 	}
 
-	// Always publish the result (success or error) to the results topic
 	resp := &contracts.QdrantResponse{
 		Id:         opID,
 		Action:     action,
@@ -311,6 +304,23 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 		log.Printf("[%s] Qdrant action '%s' failed on collection '%s': %v", opID, action, collection, opErr)
 	} else {
 		resp.Result = contracts.ToValue(result)
+	}
+	return resp, nil
+}
+
+func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq.ProcessResult, error) {
+	var data contracts.QdrantOp
+	if err := protojson.Unmarshal(msg.Payload(), &data); err != nil {
+		return dlq.PermanentFailure, fmt.Errorf("bad payload: %w", err)
+	}
+
+	tracer := otel.Tracer("qdrant-adapter")
+	ctx, span := tracer.Start(ctx, "HandleOp")
+	defer span.End()
+
+	resp, err := a.executeOp(ctx, &data)
+	if err != nil {
+		return dlq.PermanentFailure, err
 	}
 
 	marshaller := protojson.MarshalOptions{
@@ -334,13 +344,53 @@ func (a *Adapter) handleWithResult(ctx context.Context, msg pulsar.Message) (dlq
 		return dlq.TransientFailure, fmt.Errorf("publish result: %w", perr)
 	}
 
-	if opErr != nil {
-		return dlq.TransientFailure, opErr
+	if resp.Error != "" {
+		return dlq.TransientFailure, fmt.Errorf(resp.Error)
 	}
 	return dlq.Success, nil
 }
 
-func toFloat32Slice(v any) []float32 {
+func (a *Adapter) HandleSearch(w http.ResponseWriter, r *http.Request) {
+	a.handleHTTP(w, r, "search")
+}
+
+func (a *Adapter) HandleUpsert(w http.ResponseWriter, r *http.Request) {
+	a.handleHTTP(w, r, "upsert")
+}
+
+func (a *Adapter) HandleDelete(w http.ResponseWriter, r *http.Request) {
+	a.handleHTTP(w, r, "delete")
+}
+
+func (a *Adapter) handleHTTP(w http.ResponseWriter, r *http.Request, defaultAction string) {
+	var op contracts.QdrantOp
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+	if err := protojson.Unmarshal(body, &op); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if op.Action == "" {
+		op.Action = defaultAction
+	}
+
+	resp, err := a.executeOp(r.Context(), &op)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	out, err := protojson.Marshal(resp)
+	if err != nil {
+		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(out)
+}
 	arr, ok := v.([]interface{})
 	if !ok {
 		return nil

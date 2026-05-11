@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // CheckFunc is a function that performs a health check and returns an error if unhealthy.
@@ -48,6 +50,9 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	// Readiness: checks all registered dependencies
 	mux.HandleFunc("/readyz", s.readyzHandler)
+
+	// Metrics: Prometheus pull endpoint
+	mux.Handle("/metrics", promhttp.Handler())
 }
 
 // Start launches the health server on the given address in a background goroutine.

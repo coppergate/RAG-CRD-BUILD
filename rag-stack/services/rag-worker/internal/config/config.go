@@ -44,6 +44,7 @@ type Config struct {
 	StreamAccumulationCount int
 
 	MemoryControllerURL string
+	QdrantAdapterURL    string
 
 	TLSCert            string
 	TLSKey             string
@@ -96,6 +97,7 @@ func LoadConfig() *Config {
 		StreamIntermediate:  envutil.GetEnvBool("STREAM_INTERMEDIATE", true),
 
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "http://memory-controller.rag-system.svc.cluster.local:8080"),
+		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "http://qdrant-adapter.rag-system.svc.cluster.local:8080"),
 
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:              envutil.GetEnv("TLS_KEY", ""),

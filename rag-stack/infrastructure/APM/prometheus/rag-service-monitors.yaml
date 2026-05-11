@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rag-services
+  namespace: monitoring
+  labels:
+    prometheus: otlp
+    role: alert-rules
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: rag-stack
+  namespaceSelector:
+    matchNames:
+      - rag-system
+  endpoints:
+    - port: health
+      path: /metrics
+      interval: 30s
+      scheme: https
+      tlsConfig:
+        insecureSkipVerify: true
