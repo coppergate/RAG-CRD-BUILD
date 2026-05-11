@@ -237,7 +237,6 @@ func main() {
 	mux.HandleFunc("/maintenance/tags/merge", maintSvc.MergeTags)
 	mux.HandleFunc("/stats", metricsSvc.GetStats)
 	mux.HandleFunc("/metrics/summary", metricsSvc.GetMetricsSummary)
-	healthSrv.RegisterRoutes(mux)
 	mux.HandleFunc("/storage/files", storageSvc.GetFiles)
 	mux.HandleFunc("/storage/vectors", storageSvc.GetFileVectors)
 
