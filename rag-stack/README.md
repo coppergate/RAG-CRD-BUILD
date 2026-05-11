@@ -5,13 +5,13 @@ This repository contains all the necessary components to build and deploy a prod
 ## Architecture Overview
 
 The system utilizes a modular microservices architecture:
-- **LLM Gateway (Go)**: OpenAI-compatible API entry point.
-- **Apache Pulsar**: Asynchronous message bus for task orchestration.
-- **RAG Worker (Go)**: Core logic for embeddings, vector search, and LLM coordination.
-- **TimescaleDB**: Session and chat history management.
-- **Qdrant**: Vector database for code snippet embeddings.
-- **Rook-Ceph S3**: Local object storage for the codebase.
-- **RAG Explorer (Flutter)**: Advanced management UI for the RAG pipeline.
+- **LLM Gateway (Go)**: OpenAI-compatible API entry point with strict CORS and session management.
+- **Apache Pulsar**: High-concurrency message bus for asynchronous task orchestration.
+- **RAG Worker (Go)**: Core orchestration engine using high-speed direct HTTP retrieval for vector searches.
+- **TimescaleDB**: Relational metadata, session tracking, and structured memory persistence.
+- **Qdrant**: High-performance vector database with dual-mode (Pulsar/HTTP) access.
+- **Rook-Ceph S3**: Local-first S3 storage for document and source context persistence.
+- **RAG Explorer (Flutter)**: Modularized management UI for ingestion, memory, and maintenance.
 
 ## Repository Structure
 

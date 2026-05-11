@@ -1,7 +1,7 @@
 # Refactoring & Improvement Plan
 
-**Version**: 3.0.x → 3.1.x
-**Status**: In Progress (Sections 1-4 Complete)
+**Version**: 3.1.x
+**Status**: Sections 1-4 Complete (Iteration 9)
 **Principle**: Changes that affect multiple services are implemented in `common/` first. Each individual service then wires in the new common functionality with minimal edits (typically 1–5 lines). This batching strategy prevents editing the same service file repeatedly across unrelated tasks.
 
 ---

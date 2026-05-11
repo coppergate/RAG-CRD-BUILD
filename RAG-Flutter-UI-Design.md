@@ -64,10 +64,11 @@
 ```
 
 ### 2.1 State Management
-- Use **Riverpod** (recommended) or **Bloc** for state management.
-- Each tab has its own provider/state scope. Global state is limited to:
+- Use **Riverpod** for state management.
+- Each tab has its own provider/state scope. Centralized state includes:
   - `AppConfig` (API URLs, TLS settings, selected theme).
-  - `AuthState` (Network-level access for now; designed for future Key/OAuth integration).
+  - `ChatNotifier` (Centralized state for the modularized Chat tab).
+  - `AuthState` (API Key based authentication for administrative calls).
   - `ServiceHealth` (Background health polling for all services).
 
 ### 2.2 Networking Layer
@@ -88,21 +89,25 @@ lib/
 │   ├── app_config.dart         # Runtime config model
 │   └── service_endpoints.dart  # Service URL constants/defaults
 ├── core/
-│   ├── api_client.dart         # Dio wrapper with TLS, logging, tracing
+│   ├── api_client.dart         # Dio wrapper with TLS, logging, tracing, Auth
 │   ├── models/                 # Shared data models (contracts)
 │   │   ├── prompt_message.dart
 │   │   ├── response_message.dart
 │   │   ├── memory_pack.dart
+│   │   ├── behavioral_rule.dart
 │   │   ├── memory_write_request.dart
 │   │   ├── memory_retrieve_request.dart
 │   │   └── db_op_message.dart
 │   └── widgets/                # Reusable widgets (JSON viewer, data table, etc.)
 ├── features/
-│   ├── chat/                   # Chat tab
+│   ├── chat/                   # Modular Chat tab
+│   │   ├── chat_page.dart      # Composition root
+│   │   ├── chat_notifier.dart  # Centralized state logic
+│   │   ├── widgets/            # MessageList, SessionDrawer, InputBar
 │   ├── ingestion/              # Ingestion tab
-│   ├── memory/                 # Memory Explorer tab
+│   ├── memory/                 # Memory Explorer & Behavioral Rules tab
 │   ├── s3_browser/             # S3 Data Maintenance tab
-│   ├── timescale/              # TimescaleDB tab
+│   ├── timescale/              # TimescaleDB & Tag Maintenance tab
 │   ├── qdrant/                 # Qdrant tab
 │   ├── models/                 # Model Comparison tab
 │   ├── observability/          # Observability tab

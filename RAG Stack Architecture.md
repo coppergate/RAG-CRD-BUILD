@@ -1,4 +1,4 @@
-Based on the current implementation of the RAG stack (Iteration 8), here is a refreshed architecture representation of components, build flow, and asynchronous interconnections (v2.12.0).
+Based on the current implementation of the RAG stack (Iteration 9), here is a refreshed architecture representation of components, build flow, and asynchronous interconnections (v3.1.x).
 
 #### 1. Architecture & Message Interconnections - Mermaid Diagram -
 
@@ -79,6 +79,9 @@ graph TD
     Admin <-->|Proxy| OSMgr
     Gateway <-->|WS/HTTPS| Explorer
 
+    %% Performance Optimization: Direct HTTP Search
+    Worker -->|HTTPS/8082 - Search| QAdapter
+
     %% Registry Flow
     Flutter & Gateway & Worker & DBAdapter & Ingestor & QAdapter & OSMgr -.->|Pull TLS| Reg
     S3 & Qdrant & TDB & Ollama & OllamaCode -.->|Pull TLS| Reg
@@ -98,39 +101,37 @@ graph TD
     Gateway -.->|2- Publish| Ingress
 
     Ingress -.->|3- Consume| Worker
-    Worker -.->|4- Search Op| QOps
-    QOps -.->|5- Consume| QAdapter
-    QAdapter -->|6- GRPC+TLS| Qdrant
-    QAdapter -.->|7- Publish| QRes
-    QRes -.->|8- Consume| Worker
+    Worker -->|4- Search: HTTPS| QAdapter
+    QAdapter -->|5- GRPC+TLS| Qdrant
+    QAdapter -->|6- Search Results: HTTPS| Worker
 
     %% Worker transitions
-    Worker -.->|9- Publish| Plan
-    Plan -.->|10- Consume| Worker
-    Worker -.->|11- Publish| Search
-    Search -.->|12- Consume| Worker
-    Worker -.->|13- Publish| Exec
-    Exec -.->|14- Consume| Worker
+    Worker -.->|7- Publish| Plan
+    Plan -.->|8- Consume| Worker
+    Worker -.->|9- Publish| Search
+    Search -.->|10- Consume| Worker
+    Worker -.->|11- Publish| Exec
+    Exec -.->|12- Consume| Worker
 
-    Worker -->|15- Inference| Ollama
-    Worker -->|16- Inference| OllamaCode
-    Worker -.->|17- Stream Chunks| Sessions
-    Worker -.->|18- Completion Signal| Completion
+    Worker -->|13- Inference| Ollama
+    Worker -->|14- Inference| OllamaCode
+    Worker -.->|15- Stream Chunks| Sessions
+    Worker -.->|16- Completion Signal| Completion
 
     %% Memory Flow
-    Worker -.->|19- Request Memory| MemRefresh
-    Worker -.->|20- Submit Memory| MemWrite
-    MemRefresh -.->|21- Consume| Memory
-    MemWrite -.->|22- Consume| Memory
-    MemWrite -.->|23- Consume| DBAdapter
-    Memory -.->|24- Deliver MemoryPack| Sessions
+    Worker -.->|17- Request Memory| MemRefresh
+    Worker -.->|18- Submit Memory| MemWrite
+    MemRefresh -.->|19- Consume| Memory
+    MemWrite -.->|20- Consume| Memory
+    MemWrite -.->|21- Consume| DBAdapter
+    Memory -.->|22- Deliver MemoryPack| Sessions
 
-    Sessions -.->|25- Read Stream| Gateway
-    Completion -.->|26- Trigger| Aggregator
-    Aggregator -.->|27- Read Session Data| Sessions
-    Aggregator -.->|28- Publish| Results
-    Results -.->|29- Consume| DBAdapter
-    Gateway -->|30- Final Response| Explorer
+    Sessions -.->|23- Read Stream| Gateway
+    Completion -.->|24- Trigger| Aggregator
+    Aggregator -.->|25- Read Session Data| Sessions
+    Aggregator -.->|26- Publish| Results
+    Results -.->|27- Consume| DBAdapter
+    Gateway -->|28- Final Response| Explorer
 
     %% Persistent Flow: DB Adapter
     Prompts -.->|Consume| DBAdapter
@@ -156,17 +157,16 @@ graph TD
 #### 2. Component Descriptions
 
 - `rag-explorer`: Advanced Flutter-based management UI for the RAG pipeline. Supports granular ingestion control, metadata inspection, and real-time session monitoring.
-- `rag-admin-api`: Management portal proxy and health aggregator; provides a unified API for `rag-explorer`.
-- `llm-gateway`: OpenAI-compatible entry point; manages session lifecycle and asynchronous task delegation. Now supports isolated session topics for streaming.
-- `rag-worker`: Core orchestration engine with modular LLM support (Llama/Granite); integrates multi-stage RAG logic (ingress/plan/search/exec).
-- `qdrant-adapter`: Centralized vector DB adapter ensuring consistent tag-filtered search and upsert logic.
-- `db-adapter`: Async persistence layer for audit logs, session state, and chat history.
-- `memory-controller`: Manages structured memory items and session-based graph links for Titans/Miras-inspired memory. Handles salience scoring, retention/decay, and MemoryPack assembly.
-- `prompt-aggregator`: High-performance aggregation service that assembles streaming chunks from session-specific Pulsar topics into final results.
+- `rag-admin-api`: Management portal proxy and health aggregator; provides a unified API for `rag-explorer`. Now enforces API Key authentication for administration.
+- `llm-gateway`: OpenAI-compatible entry point; manages session lifecycle and asynchronous task delegation. Supports isolated session topics and strict CORS for WebSocket security.
+- `rag-worker`: Core orchestration engine. Now uses high-performance direct HTTP calls to `qdrant-adapter` for vector searches, eliminating sync-over-async latency.
+- `qdrant-adapter`: Centralized vector DB adapter. Dual-mode support: Asynchronous Pulsar for background ingestion and High-Speed HTTP for real-time searches.
+- `db-adapter`: Async persistence layer using Ent ORM. Standardized for TimescaleDB operations.
+- `memory-controller`: Manages structured memory items, session-based graph links, and behavioral rules. Handles salience scoring, retention/decay, and MemoryPack assembly.
+- `prompt-aggregator`: High-performance aggregation service that assembles streaming chunks using efficient blocking reader calls.
 - `rag-ingestion-service`: Persistent Python service for multi-source data ingestion and embedding generation.
-- `common/telemetry`: Shared OTLP package for distributed tracing and Prometheus metrics; services export to local `Alloy` instances.
-- `Grafana Dashboards`: Targeted observability including the "RAG Stack Operational Overview" dashboard for tracking throughput, latency, and GPU utilization.
-- `TLS/Security`: end-to-end encryption using `cert-manager` and internal Root CA; all inter-service traffic uses HTTPS, GRPC+TLS, or Pulsar+SSL. Monitoring (Loki/Mimir/Tempo) uses NGINX-based TLS gateways.
+- `common/telemetry`: Shared OTLP package for distributed tracing and Prometheus metrics; all services expose `/metrics` for pull-based scraping and export traces to local `Alloy` instances.
+- `TLS/Security`: end-to-end encryption using `cert-manager` and internal Root CA; all inter-service traffic uses HTTPS, GRPC+TLS, or Pulsar+SSL. Restricted RBAC via dedicated `rag-service-sa` ServiceAccount.
 - `k8tz`: Cluster-wide timezone injection (`Europe/London`) for consistent log/metric timestamps.
 - `metrics-generator`: Tempo module for generating RED metrics from traces, remote-writing to Mimir.
 
