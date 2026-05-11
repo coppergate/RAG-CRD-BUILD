@@ -15,6 +15,7 @@ spec:
     spec:
       nodeSelector:
         role: storage-node
+      serviceAccountName: rag-service-sa
       containers:
       - name: admin-api
         image: registry.hierocracy.home:5000/rag-admin-api:__VERSION__
@@ -67,6 +68,12 @@ spec:
           value: "/etc/ssl/certs/tls.crt"
         - name: TLS_KEY
           value: "/etc/ssl/certs/tls.key"
+        - name: ADMIN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: rag-admin-api-auth
+              key: api-key
+              optional: true
         volumeMounts:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt

@@ -15,6 +15,7 @@ spec:
     spec:
       nodeSelector:
         role: storage-node
+      serviceAccountName: rag-service-sa
       enableServiceLinks: false
       containers:
       - name: worker

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"app-builds/common/contracts"
@@ -22,7 +23,19 @@ import (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Adjust as needed for security
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		// Allow internal domain
+		if strings.HasSuffix(origin, ".hierocracy.home") {
+			return true
+		}
+		// Allow localhost for debugging
+		if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") {
+			return true
+		}
+		return false
 	},
 }
 

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -68,7 +69,16 @@ func main() {
 	// Simple CORS Middleware
 	corsHandler := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			// Restricted CORS when auth is active
+			origin := r.Header.Get("Origin")
+			if origin == "https://rag-admin-api.rag.hierocracy.home" || 
+			   origin == "https://rag-explorer.rag.hierocracy.home" ||
+			   os.Getenv("ADMIN_API_KEY") == "" {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			} else {
+				w.Header().Set("Access-Control-Allow-Origin", "https://rag-admin-api.rag.hierocracy.home")
+			}
+			
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 			
@@ -81,7 +91,29 @@ func main() {
 		})
 	}
 
-	otelHandler := otelhttp.NewHandler(corsHandler(mux), "rag-admin-api")
+	apiKey := os.Getenv("ADMIN_API_KEY")
+	authMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Health and metrics endpoints bypass auth
+			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/health" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if apiKey != "" {
+				token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+				if token != apiKey {
+					// Also check if it was passed without Bearer prefix
+					if r.Header.Get("Authorization") != apiKey {
+						http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+						return
+					}
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	otelHandler := otelhttp.NewHandler(corsHandler(authMiddleware(mux)), "rag-admin-api")
 
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,

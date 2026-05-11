@@ -107,9 +107,12 @@ func main() {
 		_, err := entClient.Session.Query().Limit(1).Count(context.Background())
 		return err
 	})
+	healthSrv.RegisterCheck("pulsar", pulsarClient.Ping)
 
 	// Setup Pulsar Consumers
-	setupConsumers(ctx, pulsarClient, cfg, dlqHandler, processor)
+	if err := setupConsumers(ctx, pulsarClient, cfg, dlqHandler, processor); err != nil {
+		log.Fatalf("Fatal: could not setup pulsar consumers: %v", err)
+	}
 
 	// Setup HTTP Routes
 	mux := http.NewServeMux()
@@ -265,38 +268,26 @@ func main() {
 	log.Println("DB Adapter shutdown complete")
 }
 
-func setupConsumers(ctx context.Context, client *pulsarCommon.Client, cfg *config.Config, dlqHandler *dlq.Handler, processor *service.PulsarProcessor) {
-	// Prompts
-	pc, err := client.NewSharedConsumer(cfg.PromptTopic, cfg.Subscription)
-	if err == nil {
-		go consumeLoop(ctx, pc, dlqHandler, processor.HandlePrompt)
-	} else {
-		log.Printf("Error creating prompt consumer on %s: %v", cfg.PromptTopic, err)
+func setupConsumers(ctx context.Context, client *pulsarCommon.Client, cfg *config.Config, dlqHandler *dlq.Handler, processor *service.PulsarProcessor) error {
+	consumers := []struct {
+		topic        string
+		subscription string
+		handler      func(context.Context, pulsar.Message) (dlq.ProcessResult, error)
+	}{
+		{cfg.PromptTopic, cfg.Subscription, processor.HandlePrompt},
+		{cfg.ResponseTopic, cfg.Subscription, processor.HandleResponse},
+		{cfg.CompletionTopic, cfg.Subscription + "-metrics", processor.HandleCompletion},
+		{cfg.DBOpsTopic, cfg.Subscription + "-ops", processor.HandleDBOp},
 	}
 
-	// Responses
-	rc, err := client.NewSharedConsumer(cfg.ResponseTopic, cfg.Subscription)
-	if err == nil {
-		go consumeLoop(ctx, rc, dlqHandler, processor.HandleResponse)
-	} else {
-		log.Printf("Error creating response consumer on %s: %v", cfg.ResponseTopic, err)
+	for _, c := range consumers {
+		consumer, err := client.NewSharedConsumer(c.topic, c.subscription)
+		if err != nil {
+			return fmt.Errorf("failed to create consumer for topic %s: %w", c.topic, err)
+		}
+		go consumeLoop(ctx, consumer, dlqHandler, c.handler)
 	}
-
-	// Metrics
-	cc, err := client.NewSharedConsumer(cfg.CompletionTopic, cfg.Subscription+"-metrics")
-	if err == nil {
-		go consumeLoop(ctx, cc, dlqHandler, processor.HandleCompletion)
-	} else {
-		log.Printf("Error creating completion consumer on %s: %v", cfg.CompletionTopic, err)
-	}
-
-	// Ops
-	oc, err := client.NewSharedConsumer(cfg.DBOpsTopic, cfg.Subscription+"-ops")
-	if err == nil {
-		go consumeLoop(ctx, oc, dlqHandler, processor.HandleDBOp)
-	} else {
-		log.Printf("Error creating DB ops consumer on %s: %v", cfg.DBOpsTopic, err)
-	}
+	return nil
 }
 
 func consumeLoop(ctx context.Context, consumer pulsar.Consumer, dlqHandler *dlq.Handler, handler func(context.Context, pulsar.Message) (dlq.ProcessResult, error)) {

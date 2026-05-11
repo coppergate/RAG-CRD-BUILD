@@ -794,3 +794,11 @@ The resume and cover letter generation follows a strict Markdown-first workflow 
 - **Authenticity**: Treat the RAG pipeline and AI stack as personal projects. Do not attribute them to previous employers unless applicable.
 - **Accuracy**: Do not claim experience or achievements not present in source documents.
 - **Language**: Only include languages the subject actually uses.
+
+## 13. Security & Access Control
+
+### 13.1 Admin API Authentication
+The `rag-admin-api` now supports API key authentication via the `ADMIN_API_KEY` environment variable.
+- **Transition State**: Currently configured as "fail-open" (optional: true in deployment). If the `rag-admin-api-auth` secret is missing, the service will allow unauthenticated access.
+- **Enforcement**: Once stable, the `optional: true` flag should be removed from the deployment.
+- **Setup**: Run `scripts/setup-admin-auth.sh` on **hierophant** to generate and apply the API key secret.
