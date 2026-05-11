@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 
 	"app-builds/common/ent"
 	"app-builds/common/ent/actiontype"
 	_ "github.com/lib/pq"
+	"app-builds/common/logging"
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 
 	client, err := ent.Open("postgres", dbConn)
 	if err != nil {
-		log.Fatalf("failed opening connection to postgres: %v", err)
+		logging.Fatalf("failed opening connection to postgres: %v", err)
 	}
 	defer client.Close()
 
@@ -43,7 +43,7 @@ func main() {
 		if err != nil {
 			at, err = client.ActionType.Create().SetName(atName).Save(ctx)
 			if err != nil {
-				log.Fatalf("failed creating action type %s: %v", atName, err)
+				logging.Fatalf("failed creating action type %s: %v", atName, err)
 			}
 		}
 
@@ -53,7 +53,7 @@ func main() {
 				SetIdentifier(id).
 				Exec(ctx)
 			if err != nil {
-				log.Printf("Warning: failed creating identifier %s for %s: %v", id, atName, err)
+				logging.Printf("Warning: failed creating identifier %s for %s: %v", id, atName, err)
 			}
 		}
 	}
@@ -89,9 +89,9 @@ func main() {
 			SetState("ACTIVE").
 			Save(ctx)
 		if err != nil {
-			log.Printf("Warning: failed creating rule for %s: %v", r.ActionType, err)
+			logging.Printf("Warning: failed creating rule for %s: %v", r.ActionType, err)
 		}
 	}
 
-	log.Println("Seeding complete.")
+	logging.Println("Seeding complete.")
 }

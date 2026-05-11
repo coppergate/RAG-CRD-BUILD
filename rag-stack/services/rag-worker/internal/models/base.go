@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
+	"app-builds/common/logging"
 )
 
 // ModelConfig defines model-specific strings and behavior for the GenericModel
@@ -45,7 +45,7 @@ func (m *GenericModel) Plan(ctx context.Context, prompt string, contexts []inter
 
 	subQueries := ParseJSONArray(planResult)
 	if len(subQueries) == 0 {
-		log.Printf("Planner output did not contain a valid JSON array or was empty: %s", planResult)
+		logging.Printf("Planner output did not contain a valid JSON array or was empty: %s", planResult)
 		subQueries = []string{prompt}
 	}
 	return subQueries, metrics, nil

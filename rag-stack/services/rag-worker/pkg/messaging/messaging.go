@@ -3,7 +3,6 @@ package messaging
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"app-builds/common/contracts"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/rag-worker/internal/config"
+	"app-builds/common/logging"
 )
 
 // Producers holds all Pulsar producers used by the worker.
@@ -150,13 +150,13 @@ func (c *Client) SendStatus(ctx context.Context, id string, sessionID int64, sta
 		Details:   details,
 	}
 	if _, err := pulsarCommon.SendProto(ctx, c.Producers.Status, payload); err != nil {
-		log.Printf("[%s] Failed to send status message: %v", id, err)
+		logging.Printf("[%s] Failed to send status message: %v", id, err)
 	}
 }
 
 // SendResult sends a result message as a single chunk for consistency with the aggregator.
 func (c *Client) SendResult(ctx context.Context, id string, sessionID int64, result, model string, metadata map[string]interface{}) {
-	log.Printf("[%s] Sending non-streaming result as final chunk", id)
+	logging.Printf("[%s] Sending non-streaming result as final chunk", id)
 	c.SendStreamChunk(ctx, id, sessionID, result, 0, true, model, true, metadata)
 }
 
@@ -183,7 +183,7 @@ func (c *Client) SendStreamChunk(ctx context.Context, id string, sessionID int64
 	topic := c.SessionTopic(id)
 	producer, err := c.getSessionProducer(topic)
 	if err != nil {
-		log.Printf("[%s] Failed to get session producer for %s: %v", id, topic, err)
+		logging.Printf("[%s] Failed to get session producer for %s: %v", id, topic, err)
 		return
 	}
 
@@ -199,12 +199,12 @@ func (c *Client) SendStreamChunk(ctx context.Context, id string, sessionID int64
 	}
 
 	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
-		log.Printf("[%s] Failed to send stream chunk to session topic %s: %v", id, topic, err)
+		logging.Printf("[%s] Failed to send stream chunk to session topic %s: %v", id, topic, err)
 	}
 
 	// Also send to the global results topic for database persistence
 	if _, err := pulsarCommon.SendProto(ctx, c.Producers.Results, msgPayload); err != nil {
-		log.Printf("[%s] Failed to send stream chunk to global results topic: %v", id, err)
+		logging.Printf("[%s] Failed to send stream chunk to global results topic: %v", id, err)
 	}
 
 	if isLast {
@@ -221,7 +221,7 @@ func (c *Client) SendPlanningResponse(ctx context.Context, id string, sessionID 
 	topic := c.SessionTopic(id)
 	producer, err := c.getSessionProducer(topic)
 	if err != nil {
-		log.Printf("[%s] Failed to get session producer for planning %s: %v", id, topic, err)
+		logging.Printf("[%s] Failed to get session producer for planning %s: %v", id, topic, err)
 		return
 	}
 
@@ -234,14 +234,14 @@ func (c *Client) SendPlanningResponse(ctx context.Context, id string, sessionID 
 	}
 
 	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
-		log.Printf("[%s] Failed to send planning response to session topic %s: %v", id, topic, err)
+		logging.Printf("[%s] Failed to send planning response to session topic %s: %v", id, topic, err)
 	} else {
-		log.Printf("[%s] Sent planning response to session topic %s", id, topic)
+		logging.Printf("[%s] Sent planning response to session topic %s", id, topic)
 	}
 
 	// Also send to the global results topic for database persistence
 	if _, err := pulsarCommon.SendProto(ctx, c.Producers.Results, msgPayload); err != nil {
-		log.Printf("[%s] Failed to send planning response to global results topic: %v", id, err)
+		logging.Printf("[%s] Failed to send planning response to global results topic: %v", id, err)
 	}
 }
 
@@ -249,7 +249,7 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 	topic := c.SessionTopic(id)
 	producer, err := c.getSessionProducer(topic)
 	if err != nil {
-		log.Printf("[%s] Failed to get session producer for error %s: %v", id, topic, err)
+		logging.Printf("[%s] Failed to get session producer for error %s: %v", id, topic, err)
 		return
 	}
 
@@ -261,7 +261,7 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 	}
 
 	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {
-		log.Printf("[%s] Failed to send error to topic %s: %v", id, topic, err)
+		logging.Printf("[%s] Failed to send error to topic %s: %v", id, topic, err)
 	}
 
 	c.sessionProducers.Delete(topic)
@@ -273,7 +273,7 @@ func (c *Client) SendError(ctx context.Context, id, errMsg string, inConversatio
 
 // SendCompletion sends a completion event to the completion topic.
 func (c *Client) SendCompletion(ctx context.Context, id string, sessionID int64, startTS, model, status string, metrics *contracts.ExecutionMetrics) {
-	log.Printf("[%s] Sending completion event (status: %s)", id, status)
+	logging.Printf("[%s] Sending completion event (status: %s)", id, status)
 	payload := &contracts.ResponseCompletion{
 		Id:             id,
 		SessionId:      sessionID,
@@ -283,7 +283,7 @@ func (c *Client) SendCompletion(ctx context.Context, id string, sessionID int64,
 		Metrics:        metrics,
 	}
 	if _, err := pulsarCommon.SendProto(ctx, c.Producers.Completion, payload); err != nil {
-		log.Printf("[%s] Failed to send completion message: %v", id, err)
+		logging.Printf("[%s] Failed to send completion message: %v", id, err)
 	}
 }
 

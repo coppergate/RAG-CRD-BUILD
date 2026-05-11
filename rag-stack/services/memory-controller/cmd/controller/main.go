@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,7 @@ import (
 
 	"app-builds/common/ent"
 	"app-builds/common/health"
+	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 	"app-builds/memory-controller/internal/config"
 	"app-builds/memory-controller/internal/handlers"
@@ -24,14 +24,15 @@ func main() {
 
 	shutdown, err := telemetry.InitTracer("memory-controller")
 	if err != nil {
-		log.Printf("Warning: failed to initialize tracer: %v", err)
+		logging.Warn("failed to initialize tracer", "error", err)
 	} else {
 		defer shutdown(context.Background())
 	}
 
 	entClient, err := ent.Open("postgres", cfg.DBConnString)
 	if err != nil {
-		log.Fatalf("Failed to connect to DB: %v", err)
+		logging.Error("failed to connect to DB", "error", err)
+		os.Exit(1)
 	}
 	defer entClient.Close()
 
@@ -70,14 +71,16 @@ func main() {
 
 	go func() {
 		if cfg.TLSCert != "" && cfg.TLSKey != "" {
-			log.Printf("Starting Memory Controller with TLS on %s", cfg.ListenAddr)
+			logging.Info("starting Memory Controller with TLS", "addr", cfg.ListenAddr)
 			if err := server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Listen error: %v", err)
+				logging.Error("listen error", "error", err)
+				os.Exit(1)
 			}
 		} else {
-			log.Printf("Starting Memory Controller on %s", cfg.ListenAddr)
+			logging.Info("starting Memory Controller", "addr", cfg.ListenAddr)
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Listen error: %v", err)
+				logging.Error("listen error", "error", err)
+				os.Exit(1)
 			}
 		}
 	}()
@@ -86,7 +89,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	log.Println("Shutting down memory-controller...")
+	logging.Info("shutting down memory-controller")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	server.Shutdown(ctx)

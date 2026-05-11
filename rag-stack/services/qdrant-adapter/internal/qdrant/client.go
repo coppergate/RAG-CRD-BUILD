@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"app-builds/common/contracts"
 	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
+	"app-builds/common/logging"
 )
 
 type QdrantClient struct {
@@ -22,7 +22,7 @@ type QdrantClient struct {
 func NewClient(cfg *config.Config) *QdrantClient {
 	httpClient, err := tlsutil.NewHTTPClient(cfg.QdrantUseTLS, 10*time.Second)
 	if err != nil {
-		log.Fatalf("Failed to create Qdrant HTTP client with TLS: %v", err)
+		logging.Fatalf("Failed to create Qdrant HTTP client with TLS: %v", err)
 	}
 	return &QdrantClient{
 		cfg:        cfg,
@@ -40,7 +40,7 @@ func (q *QdrantClient) Search(collection string, vectorSize int, vector []float3
 func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]interface{}, error) {
 	if len(vector) == 0 {
 		if len(tags) > 0 {
-			log.Printf("Empty vector but tags provided, falling back to filter-only retrieval")
+			logging.Printf("Empty vector but tags provided, falling back to filter-only retrieval")
 			return q.RetrieveByFilter(collection, vectorSize, tags, sessionID, includeGlobal, limit)
 		}
 		return nil, nil // Cannot search with empty vector and no tags
@@ -117,7 +117,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		query["filter"] = map[string]interface{}{
 			"must": mustFilters,
 		}
-		log.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%d): %+v", tags, sessionID, query["filter"])
+		logging.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%d): %+v", tags, sessionID, query["filter"])
 	}
 
 	body, err := json.Marshal(query)

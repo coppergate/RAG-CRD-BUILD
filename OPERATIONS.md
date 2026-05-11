@@ -223,7 +223,7 @@ Every new session for the **Junie** agent MUST establish the operational context
         - Create a merge request (if applicable) and ensure it's ready for merge.
     - Create a new session branch named `work-YYYY-MM-DD` (e.g., `work-2026-03-02`).
     - During the session, commit with timestamp messages (e.g., `2026-03-02 08:30`).
-    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies"`.
+    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Co-authored-by: Junie <junie@jetbrains.com>"`.
 2. **File Size Limit**: Do not commit any files larger than 1MB without asking first.
    - **Clean History (Rebase & Squash)**:
    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.

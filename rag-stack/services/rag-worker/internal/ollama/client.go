@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"app-builds/common/contracts"
 	"app-builds/common/tlsutil"
+	"app-builds/common/logging"
 )
 
 type OllamaClient struct {
@@ -25,7 +25,7 @@ func NewClient(url, model string) *OllamaClient {
 	useTLS := strings.HasPrefix(url, "https://")
 	httpClient, err := tlsutil.NewHTTPClient(useTLS, 60*time.Second)
 	if err != nil {
-		log.Fatalf("Failed to create Ollama HTTP client with TLS: %v", err)
+		logging.Fatalf("Failed to create Ollama HTTP client with TLS: %v", err)
 	}
 	return &OllamaClient{
 		url:        url,

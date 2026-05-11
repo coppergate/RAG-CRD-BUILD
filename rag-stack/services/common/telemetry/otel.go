@@ -3,7 +3,6 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"app-builds/common/tlsutil"
@@ -19,6 +18,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"google.golang.org/grpc/credentials"
+	"app-builds/common/logging"
 )
 
 func InitTracer(serviceName string) (func(context.Context) error, error) {
@@ -45,7 +45,7 @@ func InitTracer(serviceName string) (func(context.Context) error, error) {
 		if err != nil {
 			return nil, fmt.Errorf("OTEL TLS initialization failed for %s: %w", serviceName, err)
 		}
-		log.Printf("OTEL (gRPC): TLS enabled for %s using CA from SSL_CERT_FILE", serviceName)
+		logging.Printf("OTEL (gRPC): TLS enabled for %s using CA from SSL_CERT_FILE", serviceName)
 		traceOpts = append(traceOpts, otlptracegrpc.WithTLSCredentials(credentials.NewTLS(tlsConfig)))
 		metricOpts = append(metricOpts, otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(tlsConfig)))
 	}

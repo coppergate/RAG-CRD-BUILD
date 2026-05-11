@@ -3,23 +3,23 @@ package search
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"app-builds/common/clients"
 	"app-builds/common/contracts"
 	"app-builds/rag-worker/internal/config"
+	"app-builds/common/logging"
 )
 
 // QdrantSearcher handles Qdrant search operations via direct HTTP calls.
 type QdrantSearcher struct {
 	cfg    *config.Config
-	client *clients.QdrantHTTPClient
+	client clients.QdrantClient
 }
 
 // NewQdrantSearcher creates a new Qdrant searcher that sends search requests
 // via the given HTTP client.
-func NewQdrantSearcher(cfg *config.Config, client *clients.QdrantHTTPClient) *QdrantSearcher {
+func NewQdrantSearcher(cfg *config.Config, client clients.QdrantClient) *QdrantSearcher {
 	return &QdrantSearcher{
 		cfg:    cfg,
 		client: client,
@@ -29,7 +29,7 @@ func NewQdrantSearcher(cfg *config.Config, client *clients.QdrantHTTPClient) *Qd
 // Search sends a search request to Qdrant via HTTP and waits for the result.
 func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
 	if len(vector) == 0 && len(tags) == 0 {
-		log.Printf("DEBUG: Skipping Qdrant search for session %d - empty vector and no tags", sessionID)
+		logging.Printf("DEBUG: Skipping Qdrant search for session %d - empty vector and no tags", sessionID)
 		return nil, nil
 	}
 
@@ -65,7 +65,7 @@ func (s *QdrantSearcher) Search(ctx context.Context, vector []float32, tags []in
 		return nil, fmt.Errorf("qdrant search result was not a list: %T", val)
 	}
 
-	log.Printf("[%s] Qdrant search returned %d items", resp.Id, len(res))
+	logging.Printf("[%s] Qdrant search returned %d items", resp.Id, len(res))
 	return res, nil
 }
 

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -14,6 +13,7 @@ import (
 	"time"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"app-builds/common/logging"
 )
 
 type SessionResponse struct {
@@ -91,7 +91,7 @@ func (h *MemoryHandler) listItems(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.manager.ListItems(ctx, sessionID)
 	if err != nil {
-		log.Printf("[MEMCTRL][SID:%d] Error listing items: %v", sessionID, err)
+		logging.Printf("[MEMCTRL][SID:%d] Error listing items: %v", sessionID, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -114,7 +114,7 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	if err := h.manager.WriteItems(ctx, &req); err != nil {
-		log.Printf("[MEMCTRL][SID:%d] Failed to write items: %v", req.Scope.SessionId, err)
+		logging.Printf("[MEMCTRL][SID:%d] Failed to write items: %v", req.Scope.SessionId, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -124,7 +124,7 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 func (h *MemoryHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[MEMCTRL] %s %s (session.FieldID=%s)", r.Method, r.URL.Path, session.FieldID)
+	logging.Printf("[MEMCTRL] %s %s (session.FieldID=%s)", r.Method, r.URL.Path, session.FieldID)
 	switch r.Method {
 	case http.MethodGet:
 		h.listSessions(w, r)
@@ -167,7 +167,7 @@ func (h *MemoryHandler) createSession(w http.ResponseWriter, r *http.Request) {
 
 	s, err := h.manager.CreateSession(ctx, req.Id, req.Name)
 	if err != nil {
-		log.Printf("[MEMCTRL] Error creating/updating session: %v", err)
+		logging.Printf("[MEMCTRL] Error creating/updating session: %v", err)
 		if strings.Contains(err.Error(), "already exists") {
 			http.Error(w, err.Error(), http.StatusConflict)
 		} else {
@@ -200,7 +200,7 @@ func (h *MemoryHandler) deleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.manager.DeleteSession(ctx, id); err != nil {
-		log.Printf("[MEMCTRL] Error deleting session: %v", err)
+		logging.Printf("[MEMCTRL] Error deleting session: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

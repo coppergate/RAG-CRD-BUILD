@@ -12,6 +12,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+type QdrantClient interface {
+	Search(ctx context.Context, op *contracts.QdrantOp) (*contracts.QdrantResponse, error)
+}
+
 type QdrantHTTPClient struct {
 	baseURL    string
 	httpClient *http.Client

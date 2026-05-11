@@ -15,6 +15,7 @@ spec:
     spec:
       nodeSelector:
         role: storage-node
+      serviceAccountName: rag-service-sa
       containers:
       - name: aggregator
         image: registry.hierocracy.home:5000/prompt-aggregator:__VERSION__

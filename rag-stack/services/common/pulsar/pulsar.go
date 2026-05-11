@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"app-builds/common/logging"
 	"app-builds/common/tlsutil"
 )
 
@@ -104,7 +104,7 @@ func SendProto(ctx context.Context, producer pulsar.Producer, payload proto.Mess
 		return nil, fmt.Errorf("failed to marshal proto payload: %w", err)
 	}
 
-	log.Printf("[PULSAR] Sending marshaled proto: %s", string(data))
+	logging.L.WithTrace(ctx).Info("sending marshaled proto", "payload_len", len(data))
 
 	msg := &pulsar.ProducerMessage{
 		Payload:    data,

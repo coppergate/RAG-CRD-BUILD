@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -21,6 +20,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"app-builds/common/contracts"
+	"app-builds/common/logging"
 )
 
 type MaintenanceService struct {
@@ -77,7 +77,7 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 		WithTags().
 		All(ctx)
 	if err != nil {
-		log.Printf("Merge: Failed to find embeddings for source tags: %v", err)
+		logging.Printf("Merge: Failed to find embeddings for source tags: %v", err)
 		http.Error(w, "Failed to find files for source tags", http.StatusInternalServerError)
 		return
 	}
@@ -149,7 +149,7 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 	httpClient, _ := tlsutil.NewHTTPClient(true, 10*time.Minute)
 
 	for _, group := range groups {
-		log.Printf("Merge: Processing group with tags %v and %d files", group.TagNames, len(group.Paths))
+		logging.Printf("Merge: Processing group with tags %v and %d files", group.TagNames, len(group.Paths))
 
 		_, err = s.client.CodeEmbedding.Delete().
 			Where(func(sel *sql.Selector) {
@@ -157,7 +157,7 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 			}).
 			Exec(ctx)
 		if err != nil {
-			log.Printf("Merge: Error deleting from code_embedding: %v", err)
+			logging.Printf("Merge: Error deleting from code_embedding: %v", err)
 		}
 
 		if s.qdrantProducer != nil {
@@ -187,10 +187,10 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 		ingestEndpoint := s.ingestionURL + "/api/ingest/"
 		resp, err := httpClient.Post(ingestEndpoint, "application/json", bytes.NewBuffer(body))
 		if err != nil {
-			log.Printf("Merge: Failed to trigger ingestion for group: %v", err)
+			logging.Printf("Merge: Failed to trigger ingestion for group: %v", err)
 		} else {
 			resp.Body.Close()
-			log.Printf("Merge: Triggered ingestion for group, status: %s", resp.Status)
+			logging.Printf("Merge: Triggered ingestion for group, status: %s", resp.Status)
 		}
 	}
 

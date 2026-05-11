@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"app-builds/memory-controller/internal/behavioral"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"app-builds/common/logging"
 )
 
 type BehavioralHandler struct {
@@ -161,7 +161,7 @@ func (h *BehavioralHandler) HandleLearn(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[MEMCTRL] Recorded new learning for %s: %d (State: %s)", req.ActionType, rule.ID, rule.State)
+	logging.Printf("[MEMCTRL] Recorded new learning for %s: %d (State: %s)", req.ActionType, rule.ID, rule.State)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(rule)

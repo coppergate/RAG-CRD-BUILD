@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"go.opentelemetry.io/otel/attribute"
@@ -58,7 +58,7 @@ func NewHandler(client pulsar.Client, serviceName string) (*Handler, error) {
 		return nil, fmt.Errorf("failed to create DLQ producer for %s: %w", dlqTopic, err)
 	}
 
-	log.Printf("DLQ handler initialized for %s (max_retries=%d, dlq_topic=%s)", serviceName, maxRetries, dlqTopic)
+	logging.L.Info("DLQ handler initialized", "service", serviceName, "max_retries", maxRetries, "dlq_topic", dlqTopic)
 
 	meter := telemetry.Meter("dlq")
 	dlqRouted, _ := meter.Int64Counter("dlq_routed_total",
@@ -124,7 +124,7 @@ func (h *Handler) HandleMessage(
 	case PermanentFailure:
 		h.dlqRouted.Add(ctx, 1, attrs)
 		telemetry.UpdateDLQDepth(ctx, 1, h.serviceName)
-		log.Printf("[DLQ] Permanent failure processing message on %s: %v", msg.Topic(), processErr)
+		logging.L.WithTrace(ctx).Error("permanent failure processing message", "topic", msg.Topic(), "error", processErr)
 		h.routeToDLQ(ctx, msg, processErr)
 		consumer.Ack(msg) // ACK after DLQ routing to prevent redelivery
 		return
@@ -134,14 +134,14 @@ func (h *Handler) HandleMessage(
 		if retryCount >= h.maxRetries {
 			h.dlqRouted.Add(ctx, 1, attrs)
 			telemetry.UpdateDLQDepth(ctx, 1, h.serviceName)
-			log.Printf("[DLQ] Max retries (%d) exhausted for message on %s: %v", h.maxRetries, msg.Topic(), processErr)
+			logging.L.WithTrace(ctx).Warn("max retries exhausted", "topic", msg.Topic(), "retries", h.maxRetries, "error", processErr)
 			h.routeToDLQ(ctx, msg, processErr)
 			consumer.Ack(msg)
 			return
 		}
 
 		h.dlqRetried.Add(ctx, 1, attrs)
-		log.Printf("[DLQ] Transient failure (retry %d/%d) on %s: %v", retryCount+1, h.maxRetries, msg.Topic(), processErr)
+		logging.L.WithTrace(ctx).Warn("transient failure (retrying)", "topic", msg.Topic(), "retry", retryCount+1, "max_retries", h.maxRetries, "error", processErr)
 		consumer.Nack(msg)
 	}
 }
@@ -177,14 +177,14 @@ func (h *Handler) routeToDLQ(ctx context.Context, msg pulsar.Message, processErr
 	if len(payloadStr) > 2000 {
 		payloadStr = payloadStr[:2000] + "...(truncated)"
 	}
-	log.Printf("[DLQ] Routing message to DLQ. Service=%s, OrigTopic=%s, Payload=%s", h.serviceName, msg.Topic(), payloadStr)
+	logging.L.WithTrace(ctx).Info("routing message to DLQ", "service", h.serviceName, "orig_topic", msg.Topic(), "payload", payloadStr)
 
 	_, err := h.dlqProducer.Send(ctx, &pulsar.ProducerMessage{
 		Payload:    msg.Payload(),
 		Properties: props,
 	})
 	if err != nil {
-		log.Printf("[DLQ] CRITICAL: Failed to send message to DLQ: %v. Original payload: %s", err, payloadStr)
+		logging.L.WithTrace(ctx).Error("CRITICAL: failed to send message to DLQ", "error", err, "payload", payloadStr)
 	}
 }
 
@@ -204,14 +204,14 @@ func (h *Handler) pollBacklog() {
 		case <-ticker.C:
 			resp, err := client.Get(url)
 			if err != nil {
-				log.Printf("[DLQ] Failed to poll backlog from %s: %v", url, err)
+				logging.L.Warn("failed to poll DLQ backlog", "url", url, "error", err)
 				continue
 			}
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 
 			if resp.StatusCode != http.StatusOK {
-				log.Printf("[DLQ] Admin API returned status %d: %s", resp.StatusCode, string(body))
+				logging.L.Warn("DLQ admin API error", "status", resp.StatusCode, "body", string(body))
 				continue
 			}
 
@@ -219,7 +219,7 @@ func (h *Handler) pollBacklog() {
 				MsgBacklog int64 `json:"msgBacklog"`
 			}
 			if err := json.Unmarshal(body, &stats); err != nil {
-				log.Printf("[DLQ] Failed to unmarshal stats: %v", err)
+				logging.L.Warn("failed to unmarshal DLQ stats", "error", err)
 				continue
 			}
 

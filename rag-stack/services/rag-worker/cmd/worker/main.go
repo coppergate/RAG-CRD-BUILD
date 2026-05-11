@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"app-builds/common/clients"
 	"app-builds/common/dlq"
 	"app-builds/common/health"
+	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/models"
@@ -89,11 +89,11 @@ func main() {
 
 	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher, memoryClient)
 
-	log.Printf("RAG Worker started, listening on multiple stages")
+	logging.Info("RAG Worker started", "stages", "multiple")
 
 	runMessageLoop(cfg, consumer, handler, dlqHandler)
 
-	log.Println("RAG Worker shutdown complete")
+	logging.Info("RAG Worker shutdown complete")
 }
 
 // initTracer initializes the OpenTelemetry tracer and returns its shutdown
@@ -101,7 +101,7 @@ func main() {
 func initTracer() func(context.Context) error {
 	shutdown, err := telemetry.InitTracer("rag-worker")
 	if err != nil {
-		log.Printf("Warning: failed to initialize tracer: %v", err)
+		logging.Warn("failed to initialize tracer", "error", err)
 		return nil
 	}
 	return shutdown
@@ -111,7 +111,7 @@ func initTracer() func(context.Context) error {
 func initMessaging(cfg *config.Config) *messaging.Client {
 	msgClient, err := messaging.NewClient(cfg)
 	if err != nil {
-		log.Fatalf("Could not initialize messaging: %v", err)
+		logging.Fatalf("Could not initialize messaging: %v", err)
 	}
 	return msgClient
 }
@@ -148,7 +148,8 @@ func initModelRegistry(cfg *config.Config) *models.ModelRegistry {
 func initDLQHandler(msgClient *messaging.Client) *dlq.Handler {
 	dlqHandler, err := dlq.NewHandler(msgClient.PulsarClient(), "rag-worker")
 	if err != nil {
-		log.Fatalf("Could not create DLQ handler: %v", err)
+		logging.Error("could not create DLQ handler", "error", err)
+		os.Exit(1)
 	}
 	return dlqHandler
 }
@@ -172,7 +173,8 @@ func subscribeToStageTopics(cfg *config.Config, msgClient *messaging.Client) pul
 		Type:             pulsar.Shared,
 	})
 	if err != nil {
-		log.Fatalf("Could not create Pulsar consumer: %v", err)
+		logging.Error("could not create Pulsar consumer", "error", err)
+		os.Exit(1)
 	}
 	return consumer
 }
@@ -202,7 +204,7 @@ func runMessageLoop(cfg *config.Config, consumer pulsar.Consumer, handler *pipel
 	var wg sync.WaitGroup
 	go func() {
 		<-stop
-		log.Println("Shutdown signal received, stopping message consumption...")
+		logging.Info("shutdown signal received, stopping message consumption")
 		cancel()
 	}()
 
@@ -212,7 +214,7 @@ func runMessageLoop(cfg *config.Config, consumer pulsar.Consumer, handler *pipel
 			if ctx.Err() != nil {
 				break
 			}
-			log.Printf("Error receiving message: %v", err)
+			logging.Error("error receiving message", "error", err)
 			continue
 		}
 
@@ -237,7 +239,7 @@ func runMessageLoop(cfg *config.Config, consumer pulsar.Consumer, handler *pipel
 
 // awaitInFlight waits for all in-flight goroutines to finish, with a timeout.
 func awaitInFlight(wg *sync.WaitGroup, timeout time.Duration) {
-	log.Println("Waiting for in-flight tasks to complete...")
+	logging.Info("waiting for in-flight tasks to complete")
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -246,8 +248,8 @@ func awaitInFlight(wg *sync.WaitGroup, timeout time.Duration) {
 
 	select {
 	case <-done:
-		log.Println("All in-flight tasks completed")
+		logging.Info("all in-flight tasks completed")
 	case <-time.After(timeout):
-		log.Printf("Shutdown timeout (%s) reached, some tasks may not have completed", timeout)
+		logging.Warn("shutdown timeout reached", "timeout", timeout)
 	}
 }

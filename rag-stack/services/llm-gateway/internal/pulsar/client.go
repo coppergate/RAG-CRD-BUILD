@@ -3,7 +3,6 @@ package pulsar
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"app-builds/common/contracts"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/llm-gateway/internal/config"
+	"app-builds/common/logging"
 )
 
 type pulsarClient struct {
@@ -157,7 +157,7 @@ func (pc *pulsarClient) SubscribeStream(id string, ch chan *contracts.StreamChun
 			Type:             pulsar.Exclusive,
 		})
 		if err != nil {
-			log.Printf("[%s] Failed to subscribe to session topic %s: %v", id, topic, err)
+			logging.Printf("[%s] Failed to subscribe to session topic %s: %v", id, topic, err)
 			return
 		}
 		defer consumer.Close()
@@ -168,7 +168,7 @@ func (pc *pulsarClient) SubscribeStream(id string, ch chan *contracts.StreamChun
 				if ctx.Err() != nil {
 					return
 				}
-				log.Printf("[%s] Consumer receive error: %v", id, err)
+				logging.Printf("[%s] Consumer receive error: %v", id, err)
 				return
 			}
 

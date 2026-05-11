@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 
 	"app-builds/common/ent/migrate"
@@ -37,6 +36,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"app-builds/common/logging"
 )
 
 // Client is the client that holds all ent builders.
@@ -140,7 +140,7 @@ type (
 
 // newConfig creates a new config for the client.
 func newConfig(opts ...Option) config {
-	cfg := config{log: log.Println, hooks: &hooks{}, inters: &inters{}}
+	cfg := config{log: logging.Println, hooks: &hooks{}, inters: &inters{}}
 	cfg.options(opts...)
 	return cfg
 }

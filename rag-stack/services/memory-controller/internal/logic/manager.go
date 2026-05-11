@@ -3,7 +3,6 @@ package logic
 import (
 	"context"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +20,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqljson"
+	"app-builds/common/logging"
 )
 
 type MemoryManager struct {
@@ -272,7 +272,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		Limit(int(limit)).
 		All(ctx)
 	if err != nil {
-		log.Printf("[MEMCTRL] Error fetching memory items: %v", err)
+		logging.Printf("[MEMCTRL] Error fetching memory items: %v", err)
 	}
 
 	// 2. Fetch Chat History (Prompts and Responses)
@@ -282,7 +282,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		Limit(int(limit)).
 		All(ctx)
 	if err != nil {
-		log.Printf("[MEMCTRL] Error fetching prompts: %v", err)
+		logging.Printf("[MEMCTRL] Error fetching prompts: %v", err)
 	}
 
 	var promptIDs []int64
@@ -296,7 +296,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 			Where(response.PromptIDIn(promptIDs...)).
 			All(ctx)
 		if err != nil {
-			log.Printf("[MEMCTRL] Error fetching responses: %v", err)
+			logging.Printf("[MEMCTRL] Error fetching responses: %v", err)
 		} else {
 			for _, res := range responses {
 				if res.PromptID != 0 {
@@ -311,7 +311,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		Where(behavioralrule.StateEQ(behavioralrule.StateACTIVE)).
 		All(ctx)
 	if err != nil {
-		log.Printf("[MEMCTRL] Error fetching behavioral rules: %v", err)
+		logging.Printf("[MEMCTRL] Error fetching behavioral rules: %v", err)
 	}
 
 	// 3b. Fetch Session Overrides (Iteration 9b)
