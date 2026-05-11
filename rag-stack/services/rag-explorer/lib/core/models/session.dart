@@ -10,7 +10,7 @@ abstract class Session with _$Session {
   const factory Session({
     @JsonKey(name: 'created_at') required DateTime createdAt,
     String? description,
-    @Default(0) required int id,
+    @Default(0) int id,
     @JsonKey(name: 'last_active_at') required DateTime lastActiveAt,
     Map<String, dynamic>? metadata,
     String? name,

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../config/service_endpoints.dart';
-import '../../core/models/metrics.dart';
 import '../../core/api_client.dart';
+import '../../core/models/metrics.dart';
 import '../../app_config_provider.dart';
 
 class QdrantPage extends ConsumerStatefulWidget {
@@ -25,13 +24,13 @@ class _QdrantPageState extends ConsumerState<QdrantPage> {
     final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
     
-    final response = await client.get('${ServiceEndpoints.qdrantAdapter}/collections');
+    final response = await client.get('${config.qdrantUrl}/collections');
     final collections = (response.data['result']['collections'] as List);
     
     List<Map<String, dynamic>> details = [];
     for (var coll in collections) {
       final name = coll['name'];
-      final statsResp = await client.get('${ServiceEndpoints.qdrantAdapter}/collections/$name/stats');
+      final statsResp = await client.get('${config.qdrantUrl}/collections/$name/stats');
       details.add({
         'name': name,
         'stats': QdrantStats.fromJson(statsResp.data),

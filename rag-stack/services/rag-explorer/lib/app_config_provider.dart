@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/app_config.dart';
-import 'config/service_endpoints.dart';
 
 // Centralized configuration provider for the RAG Explorer app.
 final appConfigProvider = NotifierProvider<AppConfigNotifier, AppConfig>(() => AppConfigNotifier());
@@ -37,16 +36,7 @@ final dioProvider = Provider<Dio>((ref) {
 class AppConfigNotifier extends Notifier<AppConfig> {
   @override
   AppConfig build() {
-    return const AppConfig(
-      llmGatewayUrl: ServiceEndpoints.llmGateway,
-      ragIngestionUrl: ServiceEndpoints.ragIngestion,
-      objectStoreMgrUrl: ServiceEndpoints.objectStoreMgr,
-      dbAdapterUrl: ServiceEndpoints.dbAdapter,
-      qdrantAdapterUrl: ServiceEndpoints.qdrantAdapter,
-      memoryControllerUrl: ServiceEndpoints.memoryController,
-      grafanaUrl: ServiceEndpoints.grafana,
-      ragAdminApiUrl: ServiceEndpoints.ragAdminApi,
-    );
+    return const AppConfig();
   }
 
   void update(AppConfig config) {
@@ -54,14 +44,6 @@ class AppConfigNotifier extends Notifier<AppConfig> {
   }
 
   void updateRagAdminApi(String url) {
-    state = state.copyWith(
-      ragAdminApiUrl: url,
-      llmGatewayUrl: '$url/api/chat',
-      ragIngestionUrl: '$url/api/ingest',
-      objectStoreMgrUrl: '$url/api/s3',
-      dbAdapterUrl: '$url/api/db',
-      qdrantAdapterUrl: '$url/api/qdrant',
-      memoryControllerUrl: '$url/api/memory',
-    );
+    state = state.copyWith(ragAdminApiUrl: url);
   }
 }

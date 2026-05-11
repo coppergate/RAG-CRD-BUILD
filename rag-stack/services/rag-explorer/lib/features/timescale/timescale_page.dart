@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../config/service_endpoints.dart';
 import '../../core/api_client.dart';
 import '../../core/models/metrics.dart';
 import '../../core/models/session.dart';
@@ -30,7 +29,7 @@ class _TimescalePageState extends ConsumerState<TimescalePage> {
   Future<List<Session>> _fetchSessions() async {
     final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
-    final response = await client.get('${ServiceEndpoints.dbAdapter}/sessions');
+    final response = await client.get('${config.dbUrl}/sessions');
     if (response.data == null) return [];
     return (response.data as List).map((e) => Session.fromJson(e)).toList();
   }
@@ -45,8 +44,8 @@ class _TimescalePageState extends ConsumerState<TimescalePage> {
       final config = ref.read(appConfigProvider);
       final client = ApiClient(config);
       
-      final healthResp = await client.get('${ServiceEndpoints.dbAdapter}/sessions/${session.id}/health');
-      final auditResp = await client.get('${ServiceEndpoints.dbAdapter}/audit/sessions/${session.id}');
+      final healthResp = await client.get('${config.dbUrl}/sessions/${session.id}/health');
+      final auditResp = await client.get('${config.dbUrl}/audit/sessions/${session.id}');
       
       setState(() {
         if (healthResp.data != null) {
@@ -269,22 +268,77 @@ class _TimescalePageState extends ConsumerState<TimescalePage> {
     }
   }
 
-  void _showMergeDialog() {
+  void _showMergeDialog() async {
+    final chatService = ref.read(chatServiceProvider);
+    final tags = await chatService.getTags();
+    
+    if (!mounted) return;
+
+    List<int> sourceTagIds = [];
+    int? targetTagId;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Merge Tags (Maintenance)'),
-        content: const Text('This will unify multiple tags into a single target and sync the vector store. This action is irreversible.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              // Implementation of merge logic would go here
-              Navigator.pop(context);
-            },
-            child: const Text('Merge'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Merge Tags (Maintenance)'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Select source tags to merge FROM:'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 4,
+                  children: tags.map((t) => FilterChip(
+                    label: Text(t.name, style: const TextStyle(fontSize: 10)),
+                    selected: sourceTagIds.contains(t.id),
+                    onSelected: (val) {
+                      setDialogState(() {
+                        if (val) sourceTagIds.add(t.id);
+                        else sourceTagIds.remove(t.id);
+                      });
+                    },
+                  )).toList(),
+                ),
+                const Divider(height: 32),
+                const Text('Select target tag to merge INTO:'),
+                const SizedBox(height: 8),
+                DropdownButton<int>(
+                  value: targetTagId,
+                  isExpanded: true,
+                  hint: const Text('Select target tag'),
+                  items: tags.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))).toList(),
+                  onChanged: (val) => setDialogState(() => targetTagId = val),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: (sourceTagIds.isNotEmpty && targetTagId != null && !sourceTagIds.contains(targetTagId))
+                ? () async {
+                    final config = ref.read(appConfigProvider);
+                    final client = ApiClient(config);
+                    try {
+                      await client.post('${config.dbUrl}/maintenance/tags/merge', data: {
+                        'source_tag_ids': sourceTagIds,
+                        'target_tag_id': targetTagId,
+                      });
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tag merge initiated successfully')));
+                      }
+                    } catch (e) {
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error merging tags: $e')));
+                    }
+                  }
+                : null,
+              child: const Text('Merge'),
+            ),
+          ],
+        ),
       ),
     );
   }
