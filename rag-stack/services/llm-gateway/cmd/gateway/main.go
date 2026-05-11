@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"app-builds/common/ent"
 	"app-builds/common/health"
 	"app-builds/common/telemetry"
@@ -68,6 +70,7 @@ func main() {
 	mux.HandleFunc("/v1/chat/completions", openAIHandler.HandleChatCompletions)
 	mux.HandleFunc("/v1/rag/chat", openAIHandler.HandleGenericChat)
 	mux.HandleFunc("/v1/rag/chat/stream", openAIHandler.HandleStreamingChat)
+	mux.Handle("/metrics", promhttp.Handler())
 	healthSrv.RegisterRoutes(mux)
 
 	otelHandler := otelhttp.NewHandler(mux, "llm-gateway")

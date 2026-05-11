@@ -89,6 +89,29 @@ func main() {
 
 	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher, memoryClient)
 
+	// Start health/metrics server
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+		mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+			if msgClient.PulsarClient() != nil {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			} else {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte("Not Ready"))
+			}
+		})
+		log.Printf("Starting health/metrics server on :8080")
+		if err := http.ListenAndServe(":8080", mux); err != nil {
+			log.Printf("Health server failed: %v", err)
+		}
+	}()
+
 	log.Printf("RAG Worker started, listening on multiple stages")
 
 	runMessageLoop(cfg, consumer, handler, dlqHandler)

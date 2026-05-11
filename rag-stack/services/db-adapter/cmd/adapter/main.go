@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"app-builds/common/dlq"
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
@@ -237,6 +239,7 @@ func main() {
 	mux.HandleFunc("/maintenance/tags/merge", maintSvc.MergeTags)
 	mux.HandleFunc("/stats", metricsSvc.GetStats)
 	mux.HandleFunc("/metrics/summary", metricsSvc.GetMetricsSummary)
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/storage/files", storageSvc.GetFiles)
 	mux.HandleFunc("/storage/vectors", storageSvc.GetFileVectors)
 

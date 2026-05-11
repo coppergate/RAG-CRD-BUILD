@@ -1,46 +1,46 @@
 {
   "build-orchestrator": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "rag-test-runner": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "object-store-mgr": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "rag-admin-api": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "prompt-aggregator": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "llm-gateway": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "qdrant-adapter": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "db-adapter": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "memory-controller": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "rag-ingestion": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   },
   "rag-worker": {
-    "version": "3.1.0",
-    "last_build": "2026-05-11T06:15:00.000000+01:00"
+    "version": "3.1.1",
+    "last_build": "2026-05-11T07:20:00.000000+01:00"
   }
 }
