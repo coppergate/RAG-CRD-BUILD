@@ -394,7 +394,10 @@ main() {
 				local bver=$(get_svc_version "build-orchestrator")
 				local bver_safe="${bver//./-}"
 				log "Waiting for build-orchestrator Kaniko job..."
-				"$KUBECTL" wait --for=condition=complete job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" --timeout=600s || true
+				if ! "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" --timeout=600s; then
+                    log "ERROR: build-orchestrator Kaniko job did not complete in time."
+                    exit 1
+                fi
 				
 				# Verify success before deploying
 				if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep 1 >/dev/null; then
@@ -402,10 +405,14 @@ main() {
 					update_svc_info "build-orchestrator" "$bver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
 				else
 					log "ERROR: build-orchestrator build failed. Cannot update deployment."
+                    exit 1
 				fi
 
 				log "Waiting for build-orchestrator rollout..."
-				"$KUBECTL" rollout status deployment/build-orchestrator -n build-pipeline --timeout=300s || true
+				if ! "$KUBECTL" rollout status deployment/build-orchestrator -n build-pipeline --timeout=300s; then
+                    log "ERROR: build-orchestrator rollout failed."
+                    exit 1
+                fi
 				sleep 10 # Allow new orchestrator to stabilize
 			fi
 		fi
@@ -445,9 +452,11 @@ main() {
 	fi
 
     if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
-        log "Waiting for cluster builds to complete..."
+        log "Waiting for cluster builds to complete (timeout: 1800s)..."
         # Wait for all jobs with the app=kaniko-build label
-        "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l app=kaniko-build --timeout=900s || true
+        if ! "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l app=kaniko-build --timeout=1800s; then
+            log "WARN: Some build jobs did not complete successfully or timed out."
+        fi
         # After wait, we update timestamps and DEPLOY all services that were successfully built
         for svc in "${SERVICES[@]}" "${INFRA_SERVICES[@]}"; do
              local ver=$(get_svc_version "$svc")

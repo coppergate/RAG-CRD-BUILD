@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
 	"app-builds/common/logging"
 )
 
@@ -302,6 +303,8 @@ func main() {
 	publisher := &statusPublisher{hub: hub, producer: statusProducer}
 	failedPublisher := &failedTaskPublisher{producer: failedProducer, topic: failedTaskTopic}
 
+	autoRollout := getenvDefault("AUTO_ROLLOUT", "false") == "true"
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -337,7 +340,7 @@ func main() {
 						Message:     fmt.Sprintf("Picked up by worker-%d", workerID),
 					})
 
-					err := processTask(ctx, k8sClientset, env.task, jobName, publisher)
+					err := processTask(ctx, k8sClientset, env.task, jobName, publisher, autoRollout)
 					if err != nil {
 						redelivery := int(env.msg.RedeliveryCount())
 						if redelivery >= maxTaskRetries {
@@ -475,7 +478,7 @@ func main() {
 	cancel()
 }
 
-func processTask(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask, jobName string, publisher *statusPublisher) error {
+func processTask(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask, jobName string, publisher *statusPublisher, autoRollout bool) error {
 	namespace := "build-pipeline"
 
 	publisher.Publish(BuildStatusEvent{
@@ -490,7 +493,83 @@ func processTask(ctx context.Context, clientset *kubernetes.Clientset, task Buil
 		return fmt.Errorf("launch job: %w", err)
 	}
 
-	return waitForJobCompletion(ctx, clientset, namespace, task, jobName, publisher)
+	if err := waitForJobCompletion(ctx, clientset, namespace, task, jobName, publisher); err != nil {
+		return err
+	}
+
+	if autoRollout {
+		publisher.Publish(BuildStatusEvent{
+			ServiceName: task.ServiceName,
+			Version:     task.Version,
+			JobName:     jobName,
+			Status:      "rolling_out",
+			Message:     "Triggering automatic deployment update",
+		})
+		if err := updateDeploymentImage(ctx, clientset, task); err != nil {
+			logging.Printf("Warning: automatic rollout failed for %s: %v", task.ServiceName, err)
+			publisher.Publish(BuildStatusEvent{
+				ServiceName: task.ServiceName,
+				Version:     task.Version,
+				JobName:     jobName,
+				Status:      "rollout_failed",
+				Message:     err.Error(),
+			})
+			// We don't return error here because the build itself succeeded
+		} else {
+			publisher.Publish(BuildStatusEvent{
+				ServiceName: task.ServiceName,
+				Version:     task.Version,
+				JobName:     jobName,
+				Status:      "rollout_triggered",
+				Message:     "Deployment update successful",
+			})
+		}
+	}
+
+	return nil
+}
+
+func updateDeploymentImage(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask) error {
+	namespace := "rag-system"
+	if task.ServiceName == "build-orchestrator" {
+		namespace = "build-pipeline"
+	}
+
+	deploymentName := task.ServiceName
+	// Handle special cases if any. Currently object-store-mgr matches.
+	// But we should be careful with names.
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		deploy, err := clientset.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logging.Printf("Deployment %s not found in namespace %s, skipping automatic rollout", deploymentName, namespace)
+				return nil
+			}
+			return err
+		}
+
+		image := task.Registry + "/" + task.ServiceName + ":" + task.Version
+		// Kaniko pushes both :version and :latest
+		// We use :version for the deployment for traceability.
+
+		updated := false
+		for i := range deploy.Spec.Template.Spec.Containers {
+			// Heuristic: check if the image contains the service name
+			if strings.Contains(deploy.Spec.Template.Spec.Containers[i].Image, task.ServiceName) {
+				deploy.Spec.Template.Spec.Containers[i].Image = image
+				updated = true
+			}
+		}
+
+		if !updated {
+			logging.Printf("No container matching %s found in deployment %s, skipping rollout", task.ServiceName, deploymentName)
+			return nil
+		}
+
+		_, err = clientset.AppsV1().Deployments(namespace).Update(ctx, deploy, metav1.UpdateOptions{})
+		return err
+	})
 }
 
 func waitForJobCompletion(ctx context.Context, clientset *kubernetes.Clientset, namespace string, task BuildTask, jobName string, publisher *statusPublisher) error {
