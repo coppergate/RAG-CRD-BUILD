@@ -160,5 +160,6 @@ func (c *Client) Ping() error {
 		}
 	}
 	_ = partitions
+	_ = ctx
 	return nil
 }
