@@ -391,29 +391,3 @@ func (a *Adapter) handleHTTP(w http.ResponseWriter, r *http.Request, defaultActi
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(out)
 }
-	arr, ok := v.([]interface{})
-	if !ok {
-		return nil
-	}
-	res := make([]float32, 0, len(arr))
-	for _, it := range arr {
-		if f, ok := it.(float64); ok {
-			res = append(res, float32(f))
-		}
-	}
-	return res
-}
-
-func toStringSlice(v any) []string {
-	arr, ok := v.([]interface{})
-	if !ok {
-		return nil
-	}
-	res := make([]string, 0, len(arr))
-	for _, it := range arr {
-		if s, ok := it.(string); ok {
-			res = append(res, s)
-		}
-	}
-	return res
-}
