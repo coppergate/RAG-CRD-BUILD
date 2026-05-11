@@ -9,8 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"app-builds/common/ent"
 	"app-builds/common/health"
 	"app-builds/common/telemetry"
@@ -46,7 +44,6 @@ func main() {
 	mux := http.NewServeMux()
 	
 	healthSrv.RegisterRoutes(mux)
-	mux.Handle("/metrics", promhttp.Handler())
 	
 	memoryHandler := handlers.NewMemoryHandler(entClient)
 	mux.HandleFunc("/items", memoryHandler.HandleItems)

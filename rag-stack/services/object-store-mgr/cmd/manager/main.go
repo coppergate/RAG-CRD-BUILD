@@ -10,8 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"app-builds/common/health"
 	"app-builds/common/telemetry"
 
@@ -68,7 +66,6 @@ func main() {
 	mux := http.NewServeMux()
 	
 	healthSrv.RegisterRoutes(mux)
-	mux.Handle("/metrics", promhttp.Handler())
 	
 	mux.HandleFunc("/buckets", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

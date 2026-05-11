@@ -11,8 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/apache/pulsar-client-go/pulsar"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -113,7 +111,6 @@ func main() {
 
 	mux := http.NewServeMux()
 	healthSrv.RegisterRoutes(mux)
-	mux.Handle("/metrics", promhttp.Handler())
 
 	mux.HandleFunc("/search", adapter.HandleSearch)
 	mux.HandleFunc("/upsert", adapter.HandleUpsert)

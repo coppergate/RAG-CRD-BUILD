@@ -95,7 +95,7 @@ func main() {
 	authMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Health and metrics endpoints bypass auth
-			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/health" {
+			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/health" || r.URL.Path == "/metrics" {
 				next.ServeHTTP(w, r)
 				return
 			}
