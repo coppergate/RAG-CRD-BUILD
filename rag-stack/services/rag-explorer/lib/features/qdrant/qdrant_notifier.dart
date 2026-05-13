@@ -92,8 +92,8 @@ class QdrantNotifier extends _$QdrantNotifier {
       _logger.debug('Loading Qdrant collections');
       final collectionsData = await _getWithFallback(
         client,
-        '${config.qdrantDirectUrl}/collections',
         '${config.qdrantUrl}/collections',
+        '${config.qdrantDirectUrl}/collections',
       );
       final collections = _extractCollections(collectionsData);
 
@@ -106,13 +106,13 @@ class QdrantNotifier extends _$QdrantNotifier {
         try {
           final statsJson = await _getWithFallback(
             client,
-            '${config.qdrantDirectUrl}/collections/$name/stats',
-            '${config.qdrantUrl}/collections/$name/stats',
+            '${config.qdrantUrl}/collections/$name',
+            '${config.qdrantDirectUrl}/collections/$name',
           );
           final extractedStats = _extractStats(statsJson);
           if (extractedStats == null) {
             _logger.warn(
-              'Qdrant stats response for $name had no result payload',
+              'Qdrant collection response for $name had no result payload',
             );
             details.add({
               'name': name,
@@ -131,7 +131,7 @@ class QdrantNotifier extends _$QdrantNotifier {
             'stats': QdrantStats.fromJson(extractedStats),
           });
         } catch (e) {
-          _logger.warn('Failed to load Qdrant stats for $name: $e');
+          _logger.warn('Failed to load Qdrant collection $name: $e');
           details.add({
             'name': name,
             'stats': QdrantStats(

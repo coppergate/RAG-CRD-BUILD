@@ -12,15 +12,15 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
+	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 	"app-builds/rag-worker/internal/behavioral"
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/models"
 	"app-builds/rag-worker/pkg/messaging"
-	"app-builds/common/logging"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var (
@@ -228,7 +228,7 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	// ...
 
 	// We don't store planning metrics yet, but we could in the future.
-	_ = metrics 
+	_ = metrics
 
 	if len(subQueries) == 0 {
 		subQueries = []string{req.Prompt}
@@ -346,6 +346,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		metadataMap = make(map[string]interface{})
 	}
 	metadataMap["chunks"] = allChunks
+	metadataMap["contexts"] = flattenChunkContexts(allChunks)
 	if metadataMap["recursion_budget"] == nil {
 		metadataMap["recursion_budget"] = h.cfg.RecursionBudget
 	}
@@ -374,6 +375,18 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	}
 
 	return dlq.Success, nil
+}
+
+func flattenChunkContexts(chunks [][]string) []interface{} {
+	contexts := make([]interface{}, 0)
+	for _, chunk := range chunks {
+		for _, item := range chunk {
+			if item != "" {
+				contexts = append(contexts, item)
+			}
+		}
+	}
+	return contexts
 }
 
 func (h *Handler) chunkResults(ctx context.Context, rawResults []interface{}) [][]string {
@@ -848,7 +861,9 @@ func (h *Handler) mapMetrics(raw interface{}, modelID string) *contracts.Executi
 	}
 
 	var m *contracts.ExecutionMetrics
-	if or, ok := raw.(interface{ GetMetrics() *contracts.ExecutionMetrics }); ok {
+	if or, ok := raw.(interface {
+		GetMetrics() *contracts.ExecutionMetrics
+	}); ok {
 		m = or.GetMetrics()
 	}
 
