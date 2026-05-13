@@ -141,6 +141,7 @@ class _GrafanaPanelCard extends ConsumerStatefulWidget {
 class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
   bool _isLoaded = false;
   bool _hasError = false;
+  String? _loadedUrl;
 
   @override
   void initState() {
@@ -150,8 +151,22 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
         .debug('Loading Grafana panel: ${widget.title}');
   }
 
+  @override
+  void didUpdateWidget(covariant _GrafanaPanelCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.renderUrl != widget.renderUrl ||
+        oldWidget.url != widget.url) {
+      _isLoaded = false;
+      _hasError = false;
+      _loadedUrl = null;
+      ref
+          .read(logProvider.notifier)
+          .debug('Reloading Grafana panel: ${widget.title}');
+    }
+  }
+
   void _markLoaded() {
-    if (_isLoaded) {
+    if (_isLoaded || _loadedUrl == widget.renderUrl) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -160,6 +175,7 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
       }
       setState(() {
         _isLoaded = true;
+        _loadedUrl = widget.renderUrl;
       });
       ref
           .read(logProvider.notifier)
@@ -214,7 +230,25 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
                           _markLoaded();
                           return child;
                         }
-                        return const SizedBox.shrink();
+                        return Container(
+                          color: Colors.transparent,
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                SizedBox(height: 12),
+                                Text('Loading panel...'),
+                              ],
+                            ),
+                          ),
+                        );
                       },
                       errorBuilder: (context, error, stackTrace) {
                         if (!_hasError) {

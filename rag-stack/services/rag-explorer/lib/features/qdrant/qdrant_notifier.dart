@@ -73,7 +73,14 @@ class QdrantNotifier extends _$QdrantNotifier {
       return (await client.get(primaryUrl)).data;
     } catch (e) {
       _logger.warn('Primary Qdrant request failed for $primaryUrl: $e');
-      return (await client.get(fallbackUrl)).data;
+      try {
+        return (await client.get(fallbackUrl)).data;
+      } catch (fallbackError) {
+        _logger.warn(
+          'Fallback Qdrant request failed for $fallbackUrl: $fallbackError',
+        );
+        return null;
+      }
     }
   }
 
@@ -107,6 +114,16 @@ class QdrantNotifier extends _$QdrantNotifier {
             _logger.warn(
               'Qdrant stats response for $name had no result payload',
             );
+            details.add({
+              'name': name,
+              'stats': QdrantStats(
+                status: 'error',
+                pointsCount: 0,
+                segmentsCount: 0,
+                indexedVectorsCount: 0,
+                payloadSchema: null,
+              ),
+            });
             continue;
           }
           details.add({
@@ -114,7 +131,7 @@ class QdrantNotifier extends _$QdrantNotifier {
             'stats': QdrantStats.fromJson(extractedStats),
           });
         } catch (e) {
-          _logger.error('Failed to load Qdrant stats for $name: $e');
+          _logger.warn('Failed to load Qdrant stats for $name: $e');
           details.add({
             'name': name,
             'stats': QdrantStats(

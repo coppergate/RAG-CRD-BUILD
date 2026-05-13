@@ -176,9 +176,9 @@ class SessionDetails extends StatelessWidget {
     return Table(
       border: TableBorder.all(color: borderColor),
       columnWidths: const {
-        0: FixedColumnWidth(100),
+        0: FixedColumnWidth(110),
         1: FlexColumnWidth(),
-        2: FixedColumnWidth(150),
+        2: FixedColumnWidth(220),
       },
       children: [
         TableRow(
@@ -226,13 +226,21 @@ class SessionDetails extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.all(8),
-                child: Text(log.createdAt.toLocal().toString().split('.')[0]),
+                child: Text(_formatTimestamp(log.createdAt)),
               ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  String _formatTimestamp(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    final date = local.toString().split(' ').first;
+    final time =
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}:${local.second.toString().padLeft(2, '0')}.${local.millisecond.toString().padLeft(3, '0')}';
+    return '$date $time';
   }
 
   Color _getStatusColor(String status) {
