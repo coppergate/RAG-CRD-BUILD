@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$S3State {
 
- List<VirtualFile> get files; List<Tag> get availableTags; List<Session> get availableSessions; List<Tag> get selectedTags; Session? get selectedSession; Set<String> get selectedFilePaths; bool get isLoading; bool get isDeleting; String? get error;
+ List<String> get availableBuckets; String? get selectedBucket; List<VirtualFile> get files; List<Tag> get availableTags; List<Session> get availableSessions; List<Tag> get selectedTags; Session? get selectedSession; Set<String> get selectedFilePaths; bool get isLoading; bool get isDeleting; String? get error;
 /// Create a copy of S3State
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $S3StateCopyWith<S3State> get copyWith => _$S3StateCopyWithImpl<S3State>(this as
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is S3State&&const DeepCollectionEquality().equals(other.files, files)&&const DeepCollectionEquality().equals(other.availableTags, availableTags)&&const DeepCollectionEquality().equals(other.availableSessions, availableSessions)&&const DeepCollectionEquality().equals(other.selectedTags, selectedTags)&&(identical(other.selectedSession, selectedSession) || other.selectedSession == selectedSession)&&const DeepCollectionEquality().equals(other.selectedFilePaths, selectedFilePaths)&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.isDeleting, isDeleting) || other.isDeleting == isDeleting)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is S3State&&const DeepCollectionEquality().equals(other.availableBuckets, availableBuckets)&&(identical(other.selectedBucket, selectedBucket) || other.selectedBucket == selectedBucket)&&const DeepCollectionEquality().equals(other.files, files)&&const DeepCollectionEquality().equals(other.availableTags, availableTags)&&const DeepCollectionEquality().equals(other.availableSessions, availableSessions)&&const DeepCollectionEquality().equals(other.selectedTags, selectedTags)&&(identical(other.selectedSession, selectedSession) || other.selectedSession == selectedSession)&&const DeepCollectionEquality().equals(other.selectedFilePaths, selectedFilePaths)&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.isDeleting, isDeleting) || other.isDeleting == isDeleting)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(files),const DeepCollectionEquality().hash(availableTags),const DeepCollectionEquality().hash(availableSessions),const DeepCollectionEquality().hash(selectedTags),selectedSession,const DeepCollectionEquality().hash(selectedFilePaths),isLoading,isDeleting,error);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(availableBuckets),selectedBucket,const DeepCollectionEquality().hash(files),const DeepCollectionEquality().hash(availableTags),const DeepCollectionEquality().hash(availableSessions),const DeepCollectionEquality().hash(selectedTags),selectedSession,const DeepCollectionEquality().hash(selectedFilePaths),isLoading,isDeleting,error);
 
 @override
 String toString() {
-  return 'S3State(files: $files, availableTags: $availableTags, availableSessions: $availableSessions, selectedTags: $selectedTags, selectedSession: $selectedSession, selectedFilePaths: $selectedFilePaths, isLoading: $isLoading, isDeleting: $isDeleting, error: $error)';
+  return 'S3State(availableBuckets: $availableBuckets, selectedBucket: $selectedBucket, files: $files, availableTags: $availableTags, availableSessions: $availableSessions, selectedTags: $selectedTags, selectedSession: $selectedSession, selectedFilePaths: $selectedFilePaths, isLoading: $isLoading, isDeleting: $isDeleting, error: $error)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $S3StateCopyWith<$Res>  {
   factory $S3StateCopyWith(S3State value, $Res Function(S3State) _then) = _$S3StateCopyWithImpl;
 @useResult
 $Res call({
- List<VirtualFile> files, List<Tag> availableTags, List<Session> availableSessions, List<Tag> selectedTags, Session? selectedSession, Set<String> selectedFilePaths, bool isLoading, bool isDeleting, String? error
+ List<String> availableBuckets, String? selectedBucket, List<VirtualFile> files, List<Tag> availableTags, List<Session> availableSessions, List<Tag> selectedTags, Session? selectedSession, Set<String> selectedFilePaths, bool isLoading, bool isDeleting, String? error
 });
 
 
@@ -62,9 +62,11 @@ class _$S3StateCopyWithImpl<$Res>
 
 /// Create a copy of S3State
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? files = null,Object? availableTags = null,Object? availableSessions = null,Object? selectedTags = null,Object? selectedSession = freezed,Object? selectedFilePaths = null,Object? isLoading = null,Object? isDeleting = null,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? availableBuckets = null,Object? selectedBucket = freezed,Object? files = null,Object? availableTags = null,Object? availableSessions = null,Object? selectedTags = null,Object? selectedSession = freezed,Object? selectedFilePaths = null,Object? isLoading = null,Object? isDeleting = null,Object? error = freezed,}) {
   return _then(_self.copyWith(
-files: null == files ? _self.files : files // ignore: cast_nullable_to_non_nullable
+availableBuckets: null == availableBuckets ? _self.availableBuckets : availableBuckets // ignore: cast_nullable_to_non_nullable
+as List<String>,selectedBucket: freezed == selectedBucket ? _self.selectedBucket : selectedBucket // ignore: cast_nullable_to_non_nullable
+as String?,files: null == files ? _self.files : files // ignore: cast_nullable_to_non_nullable
 as List<VirtualFile>,availableTags: null == availableTags ? _self.availableTags : availableTags // ignore: cast_nullable_to_non_nullable
 as List<Tag>,availableSessions: null == availableSessions ? _self.availableSessions : availableSessions // ignore: cast_nullable_to_non_nullable
 as List<Session>,selectedTags: null == selectedTags ? _self.selectedTags : selectedTags // ignore: cast_nullable_to_non_nullable
@@ -170,10 +172,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<VirtualFile> files,  List<Tag> availableTags,  List<Session> availableSessions,  List<Tag> selectedTags,  Session? selectedSession,  Set<String> selectedFilePaths,  bool isLoading,  bool isDeleting,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<String> availableBuckets,  String? selectedBucket,  List<VirtualFile> files,  List<Tag> availableTags,  List<Session> availableSessions,  List<Tag> selectedTags,  Session? selectedSession,  Set<String> selectedFilePaths,  bool isLoading,  bool isDeleting,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _S3State() when $default != null:
-return $default(_that.files,_that.availableTags,_that.availableSessions,_that.selectedTags,_that.selectedSession,_that.selectedFilePaths,_that.isLoading,_that.isDeleting,_that.error);case _:
+return $default(_that.availableBuckets,_that.selectedBucket,_that.files,_that.availableTags,_that.availableSessions,_that.selectedTags,_that.selectedSession,_that.selectedFilePaths,_that.isLoading,_that.isDeleting,_that.error);case _:
   return orElse();
 
 }
@@ -191,10 +193,10 @@ return $default(_that.files,_that.availableTags,_that.availableSessions,_that.se
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<VirtualFile> files,  List<Tag> availableTags,  List<Session> availableSessions,  List<Tag> selectedTags,  Session? selectedSession,  Set<String> selectedFilePaths,  bool isLoading,  bool isDeleting,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<String> availableBuckets,  String? selectedBucket,  List<VirtualFile> files,  List<Tag> availableTags,  List<Session> availableSessions,  List<Tag> selectedTags,  Session? selectedSession,  Set<String> selectedFilePaths,  bool isLoading,  bool isDeleting,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _S3State():
-return $default(_that.files,_that.availableTags,_that.availableSessions,_that.selectedTags,_that.selectedSession,_that.selectedFilePaths,_that.isLoading,_that.isDeleting,_that.error);case _:
+return $default(_that.availableBuckets,_that.selectedBucket,_that.files,_that.availableTags,_that.availableSessions,_that.selectedTags,_that.selectedSession,_that.selectedFilePaths,_that.isLoading,_that.isDeleting,_that.error);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -211,10 +213,10 @@ return $default(_that.files,_that.availableTags,_that.availableSessions,_that.se
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<VirtualFile> files,  List<Tag> availableTags,  List<Session> availableSessions,  List<Tag> selectedTags,  Session? selectedSession,  Set<String> selectedFilePaths,  bool isLoading,  bool isDeleting,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<String> availableBuckets,  String? selectedBucket,  List<VirtualFile> files,  List<Tag> availableTags,  List<Session> availableSessions,  List<Tag> selectedTags,  Session? selectedSession,  Set<String> selectedFilePaths,  bool isLoading,  bool isDeleting,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _S3State() when $default != null:
-return $default(_that.files,_that.availableTags,_that.availableSessions,_that.selectedTags,_that.selectedSession,_that.selectedFilePaths,_that.isLoading,_that.isDeleting,_that.error);case _:
+return $default(_that.availableBuckets,_that.selectedBucket,_that.files,_that.availableTags,_that.availableSessions,_that.selectedTags,_that.selectedSession,_that.selectedFilePaths,_that.isLoading,_that.isDeleting,_that.error);case _:
   return null;
 
 }
@@ -226,9 +228,17 @@ return $default(_that.files,_that.availableTags,_that.availableSessions,_that.se
 
 
 class _S3State implements S3State {
-  const _S3State({final  List<VirtualFile> files = const [], final  List<Tag> availableTags = const [], final  List<Session> availableSessions = const [], final  List<Tag> selectedTags = const [], this.selectedSession, final  Set<String> selectedFilePaths = const {}, this.isLoading = false, this.isDeleting = false, this.error}): _files = files,_availableTags = availableTags,_availableSessions = availableSessions,_selectedTags = selectedTags,_selectedFilePaths = selectedFilePaths;
+  const _S3State({final  List<String> availableBuckets = const [], this.selectedBucket, final  List<VirtualFile> files = const [], final  List<Tag> availableTags = const [], final  List<Session> availableSessions = const [], final  List<Tag> selectedTags = const [], this.selectedSession, final  Set<String> selectedFilePaths = const {}, this.isLoading = false, this.isDeleting = false, this.error}): _availableBuckets = availableBuckets,_files = files,_availableTags = availableTags,_availableSessions = availableSessions,_selectedTags = selectedTags,_selectedFilePaths = selectedFilePaths;
   
 
+ final  List<String> _availableBuckets;
+@override@JsonKey() List<String> get availableBuckets {
+  if (_availableBuckets is EqualUnmodifiableListView) return _availableBuckets;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_availableBuckets);
+}
+
+@override final  String? selectedBucket;
  final  List<VirtualFile> _files;
 @override@JsonKey() List<VirtualFile> get files {
   if (_files is EqualUnmodifiableListView) return _files;
@@ -279,16 +289,16 @@ _$S3StateCopyWith<_S3State> get copyWith => __$S3StateCopyWithImpl<_S3State>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _S3State&&const DeepCollectionEquality().equals(other._files, _files)&&const DeepCollectionEquality().equals(other._availableTags, _availableTags)&&const DeepCollectionEquality().equals(other._availableSessions, _availableSessions)&&const DeepCollectionEquality().equals(other._selectedTags, _selectedTags)&&(identical(other.selectedSession, selectedSession) || other.selectedSession == selectedSession)&&const DeepCollectionEquality().equals(other._selectedFilePaths, _selectedFilePaths)&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.isDeleting, isDeleting) || other.isDeleting == isDeleting)&&(identical(other.error, error) || other.error == error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _S3State&&const DeepCollectionEquality().equals(other._availableBuckets, _availableBuckets)&&(identical(other.selectedBucket, selectedBucket) || other.selectedBucket == selectedBucket)&&const DeepCollectionEquality().equals(other._files, _files)&&const DeepCollectionEquality().equals(other._availableTags, _availableTags)&&const DeepCollectionEquality().equals(other._availableSessions, _availableSessions)&&const DeepCollectionEquality().equals(other._selectedTags, _selectedTags)&&(identical(other.selectedSession, selectedSession) || other.selectedSession == selectedSession)&&const DeepCollectionEquality().equals(other._selectedFilePaths, _selectedFilePaths)&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.isDeleting, isDeleting) || other.isDeleting == isDeleting)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_files),const DeepCollectionEquality().hash(_availableTags),const DeepCollectionEquality().hash(_availableSessions),const DeepCollectionEquality().hash(_selectedTags),selectedSession,const DeepCollectionEquality().hash(_selectedFilePaths),isLoading,isDeleting,error);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_availableBuckets),selectedBucket,const DeepCollectionEquality().hash(_files),const DeepCollectionEquality().hash(_availableTags),const DeepCollectionEquality().hash(_availableSessions),const DeepCollectionEquality().hash(_selectedTags),selectedSession,const DeepCollectionEquality().hash(_selectedFilePaths),isLoading,isDeleting,error);
 
 @override
 String toString() {
-  return 'S3State(files: $files, availableTags: $availableTags, availableSessions: $availableSessions, selectedTags: $selectedTags, selectedSession: $selectedSession, selectedFilePaths: $selectedFilePaths, isLoading: $isLoading, isDeleting: $isDeleting, error: $error)';
+  return 'S3State(availableBuckets: $availableBuckets, selectedBucket: $selectedBucket, files: $files, availableTags: $availableTags, availableSessions: $availableSessions, selectedTags: $selectedTags, selectedSession: $selectedSession, selectedFilePaths: $selectedFilePaths, isLoading: $isLoading, isDeleting: $isDeleting, error: $error)';
 }
 
 
@@ -299,7 +309,7 @@ abstract mixin class _$S3StateCopyWith<$Res> implements $S3StateCopyWith<$Res> {
   factory _$S3StateCopyWith(_S3State value, $Res Function(_S3State) _then) = __$S3StateCopyWithImpl;
 @override @useResult
 $Res call({
- List<VirtualFile> files, List<Tag> availableTags, List<Session> availableSessions, List<Tag> selectedTags, Session? selectedSession, Set<String> selectedFilePaths, bool isLoading, bool isDeleting, String? error
+ List<String> availableBuckets, String? selectedBucket, List<VirtualFile> files, List<Tag> availableTags, List<Session> availableSessions, List<Tag> selectedTags, Session? selectedSession, Set<String> selectedFilePaths, bool isLoading, bool isDeleting, String? error
 });
 
 
@@ -316,9 +326,11 @@ class __$S3StateCopyWithImpl<$Res>
 
 /// Create a copy of S3State
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? files = null,Object? availableTags = null,Object? availableSessions = null,Object? selectedTags = null,Object? selectedSession = freezed,Object? selectedFilePaths = null,Object? isLoading = null,Object? isDeleting = null,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? availableBuckets = null,Object? selectedBucket = freezed,Object? files = null,Object? availableTags = null,Object? availableSessions = null,Object? selectedTags = null,Object? selectedSession = freezed,Object? selectedFilePaths = null,Object? isLoading = null,Object? isDeleting = null,Object? error = freezed,}) {
   return _then(_S3State(
-files: null == files ? _self._files : files // ignore: cast_nullable_to_non_nullable
+availableBuckets: null == availableBuckets ? _self._availableBuckets : availableBuckets // ignore: cast_nullable_to_non_nullable
+as List<String>,selectedBucket: freezed == selectedBucket ? _self.selectedBucket : selectedBucket // ignore: cast_nullable_to_non_nullable
+as String?,files: null == files ? _self._files : files // ignore: cast_nullable_to_non_nullable
 as List<VirtualFile>,availableTags: null == availableTags ? _self._availableTags : availableTags // ignore: cast_nullable_to_non_nullable
 as List<Tag>,availableSessions: null == availableSessions ? _self._availableSessions : availableSessions // ignore: cast_nullable_to_non_nullable
 as List<Session>,selectedTags: null == selectedTags ? _self._selectedTags : selectedTags // ignore: cast_nullable_to_non_nullable

@@ -4,12 +4,13 @@ import '../../core/models/response_message.dart';
 import '../../core/models/session.dart';
 import '../../core/models/tag.dart';
 import '../../core/services/chat_service.dart';
+import '../../core/services/log_service.dart';
 
 part 'chat_notifier.freezed.dart';
 part 'chat_notifier.g.dart';
 
 @freezed
-class ChatState with _$ChatState {
+abstract class ChatState with _$ChatState {
   const factory ChatState({
     @Default([]) List<Session> sessions,
     @Default([]) List<Tag> availableTags,
@@ -36,10 +37,12 @@ class ChatNotifier extends _$ChatNotifier {
     final chatService = ref.watch(chatServiceProvider);
     final sessions = await chatService.getSessions();
     final availableTags = await chatService.getTags();
-    
+
     List<Tag> selectedTags = [];
     try {
-      final general = availableTags.firstWhere((t) => t.name.toLowerCase() == 'general');
+      final general = availableTags.firstWhere(
+        (t) => t.name.toLowerCase() == 'general',
+      );
       selectedTags.add(general);
     } catch (_) {}
 
@@ -52,12 +55,14 @@ class ChatNotifier extends _$ChatNotifier {
 
   Future<void> loadSessions() async {
     final chatService = ref.read(chatServiceProvider);
+    ref.read(logProvider.notifier).debug('Refreshing chat session list');
     final sessions = await chatService.getSessions();
     state = AsyncData(state.value!.copyWith(sessions: sessions));
   }
 
   Future<void> loadTags() async {
     final chatService = ref.read(chatServiceProvider);
+    ref.read(logProvider.notifier).debug('Refreshing chat tag list');
     final tags = await chatService.getTags();
     state = AsyncData(state.value!.copyWith(availableTags: tags));
   }
@@ -68,7 +73,9 @@ class ChatNotifier extends _$ChatNotifier {
     if (success) {
       final currentState = state.value!;
       var newState = currentState.copyWith(
-        selectedSessionIds: currentState.selectedSessionIds.where((id) => id != sessionId).toSet(),
+        selectedSessionIds: currentState.selectedSessionIds
+            .where((id) => id != sessionId)
+            .toSet(),
       );
       if (sessionId == currentState.currentSessionId) {
         newState = newState.copyWith(
@@ -86,13 +93,16 @@ class ChatNotifier extends _$ChatNotifier {
     final currentState = state.value!;
     if (currentState.currentSessionId == sessionId) return;
 
+    ref.read(logProvider.notifier).info('Selecting chat session: $sessionId');
     final session = currentState.sessions.firstWhere((s) => s.id == sessionId);
-    state = AsyncData(currentState.copyWith(
-      currentSessionId: sessionId,
-      currentSessionName: session.name,
-      selectedMessageIndex: null,
-    ));
-    
+    state = AsyncData(
+      currentState.copyWith(
+        currentSessionId: sessionId,
+        currentSessionName: session.name,
+        selectedMessageIndex: null,
+      ),
+    );
+
     await loadMessages(sessionId);
   }
 
@@ -130,7 +140,9 @@ class ChatNotifier extends _$ChatNotifier {
   }
 
   void toggleMetadata() {
-    state = AsyncData(state.value!.copyWith(showMetadata: !state.value!.showMetadata));
+    state = AsyncData(
+      state.value!.copyWith(showMetadata: !state.value!.showMetadata),
+    );
   }
 
   void setMetadataPanelWidth(double width) {
@@ -144,21 +156,34 @@ class ChatNotifier extends _$ChatNotifier {
   void addTag(Tag tag) {
     final currentState = state.value!;
     if (!currentState.selectedTags.any((t) => t.id == tag.id)) {
-      state = AsyncData(currentState.copyWith(
-        selectedTags: [...currentState.selectedTags, tag],
-      ));
+      ref
+          .read(logProvider.notifier)
+          .info('Added chat tag: ${tag.name} (${tag.id})');
+      state = AsyncData(
+        currentState.copyWith(
+          selectedTags: [...currentState.selectedTags, tag],
+        ),
+      );
     }
   }
 
   void removeTag(Tag tag) {
     final currentState = state.value!;
-    state = AsyncData(currentState.copyWith(
-      selectedTags: currentState.selectedTags.where((t) => t.id != tag.id).toList(),
-    ));
+    ref
+        .read(logProvider.notifier)
+        .info('Removed chat tag: ${tag.name} (${tag.id})');
+    state = AsyncData(
+      currentState.copyWith(
+        selectedTags: currentState.selectedTags
+            .where((t) => t.id != tag.id)
+            .toList(),
+      ),
+    );
   }
 
   Future<void> createSession(String name) async {
     final chatService = ref.read(chatServiceProvider);
+    ref.read(logProvider.notifier).info('Creating chat session from UI: $name');
     final session = await chatService.createSession(name);
     if (session != null) {
       await loadSessions();
@@ -171,6 +196,7 @@ class ChatNotifier extends _$ChatNotifier {
     // unless we use a StreamController or similar.
     // But we can update the state to stop streaming.
     if (state.value != null) {
+      ref.read(logProvider.notifier).warn('Chat streaming stopped by user');
       state = AsyncData(state.value!.copyWith(isStreaming: false));
     }
   }
@@ -178,6 +204,11 @@ class ChatNotifier extends _$ChatNotifier {
   Future<void> sendMessage(String prompt) async {
     final currentState = state.value!;
     if (currentState.currentSessionId == null) return;
+    ref
+        .read(logProvider.notifier)
+        .info(
+          'Submitting prompt for session ${currentState.currentSessionId} with tags: ${currentState.selectedTags.map((t) => t.id).join(", ")}',
+        );
 
     // Add user message
     final userMessage = ResponseMessage(
@@ -185,7 +216,7 @@ class ChatNotifier extends _$ChatNotifier {
       role: 'user',
       timestamp: DateTime.now(),
     );
-    
+
     // Add empty assistant message
     final assistantMessage = ResponseMessage(
       content: '',
@@ -193,11 +224,13 @@ class ChatNotifier extends _$ChatNotifier {
       timestamp: DateTime.now(),
     );
 
-    state = AsyncData(currentState.copyWith(
-      messages: [...currentState.messages, userMessage, assistantMessage],
-      isStreaming: true,
-      inConversation: false,
-    ));
+    state = AsyncData(
+      currentState.copyWith(
+        messages: [...currentState.messages, userMessage, assistantMessage],
+        isStreaming: true,
+        inConversation: false,
+      ),
+    );
 
     final chatService = ref.read(chatServiceProvider);
     final stream = chatService.streamChat(
@@ -216,16 +249,18 @@ class ChatNotifier extends _$ChatNotifier {
         final latestState = state.value!;
         final messages = List<ResponseMessage>.from(latestState.messages);
         if (messages.isEmpty) break;
-        
+
         final lastIndex = messages.length - 1;
         final lastMsg = messages[lastIndex];
 
         String? updatedPlanning = lastMsg.planningResponse;
-        if (chunk.planningResponse != null && chunk.planningResponse!.isNotEmpty) {
+        if (chunk.planningResponse != null &&
+            chunk.planningResponse!.isNotEmpty) {
           updatedPlanning = (updatedPlanning ?? '') + chunk.planningResponse!;
         }
 
-        final Map<String, dynamic>? updatedMetadata = (chunk.metadata != null && chunk.metadata!.isNotEmpty)
+        final Map<String, dynamic>? updatedMetadata =
+            (chunk.metadata != null && chunk.metadata!.isNotEmpty)
             ? chunk.metadata
             : lastMsg.metadata;
 
@@ -235,11 +270,13 @@ class ChatNotifier extends _$ChatNotifier {
           planningResponse: updatedPlanning,
         );
 
-        state = AsyncData(latestState.copyWith(
-          messages: messages,
-          inConversation: chunk.inConversation,
-          isStreaming: !chunk.isLast,
-        ));
+        state = AsyncData(
+          latestState.copyWith(
+            messages: messages,
+            inConversation: chunk.inConversation,
+            isStreaming: !chunk.isLast,
+          ),
+        );
 
         if (chunk.isLast) {
           await loadSessions();
@@ -249,19 +286,20 @@ class ChatNotifier extends _$ChatNotifier {
     } catch (e) {
       final latestState = state.value!;
       final messages = List<ResponseMessage>.from(latestState.messages);
-      messages.add(ResponseMessage(
-        content: 'Error: $e',
-        role: 'assistant',
-        timestamp: DateTime.now(),
-        metadata: {'error': true},
-      ));
-      state = AsyncData(latestState.copyWith(
-        messages: messages,
-        isStreaming: false,
-      ));
+      messages.add(
+        ResponseMessage(
+          content: 'Error: $e',
+          role: 'assistant',
+          timestamp: DateTime.now(),
+          metadata: {'error': true},
+        ),
+      );
+      state = AsyncData(
+        latestState.copyWith(messages: messages, isStreaming: false),
+      );
     } finally {
       if (state.value!.isStreaming) {
-         state = AsyncData(state.value!.copyWith(isStreaming: false));
+        state = AsyncData(state.value!.copyWith(isStreaming: false));
       }
     }
   }

@@ -4,12 +4,13 @@ import '../../core/models/memory_pack.dart';
 import '../../core/models/memory_retrieve_request.dart';
 import '../../core/models/memory_write_request.dart';
 import '../../core/services/memory_service.dart';
+import '../../core/services/log_service.dart';
 
 part 'memory_notifier.freezed.dart';
 part 'memory_notifier.g.dart';
 
 @freezed
-class MemoryState with _$MemoryState {
+abstract class MemoryState with _$MemoryState {
   const factory MemoryState({
     int? sessionId,
     @Default([]) List<dynamic> items,
@@ -21,13 +22,21 @@ class MemoryState with _$MemoryState {
 
 @riverpod
 class MemoryNotifier extends _$MemoryNotifier {
+  LogNotifier get _logger => ref.read(logProvider.notifier);
+
   @override
   MemoryState build() {
+    _logger.debug('Building memory explorer state');
     return const MemoryState();
   }
 
   Future<void> setSession(int? sessionId) async {
-    state = state.copyWith(sessionId: sessionId, items: [], retrievedPack: null);
+    _logger.info('Selecting memory session: ${sessionId ?? "all"}');
+    state = state.copyWith(
+      sessionId: sessionId,
+      items: [],
+      retrievedPack: null,
+    );
     if (sessionId != null) {
       await loadItems();
     }
@@ -35,6 +44,7 @@ class MemoryNotifier extends _$MemoryNotifier {
 
   Future<void> loadItems() async {
     if (state.sessionId == null) return;
+    _logger.debug('Loading memory items for session ${state.sessionId}');
     state = state.copyWith(isLoading: true, error: null);
     final service = ref.read(memoryServiceProvider);
     final items = await service.getMemoryItems(state.sessionId!);
@@ -43,13 +53,16 @@ class MemoryNotifier extends _$MemoryNotifier {
 
   Future<void> writeMemory(String content, String type) async {
     if (state.sessionId == null) return;
+    _logger.info('Writing memory item for session ${state.sessionId} ($type)');
     state = state.copyWith(isLoading: true, error: null);
     final service = ref.read(memoryServiceProvider);
-    final success = await service.writeMemory(MemoryWriteRequest(
-      content: content,
-      type: type,
-      sessionId: state.sessionId,
-    ));
+    final success = await service.writeMemory(
+      MemoryWriteRequest(
+        content: content,
+        type: type,
+        sessionId: state.sessionId,
+      ),
+    );
     if (success) {
       await loadItems();
     } else {
@@ -59,12 +72,12 @@ class MemoryNotifier extends _$MemoryNotifier {
 
   Future<void> retrieve(String query) async {
     if (state.sessionId == null) return;
+    _logger.info('Retrieving memory for session ${state.sessionId}: $query');
     state = state.copyWith(isLoading: true, error: null);
     final service = ref.read(memoryServiceProvider);
-    final pack = await service.retrieveMemory(MemoryRetrieveRequest(
-      sessionId: state.sessionId!,
-      query: query,
-    ));
+    final pack = await service.retrieveMemory(
+      MemoryRetrieveRequest(sessionId: state.sessionId!, query: query),
+    );
     state = state.copyWith(retrievedPack: pack, isLoading: false);
   }
 }

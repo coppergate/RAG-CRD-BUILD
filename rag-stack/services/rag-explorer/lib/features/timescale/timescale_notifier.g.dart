@@ -33,7 +33,7 @@ final class TimescaleNotifierProvider
   TimescaleNotifier create() => TimescaleNotifier();
 }
 
-String _$timescaleNotifierHash() => r'b08357072344e7c33e97923b257c536183307789';
+String _$timescaleNotifierHash() => r'bad2c3a613705f0962a800f5d0f74650e0a2cd9f';
 
 abstract class _$TimescaleNotifier extends $AsyncNotifier<TimescaleState> {
   FutureOr<TimescaleState> build();

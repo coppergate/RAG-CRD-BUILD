@@ -33,7 +33,7 @@ final class BehaviorNotifierProvider
   BehaviorNotifier create() => BehaviorNotifier();
 }
 
-String _$behaviorNotifierHash() => r'73324e73566290ea3bd21c362dea51878d43def9';
+String _$behaviorNotifierHash() => r'6bb0242345a55841c45b0fb53954982601134468';
 
 abstract class _$BehaviorNotifier extends $AsyncNotifier<BehaviorState> {
   FutureOr<BehaviorState> build();
