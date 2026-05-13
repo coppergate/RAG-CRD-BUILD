@@ -64,46 +64,75 @@ class QdrantNotifier extends _$QdrantNotifier {
     return null;
   }
 
+  Future<dynamic> _getWithFallback(
+    ApiClient client,
+    String primaryUrl,
+    String fallbackUrl,
+  ) async {
+    try {
+      return (await client.get(primaryUrl)).data;
+    } catch (e) {
+      _logger.warn('Primary Qdrant request failed for $primaryUrl: $e');
+      return (await client.get(fallbackUrl)).data;
+    }
+  }
+
   Future<QdrantState> _fetchInitialState() async {
     final config = ref.read(appConfigProvider);
     final client = ApiClient(config);
 
-    _logger.debug('Loading Qdrant collections');
-    final response = await client.get('${config.qdrantUrl}/collections');
-    final collections = _extractCollections(response.data);
+    try {
+      _logger.debug('Loading Qdrant collections');
+      final collectionsData = await _getWithFallback(
+        client,
+        '${config.qdrantDirectUrl}/collections',
+        '${config.qdrantUrl}/collections',
+      );
+      final collections = _extractCollections(collectionsData);
 
-    final details = <Map<String, dynamic>>[];
-    for (final coll in collections) {
-      final name = (coll['name'] ?? coll['collection_name'] ?? '').toString();
-      if (name.isEmpty) {
-        continue;
-      }
-      try {
-        final statsResp = await client.get(
-          '${config.qdrantUrl}/collections/$name/stats',
-        );
-        final statsJson = _extractStats(statsResp.data);
-        if (statsJson == null) {
-          _logger.warn('Qdrant stats response for $name had no result payload');
+      final details = <Map<String, dynamic>>[];
+      for (final coll in collections) {
+        final name = (coll['name'] ?? coll['collection_name'] ?? '').toString();
+        if (name.isEmpty) {
           continue;
         }
-        details.add({'name': name, 'stats': QdrantStats.fromJson(statsJson)});
-      } catch (e) {
-        _logger.error('Failed to load Qdrant stats for $name: $e');
-        details.add({
-          'name': name,
-          'stats': QdrantStats(
-            status: 'error',
-            pointsCount: 0,
-            segmentsCount: 0,
-            indexedVectorsCount: 0,
-            payloadSchema: null,
-          ),
-        });
+        try {
+          final statsJson = await _getWithFallback(
+            client,
+            '${config.qdrantDirectUrl}/collections/$name/stats',
+            '${config.qdrantUrl}/collections/$name/stats',
+          );
+          final extractedStats = _extractStats(statsJson);
+          if (extractedStats == null) {
+            _logger.warn(
+              'Qdrant stats response for $name had no result payload',
+            );
+            continue;
+          }
+          details.add({
+            'name': name,
+            'stats': QdrantStats.fromJson(extractedStats),
+          });
+        } catch (e) {
+          _logger.error('Failed to load Qdrant stats for $name: $e');
+          details.add({
+            'name': name,
+            'stats': QdrantStats(
+              status: 'error',
+              pointsCount: 0,
+              segmentsCount: 0,
+              indexedVectorsCount: 0,
+              payloadSchema: null,
+            ),
+          });
+        }
       }
+      _logger.info('Loaded ${details.length} Qdrant collection(s)');
+      return QdrantState(collections: details);
+    } catch (e) {
+      _logger.error('Failed to load Qdrant collections: $e');
+      return const QdrantState();
     }
-    _logger.info('Loaded ${details.length} Qdrant collection(s)');
-    return QdrantState(collections: details);
   }
 
   Future<void> refresh() async {

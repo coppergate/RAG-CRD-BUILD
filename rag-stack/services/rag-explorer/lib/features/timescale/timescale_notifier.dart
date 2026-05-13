@@ -27,6 +27,48 @@ abstract class TimescaleState with _$TimescaleState {
 class TimescaleNotifier extends _$TimescaleNotifier {
   LogNotifier get _logger => ref.read(logProvider.notifier);
 
+  Session? _parseSession(dynamic item) {
+    try {
+      if (item is Map<String, dynamic>) {
+        return Session.fromJson(item);
+      }
+      if (item is Map) {
+        return Session.fromJson(Map<String, dynamic>.from(item));
+      }
+    } catch (e) {
+      _logger.warn('Skipping malformed Timescale session payload: $e');
+    }
+    return null;
+  }
+
+  Tag? _parseTag(dynamic item) {
+    try {
+      if (item is Map<String, dynamic>) {
+        return Tag.fromJson(item);
+      }
+      if (item is Map) {
+        return Tag.fromJson(Map<String, dynamic>.from(item));
+      }
+    } catch (e) {
+      _logger.warn('Skipping malformed Timescale tag payload: $e');
+    }
+    return null;
+  }
+
+  AuditEntry? _parseAuditEntry(dynamic item) {
+    try {
+      if (item is Map<String, dynamic>) {
+        return AuditEntry.fromJson(item);
+      }
+      if (item is Map) {
+        return AuditEntry.fromJson(Map<String, dynamic>.from(item));
+      }
+    } catch (e) {
+      _logger.warn('Skipping malformed Timescale audit payload: $e');
+    }
+    return null;
+  }
+
   @override
   FutureOr<TimescaleState> build() async {
     return _fetchInitialState();
@@ -44,8 +86,8 @@ class TimescaleNotifier extends _$TimescaleNotifier {
       final List<dynamic> tagData = tagResp.data ?? [];
 
       return TimescaleState(
-        sessions: sessData.map((e) => Session.fromJson(e)).toList(),
-        availableTags: tagData.map((e) => Tag.fromJson(e)).toList(),
+        sessions: sessData.map(_parseSession).whereType<Session>().toList(),
+        availableTags: tagData.map(_parseTag).whereType<Tag>().toList(),
       );
     } catch (e) {
       _logger.error('Failed to load Timescale overview: $e');
@@ -89,7 +131,10 @@ class TimescaleNotifier extends _$TimescaleNotifier {
           currentHealth: healthResp.data != null
               ? SessionHealth.fromJson(healthResp.data)
               : null,
-          auditLogs: auditData.map((e) => AuditEntry.fromJson(e)).toList(),
+          auditLogs: auditData
+              .map(_parseAuditEntry)
+              .whereType<AuditEntry>()
+              .toList(),
           isLoadingDetails: false,
         ),
       );

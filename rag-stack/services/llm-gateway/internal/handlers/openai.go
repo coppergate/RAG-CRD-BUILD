@@ -232,7 +232,9 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
-			"source": "openai-api",
+			"source":        "openai-api",
+			"selected_tags": effectiveTags,
+			"session_tags":  sessionTags,
 		}),
 	}
 
@@ -346,7 +348,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Stream:        true,
 		Metadata: contracts.ToStruct(map[string]interface{}{
-			"source": "websocket-api",
+			"source":        "websocket-api",
+			"selected_tags": effectiveTags,
+			"session_tags":  sessionTags,
 		}),
 	}
 
@@ -485,7 +489,9 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
-			"source": "generic-api",
+			"source":        "generic-api",
+			"selected_tags": effectiveTags,
+			"session_tags":  sessionTags,
 		}),
 	}
 

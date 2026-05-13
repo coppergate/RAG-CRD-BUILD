@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'dart:convert';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../core/models/metrics.dart';
 import '../../core/models/tag.dart';
@@ -41,14 +42,99 @@ class S3Notifier extends _$S3Notifier {
       return data
           .map((e) {
             if (e is Map<String, dynamic>) {
-              return (e['Name'] ?? e['name'] ?? '').toString();
+              final name = e['Name'] ?? e['name'];
+              return name == null ? '' : name.toString();
             }
-            return e.toString();
+            return e?.toString() ?? '';
           })
           .where((name) => name.isNotEmpty)
           .toList();
     }
     return const [];
+  }
+
+  Map<String, dynamic> _asObjectMap(dynamic item) {
+    if (item is Map<String, dynamic>) {
+      return item;
+    }
+    if (item is Map) {
+      return Map<String, dynamic>.from(item);
+    }
+    return const {};
+  }
+
+  VirtualFile? _parseVirtualFile(dynamic item, String fallbackBucket) {
+    final data = _asObjectMap(item);
+    if (data.isEmpty) {
+      return null;
+    }
+
+    final path = (data['Key'] ?? data['key'] ?? data['path'] ?? '').toString();
+    if (path.isEmpty) {
+      return null;
+    }
+
+    final bucket = (data['Bucket'] ?? data['bucket'] ?? fallbackBucket)
+        .toString();
+    final tagsRaw = data['tags'];
+    final tags = tagsRaw is List
+        ? tagsRaw.map((e) => e.toString()).toList()
+        : <String>[];
+    final status = (data['status'] ?? data['StorageClass'] ?? 'AVAILABLE')
+        .toString();
+    final createdAtRaw =
+        data['LastModified'] ?? data['last_modified'] ?? data['created_at'];
+    DateTime createdAt = DateTime.now().toUtc();
+    if (createdAtRaw is String) {
+      createdAt = DateTime.tryParse(createdAtRaw)?.toUtc() ?? createdAt;
+    } else if (createdAtRaw is DateTime) {
+      createdAt = createdAtRaw.toUtc();
+    } else if (createdAtRaw is int) {
+      createdAt = DateTime.fromMillisecondsSinceEpoch(
+        createdAtRaw,
+        isUtc: true,
+      );
+    }
+
+    return VirtualFile(
+      path: path,
+      bucket: bucket.isEmpty ? fallbackBucket : bucket,
+      createdAt: createdAt,
+      tags: tags,
+      status: status.isEmpty ? 'AVAILABLE' : status,
+    );
+  }
+
+  Tag? _parseTag(dynamic item) {
+    final data = _asObjectMap(item);
+    if (data.isEmpty) {
+      return null;
+    }
+    try {
+      final idRaw = data['id'];
+      final nameRaw = data['name'];
+      if (idRaw == null || nameRaw == null) {
+        _logger.warn('Skipping malformed S3 tag payload: $data');
+        return null;
+      }
+      return Tag.fromJson(data);
+    } catch (e) {
+      _logger.warn('Skipping malformed S3 tag payload: $e');
+      return null;
+    }
+  }
+
+  Session? _parseSession(dynamic item) {
+    final data = _asObjectMap(item);
+    if (data.isEmpty) {
+      return null;
+    }
+    try {
+      return Session.fromJson(data);
+    } catch (e) {
+      _logger.warn('Skipping malformed S3 session payload: $e');
+      return null;
+    }
   }
 
   String? _chooseBucket(List<String> buckets, String preferred) {
@@ -80,8 +166,11 @@ class S3Notifier extends _$S3Notifier {
       final state = S3State(
         availableBuckets: buckets,
         selectedBucket: selectedBucket,
-        availableTags: tagsData.map((e) => Tag.fromJson(e)).toList(),
-        availableSessions: sessData.map((e) => Session.fromJson(e)).toList(),
+        availableTags: tagsData.map(_parseTag).whereType<Tag>().toList(),
+        availableSessions: sessData
+            .map(_parseSession)
+            .whereType<Session>()
+            .toList(),
       );
 
       if (selectedBucket == null) {
@@ -126,13 +215,31 @@ class S3Notifier extends _$S3Notifier {
       '${config.ragAdminApiUrl}/api/s3/buckets/${currentState.selectedBucket}',
       queryParameters: queryParams,
     );
-    final List<dynamic> data = response.data ?? [];
+    final dynamic rawData = response.data;
+    final List<dynamic> data = rawData is List
+        ? rawData
+        : rawData is String
+        ? jsonDecode(rawData) as List<dynamic>
+        : rawData is Map<String, dynamic>
+        ? (rawData['objects'] as List<dynamic>? ??
+              rawData['items'] as List<dynamic>? ??
+              rawData['files'] as List<dynamic>? ??
+              const [])
+        : const [];
 
-    return currentState.copyWith(
-      files: data.map((e) => VirtualFile.fromJson(e)).toList(),
-      isLoading: false,
-      error: null,
+    final files = <VirtualFile>[];
+    for (final item in data) {
+      final file = _parseVirtualFile(item, currentState.selectedBucket!);
+      if (file != null) {
+        files.add(file);
+      }
+    }
+
+    _logger.info(
+      'Loaded ${files.length} S3 object(s) from bucket ${currentState.selectedBucket}',
     );
+
+    return currentState.copyWith(files: files, isLoading: false, error: null);
   }
 
   Future<void> refresh() async {

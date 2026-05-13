@@ -167,6 +167,20 @@ class ChatNotifier extends _$ChatNotifier {
     }
   }
 
+  Map<String, dynamic> _mergeMetadata(
+    Map<String, dynamic>? base,
+    Map<String, dynamic>? update,
+  ) {
+    final merged = <String, dynamic>{};
+    if (base != null) {
+      merged.addAll(base);
+    }
+    if (update != null) {
+      merged.addAll(update);
+    }
+    return merged;
+  }
+
   void removeTag(Tag tag) {
     final currentState = state.value!;
     ref
@@ -222,6 +236,12 @@ class ChatNotifier extends _$ChatNotifier {
       content: '',
       role: 'assistant',
       timestamp: DateTime.now(),
+      metadata: {
+        'selected_tags': currentState.selectedTags.map((t) => t.name).toList(),
+        'selected_tag_ids': currentState.selectedTags.map((t) => t.id).toList(),
+        'session_tags': currentState.selectedTags.map((t) => t.name).toList(),
+        'source': 'chat-ui',
+      },
     );
 
     state = AsyncData(
@@ -261,7 +281,7 @@ class ChatNotifier extends _$ChatNotifier {
 
         final Map<String, dynamic>? updatedMetadata =
             (chunk.metadata != null && chunk.metadata!.isNotEmpty)
-            ? chunk.metadata
+            ? _mergeMetadata(lastMsg.metadata, chunk.metadata)
             : lastMsg.metadata;
 
         messages[lastIndex] = lastMsg.copyWith(
