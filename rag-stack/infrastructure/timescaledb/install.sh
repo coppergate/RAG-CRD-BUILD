@@ -17,7 +17,28 @@ export TIMESCALEDB_INSTALL="$REPO_DIR/rag-stack/infrastructure/timescaledb"
 source "$REPO_DIR/scripts/journal-helper.sh"
 init_journal
 
-if ! is_step_done "timescaledb-node-labels"; then
+should_run_step() {
+  local step_name="$1"
+  local verify_cmd="$2"
+
+  if is_step_done "$step_name"; then
+    if [[ -z "$verify_cmd" ]] || eval "$verify_cmd" >/dev/null 2>&1; then
+      return 1
+    fi
+    echo "Journal has '$step_name' but live verification failed. Re-running step..."
+    return 0
+  fi
+
+  if [[ -n "$verify_cmd" ]] && eval "$verify_cmd" >/dev/null 2>&1; then
+    echo "Step '$step_name' is not in journal but live verification succeeded. Skipping."
+    mark_step_done "$step_name"
+    return 1
+  fi
+
+  return 0
+}
+
+if should_run_step "timescaledb-node-labels" "$KUBECTL get nodes -l rag.role.timescaledb-node=true -o name 2>/dev/null | grep -q '^node/'"; then
   echo "[TSDB] Labeling TimescaleDB nodes"
   $KUBECTL label --overwrite nodes worker-0 rag.role.timescaledb-node=true || true
   $KUBECTL label --overwrite nodes worker-1 rag.role.timescaledb-node=true || true
@@ -26,14 +47,14 @@ if ! is_step_done "timescaledb-node-labels"; then
   mark_step_done "timescaledb-node-labels"
 fi
 
-if ! is_step_done "cnpg-operator-apply"; then
+if should_run_step "cnpg-operator-apply" "$KUBECTL -n cnpg-system get deploy >/dev/null 2>&1"; then
   echo "--- 1. Installing CloudNativePG Operator (v1.25.0) ---"
   $KUBECTL apply -f "$TIMESCALEDB_INSTALL/cnpg-1.25.0.yaml" \
     --server-side --force-conflicts
   mark_step_done "cnpg-operator-apply"
 fi
 
-if ! is_step_done "cnpg-operator-wait"; then
+if should_run_step "cnpg-operator-wait" "$KUBECTL -n cnpg-system wait --for=condition=available deployment/cloudnative-pg-controller-manager --timeout=1s >/dev/null 2>&1"; then
   echo "Waiting for CNPG operator namespace to appear..."
   # Wait up to 5 minutes for the namespace and deployment to show up
   NS_TIMEOUT=300
@@ -68,7 +89,7 @@ if ! is_step_done "cnpg-operator-wait"; then
   mark_step_done "cnpg-operator-wait"
 fi
 
-if ! is_step_done "timescaledb-namespace"; then
+if should_run_step "timescaledb-namespace" "$KUBECTL get namespace $NAMESPACE >/dev/null 2>&1"; then
   echo "--- 2. Preparing Namespace '$NAMESPACE' ---"
   if ! $KUBECTL get namespace $NAMESPACE >/dev/null 2>&1; then
       $KUBECTL create namespace $NAMESPACE
@@ -80,7 +101,7 @@ if ! is_step_done "timescaledb-namespace"; then
   mark_step_done "timescaledb-namespace"
 fi
 
-if ! is_step_done "timescaledb-tls"; then
+if should_run_step "timescaledb-tls" "$KUBECTL get certificate timescaledb-server-cert -n $NAMESPACE >/dev/null 2>&1"; then
   echo "--- 2.5. Creating TimescaleDB TLS Certificates ---"
   $KUBECTL apply -f $TIMESCALEDB_INSTALL/timescaledb-tls.yaml
   # Wait for the certificate to be ready
@@ -89,7 +110,7 @@ if ! is_step_done "timescaledb-tls"; then
   mark_step_done "timescaledb-tls"
 fi
 
-if ! is_step_done "timescaledb-cluster-apply"; then
+if should_run_step "timescaledb-cluster-apply" "$KUBECTL get cluster -n $NAMESPACE timescaledb >/dev/null 2>&1"; then
   echo "--- 3. Deploying TimescaleDB Cluster ---"
   $KUBECTL apply -f $TIMESCALEDB_INSTALL/cluster.yaml --server-side --force-conflicts
   mark_step_done "timescaledb-cluster-apply"

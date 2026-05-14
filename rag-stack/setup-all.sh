@@ -157,11 +157,22 @@ if ! is_step_done "ollama"; then
   mark_step_done "ollama"
 fi
 
-if ! is_step_done "timescaledb"; then
-echo "--- 2. Deploying Infrastructure: TimescaleDB ---"
-$REPO_DIR/infrastructure/timescaledb/install.sh
-$KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
-mark_step_done "timescaledb"
+if is_step_done "timescaledb"; then
+  if $KUBECTL get namespace timescaledb >/dev/null 2>&1 && \
+     $KUBECTL get cluster -n timescaledb timescaledb >/dev/null 2>&1; then
+    echo "Skipping already completed step: timescaledb"
+  else
+    echo "Journal has 'timescaledb' but live verification failed. Re-running step..."
+    echo "--- 2. Deploying Infrastructure: TimescaleDB ---"
+    $REPO_DIR/infrastructure/timescaledb/install.sh
+    $KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
+    mark_step_done "timescaledb"
+  fi
+else
+  echo "--- 2. Deploying Infrastructure: TimescaleDB ---"
+  $REPO_DIR/infrastructure/timescaledb/install.sh
+  $KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
+  mark_step_done "timescaledb"
 fi
 
 # Apply unified application schema and privileges so 'app' owns and can access all objects
