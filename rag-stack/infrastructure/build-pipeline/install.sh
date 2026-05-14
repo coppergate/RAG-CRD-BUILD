@@ -99,6 +99,31 @@ fi
 rm -f "$COMBINED_CA"
 mark_step_done "build-pipeline-ca"
 
+if should_run_step "build-pipeline-timescaledb-secret" "$KUBECTL get secret timescaledb-secret -n $NAMESPACE >/dev/null 2>&1"; then
+    echo "--- Creating Build Pipeline TimescaleDB Secret ---"
+    retries=0
+    max_retries=120
+    until $KUBECTL get secret timescaledb-app -n timescaledb >/dev/null 2>&1; do
+        if [ "$retries" -ge "$max_retries" ]; then
+            echo "ERROR: timescaledb-app secret was not created in timescaledb after waiting."
+            exit 1
+        fi
+        echo "Waiting for timescaledb-app secret in timescaledb namespace..."
+        sleep 5
+        retries=$((retries + 1))
+    done
+    REAL_PW=$($KUBECTL get secret timescaledb-app -n timescaledb -o jsonpath='{.data.password}' | base64 -d)
+    if [ -z "$REAL_PW" ]; then
+        echo "ERROR: Could not fetch timescaledb-app password from timescaledb namespace."
+        exit 1
+    fi
+    DB_URL="postgres://app:${REAL_PW}@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=require"
+    $KUBECTL create secret generic timescaledb-secret -n $NAMESPACE \
+        --from-literal=url="${DB_URL}" \
+        --dry-run=client -o yaml | $KUBECTL apply -f -
+    mark_step_done "build-pipeline-timescaledb-secret"
+fi
+
 # Use the external registry URL for skopeo if running on hierophant
 SKOPEO_REGISTRY="registry.hierocracy.home:5000"
 if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1 && skopeo inspect --tls-verify=false docker://$SKOPEO_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"; then
