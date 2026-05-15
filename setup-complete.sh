@@ -264,6 +264,19 @@ STEP_TS_END=$(date +%s)
 log_step_timing "pulsar-init" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+if ! is_step_done "timescaledb"; then
+STEP_TS_START=$(date +%s)
+echo ""
+echo "Step 1.5.8.2: TimescaleDB Infrastructure"
+echo "----------------------------------------------------"
+export REPO_DIR="$BASE_DIR/rag-stack"
+bash "$REPO_DIR/infrastructure/timescaledb/install.sh"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
+mark_step_done "timescaledb"
+STEP_TS_END=$(date +%s)
+log_step_timing "timescaledb" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
 if ! is_step_done "build-pipeline-infra" || ! $KUBECTL get namespace build-pipeline >/dev/null 2>&1; then
 STEP_TS_START=$(date +%s)
 echo ""

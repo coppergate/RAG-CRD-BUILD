@@ -116,6 +116,20 @@ if should_run_step "timescaledb-cluster-apply" "$KUBECTL get cluster -n $NAMESPA
   mark_step_done "timescaledb-cluster-apply"
 fi
 
+if ! $KUBECTL get secret timescaledb-app -n $NAMESPACE >/dev/null 2>&1; then
+  echo "Waiting for timescaledb-app secret in namespace '$NAMESPACE'..."
+  retries=0
+  max_retries=120
+  until $KUBECTL get secret timescaledb-app -n $NAMESPACE >/dev/null 2>&1; do
+    if [ "$retries" -ge "$max_retries" ]; then
+      echo "ERROR: timescaledb-app secret was not created in $NAMESPACE after waiting."
+      exit 1
+    fi
+    sleep 5
+    retries=$((retries + 1))
+  done
+fi
+
 echo "Waiting for TimescaleDB instances to be ready (this can take several minutes)..."
 echo "Check status with: $KUBECTL get cluster -n $NAMESPACE && $KUBECTL -n $NAMESPACE get pods -l cnpg.io/cluster=timescaledb"
 
