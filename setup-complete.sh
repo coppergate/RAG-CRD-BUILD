@@ -279,8 +279,24 @@ for _ in $(seq 1 60); do
   fi
   sleep 5
 done
-echo "Waiting for CNPG deployment..."
-$KUBECTL -n cnpg-system wait --for=condition=available deployment/cloudnative-pg-controller-manager --timeout=300s
+CNPG_DEPLOYMENT="cnpg-controller-manager"
+CNPG_TIMEOUT=300
+CNPG_START_TS=$(date +%s)
+until $KUBECTL -n cnpg-system get deployment "$CNPG_DEPLOYMENT" >/dev/null 2>&1; do
+  discovered=$($KUBECTL -n cnpg-system get deployment -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  if [[ -n "$discovered" ]]; then
+    CNPG_DEPLOYMENT="$discovered"
+    break
+  fi
+  if (( $(date +%s) - CNPG_START_TS > CNPG_TIMEOUT )); then
+    echo "[ERROR] Timeout waiting for CNPG deployment to be created in cnpg-system" >&2
+    $KUBECTL -n cnpg-system get deployment || true
+    exit 1
+  fi
+  sleep 5
+done
+echo "Waiting for CNPG deployment: $CNPG_DEPLOYMENT"
+$KUBECTL -n cnpg-system wait --for=condition=available deployment/"$CNPG_DEPLOYMENT" --timeout=300s
 mark_step_done "cnpg-operator"
 STEP_TS_END=$(date +%s)
 log_step_timing "cnpg-operator" "$STEP_TS_START" "$STEP_TS_END" "ok"
