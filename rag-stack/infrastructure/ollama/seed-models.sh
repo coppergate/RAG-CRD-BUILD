@@ -61,19 +61,19 @@ for MODEL in "${!MODEL_PVC_MAP[@]}"; do
 
   echo "  Pulling $MODEL from registry into PVC..."
   # Run a seeder pod that starts ollama, pulls the model from local registry, then exits
-  cat <<EOF | $KUBECTL apply -f -
+  SEEDER_MANIFEST="$(cat <<'EOF'
 apiVersion: v1
 kind: Pod
 metadata:
-  name: $SEEDER_NAME
-  namespace: $NAMESPACE
+  name: __SEEDER_NAME__
+  namespace: __NAMESPACE__
 spec:
   nodeSelector:
     role: storage-node
   restartPolicy: Never
   containers:
     - name: seeder
-      image: ${REGISTRY}/ollama/ollama:0.15.6
+      image: __REGISTRY__/ollama/ollama:0.15.6
       command:
         - /bin/sh
         - -c
@@ -81,7 +81,7 @@ spec:
           echo "Starting Ollama for model seeding..."
           # Models are stored in the 'models' subdirectory of the PVC
           OLLAMA_MODELS=/ollama-models/models
-          mkdir -p $OLLAMA_MODELS
+          mkdir -p "$OLLAMA_MODELS"
           ollama serve &
           OLLAMA_PID=$!
           # Wait for ollama to be ready (max 60s)
@@ -92,42 +92,42 @@ spec:
             fi
             if [ "$i" -eq 60 ]; then
               echo "ERROR: Ollama did not start"
-              kill $OLLAMA_PID 2>/dev/null
+              kill "$OLLAMA_PID" 2>/dev/null
               exit 1
             fi
             sleep 1
           done
-          
-          FULL_MODEL_NAME="${REGISTRY}/ollama/${MODEL}"
+
+          FULL_MODEL_NAME="__REGISTRY__/ollama/__MODEL__"
           echo "Pulling ${FULL_MODEL_NAME}..."
           if ollama pull "${FULL_MODEL_NAME}"; then
-            echo "SUCCESS: ${MODEL} seeded from local registry"
+            echo "SUCCESS: __MODEL__ seeded from local registry"
             # Tag it as the short name so Ollama pods can find it easily
-            ollama cp "${FULL_MODEL_NAME}" "${MODEL}"
+            ollama cp "${FULL_MODEL_NAME}" "__MODEL__"
           else
             echo "WARNING: ollama pull failed. Falling back to manual seed with curl..."
             # Manual fallback logic using curl (bypassing ollama pull location header bugs)
             # 1. Parse repo and tag
-            REPO="ollama/$(echo "$MODEL" | cut -d: -f1)"
-            TAG="$(echo "$MODEL" | cut -s -d: -f2)"
+            REPO="ollama/$(echo "__MODEL__" | cut -d: -f1)"
+            TAG="$(echo "__MODEL__" | cut -s -d: -f2)"
             TAG="${TAG:-latest}"
-            
-            MANIFEST_DIR="$OLLAMA_MODELS/manifests/${REGISTRY}/${REPO}"
+
+            MANIFEST_DIR="$OLLAMA_MODELS/manifests/__REGISTRY__/${REPO}"
             MANIFEST_PATH="${MANIFEST_DIR}/${TAG}"
-            SHORT_MANIFEST_DIR="$OLLAMA_MODELS/manifests/registry.ollama.ai/library/$(echo "$MODEL" | cut -d: -f1)"
+            SHORT_MANIFEST_DIR="$OLLAMA_MODELS/manifests/registry.ollama.ai/library/$(echo "__MODEL__" | cut -d: -f1)"
             SHORT_MANIFEST_PATH="${SHORT_MANIFEST_DIR}/${TAG}"
             BLOBS_DIR="$OLLAMA_MODELS/blobs"
-            
+
             mkdir -p "$MANIFEST_DIR" "$SHORT_MANIFEST_DIR" "$BLOBS_DIR"
-            
+
             echo "Fetching manifest for ${REPO}:${TAG}..."
-            if curl -skL "https://${REGISTRY}/v2/${REPO}/manifests/${TAG}" \
+            if curl -skL "https://__REGISTRY__/v2/${REPO}/manifests/${TAG}" \
                  -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
                  -o "${MANIFEST_PATH}"; then
-               
+
                echo "Parsing layers..."
                LAYERS=$(grep -o 'sha256:[a-f0-9]*' "${MANIFEST_PATH}" | sort -u)
-               
+
                for LAYER in $LAYERS; do
                  BLOB_FILE="${BLOBS_DIR}/${LAYER//:/-}"
                  if [ -f "$BLOB_FILE" ] && [ -s "$BLOB_FILE" ]; then
@@ -135,19 +135,19 @@ spec:
                    continue
                  fi
                  echo "  Downloading blob $LAYER..."
-                 curl -skL "https://${REGISTRY}/v2/${REPO}/blobs/${LAYER}" -o "${BLOB_FILE}"
+                 curl -skL "https://__REGISTRY__/v2/${REPO}/blobs/${LAYER}" -o "${BLOB_FILE}"
                done
-               
+
                echo "Creating short-name manifest..."
                cp "${MANIFEST_PATH}" "${SHORT_MANIFEST_PATH}"
-               echo "SUCCESS: Manual seeding complete for ${MODEL}"
+               echo "SUCCESS: Manual seeding complete for __MODEL__"
             else
-               echo "ERROR: Manual seeding failed for ${MODEL}"
-               kill $OLLAMA_PID 2>/dev/null
+               echo "ERROR: Manual seeding failed for __MODEL__"
+               kill "$OLLAMA_PID" 2>/dev/null
                exit 1
             fi
           fi
-          kill $OLLAMA_PID 2>/dev/null
+          kill "$OLLAMA_PID" 2>/dev/null
           echo "Seeding complete."
       env:
         - name: SSL_CERT_FILE
@@ -170,11 +170,20 @@ spec:
   volumes:
     - name: models
       persistentVolumeClaim:
-        claimName: $PVC_NAME
+        claimName: __PVC_NAME__
     - name: registry-ca
       configMap:
         name: registry-ca-cm
 EOF
+)"
+
+  SEEDER_MANIFEST="${SEEDER_MANIFEST//__SEEDER_NAME__/$SEEDER_NAME}"
+  SEEDER_MANIFEST="${SEEDER_MANIFEST//__NAMESPACE__/$NAMESPACE}"
+  SEEDER_MANIFEST="${SEEDER_MANIFEST//__REGISTRY__/$REGISTRY}"
+  SEEDER_MANIFEST="${SEEDER_MANIFEST//__PVC_NAME__/$PVC_NAME}"
+  SEEDER_MANIFEST="${SEEDER_MANIFEST//__MODEL__/$MODEL}"
+
+  printf '%s\n' "$SEEDER_MANIFEST" | $KUBECTL apply -f -
 
   echo "  Waiting for seeder pod $SEEDER_NAME to complete (timeout 1800s)..."
   if $KUBECTL wait --for=condition=Ready pod/"$SEEDER_NAME" -n "$NAMESPACE" --timeout=30s 2>/dev/null; then

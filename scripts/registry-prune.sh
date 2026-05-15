@@ -12,6 +12,7 @@ set -Eeuo pipefail
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
+source "$BASE_DIR/scripts/version-utils.sh"
 
 # Source of truth for versioning
 if [[ ! -f "$BASE_DIR/CURRENT_VERSION" ]]; then
@@ -107,7 +108,7 @@ prune_repo() {
 
 for svc in $SERVICES; do
     # Get version from JSON
-    ver=$(jq -r ".\"$svc\".version" "$BASE_DIR/CURRENT_VERSION")
+    ver="$(read_current_version "$BASE_DIR/CURRENT_VERSION" "$svc" 2>/dev/null || true)"
     prune_repo "$svc" "$ver"
 done
 

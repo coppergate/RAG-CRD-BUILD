@@ -9,14 +9,12 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
 REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
+source "$REPO_DIR/../../../scripts/version-utils.sh"
 
 # Source of truth for versioning
 if [[ -z "${VERSION:-}" ]]; then
-    if [[ -f "$REPO_DIR/../../../CURRENT_VERSION" ]]; then
-        VERSION=$(cat "$REPO_DIR/../../../CURRENT_VERSION" | tr -d '[:space:]')
-    else
-        VERSION="2.4.9"
-    fi
+    VERSION="$(read_current_version "$REPO_DIR/../../../CURRENT_VERSION" "build-orchestrator" 2>/dev/null || true)"
+    [[ -z "$VERSION" ]] && VERSION="2.4.9"
 fi
 export VERSION
 
@@ -60,6 +58,13 @@ if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
 fi
 
 echo "--- Applying Combined Registry & Pulsar CA ---"
+
+if [[ -f "$REPO_DIR/../../../CURRENT_VERSION" ]]; then
+    echo "--- Creating Build Version Seed ConfigMap ---"
+    $KUBECTL create configmap build-current-version -n "$NAMESPACE" \
+        --from-file=current-version.json="$REPO_DIR/../../../CURRENT_VERSION" \
+        --dry-run=client -o yaml | $KUBECTL apply -f -
+fi
 
 # Ensure SAFE_TMP_DIR exists
 mkdir -p "$SAFE_TMP_DIR"

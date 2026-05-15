@@ -19,13 +19,15 @@
 set -Eeuo pipefail
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$BASE_DIR/scripts/version-utils.sh"
 
 SERVICES=${SERVICES:-"rag-test-runner rag-worker rag-ingestion llm-gateway db-adapter qdrant-adapter object-store-mgr"}
 
 # Source of truth for versioning
 if [[ -z "${VERSION:-}" ]]; then
     if [[ -f "$BASE_DIR/CURRENT_VERSION" ]]; then
-        VERSION=$(cat "$BASE_DIR/CURRENT_VERSION" | tr -d '[:space:]')
+        VERSION="$(read_current_version "$BASE_DIR/CURRENT_VERSION" "build-orchestrator" 2>/dev/null || true)"
+        [[ -z "$VERSION" ]] && VERSION="2.4.9"
     else
         VERSION="2.4.9"
     fi

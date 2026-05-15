@@ -2,6 +2,10 @@ package metadata
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"app-builds/common/ent"
@@ -16,6 +20,10 @@ type Service struct {
 
 func NewService(client *ent.Client) *Service {
 	return &Service{client: client}
+}
+
+type currentVersionFile struct {
+	Version string `json:"version"`
 }
 
 type VersionInfo struct {
@@ -66,6 +74,36 @@ func (s *Service) UpdateVersion(ctx context.Context, serviceName, version string
 		UpdateVersion().
 		UpdateLastBuild().
 		Exec(ctx)
+}
+
+func (s *Service) SeedFromCurrentVersionFile(ctx context.Context, path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read current version file %q: %w", path, err)
+	}
+
+	var versions map[string]currentVersionFile
+	if err := json.Unmarshal(data, &versions); err != nil {
+		return fmt.Errorf("parse current version file %q: %w", path, err)
+	}
+
+	for serviceName, info := range versions {
+		serviceName = strings.TrimSpace(serviceName)
+		version := strings.TrimSpace(info.Version)
+		if serviceName == "" || version == "" {
+			continue
+		}
+		if err := s.UpdateVersion(ctx, serviceName, version); err != nil {
+			return fmt.Errorf("seed version %q: %w", serviceName, err)
+		}
+	}
+
+	return nil
 }
 
 type LockInfo struct {

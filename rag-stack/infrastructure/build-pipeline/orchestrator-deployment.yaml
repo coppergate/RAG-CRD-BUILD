@@ -101,6 +101,8 @@ spec:
             secretKeyRef:
               name: timescaledb-secret
               key: url
+        - name: CURRENT_VERSION_PATH
+          value: /etc/build-version/current-version.json
         - name: FAILED_TASK_TOPIC
           value: "persistent://public/default/build-tasks-deadletter"
         - name: TLS_CERT
@@ -123,6 +125,9 @@ spec:
         - name: service-tls
           mountPath: /etc/ssl/certs/tls.key
           subPath: tls.key
+        - name: current-version
+          mountPath: /etc/build-version/current-version.json
+          subPath: current-version.json
         readinessProbe:
           httpGet:
             path: /readyz
@@ -155,6 +160,9 @@ spec:
       - name: service-tls
         secret:
           secretName: build-orchestrator-tls
+      - name: current-version
+        configMap:
+          name: build-current-version
 ---
 apiVersion: v1
 kind: ServiceAccount
