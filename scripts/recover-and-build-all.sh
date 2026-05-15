@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 cd /mnt/hegemon-share/share/code/complete-build
+source scripts/version-utils.sh
 
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 K="${K:-/home/k8s/kube/kubectl}"
@@ -12,7 +13,8 @@ CLUSTER_REGISTRY="${CLUSTER_REGISTRY:-registry.container-registry.svc.cluster.lo
 # Source of truth for versioning
 if [[ -z "${VERSION:-}" ]]; then
     if [[ -f "CURRENT_VERSION" ]]; then
-        VERSION=$(cat "CURRENT_VERSION" | tr -d '[:space:]')
+        VERSION="$(read_current_version "CURRENT_VERSION" "build-orchestrator" 2>/dev/null || true)"
+        [[ -z "$VERSION" ]] && VERSION="2.4.9"
     else
         VERSION="2.4.9"
     fi

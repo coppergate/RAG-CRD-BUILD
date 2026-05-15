@@ -9,6 +9,7 @@ set -m # Enable job control for reliable parallel build tracking
 # --- Configuration & Defaults ---
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BASE_DIR=$(cd "$REPO_DIR/.." && pwd)
+CURRENT_VERSION_FILE="$BASE_DIR/CURRENT_VERSION"
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 
@@ -137,6 +138,26 @@ update_svc_info() {
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
     curl -s "${h_args[@]}" -X POST "$BUILD_METADATA_URL/versions/$svc" -d "{\"version\": \"$ver\"}" >/dev/null
+}
+
+sync_current_version_file() {
+    if [[ ! -f "$CURRENT_VERSION_FILE" ]]; then
+        return 0
+    fi
+
+    local tmp_file
+    tmp_file="$(mktemp "${SAFE_TMP_DIR:-/tmp}/current-version.XXXXXX")"
+    local h_args=()
+    [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
+
+    if curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions" \
+        | jq 'sort_by(.service_name) | map({key: .service_name, value: {version: .version, last_build: .last_build}}) | from_entries' \
+        > "$tmp_file"; then
+        mv "$tmp_file" "$CURRENT_VERSION_FILE"
+    else
+        rm -f "$tmp_file"
+        log "WARN: Could not sync CURRENT_VERSION from build metadata."
+    fi
 }
 
 cleanup_old_jobs() {
@@ -310,6 +331,7 @@ build_service() {
         if [[ "$MODE" == "local" ]]; then
             update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
             deploy_update "$svc" "$ver"
+            sync_current_version_file
         else
              # In cluster mode, we defer the update until the build is complete
              # to avoid ImagePullBackOff on pods.
@@ -471,9 +493,10 @@ main() {
                        if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" 2>/dev/null | grep "$svc" >/dev/null; then
                            log "ERROR: Build for $svc version $ver did not succeed. Skipping deploy update."
                        fi
-                  fi
+                 fi
              fi
         done
+        sync_current_version_file
     fi
 
     log "Build process finished."

@@ -16,6 +16,7 @@ fi
 
 REPO_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
 SAFE_TMP_DIR="${SAFE_TMP_DIR:-/tmp}"
+source "$REPO_DIR/../scripts/version-utils.sh"
 
 # Source of truth for versioning
 if [[ -z "$VERSION" ]]; then
@@ -23,7 +24,7 @@ if [[ -z "$VERSION" ]]; then
         if jq . "$REPO_DIR/../CURRENT_VERSION" >/dev/null 2>&1; then
             VERSION=$(jq -r ".\"$SERVICE\".version // \"1.0.0\"" "$REPO_DIR/../CURRENT_VERSION")
         else
-            VERSION=$(cat "$REPO_DIR/../CURRENT_VERSION" | tr -d '[:space:]')
+            VERSION="$(read_current_version "$REPO_DIR/../CURRENT_VERSION" "$SERVICE" 2>/dev/null || true)"
         fi
     else
         VERSION="1.0.0"

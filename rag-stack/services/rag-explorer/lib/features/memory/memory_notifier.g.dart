@@ -41,7 +41,7 @@ final class MemoryNotifierProvider
   }
 }
 
-String _$memoryNotifierHash() => r'782af9826d05a77981f9d4e6a83ce3e02e6827e8';
+String _$memoryNotifierHash() => r'c1d06372dd9c53e2120f92bc9aa0317adba7ff9c';
 
 abstract class _$MemoryNotifier extends $Notifier<MemoryState> {
   MemoryState build();

@@ -10,15 +10,12 @@ export REPO_DIR
 
 # Versioning
 VERSION_FILE="$REPO_DIR/../CURRENT_VERSION"
+source "${BASE_DIR:-$REPO_DIR/..}/scripts/version-utils.sh"
 # Global fallback version
 if [[ -z "${VERSION:-}" ]]; then
     if [[ -f "$VERSION_FILE" ]]; then
-        # Try to get a global version if it's still a simple file, or use a default
-        if jq . "$VERSION_FILE" >/dev/null 2>&1; then
-            VERSION="2.4.11"
-        else
-            VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
-        fi
+        VERSION="$(read_current_version "$VERSION_FILE" "build-orchestrator" 2>/dev/null || true)"
+        [[ -z "$VERSION" ]] && VERSION="2.4.11"
     else
         VERSION="2.4.11"
     fi
@@ -66,16 +63,18 @@ apply_manifest() {
   # Try to extract service name from path to get per-service version
   if [[ "$manifest" == *"/services/"* ]]; then
       svc=$(echo "$manifest" | sed -n 's#.*/services/\([^/]*\).*#\1#p' | cut -d/ -f1)
-      if [[ -f "$VERSION_FILE" ]] && jq . "$VERSION_FILE" >/dev/null 2>&1; then
-          local svc_ver=$(jq -r ".\"$svc\".version // empty" "$VERSION_FILE")
+      if [[ -f "$VERSION_FILE" ]]; then
+          local svc_ver
+          svc_ver="$(read_current_version "$VERSION_FILE" "$svc" 2>/dev/null || true)"
           if [[ -n "$svc_ver" ]]; then
               ver="$svc_ver"
           fi
       fi
   elif [[ "$manifest" == *"build-pipeline/orchestrator-deployment.yaml" ]]; then
       svc="build-orchestrator"
-      if [[ -f "$VERSION_FILE" ]] && jq . "$VERSION_FILE" >/dev/null 2>&1; then
-          local svc_ver=$(jq -r ".\"build-orchestrator\".version // empty" "$VERSION_FILE")
+      if [[ -f "$VERSION_FILE" ]]; then
+          local svc_ver
+          svc_ver="$(read_current_version "$VERSION_FILE" "build-orchestrator" 2>/dev/null || true)"
           if [[ -n "$svc_ver" ]]; then
               ver="$svc_ver"
           fi
@@ -157,11 +156,22 @@ if ! is_step_done "ollama"; then
   mark_step_done "ollama"
 fi
 
-if ! is_step_done "timescaledb"; then
-echo "--- 2. Deploying Infrastructure: TimescaleDB ---"
-$REPO_DIR/infrastructure/timescaledb/install.sh
-$KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
-mark_step_done "timescaledb"
+if is_step_done "timescaledb"; then
+  if $KUBECTL get namespace timescaledb >/dev/null 2>&1 && \
+     $KUBECTL get cluster -n timescaledb timescaledb >/dev/null 2>&1; then
+    echo "Skipping already completed step: timescaledb"
+  else
+    echo "Journal has 'timescaledb' but live verification failed. Re-running step..."
+    echo "--- 2. Deploying Infrastructure: TimescaleDB ---"
+    $REPO_DIR/infrastructure/timescaledb/install.sh
+    $KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
+    mark_step_done "timescaledb"
+  fi
+else
+  echo "--- 2. Deploying Infrastructure: TimescaleDB ---"
+  $REPO_DIR/infrastructure/timescaledb/install.sh
+  $KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
+  mark_step_done "timescaledb"
 fi
 
 # Apply unified application schema and privileges so 'app' owns and can access all objects

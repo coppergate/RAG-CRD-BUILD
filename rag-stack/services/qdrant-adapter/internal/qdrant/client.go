@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"app-builds/common/contracts"
+	"app-builds/common/logging"
 	"app-builds/common/tlsutil"
 	"app-builds/qdrant-adapter/internal/config"
-	"app-builds/common/logging"
 )
 
 type QdrantClient struct {
@@ -35,6 +35,70 @@ func (q *QdrantClient) Search(collection string, vectorSize int, vector []float3
 		limit = 20 // Default limit
 	}
 	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
+}
+
+func buildTagSessionFilter(tags []int64, sessionID int64, includeGlobal bool) map[string]interface{} {
+	filter := map[string]interface{}{}
+
+	if len(tags) > 0 {
+		filter["must"] = []map[string]interface{}{
+			{
+				"key": "tags",
+				"match": map[string]interface{}{
+					"any": tags,
+				},
+			},
+		}
+	}
+
+	if sessionID > 0 {
+		if includeGlobal || len(tags) > 0 {
+			filter["should"] = []map[string]interface{}{
+				{
+					"key": "session_id",
+					"match": map[string]interface{}{
+						"value": sessionID,
+					},
+				},
+				{
+					"is_empty": map[string]interface{}{
+						"key": "session_id",
+					},
+				},
+			}
+		} else {
+			filter["must"] = append(
+				ensureConditionSlice(filter["must"]),
+				map[string]interface{}{
+					"key": "session_id",
+					"match": map[string]interface{}{
+						"value": sessionID,
+					},
+				},
+			)
+		}
+	} else {
+		filter["must"] = append(
+			ensureConditionSlice(filter["must"]),
+			map[string]interface{}{
+				"is_empty": map[string]interface{}{
+					"key": "session_id",
+				},
+			},
+		)
+	}
+
+	return filter
+}
+
+func ensureConditionSlice(v interface{}) []map[string]interface{} {
+	if v == nil {
+		return []map[string]interface{}{}
+	}
+	if conditions, ok := v.([]map[string]interface{}); ok {
+		return conditions
+	}
+	return []map[string]interface{}{}
 }
 
 func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]interface{}, error) {
@@ -65,58 +129,8 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		"with_payload": true,
 	}
 
-	var mustFilters []map[string]interface{}
-
-	if len(tags) > 0 {
-		mustFilters = append(mustFilters, map[string]interface{}{
-			"key": "tags",
-			"match": map[string]interface{}{
-				"any": tags,
-			},
-		})
-	}
-
-	if sessionID > 0 {
-		if includeGlobal || len(tags) > 0 {
-			// Allow points that match the session ID OR have no session ID (global context)
-			// We allow global context automatically if specific tags are requested.
-			mustFilters = append(mustFilters, map[string]interface{}{
-				"should": []map[string]interface{}{
-					{
-						"key": "session_id",
-						"match": map[string]interface{}{
-							"value": sessionID,
-						},
-					},
-					{
-						"is_empty": map[string]interface{}{
-							"key": "session_id",
-						},
-					},
-				},
-			})
-		} else {
-			// Strict session matching
-			mustFilters = append(mustFilters, map[string]interface{}{
-				"key": "session_id",
-				"match": map[string]interface{}{
-					"value": sessionID,
-				},
-			})
-		}
-	} else {
-		// If no session ID, we only want global context (session_id is null)
-		mustFilters = append(mustFilters, map[string]interface{}{
-			"is_empty": map[string]interface{}{
-				"key": "session_id",
-			},
-		})
-	}
-
-	if len(mustFilters) > 0 {
-		query["filter"] = map[string]interface{}{
-			"must": mustFilters,
-		}
+	if filter := buildTagSessionFilter(tags, sessionID, includeGlobal); len(filter) > 0 {
+		query["filter"] = filter
 		logging.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%d): %+v", tags, sessionID, query["filter"])
 	}
 
@@ -189,37 +203,8 @@ func (q *QdrantClient) RetrieveByFilter(collection string, vectorSize int, tags 
 		"with_payload": true,
 	}
 
-	var mustFilters []map[string]interface{}
-	if len(tags) > 0 {
-		mustFilters = append(mustFilters, map[string]interface{}{
-			"key": "tags",
-			"match": map[string]interface{}{
-				"any": tags,
-			},
-		})
-	}
-
-	// Session filtering (copied from Search)
-	if sessionID > 0 {
-		if includeGlobal || len(tags) > 0 {
-			mustFilters = append(mustFilters, map[string]interface{}{
-				"should": []map[string]interface{}{
-					{"key": "session_id", "match": map[string]interface{}{"value": sessionID}},
-					{"is_empty": map[string]interface{}{"key": "session_id"}},
-				},
-			})
-		} else {
-			mustFilters = append(mustFilters, map[string]interface{}{
-				"key": "session_id",
-				"match": map[string]interface{}{"value": sessionID},
-			})
-		}
-	}
-
-	if len(mustFilters) > 0 {
-		query["filter"] = map[string]interface{}{
-			"must": mustFilters,
-		}
+	if filter := buildTagSessionFilter(tags, sessionID, includeGlobal); len(filter) > 0 {
+		query["filter"] = filter
 	}
 
 	body, _ := json.Marshal(query)
@@ -570,31 +555,31 @@ func (q *QdrantClient) MergeTags(collection string, vectorSize int, sourceTag, t
 	// If we want to properly merge (append to array), we'd need to fetch and update or use a more advanced Qdrant feature if available.
 	// For now, we'll implement a simple "add to tags array" using Qdrant's payload update features.
 	// Note: Qdrant's /points/payload (POST) adds/updates keys. If 'tags' is a list, it might overwrite the whole list.
-	
-	// Better approach for true merge in Qdrant: 
+
+	// Better approach for true merge in Qdrant:
 	// Use a filter to find all points with sourceTag, then use a script or multi-step update.
 	// Simpler approach: Set the targetTag as a value in the tags array.
-	
+
 	filter := map[string]interface{}{
 		"must": []map[string]interface{}{
 			{
 				"key": "tags",
 				"match": map[string]interface{}{
-					"value": sourceTag,
+					"any": []int64{sourceTag},
 				},
 			},
 		},
 	}
 
 	// We'll use a multi-step update if needed, but for now let's try the simplest:
-	// Replace sourceTag with targetTag in the array. 
+	// Replace sourceTag with targetTag in the array.
 	// Actually, Qdrant's payload update doesn't support "array remove/add" natively in a single atomic call across all points.
-	
+
 	// Recommendation: For this iteration, we'll implement the "Overwrite with Target" for the session/tag field.
 	// If the user wants to merge tags, they likely want to unify them.
-	
+
 	payload := map[string]interface{}{
-		"tags": []int64{targetTag}, 
+		"tags": []int64{targetTag},
 	}
 
 	body, err := json.Marshal(map[string]interface{}{
@@ -626,7 +611,7 @@ func (q *QdrantClient) GetStats(collection string) (interface{}, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	var result struct {
 		Result interface{} `json:"result"`
 	}

@@ -264,6 +264,57 @@ STEP_TS_END=$(date +%s)
 log_step_timing "pulsar-init" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+if ! is_step_done "cnpg-operator"; then
+STEP_TS_START=$(date +%s)
+echo ""
+echo "Step 1.5.8.2: CloudNativePG Operator"
+echo "----------------------------------------------------"
+CNPG_MANIFEST="$BASE_DIR/rag-stack/infrastructure/timescaledb/cnpg-1.25.0.yaml"
+$KUBECTL get namespace cnpg-system >/dev/null 2>&1 || $KUBECTL create namespace cnpg-system
+$KUBECTL apply -f "$CNPG_MANIFEST" --server-side --force-conflicts
+echo "Waiting for CNPG namespace..."
+for _ in $(seq 1 60); do
+  if $KUBECTL get namespace cnpg-system >/dev/null 2>&1; then
+    break
+  fi
+  sleep 5
+done
+CNPG_DEPLOYMENT="cnpg-controller-manager"
+CNPG_TIMEOUT=300
+CNPG_START_TS=$(date +%s)
+until $KUBECTL -n cnpg-system get deployment "$CNPG_DEPLOYMENT" >/dev/null 2>&1; do
+  discovered=$($KUBECTL -n cnpg-system get deployment -l app.kubernetes.io/name=cloudnative-pg -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  if [[ -n "$discovered" ]]; then
+    CNPG_DEPLOYMENT="$discovered"
+    break
+  fi
+  if (( $(date +%s) - CNPG_START_TS > CNPG_TIMEOUT )); then
+    echo "[ERROR] Timeout waiting for CNPG deployment to be created in cnpg-system" >&2
+    $KUBECTL -n cnpg-system get deployment || true
+    exit 1
+  fi
+  sleep 5
+done
+echo "Waiting for CNPG deployment: $CNPG_DEPLOYMENT"
+$KUBECTL -n cnpg-system wait --for=condition=available deployment/"$CNPG_DEPLOYMENT" --timeout=300s
+mark_step_done "cnpg-operator"
+STEP_TS_END=$(date +%s)
+log_step_timing "cnpg-operator" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
+if ! is_step_done "timescaledb"; then
+STEP_TS_START=$(date +%s)
+echo ""
+echo "Step 1.5.8.3: TimescaleDB Infrastructure"
+echo "----------------------------------------------------"
+export REPO_DIR="$BASE_DIR/rag-stack"
+bash "$REPO_DIR/infrastructure/timescaledb/install.sh"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/timescaledb/timescaledb-lb-service.yaml"
+mark_step_done "timescaledb"
+STEP_TS_END=$(date +%s)
+log_step_timing "timescaledb" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
 if ! is_step_done "build-pipeline-infra" || ! $KUBECTL get namespace build-pipeline >/dev/null 2>&1; then
 STEP_TS_START=$(date +%s)
 echo ""

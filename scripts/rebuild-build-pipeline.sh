@@ -9,11 +9,13 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 NS="${NS:-build-pipeline}"
+source "$BASE_DIR/scripts/version-utils.sh"
 
 # Source of truth for versioning
 if [[ -z "${VERSION:-}" ]]; then
     if [[ -f "$BASE_DIR/CURRENT_VERSION" ]]; then
-        VERSION=$(cat "$BASE_DIR/CURRENT_VERSION" | tr -d '[:space:]')
+        VERSION="$(read_current_version "$BASE_DIR/CURRENT_VERSION" "build-orchestrator" 2>/dev/null || true)"
+        [[ -z "$VERSION" ]] && VERSION="2.4.9"
     else
         VERSION="2.4.9"
     fi

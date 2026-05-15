@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"google.golang.org/protobuf/proto"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"google.golang.org/protobuf/proto"
 
 	"app-builds/common/contracts"
 	"app-builds/common/ent/enttest"
@@ -16,11 +16,11 @@ import (
 )
 
 type mockPulsarClient struct {
-	SendRequestFunc     func(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error)
-	SendPromptEventFunc func(ctx context.Context, id string, sessionID int64, content string, tags []int64) error
-	SubscribeStreamFunc func(id string, ch chan *contracts.StreamChunk)
+	SendRequestFunc       func(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error)
+	SendPromptEventFunc   func(ctx context.Context, id string, sessionID int64, content string, tags []int64) error
+	SubscribeStreamFunc   func(id string, ch chan *contracts.StreamChunk)
 	UnsubscribeStreamFunc func(id string)
-	SendRawRequestFunc  func(ctx context.Context, payload proto.Message) error
+	SendRawRequestFunc    func(ctx context.Context, payload proto.Message) error
 }
 
 func (m *mockPulsarClient) SendRequest(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error) {
@@ -38,7 +38,7 @@ func (m *mockPulsarClient) UnsubscribeStream(id string) {
 func (m *mockPulsarClient) SendRawRequest(ctx context.Context, payload proto.Message) error {
 	return m.SendRawRequestFunc(ctx, payload)
 }
-func (m *mockPulsarClient) Close() {}
+func (m *mockPulsarClient) Close()      {}
 func (m *mockPulsarClient) Ping() error { return nil }
 
 func TestHandleChatCompletions(t *testing.T) {
@@ -97,6 +97,9 @@ func TestHandleGenericChat(t *testing.T) {
 	mockPulsar := &mockPulsarClient{
 		SendRequestFunc: func(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error) {
 			return &contracts.StreamChunk{Result: "Generic answer"}, nil
+		},
+		SendPromptEventFunc: func(ctx context.Context, id string, sessionID int64, content string, tags []int64) error {
+			return nil
 		},
 	}
 

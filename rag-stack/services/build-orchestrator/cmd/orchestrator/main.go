@@ -237,6 +237,11 @@ func main() {
 	}
 
 	metadataSvc := metadata.NewService(entClient)
+	if seedPath := strings.TrimSpace(os.Getenv("CURRENT_VERSION_PATH")); seedPath != "" {
+		if err := metadataSvc.SeedFromCurrentVersionFile(context.Background(), seedPath); err != nil {
+			logging.Printf("Warning: failed to seed build metadata from %s: %v", seedPath, err)
+		}
+	}
 
 	pulsarURL := os.Getenv("PULSAR_URL")
 	topic := os.Getenv("BUILD_TOPIC")
@@ -340,7 +345,7 @@ func main() {
 						Message:     fmt.Sprintf("Picked up by worker-%d", workerID),
 					})
 
-					err := processTask(ctx, k8sClientset, env.task, jobName, publisher, autoRollout)
+					err := processTask(ctx, k8sClientset, metadataSvc, env.task, jobName, publisher, autoRollout)
 					if err != nil {
 						redelivery := int(env.msg.RedeliveryCount())
 						if redelivery >= maxTaskRetries {
@@ -478,7 +483,7 @@ func main() {
 	cancel()
 }
 
-func processTask(ctx context.Context, clientset *kubernetes.Clientset, task BuildTask, jobName string, publisher *statusPublisher, autoRollout bool) error {
+func processTask(ctx context.Context, clientset *kubernetes.Clientset, metadataSvc *metadata.Service, task BuildTask, jobName string, publisher *statusPublisher, autoRollout bool) error {
 	namespace := "build-pipeline"
 
 	publisher.Publish(BuildStatusEvent{
@@ -495,6 +500,12 @@ func processTask(ctx context.Context, clientset *kubernetes.Clientset, task Buil
 
 	if err := waitForJobCompletion(ctx, clientset, namespace, task, jobName, publisher); err != nil {
 		return err
+	}
+
+	if metadataSvc != nil {
+		if err := metadataSvc.UpdateVersion(ctx, task.ServiceName, task.Version); err != nil {
+			logging.Printf("Warning: failed to update build metadata for %s:%s: %v", task.ServiceName, task.Version, err)
+		}
 	}
 
 	if autoRollout {

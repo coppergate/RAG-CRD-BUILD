@@ -10,7 +10,7 @@ class TimescalePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final timescaleAsync = ref.watch(timescaleNotifierProvider);
+    final timescaleAsync = ref.watch(timescaleProvider);
 
     return timescaleAsync.when(
       data: (state) => Scaffold(
@@ -19,17 +19,28 @@ class TimescalePage extends ConsumerWidget {
           actions: [
             IconButton(
               icon: const Icon(Icons.merge_type),
-              onPressed: () => TimescaleDialogs.showMergeDialog(context, state.availableTags).then((val) {
-                if (val != null) {
-                  ref.read(timescaleNotifierProvider.notifier).mergeTags(val['source_tag_ids'], val['target_tag_id']);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tag merge initiated')));
-                }
-              }),
+              onPressed: () =>
+                  TimescaleDialogs.showMergeDialog(
+                    context,
+                    state.availableTags,
+                  ).then((val) {
+                    if (val != null) {
+                      ref
+                          .read(timescaleProvider.notifier)
+                          .mergeTags(
+                            val['source_tag_ids'],
+                            val['target_tag_id'],
+                          );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Tag merge initiated')),
+                      );
+                    }
+                  }),
               tooltip: 'Maintenance: Merge Tags',
             ),
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: () => ref.read(timescaleNotifierProvider.notifier).refresh(),
+              onPressed: () => ref.read(timescaleProvider.notifier).refresh(),
             ),
           ],
         ),
@@ -40,24 +51,30 @@ class TimescalePage extends ConsumerWidget {
               child: SessionList(
                 sessions: state.sessions,
                 selectedSession: state.selectedSession,
-                onSelect: (s) => ref.read(timescaleNotifierProvider.notifier).selectSession(s),
+                onSelect: (s) =>
+                    ref.read(timescaleProvider.notifier).selectSession(s),
               ),
             ),
             const VerticalDivider(width: 1),
             Expanded(
               child: state.selectedSession == null
-                ? const Center(child: Text('Select a session to view details'))
-                : SessionDetails(
-                    session: state.selectedSession!,
-                    health: state.currentHealth,
-                    auditLogs: state.auditLogs,
-                    isLoading: state.isLoadingDetails,
-                  ),
+                  ? const Center(
+                      child: Text('Select a session to view details'),
+                    )
+                  : SessionDetails(
+                      session: state.selectedSession!,
+                      health: state.currentHealth,
+                      auditLogs: state.auditLogs,
+                      isLoading: state.isLoadingDetails,
+                      isDarkMode:
+                          Theme.of(context).brightness == Brightness.dark,
+                    ),
             ),
           ],
         ),
       ),
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, stack) => Scaffold(body: Center(child: Text('Error: $err'))),
     );
   }

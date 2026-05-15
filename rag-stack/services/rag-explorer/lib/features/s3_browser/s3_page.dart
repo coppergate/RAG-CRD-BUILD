@@ -9,8 +9,8 @@ class S3Page extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s3Async = ref.watch(s3NotifierProvider);
-    final notifier = ref.read(s3NotifierProvider.notifier);
+    final s3Async = ref.watch(s3Provider);
+    final notifier = ref.read(s3Provider.notifier);
 
     return Scaffold(
       appBar: AppBar(
@@ -23,7 +23,11 @@ class S3Page extends ConsumerWidget {
           if (s3Async.value?.selectedFilePaths.isNotEmpty ?? false)
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _confirmDelete(context, notifier, s3Async.value!.selectedFilePaths.length),
+              onPressed: () => _confirmDelete(
+                context,
+                notifier,
+                s3Async.value!.selectedFilePaths.length,
+              ),
             ),
         ],
       ),
@@ -31,24 +35,40 @@ class S3Page extends ConsumerWidget {
         data: (state) => Column(
           children: [
             S3FilterBar(
+              availableBuckets: state.availableBuckets,
+              selectedBucket: state.selectedBucket,
               availableTags: state.availableTags,
               selectedTags: state.selectedTags,
               availableSessions: state.availableSessions,
               selectedSession: state.selectedSession,
+              onBucketChanged: (bucket) => notifier.setBucket(bucket),
               onTagsChanged: (tags) => notifier.setTags(tags),
               onSessionChanged: (sess) => notifier.setSession(sess),
             ),
             const Divider(height: 1),
+            if (state.error != null)
+              Container(
+                width: double.infinity,
+                color: Colors.red.withValues(alpha: 0.08),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Text(
+                  state.error!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
             if (state.selectedFilePaths.isNotEmpty)
               _buildSelectionActions(state, notifier),
             Expanded(
-              child: state.isLoading 
-                ? const Center(child: CircularProgressIndicator())
-                : FileList(
-                    files: state.files,
-                    selectedPaths: state.selectedFilePaths,
-                    onToggle: (path) => notifier.toggleFileSelection(path),
-                  ),
+              child: state.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : FileList(
+                      files: state.files,
+                      selectedPaths: state.selectedFilePaths,
+                      onToggle: (path) => notifier.toggleFileSelection(path),
+                    ),
             ),
           ],
         ),
@@ -66,7 +86,10 @@ class S3Page extends ConsumerWidget {
         children: [
           Text('${state.selectedFilePaths.length} files selected'),
           const Spacer(),
-          TextButton(onPressed: () => notifier.clearSelection(), child: const Text('Clear')),
+          TextButton(
+            onPressed: () => notifier.clearSelection(),
+            child: const Text('Clear'),
+          ),
           const SizedBox(width: 8),
           ElevatedButton(
             onPressed: () => notifier.selectAll(state.files),
@@ -77,14 +100,23 @@ class S3Page extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, S3Notifier notifier, int count) async {
+  void _confirmDelete(
+    BuildContext context,
+    S3Notifier notifier,
+    int count,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirm Delete'),
-        content: Text('Are you sure you want to delete $count objects from S3?'),
+        content: Text(
+          'Are you sure you want to delete $count objects from S3?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),

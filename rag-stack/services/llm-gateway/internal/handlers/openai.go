@@ -1,5 +1,5 @@
 package handlers
- 
+
 import (
 	"context"
 	"encoding/json"
@@ -11,6 +11,7 @@ import (
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
 	"app-builds/common/ent/session"
+	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 	"app-builds/llm-gateway/internal/pulsar"
 	"github.com/google/uuid"
@@ -18,7 +19,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
-	"app-builds/common/logging"
 )
 
 var upgrader = websocket.Upgrader{
@@ -73,25 +73,25 @@ type OpenAIHandler struct {
 }
 
 type ChatCompletionRequest struct {
-	Model       string   `json:"model"`
-	SessionId   int64    `json:"session_id,omitempty"`   // Changed to int64
-	SessionName string   `json:"session_name,omitempty"` // Added for friendly name
-	Tags        []int64  `json:"tags,omitempty"`         // Changed to int64
-	IncludeGlobal bool     `json:"include_global,omitempty"`
-	Messages    []struct {
+	Model         string  `json:"model"`
+	SessionId     int64   `json:"session_id,omitempty"`   // Changed to int64
+	SessionName   string  `json:"session_name,omitempty"` // Added for friendly name
+	Tags          []int64 `json:"tags,omitempty"`         // Changed to int64
+	IncludeGlobal bool    `json:"include_global,omitempty"`
+	Messages      []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"messages"`
 }
 
 type GenericChatRequest struct {
-	SessionId   int64    `json:"session_id"` // Changed to int64
-	SessionName string   `json:"session_name,omitempty"`
-	Prompt      string   `json:"prompt"`
-	Planner     string   `json:"planner"`
-	Executor    string   `json:"executor"`
-	Tags        []int64  `json:"tags"` // Changed to int64
-	IncludeGlobal bool     `json:"include_global,omitempty"`
+	SessionId     int64   `json:"session_id"` // Changed to int64
+	SessionName   string  `json:"session_name,omitempty"`
+	Prompt        string  `json:"prompt"`
+	Planner       string  `json:"planner"`
+	Executor      string  `json:"executor"`
+	Tags          []int64 `json:"tags"` // Changed to int64
+	IncludeGlobal bool    `json:"include_global,omitempty"`
 }
 
 func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sessionName string, tags []int64) (*ent.Session, error) {
@@ -169,6 +169,14 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	logging.Printf(
+		"[chat-completions] session_id=%d session_name=%q tags=%v include_global=%v",
+		req.SessionId,
+		req.SessionName,
+		req.Tags,
+		req.IncludeGlobal,
+	)
+
 	// 1. Session tracking
 	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
@@ -185,10 +193,15 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 
 	requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 
-	// Fetch all tags for the session
+	// Fetch all tags for the session and preserve the request tags if the
+	// session association has not been materialized yet.
 	var sessionTags []int64
 	for _, t := range sess.Edges.Tags {
 		sessionTags = append(sessionTags, t.ID)
+	}
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
 	}
 
 	// Record prompt size
@@ -203,20 +216,9 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	// Save user message to DB via Pulsar event
 	if len(req.Messages) > 0 {
 		userMsg := req.Messages[len(req.Messages)-1].Content
-		if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, userMsg, sessionTags); err != nil {
+		if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, userMsg, effectiveTags); err != nil {
 			logging.Printf("[%s][SID:%d] Failed to send prompt event: %v", correlationID, sessionID, err)
 		}
-	}
-
-	// Map to InternalRequest for Pulsar
-	if len(req.Messages) > 0 {
-		prompt = req.Messages[len(req.Messages)-1].Content
-	}
-
-	// Use tags from request if session tags are empty (e.g. if DB association failed)
-	effectiveTags := sessionTags
-	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
-		effectiveTags = req.Tags
 	}
 
 	internalReq := &contracts.InternalRequest{
@@ -230,9 +232,19 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
-			"source": "openai-api",
+			"source":        "openai-api",
+			"selected_tags": effectiveTags,
+			"session_tags":  sessionTags,
 		}),
 	}
+
+	logging.Printf(
+		"[chat-completions] correlation_id=%s session_id=%d effective_tags=%v prompt_len=%d",
+		correlationID,
+		sessionID,
+		effectiveTags,
+		len(prompt),
+	)
 
 	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)
 	if err != nil {
@@ -286,6 +298,16 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	logging.Printf(
+		"[chat-stream] session_id=%d session_name=%q tags=%v include_global=%v planner=%q executor=%q",
+		req.SessionId,
+		req.SessionName,
+		req.Tags,
+		req.IncludeGlobal,
+		req.Planner,
+		req.Executor,
+	)
+
 	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
 		logging.Printf("Failed to ensure session: %v", err)
@@ -293,10 +315,15 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	}
 	sessionID := sess.ID
 
-	// Fetch all tags for the session
+	// Fetch all tags for the session and fall back to the request tags if the
+	// session association has not been persisted yet.
 	var sessionTags []int64
 	for _, t := range sess.Edges.Tags {
 		sessionTags = append(sessionTags, t.ID)
+	}
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
 	}
 
 	// Record prompt size
@@ -305,14 +332,8 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	correlationID := uuid.New().String()
 
 	// Save user message to DB via Pulsar event
-	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt, sessionTags); err != nil {
+	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt, effectiveTags); err != nil {
 		logging.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
-	}
-
-	// Use tags from request if session tags are empty
-	effectiveTags := sessionTags
-	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
-		effectiveTags = req.Tags
 	}
 
 	internalReq := &contracts.InternalRequest{
@@ -327,9 +348,19 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Stream:        true,
 		Metadata: contracts.ToStruct(map[string]interface{}{
-			"source": "websocket-api",
+			"source":        "websocket-api",
+			"selected_tags": effectiveTags,
+			"session_tags":  sessionTags,
 		}),
 	}
+
+	logging.Printf(
+		"[chat-stream] correlation_id=%s session_id=%d effective_tags=%v prompt_len=%d",
+		correlationID,
+		sessionID,
+		effectiveTags,
+		len(req.Prompt),
+	)
 
 	// Channel to receive chunks from Pulsar
 	chunkChan := make(chan *contracts.StreamChunk, 10)
@@ -399,6 +430,16 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	logging.Printf(
+		"[generic-chat] session_id=%d session_name=%q tags=%v include_global=%v planner=%q executor=%q",
+		req.SessionId,
+		req.SessionName,
+		req.Tags,
+		req.IncludeGlobal,
+		req.Planner,
+		req.Executor,
+	)
+
 	// 1. Session tracking
 	sess, err := h.ensureSession(ctx, req.SessionId, req.SessionName, req.Tags)
 	if err != nil {
@@ -409,10 +450,15 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 	sessionID := sess.ID
 
-	// Fetch all tags for the session
+	// Fetch all tags for the session and preserve the request tags if the
+	// session association has not been materialized yet.
 	var sessionTags []int64
 	for _, t := range sess.Edges.Tags {
 		sessionTags = append(sessionTags, t.ID)
+	}
+	effectiveTags := sessionTags
+	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
+		effectiveTags = req.Tags
 	}
 
 	// Record prompt size
@@ -421,7 +467,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	correlationID := uuid.New().String()
 
 	// Save user message to DB via Pulsar event
-	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt, sessionTags); err != nil {
+	if err := h.Pulsar.SendPromptEvent(ctx, correlationID, sessionID, req.Prompt, effectiveTags); err != nil {
 		logging.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 	}
 
@@ -430,13 +476,6 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 	if req.Executor == "" {
 		req.Executor = "llama3.1:latest"
-	}
-
-	// Direct mapping to InternalRequest
-	// Use tags from request if session tags are empty
-	effectiveTags := sessionTags
-	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
-		effectiveTags = req.Tags
 	}
 
 	internalReq := &contracts.InternalRequest{
@@ -450,9 +489,19 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		IncludeGlobal: req.IncludeGlobal,
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
-			"source": "generic-api",
+			"source":        "generic-api",
+			"selected_tags": effectiveTags,
+			"session_tags":  sessionTags,
 		}),
 	}
+
+	logging.Printf(
+		"[generic-chat] correlation_id=%s session_id=%d effective_tags=%v prompt_len=%d",
+		correlationID,
+		sessionID,
+		effectiveTags,
+		len(req.Prompt),
+	)
 
 	result, err := h.Pulsar.SendRequest(ctx, correlationID, internalReq)
 	if err != nil {

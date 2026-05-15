@@ -9,14 +9,12 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="build-pipeline"
 REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
+source "$REPO_DIR/../../../scripts/version-utils.sh"
 
 # Source of truth for versioning
 if [[ -z "${VERSION:-}" ]]; then
-    if [[ -f "$REPO_DIR/../../../CURRENT_VERSION" ]]; then
-        VERSION=$(cat "$REPO_DIR/../../../CURRENT_VERSION" | tr -d '[:space:]')
-    else
-        VERSION="2.4.9"
-    fi
+    VERSION="$(read_current_version "$REPO_DIR/../../../CURRENT_VERSION" "build-orchestrator" 2>/dev/null || true)"
+    [[ -z "$VERSION" ]] && VERSION="2.4.9"
 fi
 export VERSION
 
@@ -61,6 +59,13 @@ fi
 
 echo "--- Applying Combined Registry & Pulsar CA ---"
 
+if [[ -f "$REPO_DIR/../../../CURRENT_VERSION" ]]; then
+    echo "--- Creating Build Version Seed ConfigMap ---"
+    $KUBECTL create configmap build-current-version -n "$NAMESPACE" \
+        --from-file=current-version.json="$REPO_DIR/../../../CURRENT_VERSION" \
+        --dry-run=client -o yaml | $KUBECTL apply -f -
+fi
+
 # Ensure SAFE_TMP_DIR exists
 mkdir -p "$SAFE_TMP_DIR"
 
@@ -98,6 +103,31 @@ fi
 # Clean up
 rm -f "$COMBINED_CA"
 mark_step_done "build-pipeline-ca"
+
+if should_run_step "build-pipeline-timescaledb-secret" "$KUBECTL get secret timescaledb-secret -n $NAMESPACE >/dev/null 2>&1"; then
+    echo "--- Creating Build Pipeline TimescaleDB Secret ---"
+    retries=0
+    max_retries=120
+    until $KUBECTL get secret timescaledb-app -n timescaledb >/dev/null 2>&1; do
+        if [ "$retries" -ge "$max_retries" ]; then
+            echo "ERROR: timescaledb-app secret was not created in timescaledb after waiting."
+            exit 1
+        fi
+        echo "Waiting for timescaledb-app secret in timescaledb namespace..."
+        sleep 5
+        retries=$((retries + 1))
+    done
+    REAL_PW=$($KUBECTL get secret timescaledb-app -n timescaledb -o jsonpath='{.data.password}' | base64 -d)
+    if [ -z "$REAL_PW" ]; then
+        echo "ERROR: Could not fetch timescaledb-app password from timescaledb namespace."
+        exit 1
+    fi
+    DB_URL="postgres://app:${REAL_PW}@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=require"
+    $KUBECTL create secret generic timescaledb-secret -n $NAMESPACE \
+        --from-literal=url="${DB_URL}" \
+        --dry-run=client -o yaml | $KUBECTL apply -f -
+    mark_step_done "build-pipeline-timescaledb-secret"
+fi
 
 # Use the external registry URL for skopeo if running on hierophant
 SKOPEO_REGISTRY="registry.hierocracy.home:5000"

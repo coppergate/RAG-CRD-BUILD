@@ -10,8 +10,8 @@ class BehavioralRulesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final behaviorAsync = ref.watch(behaviorNotifierProvider);
-    final notifier = ref.read(behaviorNotifierProvider.notifier);
+    final behaviorAsync = ref.watch(behaviorProvider);
+    final notifier = ref.read(behaviorProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(
@@ -43,11 +43,18 @@ class BehavioralRulesPage extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     LearnForm(
-                      actionTypes: state.identifiers,
-                      onLearn: (type, content) => notifier.learnRule(type, content),
+                      actionTypes: state.identifiers
+                          .map((id) => id.actionType)
+                          .toList(),
+                      onLearn: (type, content) =>
+                          notifier.learnRule(type, content),
                     ),
                     const Divider(height: 32),
-                    TaxonomyTable(identifiers: state.identifiers),
+                    TaxonomyTable(
+                      identifiers: state.identifiers
+                          .map((id) => '${id.actionType} - ${id.description}')
+                          .toList(),
+                    ),
                   ],
                 ),
               ),

@@ -9,7 +9,7 @@ class QdrantPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final qdrantAsync = ref.watch(qdrantNotifierProvider);
+    final qdrantAsync = ref.watch(qdrantProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -17,24 +17,27 @@ class QdrantPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(qdrantNotifierProvider.notifier).refresh(),
+            onPressed: () => ref.read(qdrantProvider.notifier).refresh(),
           ),
         ],
       ),
       body: qdrantAsync.when(
-        data: (state) => ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: state.collections.length,
-          itemBuilder: (context, index) {
-            final coll = state.collections[index];
-            return CollectionCard(
-              name: coll['name'],
-              stats: coll['stats'] as QdrantStats,
-            );
-          },
-        ),
+        data: (state) => state.collections.isEmpty
+            ? const Center(child: Text('No Qdrant collections found.'))
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: state.collections.length,
+                itemBuilder: (context, index) {
+                  final coll = state.collections[index];
+                  return CollectionCard(
+                    name: coll['name'],
+                    stats: coll['stats'] as QdrantStats,
+                  );
+                },
+              ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        error: (err, stack) =>
+            Center(child: Text('Error loading Qdrant collections: $err')),
       ),
     );
   }

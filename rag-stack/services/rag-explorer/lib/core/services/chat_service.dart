@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:rag_explorer/config/app_config.dart';
-import 'package:rag_explorer/app_config_provider.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import '../../config/app_config.dart';
+import '../../app_config_provider.dart';
 import '../models/response_message.dart';
 import '../models/session.dart';
 import '../models/tag.dart';
@@ -62,12 +62,16 @@ class ChatService {
   Future<bool> deleteSession(int sessionId) async {
     _logger.info('Deleting session: $sessionId');
     try {
-      final response = await _dio.delete('${_config.memoryUrl}/sessions/$sessionId');
+      final response = await _dio.delete(
+        '${_config.memoryUrl}/sessions/$sessionId',
+      );
       final success = response.statusCode == 204 || response.statusCode == 200;
       if (success) {
         _logger.info('Session deleted successfully');
       } else {
-        _logger.warn('Failed to delete session, status: ${response.statusCode}');
+        _logger.warn(
+          'Failed to delete session, status: ${response.statusCode}',
+        );
       }
       return success;
     } catch (e) {
@@ -79,10 +83,14 @@ class ChatService {
   Future<List<ResponseMessage>> getMessages(int sessionId) async {
     _logger.debug('Fetching messages for session: $sessionId');
     try {
-      final response = await _dio.get('${_config.dbUrl}/sessions/$sessionId/messages');
+      final response = await _dio.get(
+        '${_config.dbUrl}/sessions/$sessionId/messages',
+      );
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
-        _logger.info('Successfully fetched ${data.length} messages for session: $sessionId');
+        _logger.info(
+          'Successfully fetched ${data.length} messages for session: $sessionId',
+        );
         return data.map((e) {
           return ResponseMessage(
             content: e['content'],
@@ -128,15 +136,22 @@ class ChatService {
   }) {
     _logger.info('Starting streamChat for session: $sessionId');
     _logger.debug('Prompt: $prompt');
-    
+    _logger.debug('Stream tags: ${tags.isEmpty ? "<none>" : tags.join(", ")}');
+
     // Construct the WebSocket URL via the rag-admin-api proxy
     final uri = Uri.parse(_config.ragAdminApiUrl);
     final wsScheme = uri.scheme == 'https' ? 'wss' : 'ws';
-    final portPart = (uri.port != 0 && ((uri.scheme == 'https' && uri.port != 443) || (uri.scheme == 'http' && uri.port != 80))) ? ':${uri.port}' : '';
-    final wsUrl = '$wsScheme://${uri.host}$portPart/api/chat/v1/rag/chat/stream';
+    final portPart =
+        (uri.port != 0 &&
+            ((uri.scheme == 'https' && uri.port != 443) ||
+                (uri.scheme == 'http' && uri.port != 80)))
+        ? ':${uri.port}'
+        : '';
+    final wsUrl =
+        '$wsScheme://${uri.host}$portPart/api/chat/v1/rag/chat/stream';
 
     _logger.info('Connecting to WebSocket: $wsUrl');
-    
+
     try {
       final channel = WebSocketChannel.connect(Uri.parse(wsUrl));
 
@@ -156,8 +171,15 @@ class ChatService {
           .timeout(
             Duration(seconds: _config.promptTimeoutSeconds),
             onTimeout: (sink) {
-              _logger.warn('Stream timed out after ${_config.promptTimeoutSeconds} seconds of inactivity');
-              sink.addError(TimeoutException('No stream event received for ${_config.promptTimeoutSeconds}s. The backend may be processing or the connection is idle.', Duration(seconds: _config.promptTimeoutSeconds)));
+              _logger.warn(
+                'Stream timed out after ${_config.promptTimeoutSeconds} seconds of inactivity',
+              );
+              sink.addError(
+                TimeoutException(
+                  'No stream event received for ${_config.promptTimeoutSeconds}s. The backend may be processing or the connection is idle.',
+                  Duration(seconds: _config.promptTimeoutSeconds),
+                ),
+              );
               sink.close();
             },
           )
