@@ -270,6 +270,12 @@ if [[ "$PULSAR_READY" != "true" ]]; then
     exit 1
 fi
 
+if ! is_step_done "pulsar-topic-config"; then
+echo "--- 3.1 Applying Pulsar Topic Config for RAG Services ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/pulsar/topic-config.yaml"
+mark_step_done "pulsar-topic-config"
+fi
+
 # Ensure tenants/namespaces are initialized (idempotent — safe to re-run)
 # if ! is_step_done "pulsar-init"; then
 # echo "--- 3.1 Initializing Pulsar Tenants and Namespaces ---"
