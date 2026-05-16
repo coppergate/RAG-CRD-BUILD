@@ -15,9 +15,9 @@ source "${BASE_DIR:-$REPO_DIR/..}/scripts/version-utils.sh"
 if [[ -z "${VERSION:-}" ]]; then
     if [[ -f "$VERSION_FILE" ]]; then
         VERSION="$(read_current_version "$VERSION_FILE" "build-orchestrator" 2>/dev/null || true)"
-        [[ -z "$VERSION" ]] && VERSION="2.4.11"
+        [[ -z "$VERSION" ]] && VERSION="1.0.0"
     else
-        VERSION="2.4.11"
+        VERSION="1.0.0"
     fi
 fi
 export VERSION
@@ -112,6 +112,12 @@ $KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --
 # $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=60s
 mark_step_done "rag-system-tls"
+fi
+
+if ! is_step_done "rag-system-rbac"; then
+echo "--- 1.2 Applying RAG System RBAC ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/rag-system-rbac.yaml"
+mark_step_done "rag-system-rbac"
 fi
 
 # Inject Registry & Pulsar CA ConfigMap into rag-system
