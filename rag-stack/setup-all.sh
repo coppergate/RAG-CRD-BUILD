@@ -431,6 +431,8 @@ fi
 if ! is_step_done "rag-admin-api"; then
 echo "--- 10.5 Deploying RAG Admin API (Go BFF) ---"
 apply_manifest "$REPO_DIR/services/rag-admin-api/k8s/deployment.yaml"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/traefik/skip-verify-transport.yaml"
+$KUBECTL apply -f "$REPO_DIR/services/rag-admin-api/k8s/ingress.yaml"
 mark_step_done "rag-admin-api"
 fi
 
