@@ -59,3 +59,7 @@ The master script orchestrates the following major steps:
 - **Journal**: Installation progress is tracked per-user under `~/.complete-build/journal/` on `hierophant`. Override with `INSTALL_JOURNAL_DIR` if needed.
 - **Temporary Files**: Scripts use a private, user-specific temporary directory at `~/.complete-build/tmp/` on `hierophant`. Override with `INSTALL_TMP_DIR` if needed.
 - **Kubernetes**: Use `/home/k8s/kube/kubectl` with `/home/k8s/kube/config/kubeconfig` on `hierophant` for cluster status.
+
+## Post-Install Routing
+
+If `dev-fedora` needs to reach the Talos management subnet directly, use the machine-specific route blocks in [`documentation/network-configuration.md`](network-configuration.md). The commands are grouped by `dev-fedora`, `hegemon`, and `hierophant` so they can be applied after the Kubernetes setup finishes.

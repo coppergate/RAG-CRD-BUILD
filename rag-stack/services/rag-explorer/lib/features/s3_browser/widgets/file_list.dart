@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/models/metrics.dart';
+import '../../../core/models/metrics.dart';
 
 class FileList extends StatelessWidget {
   final List<VirtualFile> files;
@@ -31,7 +31,9 @@ class FileList extends StatelessWidget {
             onChanged: (_) => onToggle(file.path),
           ),
           title: Text(file.path),
-          subtitle: Text('Bucket: ${file.bucket} | Tags: ${file.tags.join(", ")}'),
+          subtitle: Text(
+            'Bucket: ${file.bucket} | Tags: ${file.tags.join(", ")}',
+          ),
           trailing: Text(file.status),
           onTap: () => onToggle(file.path),
         );

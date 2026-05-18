@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/models/behavioral_rule.dart';
+import '../../../core/models/behavioral_rule.dart';
 
 class RulesList extends StatelessWidget {
   final List<BehavioralRule> rules;
@@ -32,17 +32,28 @@ class RulesList extends StatelessWidget {
               children: [
                 _buildStatusChip(rule.state),
                 const SizedBox(width: 8),
-                Text(rule.actionType, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  rule.actionType,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ],
             ),
-            subtitle: Text('Updated: ${rule.updatedAt.toString().split(' ')[0]}'),
+            subtitle: Text(
+              'Updated: ${rule.updatedAt.toString().split(' ')[0]}',
+            ),
             children: [
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Rule Content:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    const Text(
+                      'Rule Content:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Container(
                       width: double.infinity,
@@ -50,9 +61,11 @@ class RulesList extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(4),
-                        fontFamily: 'monospace',
                       ),
-                      child: Text(rule.ruleContent),
+                      child: Text(
+                        rule.ruleContent,
+                        style: const TextStyle(fontFamily: 'monospace'),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -63,14 +76,19 @@ class RulesList extends StatelessWidget {
                             icon: const Icon(Icons.check),
                             label: const Text('Accept'),
                             onPressed: () => onAccept(rule),
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
                           ),
                         const SizedBox(width: 8),
                         TextButton.icon(
                           icon: const Icon(Icons.delete_outline),
                           label: const Text('Delete'),
                           onPressed: () => onDelete(rule),
-                          style: TextButton.styleFrom(foregroundColor: Colors.red),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
                         ),
                       ],
                     ),
@@ -90,7 +108,10 @@ class RulesList extends StatelessWidget {
     if (state == 'PENDING') color = Colors.orange;
 
     return Chip(
-      label: Text(state, style: const TextStyle(fontSize: 10, color: Colors.white)),
+      label: Text(
+        state,
+        style: const TextStyle(fontSize: 10, color: Colors.white),
+      ),
       backgroundColor: color,
       padding: EdgeInsets.zero,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

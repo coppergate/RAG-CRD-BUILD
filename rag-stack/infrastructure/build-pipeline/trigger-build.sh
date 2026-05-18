@@ -197,9 +197,26 @@ TASK_B64="$(printf '%s' "$TASK_JSON" | base64 -w0)"
 $KUBECTL exec -n "$PULSAR_NAMESPACE" "$PULSAR_POD" -- sh -lc "
 set -eu
 TMP_MSG=\$(mktemp)
+PULSAR_LOG_CONF=\$(mktemp /tmp/pulsar-log4j2-XXXXXX.yaml)
+cat > \"\$PULSAR_LOG_CONF\" <<'EOF'
+Configuration:
+  status: warn
+  Appenders:
+    Console:
+      name: Console
+      target: SYSTEM_OUT
+      PatternLayout:
+        pattern: \"%m%n\"
+  Loggers:
+    Root:
+      level: warn
+      AppenderRef:
+        - ref: Console
+EOF
 printf '%s' '$TASK_B64' | base64 -d > \"\$TMP_MSG\"
-/pulsar/bin/pulsar-client produce persistent://public/default/build-tasks -f \"\$TMP_MSG\"
+PULSAR_LOG_CONF=\"\$PULSAR_LOG_CONF\" /pulsar/bin/pulsar-client produce persistent://public/default/build-tasks -f \"\$TMP_MSG\"
 rm -f \"\$TMP_MSG\"
+rm -f \"\$PULSAR_LOG_CONF\"
 "
 
 echo "Build triggered for $SERVICE:$VERSION"

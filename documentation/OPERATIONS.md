@@ -213,6 +213,9 @@ bash ./config-cluster.sh
     - The script uses a persistent journal. If interrupted, it will resume from the last successful step.
     - Check the journal with: `cat /home/k8s/talos/config/journal.log` (if configured in `scripts/journal-helper.sh`).
 
+#### Post-Setup Route Appendix
+If you need to reach the Talos management network (`10.0.0.0/24`) from `dev-fedora`, append the routing steps in [`documentation/network-configuration.md`](network-configuration.md). The command blocks there are grouped by machine file name (`dev-fedora`, `hegemon`, `hierophant`) so they can be carried into the installation workflow cleanly.
+
 ### 2.1 Session Establishment (Operational Context)
 Every new session for the **Junie** agent MUST establish the operational context by following these steps:
 1.  **Git Initialization**:

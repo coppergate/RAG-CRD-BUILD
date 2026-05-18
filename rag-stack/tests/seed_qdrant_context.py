@@ -5,12 +5,16 @@ import json
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+from e2e_tag_state import ensure_test_tag
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "4096"))
 COLLECTION_NAME = f"vectors-{VECTOR_SIZE}"
+TAG_STATE_FILE = os.getenv(
+    "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
+)
 
 TEST_DATA = [
     {
@@ -37,6 +41,9 @@ def get_ollama_embeddings(text: str):
 
 def seed_data():
     print(f"[{datetime.utcnow().isoformat()}] [SEED] Connecting to Qdrant at {QDRANT_HOST}")
+    tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-context-")
+    tag_id = tag["tag_id"]
+    print(f"[SEED] Using tag {tag['tag_name']} (ID: {tag_id})")
     qdrant_use_tls = os.getenv("QDRANT_USE_TLS", "true") == "true"
     client = QdrantClient(host=QDRANT_HOST, port=6333, https=qdrant_use_tls, prefer_grpc=False, timeout=30)
     
@@ -71,9 +78,9 @@ def seed_data():
                 print(f"    [WARN] Vector size mismatch: expected {VECTOR_SIZE}, got {len(vector)}")
             
             payload = item.copy()
-            # The stack expects 'text' and 'tags' in the top-level payload for search
-            # We use a fixed integer ID for "test-tag" to match BIGINT refactor
-            payload["tags"] = [999] 
+            # The stack expects 'text' and 'tags' in the top-level payload for search.
+            # Use the real tag ID so the query filter and Qdrant payload stay aligned.
+            payload["tags"] = [tag_id]
             
             points.append(models.PointStruct(
                 id=item["id"],

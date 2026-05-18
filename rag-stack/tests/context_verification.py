@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+from e2e_tag_state import ensure_test_tag
 
 # Environment Configuration
 endpoint_env = os.getenv("S3_ENDPOINT", "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
@@ -17,6 +18,9 @@ else:
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase-bucket")
+TAG_STATE_FILE = os.getenv(
+    "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
+)
 
 # A set of facts that are NOT in the model's base training but will be in the context
 TEST_CODEBASE = {
@@ -58,46 +62,15 @@ def trigger_ingestion():
     print("  - NOTE: Ensure the 'ingest-codebase-s3' job has run to process these new files.")
     time.sleep(5) 
 
-def get_tag_id(name):
-    # Try to get existing tag
-    try:
-        resp = requests.get(f"{GATEWAY_URL.rsplit('/', 2)[0]}/api/db/tags", timeout=10)
-        if resp.status_code == 200:
-            tags = resp.json()
-            for t in tags:
-                if t['name'] == name:
-                    return t['id']
-    except:
-        pass
-    
-    # Create new tag if not found (via db-adapter API if accessible, or just use a dummy ID for now)
-    # Actually, the gateway might not expose tag creation directly.
-    # For this test, we assume the tag exists or we use a fixed integer if it's a fresh DB.
-    return 1001 # Fallback dummy ID
-
-def get_tag_id(name):
-    # Try to get existing tag
-    try:
-        # Use full URL to admin-api for tag resolution
-        resp = requests.get("https://rag-admin-api.rag.hierocracy.home/api/db/tags", timeout=10, verify=False)
-        if resp.status_code == 200:
-            tags = resp.json()
-            for t in tags:
-                if t['name'] == name:
-                    return t['id']
-    except Exception as e:
-        print(f"  - [WARN] Failed to resolve tag name '{name}': {e}")
-    
-    return 999 # Fallback to seed_qdrant_context.py tag ID
-
 def run_context_tests():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Running Context Verification Queries (Heat 0)...")
     results = []
     
     # We use a unique session for this test run to track it in TimescaleDB
     session_id = int(time.time())
-    tag_id = get_tag_id("test-tag")
-    print(f"  - Using Session ID: {session_id}, Tag ID: {tag_id}")
+    tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-context-")
+    tag_id = tag["tag_id"]
+    print(f"  - Using Session ID: {session_id}, Tag {tag['tag_name']} (ID: {tag_id})")
     
     for query in CONTEXT_QUERIES:
         print(f"  - Query: {query['question']}")

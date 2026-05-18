@@ -7,11 +7,17 @@ class LogEntry {
   final String level;
   final String? location;
 
-  LogEntry({required this.timestamp, required this.message, this.level = 'INFO', this.location});
+  LogEntry({
+    required this.timestamp,
+    required this.message,
+    this.level = 'INFO',
+    this.location,
+  });
 
   @override
   String toString() {
-    final timeStr = "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}.${timestamp.millisecond.toString().padLeft(3, '0')}";
+    final timeStr =
+        "${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}:${timestamp.second.toString().padLeft(2, '0')}.${timestamp.millisecond.toString().padLeft(3, '0')}";
     final locStr = location != null ? ' [$location]' : '';
     return '[$timeStr] $level$locStr: $message';
   }
@@ -24,7 +30,7 @@ class LogNotifier extends StateNotifier<List<LogEntry>> {
     if (!kDebugMode && !kProfileMode) {
       return 'release';
     }
-    
+
     try {
       final stack = StackTrace.current.toString().split('\n');
       // Find the first frame that is NOT in this file
@@ -32,7 +38,7 @@ class LogNotifier extends StateNotifier<List<LogEntry>> {
         if (frame.isEmpty) continue;
         // Skip the frames from this service
         if (frame.contains('log_service.dart')) continue;
-        
+
         // Extract what's inside parentheses if it exists
         final match = RegExp(r'\((.+)\)').firstMatch(frame);
         if (match != null) {
@@ -41,7 +47,7 @@ class LogNotifier extends StateNotifier<List<LogEntry>> {
           loc = loc.replaceAll('package:rag_explorer/', '');
           return loc;
         }
-        
+
         // Fallback: take the last part of the frame string
         final parts = frame.trim().split(RegExp(r'\s+'));
         if (parts.isNotEmpty) {
@@ -56,8 +62,13 @@ class LogNotifier extends StateNotifier<List<LogEntry>> {
 
   void log(String message, {String level = 'INFO'}) {
     final location = _extractLocation();
-    final entry = LogEntry(timestamp: DateTime.now(), message: message, level: level, location: location);
-    
+    final entry = LogEntry(
+      timestamp: DateTime.now(),
+      message: message,
+      level: level,
+      location: location,
+    );
+
     // Also print to console immediately
     print(entry.toString());
 
@@ -77,7 +88,7 @@ class LogNotifier extends StateNotifier<List<LogEntry>> {
   void error(String message) => log(message, level: 'ERROR');
   void warn(String message) => log(message, level: 'WARN');
   void debug(String message) => log(message, level: 'DEBUG');
-  
+
   void clear() => state = [];
 }
 

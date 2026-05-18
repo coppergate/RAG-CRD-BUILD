@@ -96,8 +96,8 @@ func LoadConfig() *Config {
 		StreamAccumulationCount: envutil.GetEnvInt("STREAM_ACCUMULATION_COUNT", 10),
 		StreamIntermediate:  envutil.GetEnvBool("STREAM_INTERMEDIATE", true),
 
-		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "http://memory-controller.rag-system.svc.cluster.local:8080"),
-		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "http://qdrant-adapter.rag-system.svc.cluster.local:8080"),
+		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "https://memory-controller.rag-system.svc.cluster.local"),
+		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "https://qdrant-adapter.rag-system.svc.cluster.local:8082"),
 
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:              envutil.GetEnv("TLS_KEY", ""),

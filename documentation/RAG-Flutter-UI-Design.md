@@ -24,7 +24,7 @@
 
 ## 2. Architecture Overview
 
-> **Note**: A standalone, editable version of this architecture diagram is available at [diagrams/ui-layout.mmd](./diagrams/ui-layout.mmd).
+> **Note**: A standalone, editable version of this architecture diagram is available at [diagrams/ui-layout.mmd](../diagrams/ui-layout.mmd).
 
 ```
 ┌─────────────────────────────────────────────────────┐

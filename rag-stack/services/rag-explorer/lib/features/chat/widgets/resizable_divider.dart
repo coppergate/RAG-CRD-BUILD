@@ -7,15 +7,19 @@ class ResizableDivider extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final width = ref.watch(chatNotifierProvider.select((s) => s.value?.metadataPanelWidth ?? 350.0));
-    
+    final width = ref.watch(
+      chatProvider.select((s) => s.value?.metadataPanelWidth ?? 350.0),
+    );
+
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onHorizontalDragUpdate: (details) {
           final newWidth = width - details.delta.dx;
-          ref.read(chatNotifierProvider.notifier).setMetadataPanelWidth(newWidth.clamp(100.0, 800.0));
+          ref
+              .read(chatProvider.notifier)
+              .setMetadataPanelWidth(newWidth.clamp(100.0, 800.0));
         },
         child: Container(
           width: 8,

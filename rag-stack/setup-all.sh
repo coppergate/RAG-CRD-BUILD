@@ -15,9 +15,9 @@ source "${BASE_DIR:-$REPO_DIR/..}/scripts/version-utils.sh"
 if [[ -z "${VERSION:-}" ]]; then
     if [[ -f "$VERSION_FILE" ]]; then
         VERSION="$(read_current_version "$VERSION_FILE" "build-orchestrator" 2>/dev/null || true)"
-        [[ -z "$VERSION" ]] && VERSION="2.4.11"
+        [[ -z "$VERSION" ]] && VERSION="1.0.0"
     else
-        VERSION="2.4.11"
+        VERSION="1.0.0"
     fi
 fi
 export VERSION
@@ -112,6 +112,12 @@ $KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --
 # $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
 $KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=60s
 mark_step_done "rag-system-tls"
+fi
+
+if ! is_step_done "rag-system-rbac"; then
+echo "--- 1.2 Applying RAG System RBAC ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/rag-system-rbac.yaml"
+mark_step_done "rag-system-rbac"
 fi
 
 # Inject Registry & Pulsar CA ConfigMap into rag-system
@@ -262,6 +268,12 @@ if [[ "$PULSAR_READY" != "true" ]]; then
     echo "Current pods in $PULSAR_NS:"
     $KUBECTL get pods -n "$PULSAR_NS" 2>&1 || echo "  (namespace does not exist)"
     exit 1
+fi
+
+if ! is_step_done "pulsar-topic-config"; then
+echo "--- 3.1 Applying Pulsar Topic Config for RAG Services ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/pulsar/topic-config.yaml"
+mark_step_done "pulsar-topic-config"
 fi
 
 # Ensure tenants/namespaces are initialized (idempotent — safe to re-run)
@@ -419,6 +431,8 @@ fi
 if ! is_step_done "rag-admin-api"; then
 echo "--- 10.5 Deploying RAG Admin API (Go BFF) ---"
 apply_manifest "$REPO_DIR/services/rag-admin-api/k8s/deployment.yaml"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/traefik/skip-verify-transport.yaml"
+$KUBECTL apply -f "$REPO_DIR/services/rag-admin-api/k8s/ingress.yaml"
 mark_step_done "rag-admin-api"
 fi
 

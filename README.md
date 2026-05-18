@@ -44,17 +44,17 @@ The project is designed for deployment on the **hierophant** host using automate
 - **Build System**: Features a **Zero-Host Build Architecture** using a cluster-native pipeline (Kaniko + S3 + Pulsar) to prevent host resource exhaustion.
 
 For detailed instructions, refer to:
-- [**Installation Guide**](./INSTALLATION.md)
+- [**Installation Guide**](documentation/INSTALLATION.md)
 - [**RAG Stack Deployment Guide**](./rag-stack/README.md)
 
 ## 📈 Project Evolution & Roadmaps
 
 The project follows a structured iteration-based development cycle:
 
-- [**Iteration 7 (Completed)**](./iteration-7.md): Local Prompt Memory + Recall (Miras/Titans-Inspired), Memory Controller service, and contextual salience scoring.
-- [**Iteration 8 (Current)**](./iteration-8.md): Advanced Reasoning, Verification (Critic phase), and autonomous Self-Correction loop.
-- [**Iteration 6 & 6b**](./iteration-6.md) ([6b](./iteration-6b.md)): Knowledge tags, multi-file upload, and session-specific Pulsar topics.
-- [**Iteration 5**](./iteration-5.md): Multi-model selection mechanism, Pulsar-based model routing, and UI for model discovery.
+- [**Iteration 7 (Completed)**](documentation/iteration-7.md): Local Prompt Memory + Recall (Miras/Titans-Inspired), Memory Controller service, and contextual salience scoring.
+- [**Iteration 8 (Current)**](documentation/iteration-8.md): Advanced Reasoning, Verification (Critic phase), and autonomous Self-Correction loop.
+- [**Iteration 6 & 6b**](documentation/iteration-6.md) ([6b](documentation/iteration-6b.md)): Knowledge tags, multi-file upload, and session-specific Pulsar topics.
+- [**Iteration 5**](documentation/iteration-5.md): Multi-model selection mechanism, Pulsar-based model routing, and UI for model discovery.
 
 ## 📂 Documentation Index
 
@@ -66,14 +66,11 @@ Below is a comprehensive list of project documentation:
 - [**rag-stack/README.md**](./rag-stack/README.md): Practical guide for deploying and using the RAG microservices.
 
 ### Iteration Logs
-- [**iteration-8.md**](./iteration-8.md): Current development goals (Advanced Reasoning).
-- [**iteration-7.md**](./iteration-7.md): Completed development goals (Local Prompt Memory).
-- [**iteration-6.md**](./iteration-6.md) / [**iteration-6b.md**](./iteration-6b.md): Knowledge tags and session topics.
-- [**iteration-5.md**](./iteration-5.md): Multi-model selection mechanism.
-- [**iteration-4.md**](./iteration-4.md) / [**iteration-4a.md**](./iteration-4a.md): APM, Monitoring, and infrastructure refinement.
-
-### Infrastructure & VMs
-- [**vm-doms.md**](./vm-doms.md): Extended VM configuration and networking details.
+- [**iteration-8.md**](documentation/iteration-8.md): Current development goals (Advanced Reasoning).
+- [**iteration-7.md**](documentation/iteration-7.md): Completed development goals (Local Prompt Memory).
+- [**iteration-6.md**](documentation/iteration-6.md) / [**iteration-6b.md**](documentation/iteration-6b.md): Knowledge tags and session topics.
+- [**iteration-5.md**](documentation/iteration-5.md): Multi-model selection mechanism.
+- [**iteration-4.md**](documentation/iteration-4.md) / [**iteration-4a.md**](documentation/iteration-4a.md): APM, Monitoring, and infrastructure refinement.
 
 ---
 *Note: This README was automatically generated to provide a unified entry point for the project.*
