@@ -20,6 +20,7 @@ echo "Updating tests ConfigMap..."
 $KUBECTL delete configmap rag-integration-tests -n $NAMESPACE --ignore-not-found
 $KUBECTL create configmap rag-integration-tests -n $NAMESPACE \
     --from-file="${TEST_DIR}/integration_test.py" \
+    --from-file="${TEST_DIR}/e2e_tag_state.py" \
     --from-file="${TEST_DIR}/api_health_test.py" \
     --from-file="${TEST_DIR}/context_verification.py" \
     --from-file="${TEST_DIR}/recursive_rag_test.py" \
@@ -46,7 +47,7 @@ rm -f "$RENDERED_JOB"
 echo "Waiting for pod to start (Running status)..."
 "$KUBECTL" -n "$NAMESPACE" wait --for=condition=Ready pod -l job-name=rag-integration-test --timeout=120s || true
 
-POD_NAME=$($KUBECTL get pods -n $NAMESPACE -l job-name=rag-integration-test -o jsonpath='{.items[0].metadata.name}')
+POD_NAME=$($KUBECTL get pods -n $NAMESPACE -l job-name=rag-integration-test --sort-by=.metadata.creationTimestamp -o name | tail -n 1 | cut -d/ -f2)
 
 if [ -z "$POD_NAME" ]; then
     echo "Error: Could not find test pod."

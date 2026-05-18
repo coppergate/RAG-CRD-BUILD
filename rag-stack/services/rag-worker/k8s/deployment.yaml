@@ -65,7 +65,7 @@ spec:
               name: timescaledb-secret
               key: url
         - name: QDRANT_ADAPTER_URL
-          value: "http://qdrant-adapter.rag-system.svc.cluster.local:8082"
+          value: "https://qdrant-adapter.rag-system.svc.cluster.local:8082"
         - name: QDRANT_HOST
           value: "qdrant"
         - name: PLANNER_URL
@@ -85,7 +85,7 @@ spec:
         - name: RECURSION_BUDGET
           value: "2.0"
         - name: MEMORY_CONTROLLER_URL
-          value: "http://memory-controller.rag-system.svc.cluster.local:8080"
+          value: "https://memory-controller.rag-system.svc.cluster.local"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OTEL_USE_TLS

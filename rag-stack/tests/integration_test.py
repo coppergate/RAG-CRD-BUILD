@@ -7,6 +7,7 @@ import requests
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+from e2e_tag_state import ensure_test_tag
 
 # Optional OpenTelemetry tracing (enabled if OTEL_EXPORTER_OTLP_ENDPOINT is set)
 OTEL_ENABLED = bool(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
@@ -41,6 +42,9 @@ GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.clust
 BUCKET_NAME = os.getenv("BUCKET_NAME", "e2eTestBucket")
 S3_INDEX = "/e2eTestBucket"
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
+TAG_STATE_FILE = os.getenv(
+    "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-integration-tag-state.json"
+)
 
 def test_s3_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing S3 Operations...")
@@ -110,27 +114,14 @@ def test_qdrant_ops():
     assert results[0].payload["text"] == "Test vector search"
     print("  - Verified search result")
 
-def get_tag_id(name):
-    # Try to get existing tag
-    try:
-        # Use full URL to admin-api for tag resolution
-        resp = requests.get("https://rag-admin-api.rag.hierocracy.home/api/db/tags", timeout=10, verify=False)
-        if resp.status_code == 200:
-            tags = resp.json()
-            for t in tags:
-                if t['name'] == name:
-                    return t['id']
-    except Exception as e:
-        print(f"  - [WARN] Failed to resolve tag name '{name}': {e}")
-    
-    return 1001 # Fallback to a common test tag ID
-
 def test_rag_retrieval():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing RAG Retrieval via Gateway...")
     print(f"  - GATEWAY_URL={GATEWAY_URL}")
     test_file_base = "e2e-test-file-"
     session_name = f"test-session-{int(time.time())}"
-    tag_id = get_tag_id("test-tag")
+    tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-integration-")
+    tag_id = tag["tag_id"]
+    print(f"  - Using tag {tag['tag_name']} (ID: {tag_id})")
     
     payload = {
         "model": OLLAMA_MODEL,
@@ -183,7 +174,12 @@ def test_rag_retrieval():
 
 def cleanup_test_data():
     print(f"[{datetime.utcnow().isoformat()}] [CLEANUP] Cleaning up test data...")
-    
+
+    if os.getenv("TEST_CLEANUP_ON_EXIT", "false").lower() != "true":
+        print("  - Preserving test artifacts for troubleshooting.")
+        print("  - Start-of-run cleanup will remove stale data on the next run.")
+        return
+
     # 1. S3 Cleanup
     try:
         s3 = boto3.client('s3', endpoint_url=S3_ENDPOINT)

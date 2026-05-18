@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/models/metrics.dart';
+import '../../../core/models/metrics.dart';
 
 class CollectionCard extends StatelessWidget {
   final String name;
@@ -21,19 +21,34 @@ class CollectionCard extends StatelessWidget {
                 Text(name, style: Theme.of(context).textTheme.titleLarge),
                 Chip(
                   label: Text(stats.status),
-                  backgroundColor: stats.status == 'green' ? Colors.green.shade100 : Colors.orange.shade100,
+                  backgroundColor: stats.status == 'green'
+                      ? Colors.green.shade100
+                      : Colors.orange.shade100,
                 ),
               ],
             ),
             const SizedBox(height: 16),
             _buildStatRow('Points', stats.pointsCount.toString(), Icons.grain),
-            _buildStatRow('Segments', stats.segmentsCount.toString(), Icons.segment),
-            _buildStatRow('Indexed Vectors', (stats.indexedVectorsCount ?? 0).toString(), Icons.speed),
+            _buildStatRow(
+              'Segments',
+              stats.segmentsCount.toString(),
+              Icons.segment,
+            ),
+            _buildStatRow(
+              'Indexed Vectors',
+              (stats.indexedVectorsCount ?? 0).toString(),
+              Icons.speed,
+            ),
             const SizedBox(height: 16),
-            const Text('Vector Density', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Vector Density',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             LinearProgressIndicator(
-              value: stats.pointsCount > 0 ? (stats.indexedVectorsCount ?? 0) / stats.pointsCount : 0,
+              value: stats.pointsCount > 0
+                  ? (stats.indexedVectorsCount ?? 0) / stats.pointsCount
+                  : 0,
               backgroundColor: Colors.grey.shade200,
               color: Colors.blue,
               minHeight: 10,

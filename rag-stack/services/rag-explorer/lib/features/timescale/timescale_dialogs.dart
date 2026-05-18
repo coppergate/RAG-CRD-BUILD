@@ -24,8 +24,11 @@ class TimescaleDialogs {
                     selected: sourceTagIds.contains(t.id),
                     onSelected: (val) {
                       setDialogState(() {
-                        if (val) sourceTagIds.add(t.id);
-                        else sourceTagIds.remove(t.id);
+                        if (val) {
+                          sourceTagIds.add(t.id);
+                        } else {
+                          sourceTagIds.remove(t.id);
+                        }
                       });
                     },
                   )).toList(),

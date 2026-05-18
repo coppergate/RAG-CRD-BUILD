@@ -11,19 +11,25 @@ class MemoryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final chatState = ref.watch(chatNotifierProvider).value;
-    final memoryState = ref.watch(memoryNotifierProvider);
-    final notifier = ref.read(memoryNotifierProvider.notifier);
+    final chatState = ref.watch(chatProvider).value;
+    final memoryState = ref.watch(memoryProvider);
+    final notifier = ref.read(memoryProvider.notifier);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Memory Explorer'),
         actions: [
           if (memoryState.isLoading)
-            const Center(child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-            )),
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => notifier.loadItems(),
@@ -49,9 +55,15 @@ class MemoryPage extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          MemoryWriteForm(onWrite: (content, type) => notifier.writeMemory(content, type)),
+                          MemoryWriteForm(
+                            onWrite: (content, type) =>
+                                notifier.writeMemory(content, type),
+                          ),
                           const Divider(height: 32),
-                          MemoryRetrievePanel(state: memoryState, onRetrieve: (query) => notifier.retrieve(query)),
+                          MemoryRetrievePanel(
+                            state: memoryState,
+                            onRetrieve: (query) => notifier.retrieve(query),
+                          ),
                         ],
                       ),
                     ),
@@ -61,14 +73,21 @@ class MemoryPage extends ConsumerWidget {
             )
           else
             const Expanded(
-              child: Center(child: Text('Please select a session to explore memory')),
+              child: Center(
+                child: Text('Please select a session to explore memory'),
+              ),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildSessionSelector(BuildContext context, dynamic chatState, MemoryState memoryState, MemoryNotifier notifier) {
+  Widget _buildSessionSelector(
+    BuildContext context,
+    dynamic chatState,
+    MemoryState memoryState,
+    MemoryNotifier notifier,
+  ) {
     if (chatState == null) return const SizedBox();
     final sessions = chatState.sessions;
 
@@ -77,7 +96,10 @@ class MemoryPage extends ConsumerWidget {
       color: Theme.of(context).cardColor,
       child: Row(
         children: [
-          const Text('Session: ', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text(
+            'Session: ',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: DropdownButton<int>(

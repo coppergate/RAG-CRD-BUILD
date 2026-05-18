@@ -409,5 +409,72 @@ Ensure this matches the actual state on `hierophant` (`virsh net-dumpxml lb-net`
 
 --------
 
+## Control Plane Access from `dev-fedora` to `10.0.0.0/24`
+
+Use this when you want `dev-fedora` to reach the cluster management plane directly, without SSH execution or port-forwarding.
+
+The path is:
+
+- `dev-fedora` on libvirt `default` network: `192.168.122.147/24`
+- `hegemon`: `192.168.1.100`
+- `hierophant`: `192.168.1.101`
+- cluster management network: `10.0.0.0/24` on `talos-bridge`
+
+### File: `dev-fedora`
+
+Add a route for the Talos subnet via the libvirt gateway.
+
+Temporary:
+```bash
+sudo ip route replace 10.0.0.0/24 via 192.168.122.1
+```
+
+Persistent with NetworkManager:
+```bash
+CONN_NAME="$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$2 != "" {print $1; exit}')"
+sudo nmcli connection modify "$CONN_NAME" +ipv4.routes "10.0.0.0/24 192.168.122.1"
+sudo nmcli connection up "$CONN_NAME"
+```
+
+### File: `hegemon`
+
+Add the route from the LAN to `hierophant`, and make sure forwarding is enabled.
+
+Temporary:
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1
+sudo ip route replace 10.0.0.0/24 via 192.168.1.101 dev eno1
+sudo iptables -A FORWARD -i virbr0 -o eno1 -d 10.0.0.0/24 -j ACCEPT
+sudo iptables -A FORWARD -i eno1 -o virbr0 -s 10.0.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+```
+
+If you want to make it persistent on a NetworkManager-managed host, add the route to the `eno1` connection profile.
+
+### File: `hierophant`
+
+Allow forwarded traffic between the management LAN and the Talos bridge, and make sure return traffic can find `hegemon`.
+
+Temporary:
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1
+for iface in all default enp5s0 talos-bridge; do
+    sudo sysctl -w net.ipv4.conf.${iface}.rp_filter=2
+done
+sudo ip route replace 192.168.122.0/24 via 192.168.1.100 dev enp5s0
+sudo iptables -A FORWARD -i enp5s0 -o talos-bridge -d 10.0.0.0/24 -j ACCEPT
+sudo iptables -A FORWARD -i talos-bridge -o enp5s0 -s 10.0.0.0/24 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+```
+
+If `iptables` is replaced by `nftables` or `firewalld` on your host, translate those two forwarding rules into the local firewall system instead of relying on the command above.
+
+### Validation
+
+From `dev-fedora`, verify the route and then test the cluster endpoint:
+```bash
+ip route get 10.0.0.1
+ping -c 3 10.0.0.1
+```
+
+If `10.0.0.1` answers, the control-plane subnet is reachable from `dev-fedora` and you can point Talos or Kubernetes tooling at the cluster directly.
 
 

@@ -2,7 +2,7 @@ Based on the current implementation of the RAG stack (Iteration 9), here is a re
 
 #### 1. Architecture & Message Interconnections - Mermaid Diagram -
 
-> **Note**: A standalone, editable version of this diagram is available at [diagrams/architecture.mmd](./diagrams/architecture.mmd).
+> **Note**: A standalone, editable version of this diagram is available at [diagrams/architecture.mmd](../diagrams/architecture.mmd).
 
 ```mermaid
 graph TD
@@ -180,7 +180,7 @@ graph TD
 
 #### 3. Build & Deployment Flow - Hierophant Bootstrapped -
 
-> **Note**: A standalone, editable version of this diagram is available at [diagrams/build-flow.mmd](./diagrams/build-flow.mmd).
+> **Note**: A standalone, editable version of this diagram is available at [diagrams/build-flow.mmd](../diagrams/build-flow.mmd).
 
 ```mermaid
 flowchart TD

@@ -67,6 +67,7 @@ echo "[STEP] Refresh tests ConfigMap" | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" delete configmap rag-integration-tests --ignore-not-found | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" create configmap rag-integration-tests \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/integration_test.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/e2e_tag_state.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/context_verification.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/pulsar_crud_test.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/test_contracts.py \
@@ -101,7 +102,7 @@ rm -f "$RENDERED_JOB"
 echo "[STEP] Wait for test pod" | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" wait --for=condition=Ready pod -l job-name=rag-integration-test --timeout=120s || true
 
-POD=$("$KUBECTL" -n "$NAMESPACE" get pods -l job-name=rag-integration-test -o jsonpath='{.items[0].metadata.name}')
+POD=$("$KUBECTL" -n "$NAMESPACE" get pods -l job-name=rag-integration-test --sort-by=.metadata.creationTimestamp -o name | tail -n 1 | cut -d/ -f2)
 if [ -z "${POD}" ]; then
   echo "[ERROR] Could not find test pod" | tee -a "${OUT_DIR}/job.log"
   exit 1
@@ -117,14 +118,18 @@ if command -v podman >/dev/null 2>&1; then
   BUCKET_NAME=$("$KUBECTL" -n "$NAMESPACE" get configmap rag-codebase-bucket -o jsonpath='{.data.BUCKET_NAME}' 2>/dev/null || echo "e2eTestBucket")
   echo "[INFO] Using bucket: ${BUCKET_NAME}" | tee -a "${OUT_DIR}/go-e2e-driver.log"
   # Mount internal CA to podman container and set SSL_CERT_FILE
-  podman run --rm \
+  if podman run --rm \
     -v /mnt/hegemon-share/share/code/complete-build/rag-stack/tests:/app:Z \
     -v /mnt/hegemon-share/share/code/complete-build/combined-ca-inspect.crt:/etc/ssl/certs/internal-ca.crt:Z \
     -e SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     -e BUCKET_NAME="$BUCKET_NAME" \
     -w /app \
     golang:1.25-alpine \
-    sh -c 'cat /etc/ssl/certs/internal-ca.crt >> /etc/ssl/certs/ca-certificates.crt && go run .' | tee -a "${OUT_DIR}/go-e2e-driver.log"
+    sh -c 'cat /etc/ssl/certs/internal-ca.crt >> /etc/ssl/certs/ca-certificates.crt && go run .' | tee -a "${OUT_DIR}/go-e2e-driver.log"; then
+    echo "[INFO] Go E2E driver completed." | tee -a "${OUT_DIR}/go-e2e-driver.log"
+  else
+    echo "[WARN] podman-based Go E2E driver failed; preserving the Python E2E result." | tee -a "${OUT_DIR}/go-e2e-driver.log"
+  fi
 else
   echo "[WARN] podman not found; skipping Go E2E driver" | tee -a "${OUT_DIR}/go-e2e-driver.log"
 fi

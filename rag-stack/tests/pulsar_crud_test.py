@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 import psycopg2
 from pulsar import Client, MessageId, Producer, Consumer
+from e2e_tag_state import ensure_test_tag
 
 # Optional OpenTelemetry tracing for test visibility
 OTEL_ENABLED = bool(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
@@ -37,6 +38,9 @@ QDRANT_RESULTS_TOPIC = os.getenv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://ra
 DB_CONN_STRING = os.getenv("DB_CONN_STRING", "postgres://app:OpduDLozLwSGzGgnisFUeLyuSt4Q59alo5AtH0V7pdjGOtul9zu5c4waC3hhuCeZ@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=verify-full&sslrootcert=/etc/ssl/certs/ca-certificates.crt")
 INGRESS_TOPIC = os.getenv("PULSAR_INGRESS_TOPIC", "persistent://rag-pipeline/stage/ingress")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+TAG_STATE_FILE = os.getenv(
+    "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-pulsar-tag-state.json"
+)
 
 import requests
 
@@ -298,6 +302,9 @@ def test_pulsar_qdrant_ops():
     op_id = str(uuid.uuid4())
     session_id = int(time.time() * 1000)
     vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
+    tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-pulsar-")
+    tag_id = tag["tag_id"]
+    print(f"  - Using tag {tag['tag_name']} (ID: {tag_id})")
     search_payload = {
         "id": op_id,
         "action": "search",
@@ -306,7 +313,7 @@ def test_pulsar_qdrant_ops():
         "vector": [0.1] * vector_size,
         "limit": 5,
         "session_id": session_id,
-        "tags": [1001]
+        "tags": [tag_id]
     }
 
     print(f"  - Sending Qdrant search op to Pulsar topic {QDRANT_OPS_TOPIC} (ID: {op_id})")

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:rag_explorer/app_config_provider.dart';
+import '../../app_config_provider.dart';
 import 'chat_notifier.dart';
 import 'chat_dialogs.dart';
 import 'widgets/chat_input_bar.dart';
@@ -31,12 +31,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final prompt = _messageController.text;
     if (prompt.isEmpty) return;
     _messageController.clear();
-    ref.read(chatNotifierProvider.notifier).sendMessage(prompt);
+    ref.read(chatProvider.notifier).sendMessage(prompt);
   }
 
   @override
   Widget build(BuildContext context) {
-    final chatAsync = ref.watch(chatNotifierProvider);
+    final chatAsync = ref.watch(chatProvider);
     final config = ref.watch(appConfigProvider);
 
     return chatAsync.when(
@@ -46,7 +46,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           actions: [
             IconButton(
               icon: Icon(state.showMetadata ? Icons.info : Icons.info_outline),
-              onPressed: () => ref.read(chatNotifierProvider.notifier).toggleMetadata(),
+              onPressed: () => ref.read(chatProvider.notifier).toggleMetadata(),
               tooltip: 'Toggle Metadata Panel',
             ),
           ],
@@ -57,13 +57,33 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               sessions: state.sessions,
               currentSessionId: state.currentSessionId,
               selectedIds: state.selectedSessionIds,
-              onSelectSession: (session, isMulti) => isMulti 
-                ? ref.read(chatNotifierProvider.notifier).toggleSessionSelection(session.id)
-                : ref.read(chatNotifierProvider.notifier).selectSession(session.id),
-              onDeleteSession: (s) => ChatDialogs.showDeleteConfirm(context, s).then((val) => val == true ? ref.read(chatNotifierProvider.notifier).deleteSession(s.id) : null),
-              onDeleteSelected: () => ChatDialogs.showMultiDeleteConfirm(context, state.selectedSessionIds.length).then((val) => val == true ? _deleteSelected(state.selectedSessionIds) : null),
-              onNewSession: () => ChatDialogs.showNewSessionDialog(context).then((val) => val != null ? ref.read(chatNotifierProvider.notifier).createSession(val) : null),
-              onRefresh: () => ref.read(chatNotifierProvider.notifier).loadSessions(),
+              onSelectSession: (session, isMulti) => isMulti
+                  ? ref
+                        .read(chatProvider.notifier)
+                        .toggleSessionSelection(session.id)
+                  : ref.read(chatProvider.notifier).selectSession(session.id),
+              onDeleteSession: (s) =>
+                  ChatDialogs.showDeleteConfirm(context, s).then(
+                    (val) => val == true
+                        ? ref.read(chatProvider.notifier).deleteSession(s.id)
+                        : null,
+                  ),
+              onDeleteSelected: () =>
+                  ChatDialogs.showMultiDeleteConfirm(
+                    context,
+                    state.selectedSessionIds.length,
+                  ).then(
+                    (val) => val == true
+                        ? _deleteSelected(state.selectedSessionIds)
+                        : null,
+                  ),
+              onNewSession: () =>
+                  ChatDialogs.showNewSessionDialog(context).then(
+                    (val) => val != null
+                        ? ref.read(chatProvider.notifier).createSession(val)
+                        : null,
+                  ),
+              onRefresh: () => ref.read(chatProvider.notifier).loadSessions(),
             ),
             const VerticalDivider(width: 1),
             Expanded(
@@ -75,28 +95,35 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       messages: state.messages,
                       isStreaming: state.isStreaming,
                       selectedMessageIndex: state.selectedMessageIndex,
-                      onSelectMessage: (index) => ref.read(chatNotifierProvider.notifier).selectMessage(index),
+                      onSelectMessage: (index) =>
+                          ref.read(chatProvider.notifier).selectMessage(index),
                       scrollController: _chatScrollController,
                       isDarkMode: config.darkMode,
                     ),
                   ),
                   ChatInputBar(
-                    enabled: state.currentSessionId != null && !state.isStreaming,
+                    enabled:
+                        state.currentSessionId != null && !state.isStreaming,
                     isStreaming: state.isStreaming,
                     controller: _messageController,
                     onSend: _sendMessage,
-                    onStop: () => ref.read(chatNotifierProvider.notifier).stopChat(),
+                    onStop: () => ref.read(chatProvider.notifier).stopChat(),
                     planner: state.selectedPlanner,
                     executor: state.selectedExecutor,
                     availableModels: config.availableModels,
                     availableTags: state.availableTags,
                     selectedTags: state.selectedTags,
-                    onPlannerChanged: (val) => ref.read(chatNotifierProvider.notifier).setPlanner(val),
-                    onExecutorChanged: (val) => ref.read(chatNotifierProvider.notifier).setExecutor(val),
-                    onTagAdded: (tag) => ref.read(chatNotifierProvider.notifier).addTag(tag),
-                    onTagRemoved: (tag) => ref.read(chatNotifierProvider.notifier).removeTag(tag),
+                    onPlannerChanged: (val) =>
+                        ref.read(chatProvider.notifier).setPlanner(val),
+                    onExecutorChanged: (val) =>
+                        ref.read(chatProvider.notifier).setExecutor(val),
+                    onTagAdded: (tag) =>
+                        ref.read(chatProvider.notifier).addTag(tag),
+                    onTagRemoved: (tag) =>
+                        ref.read(chatProvider.notifier).removeTag(tag),
                     memoryMode: state.memoryMode,
-                    onMemoryModeChanged: (val) => ref.read(chatNotifierProvider.notifier).setMemoryMode(val),
+                    onMemoryModeChanged: (val) =>
+                        ref.read(chatProvider.notifier).setMemoryMode(val),
                   ),
                 ],
               ),
@@ -104,26 +131,31 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             if (state.showMetadata) ...[
               const ResizableDivider(),
               MetadataPanel(
-                message: (state.selectedMessageIndex != null && state.selectedMessageIndex! < state.messages.length)
+                message:
+                    (state.selectedMessageIndex != null &&
+                        state.selectedMessageIndex! < state.messages.length)
                     ? state.messages[state.selectedMessageIndex!]
                     : null,
                 width: state.metadataPanelWidth,
-                onWidthChanged: (val) => ref.read(chatNotifierProvider.notifier).setMetadataPanelWidth(val),
-                onClose: () => ref.read(chatNotifierProvider.notifier).selectMessage(null),
+                onWidthChanged: (val) =>
+                    ref.read(chatProvider.notifier).setMetadataPanelWidth(val),
+                onClose: () =>
+                    ref.read(chatProvider.notifier).selectMessage(null),
                 isDarkMode: config.darkMode,
               ),
             ],
           ],
         ),
       ),
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, stack) => Scaffold(body: Center(child: Text('Error: $err'))),
     );
   }
 
   void _deleteSelected(Set<int> ids) async {
     for (final id in ids) {
-      await ref.read(chatNotifierProvider.notifier).deleteSession(id);
+      await ref.read(chatProvider.notifier).deleteSession(id);
     }
   }
 }

@@ -28,7 +28,7 @@ class _LearnFormState extends State<LearnForm> {
         const Text('Learn New Rule', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          value: _selectedAction,
+          initialValue: _selectedAction,
           decoration: const InputDecoration(labelText: 'Action Type', border: OutlineInputBorder()),
           items: widget.actionTypes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
           onChanged: (val) => setState(() => _selectedAction = val),
