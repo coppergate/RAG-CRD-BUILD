@@ -60,7 +60,7 @@ spec:
           MANIFEST_PATH="/ollama-models/models/manifests/${REGISTRY}/ollama/${MODEL_BASE}/${MODEL_TAG}"
           SHORT_MANIFEST_PATH="/ollama-models/models/manifests/registry.ollama.ai/library/${MODEL_BASE}/${MODEL_TAG}"
           BLOBS_DIR="/ollama-models/models/blobs"
-          if [ -s "$MANIFEST_PATH" ] && [ -s "$SHORT_MANIFEST_PATH" ] && find "$BLOBS_DIR" -type f 2>/dev/null | grep -q .; then
+          if [ -s "\$MANIFEST_PATH" ] && [ -s "\$SHORT_MANIFEST_PATH" ] && find "\$BLOBS_DIR" -type f 2>/dev/null | grep -q .; then
             echo READY
           else
             echo EMPTY
@@ -75,6 +75,7 @@ spec:
 EOF
 )"
 
+  $KUBECTL delete pod "${SEEDER_NAME}-check" -n "$NAMESPACE" --ignore-not-found --wait=true >/dev/null 2>&1 || true
   printf '%s\n' "$CHECK_MANIFEST" | $KUBECTL apply -f - >/dev/null
   CHECK_OUTPUT="$(
     $KUBECTL wait --for=condition=Ready pod/"${SEEDER_NAME}-check" -n "$NAMESPACE" --timeout=30s >/dev/null 2>&1 || true
@@ -202,6 +203,7 @@ EOF
   SEEDER_MANIFEST="${SEEDER_MANIFEST//__PVC_NAME__/$PVC_NAME}"
   SEEDER_MANIFEST="${SEEDER_MANIFEST//__MODEL__/$MODEL}"
 
+  $KUBECTL delete pod "$SEEDER_NAME" -n "$NAMESPACE" --ignore-not-found --wait=true >/dev/null 2>&1 || true
   printf '%s\n' "$SEEDER_MANIFEST" | $KUBECTL apply -f -
 
   echo "  Waiting for seeder pod $SEEDER_NAME to complete (timeout 1800s)..."
