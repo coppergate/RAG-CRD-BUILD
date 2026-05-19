@@ -34,25 +34,55 @@ for MODEL in "${!MODEL_PVC_MAP[@]}"; do
     continue
   fi
 
-  # Check if model is already present by looking for manifests
-  # Models are stored in models/ subdirectory in the PVC
-  EXISTING=$($KUBECTL run "$SEEDER_NAME-check" \
-    --image="${REGISTRY}/ollama/ollama:0.15.6" \
-    --restart=Never \
-    --rm -i --quiet \
-    -n "$NAMESPACE" \
-    --overrides="{
-      \"spec\": {
-        \"nodeSelector\": {\"role\": \"storage-node\"},
-        \"containers\": [{
-          \"name\": \"check\",
-          \"image\": \"${REGISTRY}/ollama/ollama:0.15.6\",
-          \"command\": [\"sh\", \"-c\", \"find /ollama-models/models/manifests -type f 2>/dev/null | head -1 || echo EMPTY\"],
-          \"volumeMounts\": [{\"name\": \"models\", \"mountPath\": \"/ollama-models\"}]
-        }],
-        \"volumes\": [{\"name\": \"models\", \"persistentVolumeClaim\": {\"claimName\": \"$PVC_NAME\"}}]
-      }
-    }" 2>/dev/null || echo "EMPTY")
+  MODEL_BASE="$(echo "$MODEL" | cut -d: -f1)"
+  MODEL_TAG="$(echo "$MODEL" | cut -s -d: -f2)"
+  MODEL_TAG="${MODEL_TAG:-latest}"
+
+  # Check if model is already present by looking for verified manifests and blobs.
+  CHECK_MANIFEST="$(cat <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${SEEDER_NAME}-check
+  namespace: ${NAMESPACE}
+spec:
+  nodeSelector:
+    role: storage-node
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: ${REGISTRY}/ollama/ollama:0.15.6
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          MANIFEST_PATH="/ollama-models/models/manifests/${REGISTRY}/ollama/${MODEL_BASE}/${MODEL_TAG}"
+          SHORT_MANIFEST_PATH="/ollama-models/models/manifests/registry.ollama.ai/library/${MODEL_BASE}/${MODEL_TAG}"
+          BLOBS_DIR="/ollama-models/models/blobs"
+          if [ -s "$MANIFEST_PATH" ] && [ -s "$SHORT_MANIFEST_PATH" ] && find "$BLOBS_DIR" -type f 2>/dev/null | grep -q .; then
+            echo READY
+          else
+            echo EMPTY
+          fi
+      volumeMounts:
+        - name: models
+          mountPath: /ollama-models
+  volumes:
+    - name: models
+      persistentVolumeClaim:
+        claimName: ${PVC_NAME}
+EOF
+)"
+
+  printf '%s\n' "$CHECK_MANIFEST" | $KUBECTL apply -f - >/dev/null
+  CHECK_OUTPUT="$(
+    $KUBECTL wait --for=condition=Ready pod/"${SEEDER_NAME}-check" -n "$NAMESPACE" --timeout=30s >/dev/null 2>&1 || true
+    $KUBECTL wait --for=jsonpath='{.status.phase}'=Succeeded pod/"${SEEDER_NAME}-check" -n "$NAMESPACE" --timeout=300s >/dev/null 2>&1 || true
+    $KUBECTL logs "${SEEDER_NAME}-check" -n "$NAMESPACE" --tail=20 2>/dev/null || true
+  )"
+  EXISTING="$(printf '%s\n' "$CHECK_OUTPUT" | tail -n 1)"
+  $KUBECTL delete pod "${SEEDER_NAME}-check" -n "$NAMESPACE" --ignore-not-found 2>/dev/null || true
 
   if [ -n "$EXISTING" ] && [ "$EXISTING" != "EMPTY" ]; then
     echo "  Model already present in PVC $PVC_NAME. Skipping."
@@ -114,7 +144,15 @@ spec:
 
           echo "Creating short-name manifest..."
           cp "$MANIFEST_PATH" "$SHORT_MANIFEST_PATH"
+          echo "Verifying seeded files..."
+          test -s "$MANIFEST_PATH"
+          test -s "$SHORT_MANIFEST_PATH"
+          find "$BLOBS_DIR" -type f | grep -q .
           echo "SUCCESS: Manual seeding complete for __MODEL__"
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        allowPrivilegeEscalation: false
       volumeMounts:
         - name: models
           mountPath: /ollama-models
@@ -178,6 +216,7 @@ EOF
   else
     echo "  ✗ Seeding failed for $MODEL. Pod logs:"
     $KUBECTL logs "$SEEDER_NAME" -n "$NAMESPACE" --tail=20 2>/dev/null || true
+    exit 1
   fi
 
   # Cleanup seeder pod

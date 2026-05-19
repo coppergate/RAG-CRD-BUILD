@@ -2,6 +2,7 @@ import os
 import time
 import requests
 import json
+import sys
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
@@ -39,11 +40,34 @@ def get_ollama_embeddings(text: str):
     resp.raise_for_status()
     return resp.json()["embedding"]
 
+def ensure_ollama_model_available():
+    url = f"{OLLAMA_URL}/api/tags"
+    print(f"[SEED] Preflight: checking Ollama model '{OLLAMA_MODEL}' at {url}")
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+
+    for model in data.get("models", []):
+        candidate = model.get("name") or model.get("model")
+        if candidate == OLLAMA_MODEL:
+            return
+
+    available = []
+    for model in data.get("models", []):
+        candidate = model.get("name") or model.get("model")
+        if candidate:
+            available.append(candidate)
+
+    raise RuntimeError(
+        f"Ollama model '{OLLAMA_MODEL}' is not available; found: {available or 'none'}"
+    )
+
 def seed_data():
     print(f"[{datetime.utcnow().isoformat()}] [SEED] Connecting to Qdrant at {QDRANT_HOST}")
     tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-context-")
     tag_id = tag["tag_id"]
     print(f"[SEED] Using tag {tag['tag_name']} (ID: {tag_id})")
+    ensure_ollama_model_available()
     qdrant_use_tls = os.getenv("QDRANT_USE_TLS", "true") == "true"
     client = QdrantClient(host=QDRANT_HOST, port=6333, https=qdrant_use_tls, prefer_grpc=False, timeout=30)
     
@@ -68,6 +92,7 @@ def seed_data():
                 raise
     
     points = []
+    failures = []
     for item in TEST_DATA:
         print(f"  - Embedding chunk {item['id']} using {OLLAMA_MODEL}...")
         try:
@@ -89,13 +114,21 @@ def seed_data():
             ))
         except Exception as e:
             print(f"    [ERROR] Failed to embed {item['id']}: {e}")
+            failures.append(item["id"])
+
+    if failures:
+        raise RuntimeError(f"Embedding failed for test points: {failures}")
     
     if points:
         print(f"  - Upserting {len(points)} points...")
         client.upsert(collection_name=COLLECTION_NAME, points=points)
         print(f"[{datetime.utcnow().isoformat()}] [SEED] Done.")
     else:
-        print(f"[{datetime.utcnow().isoformat()}] [SEED] No points to upsert.")
+        raise RuntimeError(f"No points to upsert for collection {COLLECTION_NAME}")
 
 if __name__ == "__main__":
-    seed_data()
+    try:
+        seed_data()
+    except Exception as exc:
+        print(f"[SEED][ERROR] {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc

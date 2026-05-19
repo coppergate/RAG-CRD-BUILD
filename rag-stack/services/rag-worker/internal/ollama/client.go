@@ -4,21 +4,61 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"app-builds/common/contracts"
-	"app-builds/common/tlsutil"
 	"app-builds/common/logging"
+	"app-builds/common/tlsutil"
 )
 
 type OllamaClient struct {
 	url        string
 	model      string
 	httpClient *http.Client
+}
+
+// APIStatusError captures a non-200 Ollama response.
+type APIStatusError struct {
+	Operation  string
+	URL        string
+	StatusCode int
+	Body       string
+}
+
+func (e *APIStatusError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Body != "" {
+		return fmt.Sprintf("ollama %s returned status %d: %s", e.Operation, e.StatusCode, e.Body)
+	}
+	return fmt.Sprintf("ollama %s returned status %d", e.Operation, e.StatusCode)
+}
+
+func (e *APIStatusError) NotFound() bool {
+	return e != nil && e.StatusCode == http.StatusNotFound
+}
+
+func statusError(operation, url string, resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	return &APIStatusError{
+		Operation:  operation,
+		URL:        url,
+		StatusCode: resp.StatusCode,
+		Body:       strings.TrimSpace(string(body)),
+	}
+}
+
+// IsMissingModelError reports whether the Ollama request failed because the model is absent.
+func IsMissingModelError(err error) bool {
+	var statusErr *APIStatusError
+	return errors.As(err, &statusErr) && statusErr.NotFound()
 }
 
 func NewClient(url, model string) *OllamaClient {
@@ -35,9 +75,9 @@ func NewClient(url, model string) *OllamaClient {
 }
 
 type ChatResponse struct {
-	Model      string `json:"model"`
-	CreatedAt  string `json:"created_at"`
-	Message    struct {
+	Model     string `json:"model"`
+	CreatedAt string `json:"created_at"`
+	Message   struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"message"`
@@ -70,7 +110,7 @@ func (o *OllamaClient) Chat(messages []map[string]string) (string, interface{}, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", nil, fmt.Errorf("ollama returned status %d", resp.StatusCode)
+		return "", nil, statusError("chat", url, resp)
 	}
 
 	var result ChatResponse
@@ -112,7 +152,7 @@ func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, 
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			errCh <- fmt.Errorf("ollama returned status %d", resp.StatusCode)
+			errCh <- statusError("chat stream", url, resp)
 			return
 		}
 
@@ -160,14 +200,14 @@ func (r *ChatResponse) GetMetrics() *contracts.ExecutionMetrics {
 	}
 
 	return &contracts.ExecutionMetrics{
-		PromptTokens:          int32(r.PromptEvalCount),
-		CompletionTokens:      int32(r.EvalCount),
-		TotalDurationUsec:     r.TotalDuration / 1000,
-		LoadDurationUsec:      r.LoadDuration / 1000,
+		PromptTokens:           int32(r.PromptEvalCount),
+		CompletionTokens:       int32(r.EvalCount),
+		TotalDurationUsec:      r.TotalDuration / 1000,
+		LoadDurationUsec:       r.LoadDuration / 1000,
 		PromptEvalDurationUsec: r.PromptEvalDuration / 1000,
 		EvalDurationUsec:       r.EvalDuration / 1000,
-		TokensPerSecond:       tps,
-		Hostname:              os.Getenv("HOSTNAME"),
+		TokensPerSecond:        tps,
+		Hostname:               os.Getenv("HOSTNAME"),
 	}
 }
 
@@ -193,13 +233,17 @@ func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
 		Embedding []float32 `json:"embedding"`
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, statusError("embeddings", embeddingUrl, resp)
+	}
+
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 
 	return result.Embedding, nil
 }
-	
+
 func (o *OllamaClient) Ping() error {
 	url := fmt.Sprintf("%s/api/tags", o.url)
 	resp, err := o.httpClient.Get(url)
@@ -208,7 +252,7 @@ func (o *OllamaClient) Ping() error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ollama returned status %d", resp.StatusCode)
+		return statusError("tags", url, resp)
 	}
 	return nil
 }

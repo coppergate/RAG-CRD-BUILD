@@ -19,6 +19,7 @@ import (
 	"app-builds/rag-worker/internal/behavioral"
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/models"
+	"app-builds/rag-worker/internal/ollama"
 	"app-builds/rag-worker/pkg/messaging"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -192,6 +193,10 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	subQueries, metrics, err := planner.Plan(ctx, req.Prompt, nil, history)
 	if err != nil {
 		logging.Printf("[%s][SID:%d] Planning failed: %v", req.Id, req.SessionId, err)
+		if ollama.IsMissingModelError(err) {
+			h.msg.SendError(ctx, req.Id, fmt.Sprintf("Planning model unavailable in Ollama: %s", modelID), false)
+			return dlq.PermanentFailure, fmt.Errorf("planning model unavailable: %w", err)
+		}
 		h.msg.SendError(ctx, req.Id, fmt.Sprintf("Planning failed: %v", err), false)
 		return dlq.TransientFailure, fmt.Errorf("planning: %w", err)
 	}
@@ -318,6 +323,10 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		vector, err := planner.GetEmbeddings(ctx, sq)
 		if err != nil {
 			logging.Printf("[%s][SID:%d] Failed to get embeddings for sub-query '%s': %v", req.Id, req.SessionId, sq, err)
+			if ollama.IsMissingModelError(err) {
+				h.msg.SendError(ctx, req.Id, fmt.Sprintf("Embedding model unavailable in Ollama: %s", modelID), false)
+				return dlq.PermanentFailure, fmt.Errorf("embedding model unavailable: %w", err)
+			}
 			continue
 		}
 		vs := len(vector)
@@ -673,6 +682,9 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 					planningText += fmt.Sprintf("- %s\n", sq)
 				}
 				h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, planningText)
+			} else if err != nil && ollama.IsMissingModelError(err) {
+				h.msg.SendError(ctx, req.Id, fmt.Sprintf("Planner model unavailable in Ollama: %s", plannerModelID), false)
+				return dlq.PermanentFailure, fmt.Errorf("planner model unavailable: %w", err)
 			}
 		}
 
@@ -738,6 +750,9 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 					if err != nil {
 						logging.Printf("[%s] Execution stream failed on chunk %d: %v", req.Id, actualIndex+1, err)
 						h.msg.SendError(ctx, req.Id, fmt.Sprintf("Chunk %d failed: %v", actualIndex+1, err), inConversation)
+						if ollama.IsMissingModelError(err) {
+							return dlq.PermanentFailure, fmt.Errorf("executor stream model unavailable: %w", err)
+						}
 					}
 				case <-ctx.Done():
 					h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
@@ -757,6 +772,9 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			if err != nil {
 				logging.Printf("[%s] Execution failed on chunk %d: %v", req.Id, actualIndex+1, err)
 				h.msg.SendError(ctx, req.Id, fmt.Sprintf("Chunk %d failed: %v", actualIndex+1, err), inConversation)
+				if ollama.IsMissingModelError(err) {
+					return dlq.PermanentFailure, fmt.Errorf("executor model unavailable: %w", err)
+				}
 				continue
 			}
 			fullAccumulatedResult += res + "\n"
