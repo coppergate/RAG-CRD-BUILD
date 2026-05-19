@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"app-builds/common/dlq"
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/models"
+	"app-builds/rag-worker/internal/ollama"
 	"app-builds/rag-worker/pkg/messaging"
 )
 
@@ -207,16 +209,16 @@ func TestChunkResults(t *testing.T) {
 	assert.Len(t, chunks, 1)
 	chunk := chunks[0]
 	assert.Len(t, chunk, 2)
-	
+
 	// Sort to ensure stable order for comparison
 	sort.Strings(chunk)
-	
+
 	assert.Contains(t, chunk[0], "--- File: file1.txt ---")
 	assert.Contains(t, chunk[0], "chunk 0")
 	assert.Contains(t, chunk[0], "chunk 1")
 	assert.Contains(t, chunk[0], "chunk 2")
 	assert.Equal(t, "non-file content", chunk[1])
-	
+
 	mockSearcher.AssertExpectations(t)
 }
 
@@ -251,9 +253,9 @@ func TestHandleSearch(t *testing.T) {
 	}
 
 	h := &Handler{
-		cfg:      cfg,
-		registry: mockRegistry,
-		searcher: mockSearcher,
+		cfg:          cfg,
+		registry:     mockRegistry,
+		searcher:     mockSearcher,
 		memoryClient: mockMem,
 		msg: &messaging.Client{
 			// We only need the producers used in handleSearch
@@ -272,7 +274,7 @@ func TestHandleSearch(t *testing.T) {
 
 	mockRegistry.On("GetPlanner", "default-planner").Return(mockPlanner, nil)
 	mockPlanner.On("GetEmbeddings", mock.Anything, "test prompt").Return([]float32{0.1, 0.2}, nil)
-	
+
 	// Mock status updates
 	mockStatusProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
 		return strings.Contains(string(m.Payload), "RETRIEVING_CONTEXT")
@@ -312,8 +314,8 @@ func TestHandlePlan(t *testing.T) {
 	}
 
 	h := &Handler{
-		cfg:      cfg,
-		registry: mockRegistry,
+		cfg:          cfg,
+		registry:     mockRegistry,
 		memoryClient: mockMem,
 		msg: &messaging.Client{
 			Producers: messaging.Producers{
@@ -367,8 +369,8 @@ func TestHandlePlan_LearningLoop(t *testing.T) {
 	mockResultsProd := new(MockProducer)
 
 	h := &Handler{
-		cfg:      &config.Config{PlannerModel: "p-model"},
-		registry: mockRegistry,
+		cfg:          &config.Config{PlannerModel: "p-model"},
+		registry:     mockRegistry,
 		memoryClient: mockMem,
 		msg: &messaging.Client{
 			Producers: messaging.Producers{
@@ -404,6 +406,53 @@ func TestHandlePlan_LearningLoop(t *testing.T) {
 	mockMem.AssertExpectations(t)
 }
 
+func TestHandlePlan_MissingPlannerModel_IsPermanentFailure(t *testing.T) {
+	mockRegistry := new(MockRegistry)
+	mockPlanner := new(MockPlanner)
+	mockMem := new(MockMemoryClient)
+	mockStatusProd := new(MockProducer)
+	mockSearchProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+
+	h := &Handler{
+		cfg:          &config.Config{PlannerModel: "p-model"},
+		registry:     mockRegistry,
+		memoryClient: mockMem,
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:  mockStatusProd,
+				Search:  mockSearchProd,
+				Results: mockResultsProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("test-id"), mockResultsProd)
+
+	req := &contracts.InternalRequest{
+		Id:        "test-id",
+		SessionId: 1,
+		Prompt:    "test prompt",
+	}
+
+	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
+	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return(
+		[]string(nil),
+		nil,
+		&ollama.APIStatusError{Operation: "chat", URL: "http://ollama", StatusCode: http.StatusNotFound, Body: "model not found"},
+	)
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockSearchProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	result, err := h.handlePlan(context.Background(), req)
+
+	assert.Error(t, err)
+	assert.Equal(t, dlq.PermanentFailure, result)
+	mockMem.AssertExpectations(t)
+	mockPlanner.AssertExpectations(t)
+}
+
 func TestHandlePlan_ResetBehavior(t *testing.T) {
 	mockRegistry := new(MockRegistry)
 	mockPlanner := new(MockPlanner)
@@ -413,8 +462,8 @@ func TestHandlePlan_ResetBehavior(t *testing.T) {
 	mockResultsProd := new(MockProducer)
 
 	h := &Handler{
-		cfg:      &config.Config{PlannerModel: "p-model"},
-		registry: mockRegistry,
+		cfg:          &config.Config{PlannerModel: "p-model"},
+		registry:     mockRegistry,
 		memoryClient: mockMem,
 		msg: &messaging.Client{
 			Producers: messaging.Producers{
@@ -488,17 +537,17 @@ func TestHandleExec_Recursion(t *testing.T) {
 
 	mockRegistry.On("GetExecutor", "default-executor").Return(mockExecutor, nil)
 	mockRegistry.On("GetPlanner", "default-planner").Return(nil, fmt.Errorf("not needed"))
-	
+
 	// Mock non-streaming execution
 	mockExecutor.On("Execute", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return("I don't know enough", nil, nil)
-	
+
 	// Grounding check for chunk and then final
 	mockExecutor.On("IsInsufficientContext", "I don't know enough").Return(true)
 	mockExecutor.On("IsInsufficientContext", "I don't know enough\n").Return(true)
-	
+
 	// Mock status updates
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
-	
+
 	// Mock send back to plan topic (recursion)
 	mockPlanProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
 		// Verify budget decreased
