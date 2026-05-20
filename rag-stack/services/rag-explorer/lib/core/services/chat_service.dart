@@ -92,12 +92,25 @@ class ChatService {
           'Successfully fetched ${data.length} messages for session: $sessionId',
         );
         return data.map((e) {
+          final metadata = _normalizeMetadata(e['metadata']);
+          final planningResponse = e['planning_response']?.toString();
+          final content = e['content']?.toString() ?? '';
+          if (!_hasMessageSegments(metadata) &&
+              ((planningResponse != null && planningResponse.isNotEmpty) ||
+                  content.isNotEmpty)) {
+            metadata['message_segments'] = <Map<String, dynamic>>[
+              if (planningResponse != null && planningResponse.isNotEmpty)
+                {'kind': 'planning', 'content': planningResponse},
+              if (content.isNotEmpty) {'kind': 'content', 'content': content},
+            ];
+          }
+
           return ResponseMessage(
-            content: e['content'],
-            planningResponse: e['planning_response'],
+            content: content,
+            planningResponse: planningResponse,
             role: e['role'],
             timestamp: DateTime.parse(e['timestamp']),
-            metadata: e['metadata'],
+            metadata: metadata.isEmpty ? null : metadata,
           );
         }).toList();
       }
@@ -107,6 +120,24 @@ class ChatService {
       _logger.error('Error fetching messages: $e');
       return [];
     }
+  }
+
+  Map<String, dynamic> _normalizeMetadata(dynamic raw) {
+    if (raw is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(raw);
+    }
+    if (raw is Map) {
+      return Map<String, dynamic>.from(raw);
+    }
+    return <String, dynamic>{};
+  }
+
+  bool _hasMessageSegments(Map<String, dynamic> metadata) {
+    final raw = metadata['message_segments'];
+    if (raw is! List) {
+      return false;
+    }
+    return raw.isNotEmpty;
   }
 
   Future<List<Tag>> getTags() async {

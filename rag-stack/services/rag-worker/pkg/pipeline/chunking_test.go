@@ -25,15 +25,15 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	mockExecProd := new(MockProducer)
 
 	cfg := &config.Config{
-		PlannerModel:          "default-planner",
-		ChunkVectorLimit:      50,
+		PlannerModel:         "default-planner",
+		ChunkVectorLimit:     50,
 		QdrantRetrievalLimit: 10000,
 	}
 
 	h := &Handler{
-		cfg:      cfg,
-		registry: mockRegistry,
-		searcher: mockSearcher,
+		cfg:          cfg,
+		registry:     mockRegistry,
+		searcher:     mockSearcher,
 		memoryClient: mockMem,
 		msg: &messaging.Client{
 			Producers: messaging.Producers{
@@ -51,7 +51,7 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	}
 
 	mockRegistry.On("GetPlanner", "default-planner").Return(mockPlanner, nil)
-	
+
 	// Mock status updates
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 
@@ -59,7 +59,7 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	// File 1: 60 items (will be split)
 	// File 2: 40 items
 	// File 3: 40 items
-	
+
 	var tagResults []interface{}
 	// Just return a subset in Search, let RetrieveByPaths fetch the rest
 	for i := 0; i < 30; i++ {
@@ -153,16 +153,16 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 
 	metadata := contracts.FromStruct(outReq.Metadata)
 	assert.NotNil(t, metadata)
-	
+
 	chunks, ok := metadata["chunks"].([]interface{})
 	assert.True(t, ok, "chunks should be present in metadata")
-	
+
 	// Expecting 3 chunks as calculated:
 	// Chunk 1: File 1 (0-49) = 50 items
 	// Chunk 2: File 1 (50-59) + File 2 (0-39) = 50 items
 	// Chunk 3: File 3 (0-39) = 40 items
 	assert.Len(t, chunks, 3)
-	
+
 	chunk1 := chunks[0].([]interface{})
 	assert.Len(t, chunk1, 1, "Chunk 1 should contain 1 large reassembled file part")
 	c1Str := chunk1[0].(string)
@@ -246,8 +246,18 @@ func TestHandleExec_MultiChunk(t *testing.T) {
 	mockCompletionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 
 	// Planner.Plan should be called for each chunk to "refine"
-	mockPlanner.On("Plan", mock.Anything, "multi-chunk prompt", chunks[0], mock.Anything).Return([]string{"refined plan 1"}, nil, nil)
-	mockPlanner.On("Plan", mock.Anything, "multi-chunk prompt", chunks[1], mock.Anything).Return([]string{"refined plan 2"}, nil, nil)
+	mockPlanner.On("Plan", mock.Anything, "multi-chunk prompt", chunks[0], mock.Anything).Return(&contracts.PlannerTaskPlan{
+		Objective:     "multi-chunk prompt",
+		ActionType:    "FILE_SEARCH",
+		SearchQueries: []string{"refined plan 1"},
+		ContextBudget: 1,
+	}, nil, nil)
+	mockPlanner.On("Plan", mock.Anything, "multi-chunk prompt", chunks[1], mock.Anything).Return(&contracts.PlannerTaskPlan{
+		Objective:     "multi-chunk prompt",
+		ActionType:    "FILE_SEARCH",
+		SearchQueries: []string{"refined plan 2"},
+		ContextBudget: 1,
+	}, nil, nil)
 
 	// Executor.Execute should be called for each chunk
 	mockExecutor.On("Execute", mock.Anything, "multi-chunk prompt", chunks[0], mock.Anything).Return("part 1", nil, nil)

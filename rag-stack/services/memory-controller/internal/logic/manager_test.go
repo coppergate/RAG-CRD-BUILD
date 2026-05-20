@@ -6,6 +6,7 @@ import (
 
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
+	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/enttest"
 	"github.com/google/uuid"
 
@@ -91,7 +92,7 @@ func TestMemoryManager(t *testing.T) {
 			t.Fatalf("Failed to create prompt: %v", err)
 		}
 		t.Logf("Created prompt with ID=%d", p.ID)
-		
+
 		resp, err := client.Response.Create().
 			SetPromptID(p.ID).
 			SetContent("AI is Artificial Intelligence.").
@@ -129,7 +130,7 @@ func TestMemoryManager(t *testing.T) {
 		// Verify order of history (prompt then response)
 		// Our implementation prepends them in reverse order of prompts, then response after prompt.
 		// So for 1 prompt: [MemoryItems..., Prompt, Response]
-		
+
 		foundPrompt := false
 		foundResponse := false
 		foundFact := false
@@ -156,7 +157,7 @@ func TestMemoryManager(t *testing.T) {
 		sessionID := int64(999)
 		m.CreateSession(ctx, sessionID, "delete-me")
 		m.WriteItems(ctx, &contracts.MemoryWriteRequest{
-			Scope: &contracts.MemoryScope{SessionId: sessionID},
+			Scope:  &contracts.MemoryScope{SessionId: sessionID},
 			Writes: []*contracts.MemoryWriteItem{{Content: "data"}},
 		})
 
@@ -175,6 +176,79 @@ func TestMemoryManager(t *testing.T) {
 		items, _ := m.ListItems(ctx, sessionID)
 		if len(items) != 0 {
 			t.Errorf("Expected 0 items after deletion, got %d", len(items))
+		}
+	})
+
+	t.Run("RetrieveOrdersBehavioralRulesByScopeAndPriority", func(t *testing.T) {
+		localClient := enttest.Open(t, "sqlite3", "file:behavioral-order?mode=memory&cache=shared&_fk=1")
+		defer localClient.Close()
+		localManager := NewMemoryManager(localClient)
+		localCtx := context.Background()
+
+		sessionID := int64(2024)
+		localManager.CreateSession(localCtx, sessionID, "behavior-session")
+
+		_, err := localClient.BehavioralRule.Create().
+			SetActionType("FILE_EDIT").
+			SetRuleContent("global rule").
+			SetPriority(5).
+			SetScope(behavioralrule.ScopeGLOBAL).
+			SetState(behavioralrule.StateACTIVE).
+			Save(localCtx)
+		if err != nil {
+			t.Fatalf("Failed to create global rule: %v", err)
+		}
+
+		_, err = localClient.BehavioralRule.Create().
+			SetActionType("FILE_EDIT").
+			SetRuleContent("project rule").
+			SetPriority(1).
+			SetScope(behavioralrule.ScopePROJECT).
+			SetState(behavioralrule.StateACTIVE).
+			Save(localCtx)
+		if err != nil {
+			t.Fatalf("Failed to create project rule: %v", err)
+		}
+
+		sessionRule, err := localClient.BehavioralRule.Create().
+			SetActionType("FILE_EDIT").
+			SetRuleContent("session rule").
+			SetPriority(1).
+			SetScope(behavioralrule.ScopeSESSION).
+			SetState(behavioralrule.StateACTIVE).
+			Save(localCtx)
+		if err != nil {
+			t.Fatalf("Failed to create session rule: %v", err)
+		}
+
+		_, err = localClient.SessionGovernance.Create().
+			SetSessionID(sessionID).
+			SetRuleID(sessionRule.ID).
+			SetPriorityOverride(99).
+			Save(localCtx)
+		if err != nil {
+			t.Fatalf("Failed to create session override: %v", err)
+		}
+
+		pack, err := localManager.Retrieve(localCtx, &contracts.MemoryRetrieveRequest{
+			Scope: &contracts.MemoryScope{SessionId: sessionID},
+			Limit: 5,
+		})
+		if err != nil {
+			t.Fatalf("Failed to retrieve behavioral pack: %v", err)
+		}
+
+		if len(pack.Items) < 3 {
+			t.Fatalf("Expected at least 3 behavioral items, got %d", len(pack.Items))
+		}
+		if pack.Items[0].Content != "session rule" {
+			t.Fatalf("Expected session rule first, got %q", pack.Items[0].Content)
+		}
+		if pack.Items[1].Content != "project rule" {
+			t.Fatalf("Expected project rule second, got %q", pack.Items[1].Content)
+		}
+		if pack.Items[2].Content != "global rule" {
+			t.Fatalf("Expected global rule third, got %q", pack.Items[2].Content)
 		}
 	})
 }

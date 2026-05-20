@@ -2,19 +2,19 @@ package models
 
 import (
 	"app-builds/common/contracts"
+	"app-builds/common/logging"
 	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"app-builds/common/logging"
 )
 
 // ModelConfig defines model-specific strings and behavior for the GenericModel
 type ModelConfig struct {
-	PlanningPromptTemplate      string
-	ExecutionHeader             string
-	ExecutionFooter             string
-	ExecutionSuffix             string
+	PlanningPromptTemplate     string
+	ExecutionHeader            string
+	ExecutionFooter            string
+	ExecutionSuffix            string
 	InsufficientContextPhrases []string
 }
 
@@ -24,8 +24,8 @@ type GenericModel struct {
 	Config ModelConfig
 }
 
-// Plan decomposes a user query into specific search queries using the configured template
-func (m *GenericModel) Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) ([]string, interface{}, error) {
+// Plan decomposes a user query into a structured task plan using the configured template.
+func (m *GenericModel) Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) (*contracts.PlannerTaskPlan, interface{}, error) {
 	var sb strings.Builder
 	if len(contexts) > 0 {
 		sb.WriteString("Use the following context to refine your search queries for the user query:\n\nContext:\n")
@@ -43,12 +43,12 @@ func (m *GenericModel) Plan(ctx context.Context, prompt string, contexts []inter
 		return nil, nil, fmt.Errorf("planning Chat failed: %w", err)
 	}
 
-	subQueries := ParseJSONArray(planResult)
-	if len(subQueries) == 0 {
-		logging.Printf("Planner output did not contain a valid JSON array or was empty: %s", planResult)
-		subQueries = []string{prompt}
+	plan := ParsePlannerTaskPlan(planResult, prompt)
+	if plan == nil {
+		logging.Printf("Planner output did not contain a valid structured plan: %s", planResult)
+		plan = (&contracts.PlannerTaskPlan{Objective: prompt, ActionType: contracts.PlannerActionUnknown}).Normalize(prompt)
 	}
-	return subQueries, metrics, nil
+	return plan, metrics, nil
 }
 
 // Execute performs the augmented query with provided contexts using configured templates
@@ -170,4 +170,82 @@ func ParseJSONArray(s string) []string {
 		return nil
 	}
 	return result
+}
+
+// ParsePlannerTaskPlan extracts a structured plan from planner output.
+// It accepts either a JSON object contract or the legacy JSON array of queries.
+func ParsePlannerTaskPlan(rawResponse, prompt string) *contracts.PlannerTaskPlan {
+	snippet := extractJSONSnippet(rawResponse)
+	if snippet != "" && strings.HasPrefix(snippet, "{") {
+		var plan contracts.PlannerTaskPlan
+		if err := json.Unmarshal([]byte(snippet), &plan); err == nil {
+			plan.Trace.RawResponse = rawResponse
+			plan.Trace.ParserMode = "json_object"
+			plan.Trace.Prompt = prompt
+			return plan.Normalize(prompt)
+		}
+	}
+
+	if queries := ParseJSONArray(rawResponse); len(queries) > 0 {
+		return (&contracts.PlannerTaskPlan{
+			Objective:     prompt,
+			ActionType:    contracts.PlannerActionUnknown,
+			SearchQueries: queries,
+			ContextBudget: 1,
+			Risk:          "unknown",
+			Blocking:      true,
+			Trace: contracts.PlannerTrace{
+				RawResponse: rawResponse,
+				ParserMode:  "legacy_array",
+				Prompt:      prompt,
+			},
+		}).Normalize(prompt)
+	}
+
+	return (&contracts.PlannerTaskPlan{
+		Objective:     prompt,
+		ActionType:    contracts.PlannerActionUnknown,
+		SearchQueries: []string{prompt},
+		ContextBudget: 1,
+		Risk:          "unknown",
+		Blocking:      true,
+		Trace: contracts.PlannerTrace{
+			RawResponse: rawResponse,
+			ParserMode:  "fallback",
+			Prompt:      prompt,
+		},
+	}).Normalize(prompt)
+}
+
+func extractJSONSnippet(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+
+	if strings.HasPrefix(trimmed, "```") {
+		if end := strings.LastIndex(trimmed, "```"); end > 3 {
+			trimmed = strings.TrimSpace(trimmed[3:end])
+			if nl := strings.Index(trimmed, "\n"); nl >= 0 {
+				head := strings.TrimSpace(trimmed[:nl])
+				if !strings.HasPrefix(head, "{") && !strings.HasPrefix(head, "[") {
+					trimmed = strings.TrimSpace(trimmed[nl+1:])
+				}
+			}
+		}
+	}
+
+	objStart := strings.Index(trimmed, "{")
+	objEnd := strings.LastIndex(trimmed, "}")
+	arrStart := strings.Index(trimmed, "[")
+	arrEnd := strings.LastIndex(trimmed, "]")
+
+	switch {
+	case objStart >= 0 && objEnd > objStart:
+		return trimmed[objStart : objEnd+1]
+	case arrStart >= 0 && arrEnd > arrStart:
+		return trimmed[arrStart : arrEnd+1]
+	default:
+		return trimmed
+	}
 }

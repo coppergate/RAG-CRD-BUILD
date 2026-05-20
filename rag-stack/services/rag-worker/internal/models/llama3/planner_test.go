@@ -4,6 +4,8 @@ import (
 	"context"
 	"reflect"
 	"testing"
+
+	"app-builds/common/contracts"
 	"app-builds/rag-worker/internal/models"
 )
 
@@ -11,25 +13,29 @@ func TestPlanner_Plan(t *testing.T) {
 	tests := []struct {
 		name       string
 		planResult string
-		want       []string
+		wantQuery  []string
+		wantAction string
 		wantErr    bool
 	}{
 		{
-			name:       "valid json array",
-			planResult: `["query 1", "query 2"]`,
-			want:       []string{"query 1", "query 2"},
+			name:       "valid json object",
+			planResult: `{"objective":"original prompt","action_type":"FILE_SEARCH","search_queries":["query 1","query 2"],"context_budget":2}`,
+			wantQuery:  []string{"query 1", "query 2"},
+			wantAction: "FILE_SEARCH",
 			wantErr:    false,
 		},
 		{
 			name:       "json with markdown",
-			planResult: "Here is the plan: ```json\n[\"query 1\", \"query 2\"]\n```",
-			want:       []string{"query 1", "query 2"},
+			planResult: "Here is the plan: ```json\n{\"objective\":\"original prompt\",\"action_type\":\"FILE_SEARCH\",\"search_queries\":[\"query 1\",\"query 2\"]}\n```",
+			wantQuery:  []string{"query 1", "query 2"},
+			wantAction: "FILE_SEARCH",
 			wantErr:    false,
 		},
 		{
 			name:       "invalid json",
 			planResult: "invalid",
-			want:       []string{"original prompt"}, // fallback to original prompt
+			wantQuery:  []string{"original prompt"},
+			wantAction: contracts.PlannerActionUnknown,
 			wantErr:    false,
 		},
 	}
@@ -46,8 +52,14 @@ func TestPlanner_Plan(t *testing.T) {
 				t.Errorf("Planner.Plan() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Planner.Plan() = %v, want %v", got, tt.want)
+			if got == nil {
+				t.Fatalf("Planner.Plan() returned nil plan")
+			}
+			if got.ActionType != tt.wantAction {
+				t.Errorf("Planner.Plan().ActionType = %v, want %v", got.ActionType, tt.wantAction)
+			}
+			if !reflect.DeepEqual(got.SearchQueries, tt.wantQuery) {
+				t.Errorf("Planner.Plan().SearchQueries = %v, want %v", got.SearchQueries, tt.wantQuery)
 			}
 		})
 	}

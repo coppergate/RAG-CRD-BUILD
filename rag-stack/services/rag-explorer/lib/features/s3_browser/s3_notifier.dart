@@ -200,8 +200,8 @@ class S3Notifier extends _$S3Notifier {
 
     final queryParams = <String, dynamic>{};
     if (currentState.selectedTags.isNotEmpty) {
-      queryParams['tags'] = currentState.selectedTags
-          .map((t) => t.name)
+      queryParams['tag_id'] = currentState.selectedTags
+          .map((t) => t.id)
           .toList();
     }
     if (currentState.selectedSession != null) {
@@ -209,10 +209,10 @@ class S3Notifier extends _$S3Notifier {
     }
 
     _logger.debug(
-      'Loading S3 objects from bucket ${currentState.selectedBucket} with tags=${currentState.selectedTags.map((t) => t.name).toList()} session=${currentState.selectedSession?.id ?? "all"}',
+      'Loading S3 objects from bucket ${currentState.selectedBucket} with tag_ids=${currentState.selectedTags.map((t) => t.id).toList()} session=${currentState.selectedSession?.id ?? "all"}',
     );
     final response = await client.get(
-      '${config.ragAdminApiUrl}/api/s3/buckets/${currentState.selectedBucket}',
+      '${config.dbUrl}/storage/files',
       queryParameters: queryParams,
     );
     final dynamic rawData = response.data;
@@ -230,13 +230,15 @@ class S3Notifier extends _$S3Notifier {
     final files = <VirtualFile>[];
     for (final item in data) {
       final file = _parseVirtualFile(item, currentState.selectedBucket!);
-      if (file != null) {
+      if (file != null &&
+          file.bucket == currentState.selectedBucket &&
+          file.path.isNotEmpty) {
         files.add(file);
       }
     }
 
     _logger.info(
-      'Loaded ${files.length} S3 object(s) from bucket ${currentState.selectedBucket}',
+      'Loaded ${files.length} ingested file(s) for bucket ${currentState.selectedBucket}',
     );
 
     return currentState.copyWith(files: files, isLoading: false, error: null);

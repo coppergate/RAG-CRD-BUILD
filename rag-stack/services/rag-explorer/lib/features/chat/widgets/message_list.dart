@@ -23,7 +23,9 @@ class MessageList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (messages.isEmpty) {
-      return const Center(child: Text('No messages yet. Send a prompt to start.'));
+      return const Center(
+        child: Text('No messages yet. Send a prompt to start.'),
+      );
     }
 
     return SelectionArea(
@@ -39,17 +41,23 @@ class MessageList extends StatelessWidget {
     );
   }
 
-  Widget _buildMessageBubble(BuildContext context, ResponseMessage msg, int index) {
+  Widget _buildMessageBubble(
+    BuildContext context,
+    ResponseMessage msg,
+    int index,
+  ) {
     final isUser = msg.role == 'user';
     final isSelected = selectedMessageIndex == index;
-    
+    final structuredSegments = _messageSegments(msg);
+    final hasStructuredSegments = _hasStructuredSegments(msg);
+
     return GestureDetector(
       onTap: () => onSelectMessage(isSelected ? null : index),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isUser 
+          color: isUser
               ? (isDarkMode ? Colors.blue.shade900 : Colors.blue.shade50)
               : (isDarkMode ? Colors.grey.shade900 : Colors.grey.shade100),
           borderRadius: BorderRadius.circular(12),
@@ -63,7 +71,11 @@ class MessageList extends StatelessWidget {
               children: [
                 Text(
                   isUser ? 'User' : 'Assistant',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
                 ),
                 Text(
                   msg.timestamp.toString().split(' ').last.substring(0, 5),
@@ -72,40 +84,140 @@ class MessageList extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            if (msg.planningResponse != null && msg.planningResponse!.isNotEmpty)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isDarkMode ? Colors.teal.shade900.withValues(alpha: 0.3) : Colors.teal.shade50,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.teal.withValues(alpha: 0.2)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('PLANNING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal)),
-                    const SizedBox(height: 4),
-                    MarkdownBody(
-                      data: msg.planningResponse!,
-                      styleSheet: _getMarkdownStyle(isDarkMode),
-                    ),
-                  ],
-                ),
-              ),
-            if (msg.content.isNotEmpty)
-              MarkdownBody(
-                data: msg.content,
-                styleSheet: _getMarkdownStyle(isDarkMode),
+            if (hasStructuredSegments)
+              ...structuredSegments.map(
+                (segment) => _buildSegment(segment, isDarkMode),
               )
-            else if (isStreaming && index == messages.length - 1)
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+            else ...[
+              if (msg.planningResponse != null &&
+                  msg.planningResponse!.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isDarkMode
+                        ? Colors.teal.shade900.withValues(alpha: 0.3)
+                        : Colors.teal.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: Colors.teal.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'PLANNING',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      MarkdownBody(
+                        data: msg.planningResponse!,
+                        styleSheet: _getMarkdownStyle(isDarkMode),
+                      ),
+                    ],
+                  ),
+                ),
+              if (msg.content.isNotEmpty)
+                MarkdownBody(
+                  data: msg.content,
+                  styleSheet: _getMarkdownStyle(isDarkMode),
+                ),
+            ],
+            if ((msg.content.isEmpty ||
+                    !structuredSegments.any((segment) {
+                      return (segment['kind'] ?? '').toString() == 'content';
+                    })) &&
+                isStreaming &&
+                index == messages.length - 1)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _messageSegments(ResponseMessage msg) {
+    final metadata = msg.metadata;
+    final rawSegments = metadata?['message_segments'];
+    if (rawSegments is List && rawSegments.isNotEmpty) {
+      return rawSegments
+          .whereType<Map>()
+          .map((segment) => Map<String, dynamic>.from(segment))
+          .toList();
+    }
+
+    final fallback = <Map<String, dynamic>>[];
+    if (msg.planningResponse != null && msg.planningResponse!.isNotEmpty) {
+      fallback.add({'kind': 'planning', 'content': msg.planningResponse!});
+    }
+    if (msg.content.isNotEmpty) {
+      fallback.add({'kind': 'content', 'content': msg.content});
+    }
+    return fallback;
+  }
+
+  bool _hasStructuredSegments(ResponseMessage msg) {
+    final rawSegments = msg.metadata?['message_segments'];
+    return rawSegments is List && rawSegments.isNotEmpty;
+  }
+
+  Widget _buildSegment(Map<String, dynamic> segment, bool isDarkMode) {
+    final kind = (segment['kind'] ?? 'content').toString();
+    final content = (segment['content'] ?? '').toString();
+
+    if (kind == 'planning') {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isDarkMode
+              ? Colors.teal.shade900.withValues(alpha: 0.3)
+              : Colors.teal.shade50,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.teal.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'PLANNING',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.teal,
+              ),
+            ),
+            const SizedBox(height: 4),
+            MarkdownBody(
+              data: content,
+              styleSheet: _getMarkdownStyle(isDarkMode),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (content.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: MarkdownBody(
+        data: content,
+        styleSheet: _getMarkdownStyle(isDarkMode),
       ),
     );
   }

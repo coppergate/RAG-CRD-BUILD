@@ -6,12 +6,10 @@ import (
 
 // Config provides the specific configuration for Granite 3.1
 var Config = models.ModelConfig{
-	PlanningPromptTemplate: `You are a RAG Planner. Decompose the user query into 1-3 search queries.
-Output ONLY a JSON array of strings.
-Query: %s`,
-	ExecutionHeader: "Relevant Context:\n",
-	ExecutionFooter: "\nUser Query: ",
-	ExecutionSuffix: "\nPlease answer based on the context above. Answer: ",
+	PlanningPromptTemplate: `You are a RAG Planner. Return ONLY a JSON object with the keys objective, action_type, inputs, outputs, dependencies, context_budget, confidence, blocking, risk, evidence_requirements, search_queries, and steps. Use action_type UNKNOWN when uncertain and keep search_queries narrow. Query: %s`,
+	ExecutionHeader:        "Relevant Context:\n",
+	ExecutionFooter:        "\nUser Query: ",
+	ExecutionSuffix:        "\nPlease answer based on the context above. Answer: ",
 	InsufficientContextPhrases: []string{
 		"insufficient context",
 		"i don't have enough information",

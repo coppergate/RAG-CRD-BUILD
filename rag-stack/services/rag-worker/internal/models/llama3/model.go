@@ -6,11 +6,37 @@ import (
 
 // Config provides the specific configuration for Llama 3
 var Config = models.ModelConfig{
-	PlanningPromptTemplate: `You are a RAG Planner. Decompose the following user query into 1-3 specific search queries.
-Output ONLY a JSON array of strings. 
-CRITICAL: Do not include ANY introductory text, explanation, or conversational filler. 
-Your output MUST start with "[" and end with "]".
-Example Output: ["query 1", "query 2"]
+	PlanningPromptTemplate: `You are a RAG Planner. Return ONLY a JSON object with this shape:
+{
+  "objective": "string",
+  "action_type": "FILE_SEARCH|FILE_EDIT|FILE_VCS|REMOTE_EXEC|K8S_ORCHESTRATE|DB_ACCESS|BUILD_DEPLOY|DOC_PROCESS|JOB_RESUME|WEB_FETCH|UNKNOWN",
+  "inputs": ["string"],
+  "outputs": ["string"],
+  "dependencies": ["string"],
+  "context_budget": 1,
+  "confidence": 0.0,
+  "blocking": true,
+  "risk": "read_only|mutating|infra|unknown",
+  "evidence_requirements": ["string"],
+  "search_queries": ["string"],
+  "steps": [
+    {
+      "order": 1,
+      "objective": "string",
+      "action_type": "string",
+      "inputs": ["string"],
+      "outputs": ["string"],
+      "dependencies": ["string"],
+      "context_budget": 1,
+      "confidence": 0.0,
+      "blocking": true,
+      "risk": "string",
+      "evidence_requirements": ["string"],
+      "search_queries": ["string"]
+    }
+  ]
+}
+If the request is ambiguous, use action_type UNKNOWN and put the exact prompt in search_queries.
 Query: %s`,
 	ExecutionHeader: "Use the following retrieved context to answer the user query. If the context does not contain the answer, state that you don't know based on the provided information.\n\nContext:\n",
 	ExecutionFooter: "\n\nUser Query: ",

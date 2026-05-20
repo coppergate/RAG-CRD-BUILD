@@ -11,16 +11,16 @@ import (
 	"app-builds/common/ent"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/memoryevent"
-	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/memoryitem"
 	"app-builds/common/ent/memorylink"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
+	"app-builds/common/ent/sessiongovernance"
 
+	"app-builds/common/logging"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqljson"
-	"app-builds/common/logging"
 )
 
 type MemoryManager struct {
@@ -333,7 +333,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 	}
 
 	// Add Behavioral Rules first (System instructions)
-	// Apply overrides and filter/sort by priority
+	// Apply overrides and filter/sort by scope specificity, priority, and recency.
 	type ruleWithPriority struct {
 		rule     *ent.BehavioralRule
 		priority int
@@ -347,9 +347,17 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		prioritizedRules = append(prioritizedRules, ruleWithPriority{rule: rule, priority: p})
 	}
 
-	// Sort by priority descending
+	// Sort by session > project > global, then priority, then newest rule.
 	sort.Slice(prioritizedRules, func(i, j int) bool {
-		return prioritizedRules[i].priority > prioritizedRules[j].priority
+		ri := scopeRank(prioritizedRules[i].rule.Scope)
+		rj := scopeRank(prioritizedRules[j].rule.Scope)
+		if ri != rj {
+			return ri > rj
+		}
+		if prioritizedRules[i].priority != prioritizedRules[j].priority {
+			return prioritizedRules[i].priority > prioritizedRules[j].priority
+		}
+		return prioritizedRules[i].rule.UpdatedAt.After(prioritizedRules[j].rule.UpdatedAt)
 	})
 
 	for _, pr := range prioritizedRules {
@@ -362,6 +370,8 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 				"priority":    pr.priority,
 				"scope":       string(pr.rule.Scope),
 				"category":    pr.rule.Category,
+				"state":       string(pr.rule.State),
+				"updated_at":  pr.rule.UpdatedAt.Format(time.RFC3339),
 			}),
 		})
 	}
@@ -407,4 +417,17 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 	}
 
 	return pack, nil
+}
+
+func scopeRank(scope behavioralrule.Scope) int {
+	switch scope {
+	case behavioralrule.ScopeSESSION:
+		return 3
+	case behavioralrule.ScopePROJECT:
+		return 2
+	case behavioralrule.ScopeGLOBAL:
+		fallthrough
+	default:
+		return 1
+	}
 }

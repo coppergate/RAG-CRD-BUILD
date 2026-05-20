@@ -12,15 +12,16 @@ import (
 
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
-	"app-builds/common/telemetry"
 	"app-builds/common/ent"
 	"app-builds/common/ent/inferencenode"
-	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/modeldefinition"
+	"app-builds/common/ent/modelexecutionmetric"
 	"app-builds/common/ent/prompt"
 	"app-builds/common/ent/response"
 	"app-builds/common/ent/retrievallog"
 	"app-builds/common/ent/session"
+	"app-builds/common/logging"
+	"app-builds/common/telemetry"
 	"entgo.io/ent/dialect/sql"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/google/uuid"
@@ -28,7 +29,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
-	"app-builds/common/logging"
 )
 
 type PulsarProcessor struct {
@@ -103,20 +103,28 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 
 		// Delete metrics
 		_, err = tx.ModelExecutionMetric.Delete().Where(modelexecutionmetric.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { logging.Printf("Warning: failed to delete metrics for session %d: %v", sessID, err) }
+		if err != nil {
+			logging.Printf("Warning: failed to delete metrics for session %d: %v", sessID, err)
+		}
 
 		// Delete retrieval logs
 		_, err = tx.RetrievalLog.Delete().Where(retrievallog.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { logging.Printf("Warning: failed to delete retrieval logs for session %d: %v", sessID, err) }
+		if err != nil {
+			logging.Printf("Warning: failed to delete retrieval logs for session %d: %v", sessID, err)
+		}
 
 		// Delete prompts & responses (using raw SQL as they don't have edges in Ent)
 		// Assuming 'prompts' and 'responses' are the table names.
 		// Note: Ent might use singular/plural names.
 		_, err = tx.Prompt.Delete().Where(prompt.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { logging.Printf("Warning: failed to delete prompts for session %d: %v", sessID, err) }
+		if err != nil {
+			logging.Printf("Warning: failed to delete prompts for session %d: %v", sessID, err)
+		}
 
 		_, err = tx.Response.Delete().Where(response.SessionID(sessID)).Exec(msgCtx)
-		if err != nil { logging.Printf("Warning: failed to delete responses for session %d: %v", sessID, err) }
+		if err != nil {
+			logging.Printf("Warning: failed to delete responses for session %d: %v", sessID, err)
+		}
 
 		// Finally delete the session
 		_, err = tx.Session.Delete().Where(session.ID(sessID)).Exec(msgCtx)
@@ -140,6 +148,116 @@ func (p *PulsarProcessor) HandleDBOp(ctx context.Context, msg pulsar.Message) (d
 
 func (p *PulsarProcessor) sanitizeString(s string) string {
 	return strings.ReplaceAll(s, "\x00", "")
+}
+
+func (p *PulsarProcessor) cloneMetadata(src map[string]interface{}) map[string]interface{} {
+	if src == nil {
+		return map[string]interface{}{}
+	}
+
+	out := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+func (p *PulsarProcessor) mergeMetadata(
+	base map[string]interface{},
+	update map[string]interface{},
+) map[string]interface{} {
+	merged := p.cloneMetadata(base)
+	for k, v := range update {
+		merged[k] = v
+	}
+	return merged
+}
+
+func (p *PulsarProcessor) hasResponseSegments(metadata map[string]interface{}) bool {
+	if metadata == nil {
+		return false
+	}
+	raw, ok := metadata["message_segments"]
+	if !ok {
+		return false
+	}
+	switch v := raw.(type) {
+	case []interface{}:
+		return len(v) > 0
+	case []map[string]interface{}:
+		return len(v) > 0
+	default:
+		return false
+	}
+}
+
+func (p *PulsarProcessor) extractResponseSegments(metadata map[string]interface{}) []interface{} {
+	if metadata == nil {
+		return []interface{}{}
+	}
+
+	raw, ok := metadata["message_segments"]
+	if !ok {
+		return []interface{}{}
+	}
+
+	switch v := raw.(type) {
+	case []interface{}:
+		out := make([]interface{}, len(v))
+		copy(out, v)
+		return out
+	case []map[string]interface{}:
+		out := make([]interface{}, 0, len(v))
+		for _, segment := range v {
+			out = append(out, segment)
+		}
+		return out
+	default:
+		return []interface{}{}
+	}
+}
+
+func (p *PulsarProcessor) appendResponseSegments(
+	metadata map[string]interface{},
+	planningResponse string,
+	result string,
+	sequenceNumber int32,
+	isLast bool,
+	existingHasSegments bool,
+	inConversation bool,
+	allowFinalContentSegment bool,
+) map[string]interface{} {
+	merged := p.cloneMetadata(metadata)
+	segments := p.extractResponseSegments(merged)
+
+	if planningResponse != "" {
+		segments = append(segments, map[string]interface{}{
+			"kind":            "planning",
+			"content":         planningResponse,
+			"sequence_number": sequenceNumber,
+			"is_last":         isLast,
+			"in_conversation": inConversation,
+		})
+	}
+
+	if result != "" {
+		shouldAppendContent := !isLast || allowFinalContentSegment || !existingHasSegments
+		if shouldAppendContent {
+			segments = append(segments, map[string]interface{}{
+				"kind":            "content",
+				"content":         result,
+				"sequence_number": sequenceNumber,
+				"is_last":         isLast,
+				"in_conversation": inConversation,
+			})
+		}
+	}
+
+	if len(segments) > 0 {
+		merged["message_segments"] = segments
+	}
+
+	return merged
 }
 
 func (p *PulsarProcessor) ensureSessionExists(ctx context.Context, sessionID int64) error {
@@ -322,18 +440,29 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		Where(response.PromptID(pr.ID)).
 		First(msgCtx)
 
-		if ent.IsNotFound(err) {
-			// Create new record
-			_, err = tx.Response.Create().
-				SetResponseID(respID).
-				SetPromptID(pr.ID).
-				SetSessionID(sessID).
-				SetContent(result).
-				SetPlanningResponse(payload.PlanningResponse).
-				SetSequenceNumber(int(payload.SequenceNumber)).
-				SetNillableModelName(modelName).
-				SetMetadata(contracts.FromStruct(payload.Metadata)).
-				Save(msgCtx)
+	if ent.IsNotFound(err) {
+		metadataMap := contracts.FromStruct(payload.Metadata)
+		metadataMap = p.appendResponseSegments(
+			metadataMap,
+			payload.PlanningResponse,
+			result,
+			payload.SequenceNumber,
+			payload.IsLast,
+			false,
+			payload.InConversation,
+			true,
+		)
+
+		_, err = tx.Response.Create().
+			SetResponseID(respID).
+			SetPromptID(pr.ID).
+			SetSessionID(sessID).
+			SetContent(result).
+			SetPlanningResponse(payload.PlanningResponse).
+			SetSequenceNumber(int(payload.SequenceNumber)).
+			SetNillableModelName(modelName).
+			SetMetadata(metadataMap).
+			Save(msgCtx)
 		if err != nil {
 			tx.Rollback()
 			return dlq.TransientFailure, fmt.Errorf("create response in tx: %w", err)
@@ -345,6 +474,19 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 		tx.Rollback()
 		return dlq.TransientFailure, fmt.Errorf("query existing response in tx: %w", err)
 	} else {
+		metadataMap := p.cloneMetadata(existing.Metadata)
+		metadataMap = p.mergeMetadata(metadataMap, contracts.FromStruct(payload.Metadata))
+		metadataMap = p.appendResponseSegments(
+			metadataMap,
+			payload.PlanningResponse,
+			result,
+			payload.SequenceNumber,
+			payload.IsLast,
+			p.hasResponseSegments(existing.Metadata),
+			payload.InConversation,
+			false,
+		)
+
 		// Update existing record
 		u := tx.Response.UpdateOne(existing)
 		if payload.PlanningResponse != "" {
@@ -368,9 +510,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 			u.SetNillableModelName(modelName)
 		}
 		u.SetSequenceNumber(int(payload.SequenceNumber))
-		if payload.Metadata != nil {
-			u.SetMetadata(contracts.FromStruct(payload.Metadata))
-		}
+		u.SetMetadata(metadataMap)
 		if err := u.Exec(msgCtx); err != nil {
 			tx.Rollback()
 			return dlq.TransientFailure, fmt.Errorf("update response in tx: %w", err)
