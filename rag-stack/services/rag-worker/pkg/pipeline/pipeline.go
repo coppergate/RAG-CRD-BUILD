@@ -21,6 +21,7 @@ import (
 	"app-builds/rag-worker/internal/models"
 	"app-builds/rag-worker/internal/ollama"
 	"app-builds/rag-worker/pkg/messaging"
+
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -239,7 +240,7 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	_ = metrics
 
 	if plan == nil {
-		plan = (&contracts.PlannerTaskPlan{Objective: req.Prompt, ActionType: contracts.PlannerActionUnknown}).Normalize(req.Prompt)
+		plan = &contracts.PlannerTaskPlan{Objective: req.Prompt, ActionType: contracts.PlannerActionUnknown}
 	}
 
 	plan.ActionType = actionType
