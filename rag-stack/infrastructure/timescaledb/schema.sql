@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     description TEXT,
     metadata JSONB, -- For any extra info
     user_id UUID,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    last_active_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_active_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 3. Prompts (hypertable)
