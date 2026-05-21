@@ -1,0 +1,1 @@
+At the start of every session, read documentation/guidelines.md and documentation/OPERATIONS.md before doing any work.

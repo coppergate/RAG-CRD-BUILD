@@ -103,9 +103,12 @@ type MockPlanner struct {
 	mock.Mock
 }
 
-func (m *MockPlanner) Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) ([]string, interface{}, error) {
+func (m *MockPlanner) Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) (*contracts.PlannerTaskPlan, interface{}, error) {
 	args := m.Called(ctx, prompt, contexts, history)
-	return args.Get(0).([]string), args.Get(1), args.Error(2)
+	if args.Get(0) == nil {
+		return nil, args.Get(1), args.Error(2)
+	}
+	return args.Get(0).(*contracts.PlannerTaskPlan), args.Get(1), args.Error(2)
 }
 
 func (m *MockPlanner) GetEmbeddings(ctx context.Context, text string) ([]float32, error) {
@@ -339,7 +342,17 @@ func TestHandlePlan(t *testing.T) {
 		},
 	}, nil)
 	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{"FILE_EDIT": {"edit"}}, nil)
-	mockPlanner.On("Plan", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return([]string{"subquery 1"}, nil, nil)
+	mockPlanner.On("Plan", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
+		Objective:     "test prompt",
+		ActionType:    "FILE_EDIT",
+		SearchQueries: []string{"subquery 1"},
+		ContextBudget: 2,
+		Trace: contracts.PlannerTrace{
+			RawResponse: `{"objective":"test prompt","action_type":"FILE_EDIT","search_queries":["subquery 1"]}`,
+			ParserMode:  "json_object",
+			Prompt:      "test prompt",
+		},
+	}, nil, nil)
 
 	// Mock status and planning response
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
@@ -391,7 +404,17 @@ func TestHandlePlan_LearningLoop(t *testing.T) {
 	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
 	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
 	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{}, nil)
-	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return([]string{"plan"}, nil, nil)
+	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
+		Objective:     req.Prompt,
+		ActionType:    "FILE_EDIT",
+		SearchQueries: []string{"plan"},
+		ContextBudget: 1,
+		Trace: contracts.PlannerTrace{
+			RawResponse: `{"objective":"REMEMBER WHEN FILE_EDIT # Optimization - minimize horizontal scrolling","action_type":"FILE_EDIT","search_queries":["plan"]}`,
+			ParserMode:  "json_object",
+			Prompt:      req.Prompt,
+		},
+	}, nil, nil)
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 	mockSearchProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
@@ -437,7 +460,7 @@ func TestHandlePlan_MissingPlannerModel_IsPermanentFailure(t *testing.T) {
 	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
 	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
 	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return(
-		[]string(nil),
+		(*contracts.PlannerTaskPlan)(nil),
 		nil,
 		&ollama.APIStatusError{Operation: "chat", URL: "http://ollama", StatusCode: http.StatusNotFound, Body: "model not found"},
 	)
@@ -484,7 +507,17 @@ func TestHandlePlan_ResetBehavior(t *testing.T) {
 	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
 	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
 	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{}, nil)
-	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return([]string{"plan"}, nil, nil)
+	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
+		Objective:     req.Prompt,
+		ActionType:    "UNKNOWN",
+		SearchQueries: []string{"plan"},
+		ContextBudget: 1,
+		Trace: contracts.PlannerTrace{
+			RawResponse: `["plan"]`,
+			ParserMode:  "legacy_array",
+			Prompt:      req.Prompt,
+		},
+	}, nil, nil)
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 	mockSearchProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)

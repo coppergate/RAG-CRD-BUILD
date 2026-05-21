@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+
+	"app-builds/common/contracts"
 )
 
 type ChatClient interface {
@@ -11,7 +13,7 @@ type ChatClient interface {
 }
 
 type Planner interface {
-	Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) ([]string, interface{}, error)
+	Plan(ctx context.Context, prompt string, contexts []interface{}, history []interface{}) (*contracts.PlannerTaskPlan, interface{}, error)
 	GetEmbeddings(ctx context.Context, text string) ([]float32, error)
 }
 

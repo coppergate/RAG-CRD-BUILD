@@ -53,6 +53,10 @@ class ChatNotifier extends _$ChatNotifier {
     );
   }
 
+  String _normalizeChatText(String text) {
+    return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  }
+
   Future<void> loadSessions() async {
     final chatService = ref.read(chatServiceProvider);
     ref.read(logProvider.notifier).debug('Refreshing chat session list');
@@ -181,6 +185,42 @@ class ChatNotifier extends _$ChatNotifier {
     return merged;
   }
 
+  List<Map<String, dynamic>> _extractMessageSegments(
+    Map<String, dynamic>? metadata,
+  ) {
+    final rawSegments = metadata?['message_segments'];
+    if (rawSegments is! List) {
+      return [];
+    }
+
+    return rawSegments
+        .whereType<Map>()
+        .map((segment) => Map<String, dynamic>.from(segment))
+        .toList();
+  }
+
+  Map<String, dynamic> _appendMessageSegments(
+    Map<String, dynamic>? base,
+    List<Map<String, dynamic>> segmentsToAppend,
+  ) {
+    if (segmentsToAppend.isEmpty) {
+      return _mergeMetadata(base, null);
+    }
+
+    final merged = _mergeMetadata(base, null);
+    final segments = _extractMessageSegments(base);
+    segments.addAll(segmentsToAppend);
+    merged['message_segments'] = segments;
+    return merged;
+  }
+
+  Map<String, dynamic> _buildMessageSegment({
+    required String kind,
+    required String content,
+  }) {
+    return {'kind': kind, 'content': content};
+  }
+
   void removeTag(Tag tag) {
     final currentState = state.value!;
     ref
@@ -241,6 +281,7 @@ class ChatNotifier extends _$ChatNotifier {
         'selected_tag_ids': currentState.selectedTags.map((t) => t.id).toList(),
         'session_tags': currentState.selectedTags.map((t) => t.name).toList(),
         'source': 'chat-ui',
+        'message_segments': <Map<String, dynamic>>[],
       },
     );
 
@@ -276,7 +317,11 @@ class ChatNotifier extends _$ChatNotifier {
         String? updatedPlanning = lastMsg.planningResponse;
         if (chunk.planningResponse != null &&
             chunk.planningResponse!.isNotEmpty) {
-          updatedPlanning = (updatedPlanning ?? '') + chunk.planningResponse!;
+          final normalizedChunkPlanning = _normalizeChatText(
+            chunk.planningResponse!,
+          );
+          updatedPlanning =
+              _normalizeChatText(updatedPlanning ?? '') + normalizedChunkPlanning;
         }
 
         final Map<String, dynamic>? updatedMetadata =
@@ -284,9 +329,30 @@ class ChatNotifier extends _$ChatNotifier {
             ? _mergeMetadata(lastMsg.metadata, chunk.metadata)
             : lastMsg.metadata;
 
+        final appendedSegments = <Map<String, dynamic>>[];
+        if (chunk.planningResponse != null &&
+            chunk.planningResponse!.isNotEmpty) {
+          appendedSegments.add(
+            _buildMessageSegment(
+              kind: 'planning',
+              content: _normalizeChatText(chunk.planningResponse!),
+            ),
+          );
+        }
+        if (chunk.content.isNotEmpty) {
+          appendedSegments.add(
+            _buildMessageSegment(
+              kind: 'content',
+              content: _normalizeChatText(chunk.content),
+            ),
+          );
+        }
+
         messages[lastIndex] = lastMsg.copyWith(
-          content: lastMsg.content + chunk.content,
-          metadata: updatedMetadata,
+          content:
+              _normalizeChatText(lastMsg.content) +
+              _normalizeChatText(chunk.content),
+          metadata: _appendMessageSegments(updatedMetadata, appendedSegments),
           planningResponse: updatedPlanning,
         );
 

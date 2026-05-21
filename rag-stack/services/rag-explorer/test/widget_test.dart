@@ -1,30 +1,50 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:rag_explorer/main.dart';
+import 'package:rag_explorer/features/chat/chat_notifier.dart';
+import 'package:rag_explorer/features/memory/memory_contracts.dart';
+import 'package:rag_explorer/features/memory/memory_notifier.dart';
+import 'package:rag_explorer/features/memory/memory_page.dart';
+import 'package:rag_explorer/core/models/session.dart';
+
+class _FakeChatNotifier extends ChatNotifier {
+  @override
+  Future<ChatState> build() async => ChatState(
+    sessions: [
+      Session(
+        createdAt: DateTime.utc(2026, 1, 1),
+        id: 1,
+        lastActiveAt: DateTime.utc(2026, 1, 1),
+        name: 'Demo Session',
+      ),
+    ],
+  );
+}
+
+class _FakeMemoryNotifier extends MemoryNotifier {
+  @override
+  MemoryState build() {
+    return const MemoryState(scope: MemoryScope(sessionId: 1));
+  }
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const RagExplorerApp());
+  testWidgets('renders the memory explorer shell', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          chatProvider.overrideWith(() => _FakeChatNotifier()),
+          memoryProvider.overrideWith(() => _FakeMemoryNotifier()),
+        ],
+        child: const MaterialApp(home: MemoryPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Memory Explorer'), findsOneWidget);
+    expect(find.text('Demo Session'), findsOneWidget);
+    expect(find.text('Write Memory'), findsOneWidget);
+    expect(find.text('Retrieve Context'), findsOneWidget);
   });
 }

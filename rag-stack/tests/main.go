@@ -87,7 +87,7 @@ func main() {
 
 	// 5 & 6. Wait for Ingestion and Verify via Ask
 	fmt.Println("[STEP 5&6] Waiting for ingestion and verifying via RAG Query (up to 1m)...")
-	
+
 	start := time.Now()
 	success := false
 	var lastAnswer string
@@ -117,7 +117,7 @@ func main() {
 					fmt.Printf("FAILURE: Found code %s but NO timestamp in answer. Answer: %q\n", secretCode, answer)
 					logFatal("Secret code verification failed: missing timestamp in answer")
 				}
-				
+
 				fmt.Printf("RAG Answer: %s\n", answer)
 				success = true
 				break
@@ -130,11 +130,13 @@ func main() {
 	if success {
 		// --- Iteration 6b Extended Tests ---
 		testExtendedVerification(sessionID, tagID, tagName, fileName, vectorSize)
+		runCleanup(tagID, sessionID, fileName)
 	} else {
 		fmt.Printf("FAILURE: Secret code not found in answer after 1 minute. Last answer: %q\n", lastAnswer)
+		fmt.Println("[STEP 7] Skipping cleanup to preserve failure artifacts for troubleshooting.")
+		fmt.Printf("[%s] --- E2E Test Completed With Failures ---\n", time.Now().Format(time.RFC3339))
+		os.Exit(1)
 	}
-
-	runCleanup(tagID, sessionID, fileName)
 }
 
 func runCleanup(tagID, sessionID int64, fileName string) {
@@ -235,7 +237,7 @@ func getTags() (map[string]int64, error) {
 
 	tags := make(map[string]int64)
 	for _, t := range tagsList {
-			tags[t.Name] = t.Id
+		tags[t.Name] = t.Id
 	}
 	return tags, nil
 }

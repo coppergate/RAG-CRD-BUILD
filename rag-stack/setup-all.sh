@@ -231,12 +231,36 @@ if [ -n "$DB_POD" ]; then
   run_psql_with_retry "psql -U postgres -d app -c \"GRANT CONNECT ON DATABASE app TO app; GRANT USAGE, CREATE ON SCHEMA public TO app;\""
 
   echo "Applying schema as role 'app' so objects are owned by app"
-  if ! (echo "SET ROLE app;"; cat "$REPO_DIR/infrastructure/timescaledb/schema.sql") | \
+if ! (echo "SET ROLE app;"; cat "$REPO_DIR/infrastructure/timescaledb/schema.sql") | \
     $KUBECTL exec -i -n "$DB_NAMESPACE" "$DB_POD" -- psql -U postgres -d app; then
     echo "ERROR: failed applying schema to TimescaleDB."
     exit 1
-  fi
-  mark_step_done "db-schema"
+fi
+
+echo "Repairing session defaults to match current schema"
+if ! $KUBECTL exec -i -n "$DB_NAMESPACE" "$DB_POD" -- \
+  psql -U postgres -d app -v ON_ERROR_STOP=1 -c \
+  "ALTER TABLE sessions ALTER COLUMN created_at SET DEFAULT now(); ALTER TABLE sessions ALTER COLUMN last_active_at SET DEFAULT now();"; then
+  echo "ERROR: failed repairing session defaults."
+  exit 1
+fi
+
+echo "Repairing ingestion defaults to match current schema"
+if ! $KUBECTL exec -i -n "$DB_NAMESPACE" "$DB_POD" -- \
+  psql -U postgres -d app -v ON_ERROR_STOP=1 -c \
+  "ALTER TABLE code_ingestion ALTER COLUMN created_at SET DEFAULT now();"; then
+  echo "ERROR: failed repairing ingestion defaults."
+  exit 1
+fi
+
+echo "Repairing embedding defaults to match current schema"
+if ! $KUBECTL exec -i -n "$DB_NAMESPACE" "$DB_POD" -- \
+  psql -U postgres -d app -v ON_ERROR_STOP=1 -c \
+  "ALTER TABLE code_embedding ALTER COLUMN created_at SET DEFAULT now();"; then
+  echo "ERROR: failed repairing embedding defaults."
+  exit 1
+fi
+mark_step_done "db-schema"
 else
   echo "ERROR: Could not find TimescaleDB primary pod to apply schema."
   exit 1

@@ -4,8 +4,8 @@
     "last_build": "2026-05-16T13:02:18.733924+01:00"
   },
   "llm-gateway": {
-    "version": "2.4.11",
-    "last_build": "2026-05-16T13:02:18.601198+01:00"
+    "version": "2.4.12",
+    "last_build": "2026-05-19T15:04:08.361052+01:00"
   },
   "memory-controller": {
     "version": "2.4.11",

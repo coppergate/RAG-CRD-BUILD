@@ -13,6 +13,7 @@ import (
 	"app-builds/common/dlq"
 	"app-builds/common/ent"
 	"app-builds/common/ent/enttest"
+	"app-builds/common/ent/response"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 	"app-builds/db-adapter/internal/service"
@@ -128,6 +129,58 @@ func TestHandleResponseGhostPrompt(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, pr.ID, resp.PromptID)
 	assert.Equal(t, "Test result", resp.Content)
+}
+
+func TestHandleResponsePlanningTrace(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	promptID := uuid.New()
+	sessionID := time.Now().UnixNano() % 100000
+
+	_, err := client.Session.Create().SetID(sessionID).SetName("trace-session").Save(context.Background())
+	assert.NoError(t, err)
+
+	_, err = client.Prompt.Create().
+		SetPromptID(promptID).
+		SetSessionID(sessionID).
+		SetContent("Trace prompt").
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	payload := contracts.StreamChunk{
+		Id:               promptID.String(),
+		SessionId:        sessionID,
+		PlanningResponse: "Planning complete.\nObjective: trace prompt",
+		SequenceNumber:   -1,
+		Metadata: contracts.ToStruct(map[string]interface{}{
+			"planner_task": map[string]interface{}{
+				"objective":      "trace prompt",
+				"action_type":    "FILE_SEARCH",
+				"search_queries": []string{"trace prompt"},
+			},
+			"planner_trace": map[string]interface{}{
+				"raw_response": "raw planner text",
+				"parser_mode":  "json_object",
+			},
+		}),
+	}
+	data, _ := json.Marshal(&payload)
+	msg := &mockMessage{payload: data}
+
+	processor := service.NewPulsarProcessor(client, nil, nil, nil)
+	res, err := processor.HandleResponse(context.Background(), msg)
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, res)
+
+	resp, err := client.Response.Query().Where(response.SessionID(sessionID)).Only(context.Background())
+	assert.NoError(t, err)
+	assert.NotNil(t, resp.PlanningResponse)
+	assert.Equal(t, "Planning complete.\nObjective: trace prompt", *resp.PlanningResponse)
+	assert.NotNil(t, resp.Metadata)
+	meta := resp.Metadata
+	assert.Contains(t, meta, "planner_task")
+	assert.Contains(t, meta, "planner_trace")
 }
 
 func TestHandleGetSessionHealth(t *testing.T) {
@@ -269,7 +322,7 @@ func TestHandleGetFiles(t *testing.T) {
 	t1, err := client.Tag.Create().SetID(tagID).SetName("test-tag").Save(context.Background())
 	assert.NoError(t, err)
 
-	ingestionID := time.Now().UnixNano() % 100000 + 100000
+	ingestionID := time.Now().UnixNano()%100000 + 100000
 	ci, err := client.CodeIngestion.Create().
 		SetID(ingestionID).
 		SetS3BucketID("test-bucket").
@@ -333,8 +386,8 @@ func TestHandleGetFilesBySession(t *testing.T) {
 	s1, err := client.Session.Create().SetID(sessionID).SetName("test-session-" + sessionIDStr).Save(context.Background())
 	assert.NoError(t, err)
 
-	tagID := time.Now().UnixNano() % 100000 + 100000
-	t1, err := client.Tag.Create().SetID(tagID).SetName("test-tag-"+strconv.FormatInt(tagID, 10)).AddSessions(s1).Save(context.Background())
+	tagID := time.Now().UnixNano()%100000 + 100000
+	t1, err := client.Tag.Create().SetID(tagID).SetName("test-tag-" + strconv.FormatInt(tagID, 10)).AddSessions(s1).Save(context.Background())
 	assert.NoError(t, err)
 
 	_, err = client.CodeEmbedding.Create().
@@ -492,9 +545,9 @@ func TestUpdateSessionTags(t *testing.T) {
 	_, _ = client.Tag.Create().SetID(502).SetName("T2").Save(ctx)
 
 	payload := struct {
-		TagIDs []string `json:"tag_ids"`
+		TagIDs []int64 `json:"tag_ids"`
 	}{
-		TagIDs: []string{"501", "502"},
+		TagIDs: []int64{501, 502},
 	}
 	body, _ := json.Marshal(payload)
 	req := httptest.NewRequest("POST", "/sessions/tags?session_id=301", bytes.NewBuffer(body))

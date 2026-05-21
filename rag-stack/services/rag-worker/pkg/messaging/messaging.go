@@ -9,9 +9,9 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 
 	"app-builds/common/contracts"
+	"app-builds/common/logging"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/rag-worker/internal/config"
-	"app-builds/common/logging"
 )
 
 // Producers holds all Pulsar producers used by the worker.
@@ -69,7 +69,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		client.Close()
 		return nil, fmt.Errorf("could not create Plan producer: %w", err)
 	}
-	
+
 	search, err := client.NewProducer(cfg.PulsarSearchTopic)
 	if err != nil {
 		plan.Close()
@@ -218,6 +218,10 @@ func (c *Client) SendStreamChunk(ctx context.Context, id string, sessionID int64
 }
 
 func (c *Client) SendPlanningResponse(ctx context.Context, id string, sessionID int64, planningResponse string) {
+	c.SendPlanningResponseWithMetadata(ctx, id, sessionID, planningResponse, nil)
+}
+
+func (c *Client) SendPlanningResponseWithMetadata(ctx context.Context, id string, sessionID int64, planningResponse string, metadata map[string]interface{}) {
 	topic := c.SessionTopic(id)
 	producer, err := c.getSessionProducer(topic)
 	if err != nil {
@@ -231,6 +235,7 @@ func (c *Client) SendPlanningResponse(ctx context.Context, id string, sessionID 
 		PlanningResponse: planningResponse,
 		SequenceNumber:   -1, // Planning responses use negative sequence to avoid collision with execution
 		IsLast:           false,
+		Metadata:         contracts.ToStruct(metadata),
 	}
 
 	if _, err := pulsarCommon.SendProto(ctx, producer, msgPayload); err != nil {

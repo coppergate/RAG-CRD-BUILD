@@ -90,6 +90,27 @@ func TestHandleChatCompletions(t *testing.T) {
 	}
 }
 
+func TestHandleChatCompletionsRejectsEmptyBody(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	mockPulsar := &mockPulsarClient{}
+
+	h := &OpenAIHandler{
+		Pulsar: mockPulsar,
+		Ent:    client,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader([]byte(`{}`)))
+	w := httptest.NewRecorder()
+
+	h.HandleChatCompletions(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status 400, got %v", w.Code)
+	}
+}
+
 func TestHandleGenericChat(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	defer client.Close()

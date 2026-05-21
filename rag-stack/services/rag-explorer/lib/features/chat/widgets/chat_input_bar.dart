@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/models/tag.dart';
 
 class ChatInputBar extends StatelessWidget {
@@ -50,23 +51,23 @@ class ChatInputBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildConfigRow(context),
-          const SizedBox(height: 8),
           _buildTagsRow(context),
           const SizedBox(height: 8),
           _buildInputRow(context),
+          const SizedBox(height: 8),
+          _buildConfigRow(context),
         ],
       ),
     );
   }
 
   Widget _buildConfigRow(BuildContext context) {
-    return Row(
+    return Wrap(
+      spacing: 16,
+      runSpacing: 12,
       children: [
         _buildDropdown('Planner', planner, (val) => onPlannerChanged(val!), items: availableModels),
-        const SizedBox(width: 16),
         _buildDropdown('Executor', executor, (val) => onExecutorChanged(val!), items: availableModels),
-        const SizedBox(width: 16),
         _buildDropdown('Memory', memoryMode, (val) => onMemoryModeChanged(val!), items: ['off', 'session', 'full']),
       ],
     );
@@ -132,18 +133,42 @@ class ChatInputBar extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: TextField(
-            controller: controller,
-            enabled: enabled,
-            minLines: 1,
-            maxLines: 5,
-            decoration: const InputDecoration(
-              hintText: 'Type a message...',
-              border: OutlineInputBorder(),
-              isDense: true,
-              contentPadding: EdgeInsets.all(12),
+          child: Focus(
+            onKeyEvent: (node, event) {
+              if (!enabled || event is! KeyDownEvent) {
+                return KeyEventResult.ignored;
+              }
+
+              final isEnter =
+                  event.logicalKey == LogicalKeyboardKey.enter ||
+                  event.logicalKey == LogicalKeyboardKey.numpadEnter;
+              if (!isEnter) {
+                return KeyEventResult.ignored;
+              }
+
+              if (HardwareKeyboard.instance.isShiftPressed) {
+                _insertNewline();
+                return KeyEventResult.handled;
+              }
+
+              onSend();
+              return KeyEventResult.handled;
+            },
+            child: TextField(
+              controller: controller,
+              enabled: enabled,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.send,
+              minLines: 2,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                hintText: 'Type a message...',
+                border: OutlineInputBorder(),
+                isDense: true,
+                contentPadding: EdgeInsets.all(12),
+              ),
+              onSubmitted: (_) => onSend(),
             ),
-            onSubmitted: (_) => onSend(),
           ),
         ),
         const SizedBox(width: 8),
@@ -158,6 +183,30 @@ class ChatInputBar extends StatelessWidget {
             onPressed: enabled ? onSend : null,
           ),
       ],
+    );
+  }
+
+  void _insertNewline() {
+    final value = controller.value;
+    final selection = value.selection;
+    final text = value.text;
+
+    if (!selection.isValid) {
+      controller.value = value.copyWith(
+        text: '$text\n',
+        selection: TextSelection.collapsed(offset: text.length + 1),
+        composing: TextRange.empty,
+      );
+      return;
+    }
+
+    final start = selection.start;
+    final end = selection.end;
+    final nextText = text.replaceRange(start, end, '\n');
+    controller.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: start + 1),
+      composing: TextRange.empty,
     );
   }
 }

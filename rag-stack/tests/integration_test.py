@@ -39,6 +39,7 @@ else:
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+ADMIN_URL = os.getenv("ADMIN_URL", "https://rag-admin-api.rag.hierocracy.home")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "e2eTestBucket")
 S3_INDEX = "/e2eTestBucket"
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
@@ -172,6 +173,68 @@ def test_rag_retrieval():
         print(f"  - Gateway connection failed: {e}")
         raise
 
+def test_planner_trace_replay():
+    print(f"[{datetime.utcnow().isoformat()}] [TEST] Verifying planner trace replay...")
+    session_name = f"trace-session-{int(time.time())}"
+    query = "Inspect the planner output contract and summarize the actions."
+
+    payload = {
+        "model": OLLAMA_MODEL,
+        "planner": OLLAMA_MODEL,
+        "session_name": session_name,
+        "messages": [{"role": "user", "content": query}],
+    }
+
+    response = requests.post(GATEWAY_URL, json=payload, timeout=90)
+    print(f"  - Gateway status code: {response.status_code}")
+    assert response.status_code == 200, f"Gateway failed with {response.status_code}: {response.text}"
+
+    data = response.json()
+    session_id = data.get("session_id")
+    assert session_id is not None, "Missing session_id in gateway response"
+
+    choices = data.get("choices", [])
+    assert len(choices) > 0, "No choices in gateway response"
+    message = choices[0].get("message", {})
+    planning_response = message.get("planning_response", "")
+    assert planning_response, "Missing planning_response in gateway response"
+    assert "Refined sub-queries for chunk 1:" in planning_response, (
+        f"Planning response did not include planner refinement output: {planning_response}"
+    )
+    assert "- " in planning_response, f"Planning response did not include refined sub-query entries: {planning_response}"
+
+    admin_resp = requests.get(f"{ADMIN_URL}/api/db/sessions/{int(session_id)}/messages", timeout=60, verify=False)
+    print(f"  - Admin replay status code: {admin_resp.status_code}")
+    assert admin_resp.status_code == 200, f"Failed to fetch session replay: {admin_resp.text}"
+
+    messages = admin_resp.json()
+    assert isinstance(messages, list) and len(messages) > 0, "Session replay returned no messages"
+
+    assistant_messages = [m for m in messages if m.get("role") == "assistant" and m.get("planning_response")]
+    assert assistant_messages, "No assistant message with planning_response found in replay"
+    replay_message = assistant_messages[-1]
+    replay_planning = replay_message.get("planning_response", "")
+    assert "Refined sub-queries for chunk 1:" in replay_planning, "Persisted planning response is missing refinement output"
+
+    metadata = replay_message.get("metadata") or {}
+    assert "planner_task" in metadata, f"planner_task missing from replay metadata: {metadata}"
+    assert "planner_trace" in metadata, f"planner_trace missing from replay metadata: {metadata}"
+    segments = metadata.get("message_segments") or []
+    assert len(segments) > 0, f"message_segments missing from replay metadata: {metadata}"
+    planning_segments = [seg for seg in segments if seg.get("kind") == "planning"]
+    assert planning_segments, f"No planning segment found in message_segments: {segments}"
+    assert len(planning_segments) >= 2, f"Expected multiple planning segments in replay metadata: {segments}"
+    assert segments[0].get("kind") == "planning", f"First replay segment was not planning: {segments}"
+    assert segments[1].get("kind") == "planning", f"Second replay segment was not planning: {segments}"
+    assert segments[2].get("kind") == "content", f"Content segment did not follow planning segments: {segments}"
+    assert "Planning complete." in segments[0].get("content", ""), "Planner task segment was not preserved"
+    assert "Refined sub-queries for chunk 1:" in segments[1].get("content", ""), (
+        "Planner refinement segment was not preserved"
+    )
+    assert segments[2].get("content", "").strip(), "Assistant content segment was empty"
+    assert segments[2].get("in_conversation") is True, "Assistant content segment lost conversation context"
+    print("  - Planner output and replay metadata verified successfully")
+
 def cleanup_test_data():
     print(f"[{datetime.utcnow().isoformat()}] [CLEANUP] Cleaning up test data...")
 
@@ -236,6 +299,7 @@ if __name__ == "__main__":
         test_s3_ops()
         test_qdrant_ops()
         test_rag_retrieval()
+        test_planner_trace_replay()
         print(f"\n[{datetime.utcnow().isoformat()}] [SUCCESS] All core component tests passed!")
     except Exception as e:
         print(f"\n[{datetime.utcnow().isoformat()}] [FAILURE] Test failed: {e}")

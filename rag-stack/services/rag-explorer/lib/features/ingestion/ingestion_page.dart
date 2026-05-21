@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../core/models/tag.dart';
 import '../../core/services/ingestion_service.dart';
 import '../../app_config_provider.dart';
+import '../../core/widgets/tag_picker_dialog.dart';
 
 class IngestionPage extends ConsumerStatefulWidget {
   const IngestionPage({super.key});
@@ -586,34 +587,58 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
               ],
             ),
             const SizedBox(height: 12),
-            if (_tags.isEmpty)
-              const Text('No tags available. Create one to get started.', style: TextStyle(color: Colors.grey, fontSize: 13))
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _tags.map((tag) {
-                  final isSelected = _selectedTags.contains(tag);
-                  return FilterChip(
-                    label: Text(tag.name),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        if (selected) {
-                          _selectedTags.add(tag);
-                        } else {
-                          // Don't allow deselecting if it's the only one? 
-                          // Actually, multiple tags are allowed, let's allow empty if they want, 
-                          // but start ingestion check will block it.
-                          _selectedTags.remove(tag);
-                        }
-                      });
-                    },
-                    selectedColor: Colors.blue.withValues(alpha: 0.2),
-                    checkmarkColor: Colors.blue,
-                  );
-                }).toList(),
-              ),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _tags.isEmpty
+                      ? null
+                      : () async {
+                          final chosen = await showTagPickerDialog(
+                            context: context,
+                            title: 'Select knowledge tags',
+                            availableTags: _tags,
+                            selectedTags: _selectedTags.toList(),
+                          );
+                          if (chosen == null) return;
+                          setState(() {
+                            _selectedTags
+                              ..clear()
+                              ..addAll(chosen);
+                          });
+                        },
+                  icon: const Icon(Icons.sell_outlined),
+                  label: const Text('Pick Tags'),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _selectedTags.isEmpty
+                        ? [
+                            const Text(
+                              'No tags selected.',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ]
+                        : _selectedTags.map((tag) {
+                            return InputChip(
+                              label: Text(tag.name),
+                              onDeleted: () {
+                                setState(() {
+                                  _selectedTags.remove(tag);
+                                });
+                              },
+                              selectedColor: Colors.blue.withValues(alpha: 0.2),
+                            );
+                          }).toList(),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             const Text(
               'Tags partition the vector store and allow context isolation. Select multiple to index into all of them.',

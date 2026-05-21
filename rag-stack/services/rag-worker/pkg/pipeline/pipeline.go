@@ -21,6 +21,7 @@ import (
 	"app-builds/rag-worker/internal/models"
 	"app-builds/rag-worker/internal/ollama"
 	"app-builds/rag-worker/pkg/messaging"
+
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -190,7 +191,7 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 		}
 	}
 
-	subQueries, metrics, err := planner.Plan(ctx, req.Prompt, nil, history)
+	plan, metrics, err := planner.Plan(ctx, req.Prompt, nil, history)
 	if err != nil {
 		logging.Printf("[%s][SID:%d] Planning failed: %v", req.Id, req.SessionId, err)
 		if ollama.IsMissingModelError(err) {
@@ -204,6 +205,9 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	// Filter behavioral rules by detected action type (Iteration 9)
 	actionMap, _ := h.memoryClient.GetActionIdentifiers(ctx)
 	actionType := behavioral.DetectActionType(req.Prompt, actionMap)
+	if plan != nil && strings.TrimSpace(plan.ActionType) != "" && strings.ToUpper(strings.TrimSpace(plan.ActionType)) != contracts.PlannerActionUnknown {
+		actionType = strings.ToUpper(strings.TrimSpace(plan.ActionType))
+	}
 	logging.Printf("[%s][SID:%d] Detected ActionType: %s", req.Id, req.SessionId, actionType)
 
 	// Detect Memory Suggestions (Iteration 9b: The Learning Loop)
@@ -235,16 +239,30 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	// We don't store planning metrics yet, but we could in the future.
 	_ = metrics
 
-	if len(subQueries) == 0 {
-		subQueries = []string{req.Prompt}
+	if plan == nil {
+		plan = &contracts.PlannerTaskPlan{Objective: req.Prompt, ActionType: contracts.PlannerActionUnknown}
 	}
 
-	// Transmit planner responses to the UI
-	planningText := "Planning complete. Generated sub-queries:\n"
-	for _, sq := range subQueries {
-		planningText += fmt.Sprintf("- %s\n", sq)
+	plan.ActionType = actionType
+	plan.Normalize(req.Prompt)
+	plan.Trace.ContextSources = []string{"memory-controller", "action-identifiers"}
+	if historyPack != nil && len(historyPack.Items) > 0 {
+		plan.Trace.ContextSources = append(plan.Trace.ContextSources, "session-history")
 	}
-	h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, planningText)
+	subQueries := append([]string{}, plan.SearchQueries...)
+	if len(subQueries) == 0 {
+		subQueries = []string{req.Prompt}
+		plan.SearchQueries = subQueries
+	}
+
+	planningText := formatPlannerPlan(plan)
+	planningMetadata := map[string]interface{}{
+		"planner_task":  plan.ToMap(),
+		"planner_trace": plan.Trace.ToMap(),
+		"sub_queries":   subQueries,
+		"action_type":   string(actionType),
+	}
+	h.msg.SendPlanningResponseWithMetadata(ctx, req.Id, req.SessionId, planningText, planningMetadata)
 
 	metadata := contracts.FromStruct(req.Metadata)
 	if metadata == nil {
@@ -252,6 +270,8 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	}
 	metadata["sub_queries"] = subQueries
 	metadata["action_type"] = string(actionType)
+	metadata["planner_task"] = plan.ToMap()
+	metadata["planner_trace"] = plan.Trace.ToMap()
 	if historyPack != nil {
 		metadata["history"] = historyPack.Items
 	}
@@ -271,6 +291,80 @@ func (h *Handler) handlePlan(ctx context.Context, req *contracts.InternalRequest
 	}
 
 	return dlq.Success, nil
+}
+
+func formatPlannerPlan(plan *contracts.PlannerTaskPlan) string {
+	if plan == nil {
+		return "Planning complete."
+	}
+
+	var b strings.Builder
+	b.WriteString("Planning complete.\n")
+	b.WriteString(fmt.Sprintf("Objective: %s\n", plan.Objective))
+	b.WriteString(fmt.Sprintf("Action type: %s\n", plan.ActionType))
+	b.WriteString(fmt.Sprintf("Context budget: %d\n", plan.ContextBudget))
+	b.WriteString(fmt.Sprintf("Risk: %s\n", plan.Risk))
+	b.WriteString(fmt.Sprintf("Blocking: %t\n", plan.Blocking))
+
+	if len(plan.Inputs) > 0 {
+		b.WriteString("Inputs:\n")
+		for _, input := range plan.Inputs {
+			b.WriteString(fmt.Sprintf("- %s\n", input))
+		}
+	}
+
+	if len(plan.Outputs) > 0 {
+		b.WriteString("Outputs:\n")
+		for _, output := range plan.Outputs {
+			b.WriteString(fmt.Sprintf("- %s\n", output))
+		}
+	}
+
+	if len(plan.Dependencies) > 0 {
+		b.WriteString("Dependencies:\n")
+		for _, dep := range plan.Dependencies {
+			b.WriteString(fmt.Sprintf("- %s\n", dep))
+		}
+	}
+
+	if len(plan.EvidenceRequirements) > 0 {
+		b.WriteString("Evidence requirements:\n")
+		for _, req := range plan.EvidenceRequirements {
+			b.WriteString(fmt.Sprintf("- %s\n", req))
+		}
+	}
+
+	if len(plan.SearchQueries) > 0 {
+		b.WriteString("Search queries:\n")
+		for _, sq := range plan.SearchQueries {
+			b.WriteString(fmt.Sprintf("- %s\n", sq))
+		}
+	}
+
+	if len(plan.Steps) > 0 {
+		b.WriteString("Steps:\n")
+		for _, step := range plan.Steps {
+			label := step.Objective
+			if label == "" {
+				label = step.ActionType
+			}
+			b.WriteString(fmt.Sprintf("- %d. %s\n", step.Order, label))
+			if len(step.Dependencies) > 0 {
+				b.WriteString("  Dependencies:\n")
+				for _, dep := range step.Dependencies {
+					b.WriteString(fmt.Sprintf("  - %s\n", dep))
+				}
+			}
+			if len(step.SearchQueries) > 0 {
+				b.WriteString("  Search queries:\n")
+				for _, sq := range step.SearchQueries {
+					b.WriteString(fmt.Sprintf("  - %s\n", sq))
+				}
+			}
+		}
+	}
+
+	return strings.TrimSpace(b.String())
 }
 
 func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
@@ -675,10 +769,10 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 
 		// 1. Refine Plan with chunk context
 		if planner != nil {
-			refinedQueries, _, err := planner.Plan(ctx, req.Prompt, chunk, history)
-			if err == nil && len(refinedQueries) > 0 && h.cfg.StreamIntermediate {
+			refinedPlan, _, err := planner.Plan(ctx, req.Prompt, chunk, history)
+			if err == nil && refinedPlan != nil && len(refinedPlan.SearchQueries) > 0 && h.cfg.StreamIntermediate {
 				planningText := fmt.Sprintf("Refined sub-queries for chunk %d:\n", actualIndex+1)
-				for _, sq := range refinedQueries {
+				for _, sq := range refinedPlan.SearchQueries {
 					planningText += fmt.Sprintf("- %s\n", sq)
 				}
 				h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, planningText)

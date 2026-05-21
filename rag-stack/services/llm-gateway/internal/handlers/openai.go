@@ -94,6 +94,20 @@ type GenericChatRequest struct {
 	IncludeGlobal bool    `json:"include_global,omitempty"`
 }
 
+func validateChatCompletionRequest(req ChatCompletionRequest) error {
+	if strings.TrimSpace(req.Model) == "" {
+		return fmt.Errorf("model is required")
+	}
+	if len(req.Messages) == 0 {
+		return fmt.Errorf("messages are required")
+	}
+	lastMessage := req.Messages[len(req.Messages)-1]
+	if strings.TrimSpace(lastMessage.Content) == "" {
+		return fmt.Errorf("messages must include non-empty content")
+	}
+	return nil
+}
+
 func (h *OpenAIHandler) ensureSession(ctx context.Context, sessionID int64, sessionName string, tags []int64) (*ent.Session, error) {
 	if sessionName == "" {
 		if sessionID > 0 {
@@ -163,6 +177,12 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 
 	var req ChatCompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logging.Printf("Bad request: %v", err)
+		requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
+		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateChatCompletionRequest(req); err != nil {
 		logging.Printf("Bad request: %v", err)
 		requestCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)

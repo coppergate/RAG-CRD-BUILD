@@ -2,10 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/app_config.dart';
 import '../../app_config_provider.dart';
-import '../models/memory_pack.dart';
-import '../models/memory_retrieve_request.dart';
-import '../models/memory_write_request.dart';
 import 'log_service.dart';
+import '../../features/memory/memory_contracts.dart';
 
 final memoryServiceProvider = Provider((ref) {
   final config = ref.watch(appConfigProvider);
@@ -21,12 +19,35 @@ class MemoryService {
 
   MemoryService(this._dio, this._config, this._logger);
 
-  Future<List<dynamic>> getMemoryItems(int sessionId) async {
+  Future<List<MemoryRecord>> getMemoryItems(int sessionId) async {
     _logger.debug('Fetching memory items for session $sessionId');
     try {
-      final response = await _dio.get('${_config.memoryUrl}/items', queryParameters: {'session_id': sessionId});
+      final response = await _dio.get(
+        '${_config.memoryUrl}/items',
+        queryParameters: {'session_id': sessionId},
+      );
       if (response.statusCode == 200) {
-        return response.data as List<dynamic>;
+        final data = response.data;
+        if (data is List) {
+          return data
+              .whereType<Map>()
+              .map(
+                (item) => MemoryRecord.fromJson(
+                  item.map((key, value) => MapEntry(key.toString(), value)),
+                ),
+              )
+              .toList();
+        }
+        if (data is Map<String, dynamic> && data['items'] is List) {
+          return (data['items'] as List)
+              .whereType<Map>()
+              .map(
+                (item) => MemoryRecord.fromJson(
+                  item.map((key, value) => MapEntry(key.toString(), value)),
+                ),
+              )
+              .toList();
+        }
       }
       return [];
     } catch (e) {
@@ -38,7 +59,10 @@ class MemoryService {
   Future<bool> writeMemory(MemoryWriteRequest request) async {
     _logger.info('Writing memory item');
     try {
-      final response = await _dio.post('${_config.memoryUrl}/items', data: request.toJson());
+      final response = await _dio.post(
+        '${_config.memoryUrl}/items',
+        data: request.toJson(),
+      );
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       _logger.error('Error writing memory: $e');
@@ -47,11 +71,22 @@ class MemoryService {
   }
 
   Future<MemoryPack?> retrieveMemory(MemoryRetrieveRequest request) async {
-    _logger.info('Retrieving memory for session ${request.sessionId}');
+    _logger.info('Retrieving memory for session ${request.scope.sessionId}');
     try {
-      final response = await _dio.post('${_config.memoryUrl}/retrieve', data: request.toJson());
+      final response = await _dio.post(
+        '${_config.memoryUrl}/retrieve',
+        data: request.toJson(),
+      );
       if (response.statusCode == 200) {
-        return MemoryPack.fromJson(response.data);
+        final data = response.data;
+        if (data is Map<String, dynamic>) {
+          return MemoryPack.fromJson(data);
+        }
+        if (data is Map) {
+          return MemoryPack.fromJson(
+            data.map((key, value) => MapEntry(key.toString(), value)),
+          );
+        }
       }
       return null;
     } catch (e) {

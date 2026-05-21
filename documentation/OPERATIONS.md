@@ -239,6 +239,7 @@ Every new session for the **Junie** agent MUST establish the operational context
     - Verify the current project version in `CURRENT_VERSION`.
     - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
     - `build.sh` performs automatic version incrementing when code changes are detected via hashing.
+    - `CURRENT_VERSION` is generated build metadata; do not commit it to git unless the build workflow explicitly requires a source-side version change.
 4. **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
@@ -663,6 +664,7 @@ The `CURRENT_VERSION` file and build lock files track state across multiple user
     ```
 - **DANGER**: DO NOT use `mv` to update `CURRENT_VERSION`. ALWAYS use redirection to preserve the 'pinned' permissions and contexts.
 - **Workaround**: If `Permission denied` occurs and the setup script cannot be run, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
+- **Git Note**: Leave `CURRENT_VERSION` uncommitted after build/deploy runs unless you are intentionally changing version tracking behavior in the repository.
 - **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.
 - **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666, but should be managed by the pinning script for maximum reliability.
 ### 9.2 Protobuf Generation
