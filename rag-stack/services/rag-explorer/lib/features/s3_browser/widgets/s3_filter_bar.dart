@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/tag.dart';
 import '../../../core/models/session.dart';
+import '../../../core/widgets/tag_picker_dialog.dart';
 
 class S3FilterBar extends StatelessWidget {
   final List<String> availableBuckets;
@@ -77,29 +78,54 @@ class S3FilterBar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Filter by Tags:',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        Row(
+          children: [
+            const Text(
+              'Filter by Tags:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: availableTags.isEmpty
+                  ? null
+                  : () async {
+                      final chosen = await showTagPickerDialog(
+                        context: context,
+                        title: 'Select S3 filter tags',
+                        availableTags: availableTags,
+                        selectedTags: selectedTags,
+                      );
+                      if (chosen == null) return;
+                      onTagsChanged(chosen);
+                    },
+              icon: const Icon(Icons.filter_alt_outlined),
+              label: const Text('Pick Tags'),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
-          children: availableTags.map((tag) {
-            final isSelected = selectedTags.contains(tag);
-            return FilterChip(
-              label: Text(tag.name),
-              selected: isSelected,
-              onSelected: (val) {
-                final newSelected = List<Tag>.from(selectedTags);
-                if (val) {
-                  newSelected.add(tag);
-                } else {
-                  newSelected.remove(tag);
-                }
-                onTagsChanged(newSelected);
-              },
-            );
-          }).toList(),
+          runSpacing: 8,
+          children: selectedTags.isEmpty
+              ? [
+                  const Text(
+                    'No tags selected.',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ]
+              : selectedTags
+                  .map(
+                    (tag) => InputChip(
+                      label: Text(tag.name),
+                      onDeleted: () {
+                        final newSelected = List<Tag>.from(selectedTags)
+                          ..remove(tag);
+                        onTagsChanged(newSelected);
+                      },
+                    ),
+                  )
+                  .toList(),
         ),
       ],
     );

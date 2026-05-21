@@ -9,6 +9,18 @@ class CollectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final statusColor = stats.status == 'green'
+        ? Colors.green
+        : Colors.orange;
+    final chipBackground = isDarkMode
+        ? statusColor.shade900.withValues(alpha: 0.5)
+        : statusColor.shade100;
+    final chipBorder = isDarkMode
+        ? statusColor.shade300.withValues(alpha: 0.8)
+        : statusColor.shade300;
+    final chipTextColor = isDarkMode ? Colors.white : statusColor.shade900;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -20,10 +32,15 @@ class CollectionCard extends StatelessWidget {
               children: [
                 Text(name, style: Theme.of(context).textTheme.titleLarge),
                 Chip(
-                  label: Text(stats.status),
-                  backgroundColor: stats.status == 'green'
-                      ? Colors.green.shade100
-                      : Colors.orange.shade100,
+                  label: Text(
+                    stats.status,
+                    style: TextStyle(
+                      color: chipTextColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  backgroundColor: chipBackground,
+                  side: BorderSide(color: chipBorder),
                 ),
               ],
             ),

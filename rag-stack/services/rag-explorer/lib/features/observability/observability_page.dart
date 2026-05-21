@@ -55,29 +55,29 @@ class _ObservabilityPageState extends ConsumerState<ObservabilityPage> {
               style: TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 24),
-            _GrafanaPanelCard(
-              title: 'GPU Utilization',
-              url:
+          _GrafanaPanelCard(
+            title: 'GPU Utilization',
+            url:
                   '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2',
-              renderUrl:
-                  '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2&scale=2&width={width}&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
-            ),
+            renderUrl:
+                  '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=2&scale=2&width={width}&height=640&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
+          ),
             const SizedBox(height: 16),
             _GrafanaPanelCard(
               title: 'GPU Memory Usage',
               url:
                   '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4',
-              renderUrl:
-                  '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4&scale=2&width={width}&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
-            ),
+            renderUrl:
+                  '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=4&scale=2&width={width}&height=640&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
+          ),
             const SizedBox(height: 16),
             _GrafanaPanelCard(
               title: 'CPU & System Load',
               url:
                   '$grafanaBaseUrl/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6',
-              renderUrl:
-                  '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6&scale=2&width={width}&height=500&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
-            ),
+            renderUrl:
+                  '$grafanaBaseUrl/render/d-solo/rag-inference/inference-nodes?orgId=1&panelId=6&scale=2&width={width}&height=640&from=now-1h&to=now&_t=${DateTime.now().millisecondsSinceEpoch}',
+          ),
             const SizedBox(height: 40),
             const Text(
               'Loki Log Streams',
@@ -185,6 +185,7 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
 
   @override
   Widget build(BuildContext context) {
+    final panelHeight = 320.0;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -216,7 +217,7 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
               );
 
               return SizedBox(
-                height: 250,
+                height: panelHeight,
                 width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,
@@ -224,7 +225,7 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
                     Container(color: Colors.grey.shade100),
                     Image.network(
                       dynamicRenderUrl,
-                      fit: BoxFit.contain,
+                      fit: BoxFit.fill,
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) {
                           _markLoaded();
@@ -244,7 +245,7 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
                                   ),
                                 ),
                                 SizedBox(height: 12),
-                                Text('Loading panel...'),
+                                Text('Loading'),
                               ],
                             ),
                           ),
@@ -266,7 +267,7 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
                         return const SizedBox.shrink();
                       },
                     ),
-                    if (!_isLoaded && !_hasError)
+                      if (!_isLoaded && !_hasError)
                       Container(
                         color: Colors.black.withValues(alpha: 0.02),
                         child: const Center(
@@ -281,7 +282,7 @@ class _GrafanaPanelCardState extends ConsumerState<_GrafanaPanelCard> {
                                 ),
                               ),
                               SizedBox(height: 12),
-                              Text('Loading panel...'),
+                              Text('Loading'),
                             ],
                           ),
                         ),
