@@ -116,7 +116,7 @@ class MessageList extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       MarkdownBody(
-                        data: msg.planningResponse!,
+                        data: _normalizeDisplayText(msg.planningResponse!),
                         styleSheet: _getMarkdownStyle(isDarkMode),
                       ),
                     ],
@@ -124,7 +124,7 @@ class MessageList extends StatelessWidget {
                 ),
               if (msg.content.isNotEmpty)
                 MarkdownBody(
-                  data: msg.content,
+                  data: _normalizeDisplayText(msg.content),
                   styleSheet: _getMarkdownStyle(isDarkMode),
                 ),
             ],
@@ -201,7 +201,7 @@ class MessageList extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             MarkdownBody(
-              data: content,
+              data: _normalizeDisplayText(content),
               styleSheet: _getMarkdownStyle(isDarkMode),
             ),
           ],
@@ -216,10 +216,14 @@ class MessageList extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: MarkdownBody(
-        data: content,
+        data: _normalizeDisplayText(content),
         styleSheet: _getMarkdownStyle(isDarkMode),
       ),
     );
+  }
+
+  String _normalizeDisplayText(String text) {
+    return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   }
 
   MarkdownStyleSheet _getMarkdownStyle(bool isDarkMode) {

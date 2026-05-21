@@ -53,6 +53,10 @@ class ChatNotifier extends _$ChatNotifier {
     );
   }
 
+  String _normalizeChatText(String text) {
+    return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  }
+
   Future<void> loadSessions() async {
     final chatService = ref.read(chatServiceProvider);
     ref.read(logProvider.notifier).debug('Refreshing chat session list');
@@ -313,7 +317,11 @@ class ChatNotifier extends _$ChatNotifier {
         String? updatedPlanning = lastMsg.planningResponse;
         if (chunk.planningResponse != null &&
             chunk.planningResponse!.isNotEmpty) {
-          updatedPlanning = (updatedPlanning ?? '') + chunk.planningResponse!;
+          final normalizedChunkPlanning = _normalizeChatText(
+            chunk.planningResponse!,
+          );
+          updatedPlanning =
+              _normalizeChatText(updatedPlanning ?? '') + normalizedChunkPlanning;
         }
 
         final Map<String, dynamic>? updatedMetadata =
@@ -327,18 +335,23 @@ class ChatNotifier extends _$ChatNotifier {
           appendedSegments.add(
             _buildMessageSegment(
               kind: 'planning',
-              content: chunk.planningResponse!,
+              content: _normalizeChatText(chunk.planningResponse!),
             ),
           );
         }
         if (chunk.content.isNotEmpty) {
           appendedSegments.add(
-            _buildMessageSegment(kind: 'content', content: chunk.content),
+            _buildMessageSegment(
+              kind: 'content',
+              content: _normalizeChatText(chunk.content),
+            ),
           );
         }
 
         messages[lastIndex] = lastMsg.copyWith(
-          content: lastMsg.content + chunk.content,
+          content:
+              _normalizeChatText(lastMsg.content) +
+              _normalizeChatText(chunk.content),
           metadata: _appendMessageSegments(updatedMetadata, appendedSegments),
           planningResponse: updatedPlanning,
         );

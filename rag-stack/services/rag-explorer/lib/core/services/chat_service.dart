@@ -23,6 +23,10 @@ class ChatService {
   final LogNotifier _logger;
   ChatService(this._dio, this._config, this._logger);
 
+  String _normalizeChatText(String text) {
+    return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  }
+
   Future<List<Session>> getSessions() async {
     _logger.debug('Fetching sessions from ${_config.memoryUrl}/sessions');
     try {
@@ -93,8 +97,10 @@ class ChatService {
         );
         return data.map((e) {
           final metadata = _normalizeMetadata(e['metadata']);
-          final planningResponse = e['planning_response']?.toString();
-          final content = e['content']?.toString() ?? '';
+          final planningResponse = e['planning_response'] == null
+              ? null
+              : _normalizeChatText(e['planning_response'].toString());
+          final content = _normalizeChatText(e['content']?.toString() ?? '');
           if (!_hasMessageSegments(metadata) &&
               ((planningResponse != null && planningResponse.isNotEmpty) ||
                   content.isNotEmpty)) {
@@ -124,12 +130,36 @@ class ChatService {
 
   Map<String, dynamic> _normalizeMetadata(dynamic raw) {
     if (raw is Map<String, dynamic>) {
-      return Map<String, dynamic>.from(raw);
+      return _normalizeMessageSegments(Map<String, dynamic>.from(raw));
     }
     if (raw is Map) {
-      return Map<String, dynamic>.from(raw);
+      return _normalizeMessageSegments(Map<String, dynamic>.from(raw));
     }
     return <String, dynamic>{};
+  }
+
+  Map<String, dynamic> _normalizeMessageSegments(Map<String, dynamic> metadata) {
+    final raw = metadata['message_segments'];
+    if (raw is! List || raw.isEmpty) {
+      return metadata;
+    }
+
+    final normalizedSegments = raw
+        .whereType<Map>()
+        .map((segment) {
+          final normalized = Map<String, dynamic>.from(segment);
+          final content = normalized['content'];
+          if (content is String) {
+            normalized['content'] = _normalizeChatText(content);
+          }
+          return normalized;
+        })
+        .toList();
+
+    return <String, dynamic>{
+      ...metadata,
+      'message_segments': normalizedSegments,
+    };
   }
 
   bool _hasMessageSegments(Map<String, dynamic> metadata) {
@@ -218,7 +248,9 @@ class ChatService {
             _logger.debug('Received chunk: $event');
             final data = jsonDecode(event);
             return ResponseMessage(
-              content: data['result'] ?? (data['error'] ?? ''),
+              content: _normalizeChatText(
+                data['result']?.toString() ?? data['error']?.toString() ?? '',
+              ),
               sessionId: data['session_id'],
               messageId: data['id'],
               role: 'assistant',
@@ -226,7 +258,9 @@ class ChatService {
               timestamp: DateTime.now(),
               isLast: data['is_last'] ?? false,
               inConversation: data['in_conversation'] ?? false,
-              planningResponse: data['planning_response'],
+              planningResponse: data['planning_response'] == null
+                  ? null
+                  : _normalizeChatText(data['planning_response'].toString()),
             );
           })
           .handleError((error) {
