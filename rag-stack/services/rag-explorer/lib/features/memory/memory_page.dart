@@ -148,7 +148,7 @@ class _MemoryPageState extends ConsumerState<MemoryPage> {
           SizedBox(
             width: 320,
             child: DropdownButtonFormField<int>(
-              value: sessions.any((s) => s.id == memoryState.scope.sessionId)
+              initialValue: sessions.any((s) => s.id == memoryState.scope.sessionId)
                   ? memoryState.scope.sessionId
                   : null,
               isExpanded: true,

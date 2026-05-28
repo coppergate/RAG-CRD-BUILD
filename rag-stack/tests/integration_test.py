@@ -8,19 +8,38 @@ from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from e2e_tag_state import ensure_test_tag
+from model_matrix import EMBEDDING_MODEL, model_cases
 
 # Optional OpenTelemetry tracing (enabled if OTEL_EXPORTER_OTLP_ENDPOINT is set)
 OTEL_ENABLED = bool(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
 if OTEL_ENABLED:
     try:
         from opentelemetry import trace
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.resources import Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from grpc import ssl_channel_credentials
+
+        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector.monitoring.svc.cluster.local:4317")
+        if otlp_endpoint.startswith("http://"):
+            otlp_endpoint = otlp_endpoint.replace("http://", "")
+        elif otlp_endpoint.startswith("https://"):
+            otlp_endpoint = otlp_endpoint.replace("https://", "")
+
+        use_tls = os.getenv("OTEL_USE_TLS", "false").lower() == "true"
+        credentials = None
+        if use_tls:
+            ssl_cert_file = os.getenv("SSL_CERT_FILE", "")
+            if ssl_cert_file and os.path.isfile(ssl_cert_file):
+                with open(ssl_cert_file, "rb") as f:
+                    credentials = ssl_channel_credentials(root_certificates=f.read())
+
         resource = Resource.create({"service.name": "rag-tests", "service.version": "1.0.0"})
         provider = TracerProvider(resource=resource)
-        processor = BatchSpanProcessor(OTLPSpanExporter())
+        processor = BatchSpanProcessor(
+            OTLPSpanExporter(endpoint=otlp_endpoint, insecure=not use_tls, credentials=credentials)
+        )
         provider.add_span_processor(processor)
         trace.set_tracer_provider(provider)
         tracer = trace.get_tracer("rag-tests.integration")
@@ -39,13 +58,14 @@ else:
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+CHAT_URL = os.getenv("RAG_CHAT_URL", "https://rag-admin-api.rag.hierocracy.home/api/chat/v1/rag/chat")
 ADMIN_URL = os.getenv("ADMIN_URL", "https://rag-admin-api.rag.hierocracy.home")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "e2eTestBucket")
 S3_INDEX = "/e2eTestBucket"
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 TAG_STATE_FILE = os.getenv(
-    "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-integration-tag-state.json"
+    "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
 )
+GATEWAY_TIMEOUT_SECONDS = int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "600"))
 
 def test_s3_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing S3 Operations...")
@@ -115,125 +135,159 @@ def test_qdrant_ops():
     assert results[0].payload["text"] == "Test vector search"
     print("  - Verified search result")
 
-def test_rag_retrieval():
+def test_rag_retrieval(tag_id):
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing RAG Retrieval via Gateway...")
-    print(f"  - GATEWAY_URL={GATEWAY_URL}")
-    test_file_base = "e2e-test-file-"
-    session_name = f"test-session-{int(time.time())}"
-    tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-integration-")
-    tag_id = tag["tag_id"]
-    print(f"  - Using tag {tag['tag_name']} (ID: {tag_id})")
-    
-    payload = {
-        "model": OLLAMA_MODEL,
-        "planner": OLLAMA_MODEL,
-        "session_name": session_name,
-        "tags": [tag_id],
-        "messages": [{"role": "user", "content": f"Retrieve the secret code from the {test_file_base} documents."}]
-    }
-    try:
-        headers = {}
-        if OTEL_ENABLED:
-            # Create a client span and inject trace context into headers
-            with tracer.start_as_current_span("gateway_request") as span:
-                try:
-                    from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
-                    propagator = TraceContextTextMapPropagator()
-                    propagator.inject(headers)
-                except Exception as e:
-                    print(f"  - Failed to inject trace headers: {e}")
-                response = requests.post(GATEWAY_URL, json=payload, timeout=90, headers=headers)
-        else:
-            response = requests.post(GATEWAY_URL, json=payload, timeout=90)
-        
-        print(f"  - Gateway status code: {response.status_code}")
-        assert response.status_code == 200, f"Gateway failed with {response.status_code}: {response.text}"
-        
-        data = response.json()
-        print("  - Gateway responded successfully")
-        
-        # Verify planner data
-        # Based on HandleChatCompletions update: response['choices'][0]['message']['planning_response']
-        choices = data.get("choices", [])
-        assert len(choices) > 0, "No choices in response"
-        message = choices[0].get("message", {})
-        planning_response = message.get("planning_response")
-        
-        if planning_response:
-            print(f"  - Verified Planner data presence: {planning_response[:100]}...")
-        else:
-            # It might be empty if the model didn't generate sub-queries for this prompt, 
-            # but usually it should at least be present as an empty string or null if we use omitempty
-            # In Go map it will be present if we set it.
-            print("  - [WARN] Planner data not found in response, but expected.")
-            # Note: Depending on the prompt, the planner might decide no sub-queries are needed.
-            # For E2E we should probably use a prompt that triggers planning.
-            
-    except Exception as e:
-        print(f"  - Gateway connection failed: {e}")
-        raise
+    print(f"  - RAG_CHAT_URL={CHAT_URL}")
+    print(f"  - Embedding model: {EMBEDDING_MODEL}")
+    query = "What is the primary protocol for Project Alpha?"
+    system_prompt = "Use only the uploaded context. Reply with the exact secret code and nothing else."
+
+    for case in model_cases():
+        session_name = f"test-session-{case['label']}-{int(time.time())}"
+        session_id = int(time.time() * 1000)
+        payload = {
+            "prompt": query,
+            "session_id": session_id,
+            "session_name": session_name,
+            "tags": [tag_id],
+            "planner": case["planner"],
+            "executor": case["executor"],
+            "embedding_model": EMBEDDING_MODEL,
+            "include_global": False,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": query,
+                },
+            ],
+        }
+        try:
+            headers = {}
+            if OTEL_ENABLED:
+                with tracer.start_as_current_span("gateway_request") as span:
+                    try:
+                        from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+                        propagator = TraceContextTextMapPropagator()
+                        propagator.inject(headers)
+                    except Exception as e:
+                        print(f"  - Failed to inject trace headers: {e}")
+                response = requests.post(
+                    CHAT_URL,
+                    json=payload,
+                    timeout=GATEWAY_TIMEOUT_SECONDS,
+                    headers=headers,
+                    verify=False,
+                )
+            else:
+                response = requests.post(
+                    CHAT_URL,
+                    json=payload,
+                    timeout=GATEWAY_TIMEOUT_SECONDS,
+                    verify=False,
+                )
+
+            print(
+                f"  - Gateway status code ({case['name']}): {response.status_code} "
+                f"[planner={case['planner']} executor={case['executor']}]"
+            )
+            if response.status_code != 200:
+                raise RuntimeError(f"gateway returned {response.status_code}: {response.text}")
+
+            data = response.json()
+            result = data.get("result", "")
+            planning_response = data.get("planning_response", "")
+            if "Zeltron-9" not in result:
+                raise RuntimeError(f"unexpected result for {case['name']}: {result}")
+            if not planning_response:
+                raise RuntimeError(f"missing planning_response for {case['name']}: {data}")
+
+            print(f"  - Result verified for {case['name']}")
+        except Exception as e:
+            print(f"  - [WARN] Gateway connection failed during smoke check for {case['name']}: {e}")
+            raise
 
 def test_planner_trace_replay():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Verifying planner trace replay...")
-    session_name = f"trace-session-{int(time.time())}"
     query = "Inspect the planner output contract and summarize the actions."
+    for case in model_cases():
+        session_name = f"trace-session-{case['label']}-{int(time.time())}"
+        payload = {
+            "prompt": query,
+            "session_name": session_name,
+            "planner": case["planner"],
+            "executor": case["executor"],
+            "embedding_model": EMBEDDING_MODEL,
+            "messages": [{"role": "user", "content": query}],
+        }
 
-    payload = {
-        "model": OLLAMA_MODEL,
-        "planner": OLLAMA_MODEL,
-        "session_name": session_name,
-        "messages": [{"role": "user", "content": query}],
-    }
+        response = requests.post(CHAT_URL, json=payload, timeout=GATEWAY_TIMEOUT_SECONDS, verify=False)
+        print(f"  - Gateway status code ({case['name']}): {response.status_code}")
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"gateway planner replay smoke check failed for {case['name']} with "
+                f"{response.status_code}: {response.text}"
+            )
 
-    response = requests.post(GATEWAY_URL, json=payload, timeout=90)
-    print(f"  - Gateway status code: {response.status_code}")
-    assert response.status_code == 200, f"Gateway failed with {response.status_code}: {response.text}"
+        data = response.json()
+        session_id = data.get("session_id")
+        if session_id is None:
+            raise RuntimeError(f"missing session_id in gateway response for {case['name']}")
 
-    data = response.json()
-    session_id = data.get("session_id")
-    assert session_id is not None, "Missing session_id in gateway response"
+        planning_response = data.get("planning_response", "")
+        if not planning_response:
+            raise RuntimeError(f"missing planning_response for {case['name']}")
+        if "Refined sub-queries for " not in planning_response:
+            raise RuntimeError(
+                f"planning response did not include refinement output for {case['name']}: {planning_response}"
+            )
 
-    choices = data.get("choices", [])
-    assert len(choices) > 0, "No choices in gateway response"
-    message = choices[0].get("message", {})
-    planning_response = message.get("planning_response", "")
-    assert planning_response, "Missing planning_response in gateway response"
-    assert "Refined sub-queries for chunk 1:" in planning_response, (
-        f"Planning response did not include planner refinement output: {planning_response}"
-    )
-    assert "- " in planning_response, f"Planning response did not include refined sub-query entries: {planning_response}"
+        admin_resp = requests.get(f"{ADMIN_URL}/api/db/sessions/{int(session_id)}/messages", timeout=60, verify=False)
+        print(f"  - Admin replay status code ({case['name']}): {admin_resp.status_code}")
+        if admin_resp.status_code != 200:
+            raise RuntimeError(f"failed to fetch session replay for {case['name']}: {admin_resp.text}")
 
-    admin_resp = requests.get(f"{ADMIN_URL}/api/db/sessions/{int(session_id)}/messages", timeout=60, verify=False)
-    print(f"  - Admin replay status code: {admin_resp.status_code}")
-    assert admin_resp.status_code == 200, f"Failed to fetch session replay: {admin_resp.text}"
+        messages = admin_resp.json()
+        if not isinstance(messages, list) or not messages:
+            raise RuntimeError(f"session replay returned no messages for {case['name']}")
 
-    messages = admin_resp.json()
-    assert isinstance(messages, list) and len(messages) > 0, "Session replay returned no messages"
+        assistant_messages = [m for m in messages if m.get("role") == "assistant" and m.get("planning_response")]
+        if not assistant_messages:
+            raise RuntimeError(f"no assistant message with planning_response found for {case['name']}")
+        replay_message = assistant_messages[-1]
+        replay_planning = replay_message.get("planning_response", "")
+        if "Refined sub-queries for " not in replay_planning:
+            raise RuntimeError(f"persisted planning response is missing refinement output for {case['name']}")
 
-    assistant_messages = [m for m in messages if m.get("role") == "assistant" and m.get("planning_response")]
-    assert assistant_messages, "No assistant message with planning_response found in replay"
-    replay_message = assistant_messages[-1]
-    replay_planning = replay_message.get("planning_response", "")
-    assert "Refined sub-queries for chunk 1:" in replay_planning, "Persisted planning response is missing refinement output"
-
-    metadata = replay_message.get("metadata") or {}
-    assert "planner_task" in metadata, f"planner_task missing from replay metadata: {metadata}"
-    assert "planner_trace" in metadata, f"planner_trace missing from replay metadata: {metadata}"
-    segments = metadata.get("message_segments") or []
-    assert len(segments) > 0, f"message_segments missing from replay metadata: {metadata}"
-    planning_segments = [seg for seg in segments if seg.get("kind") == "planning"]
-    assert planning_segments, f"No planning segment found in message_segments: {segments}"
-    assert len(planning_segments) >= 2, f"Expected multiple planning segments in replay metadata: {segments}"
-    assert segments[0].get("kind") == "planning", f"First replay segment was not planning: {segments}"
-    assert segments[1].get("kind") == "planning", f"Second replay segment was not planning: {segments}"
-    assert segments[2].get("kind") == "content", f"Content segment did not follow planning segments: {segments}"
-    assert "Planning complete." in segments[0].get("content", ""), "Planner task segment was not preserved"
-    assert "Refined sub-queries for chunk 1:" in segments[1].get("content", ""), (
-        "Planner refinement segment was not preserved"
-    )
-    assert segments[2].get("content", "").strip(), "Assistant content segment was empty"
-    assert segments[2].get("in_conversation") is True, "Assistant content segment lost conversation context"
-    print("  - Planner output and replay metadata verified successfully")
+        metadata = replay_message.get("metadata") or {}
+        if "planner_task" not in metadata or "planner_trace" not in metadata:
+            raise RuntimeError(f"planner metadata missing from replay for {case['name']}: {metadata}")
+        if "chunk_groups" not in metadata or not isinstance(metadata.get("chunk_groups"), list):
+            raise RuntimeError(f"chunk_groups missing or invalid in replay metadata for {case['name']}: {metadata}")
+        if "plan_step_contexts" not in metadata or not isinstance(metadata.get("plan_step_contexts"), list):
+            raise RuntimeError(f"plan_step_contexts missing or invalid in replay metadata for {case['name']}: {metadata}")
+        segments = metadata.get("message_segments") or []
+        if not segments:
+            raise RuntimeError(f"message_segments missing from replay metadata for {case['name']}: {metadata}")
+        planning_segments = [seg for seg in segments if seg.get("kind") == "planning"]
+        if not planning_segments or len(planning_segments) < 2:
+            raise RuntimeError(f"expected multiple planning segments in replay metadata for {case['name']}: {segments}")
+        if len(segments) < 3:
+            raise RuntimeError(f"replay segments were incomplete for {case['name']}: {segments}")
+        if segments[0].get("kind") != "planning" or segments[1].get("kind") != "planning" or segments[2].get("kind") != "content":
+            raise RuntimeError(f"replay segment ordering was unexpected for {case['name']}: {segments}")
+        if "Planning complete." not in segments[0].get("content", ""):
+            raise RuntimeError(f"planner task segment was not preserved for {case['name']}")
+        if "Refined sub-queries for " not in segments[1].get("content", ""):
+            raise RuntimeError(f"planner refinement segment was not preserved for {case['name']}")
+        if not segments[2].get("content", "").strip():
+            raise RuntimeError(f"assistant content segment was empty for {case['name']}")
+        if segments[2].get("in_conversation") is not True:
+            raise RuntimeError(f"assistant content segment lost conversation context for {case['name']}")
+        print(f"  - Planner output and replay metadata verified successfully for {case['name']}")
 
 def cleanup_test_data():
     print(f"[{datetime.utcnow().isoformat()}] [CLEANUP] Cleaning up test data...")
@@ -293,12 +347,17 @@ if __name__ == "__main__":
         "BUCKET_NAME": BUCKET_NAME,
         "QDRANT_HOST": QDRANT_HOST,
         "GATEWAY_URL": GATEWAY_URL,
+        "RAG_CHAT_URL": CHAT_URL,
+        "MODEL_A": os.getenv("MODEL_A", os.getenv("OLLAMA_MODEL", "llama3.1:latest")),
+        "MODEL_B": os.getenv("MODEL_B", "granite3.1-dense:8b"),
+        "EMBEDDING_MODEL": EMBEDDING_MODEL,
         "OTEL_ENABLED": OTEL_ENABLED
     }, indent=2))
     try:
         test_s3_ops()
         test_qdrant_ops()
-        test_rag_retrieval()
+        tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-integration-")
+        test_rag_retrieval(tag["tag_id"])
         test_planner_trace_replay()
         print(f"\n[{datetime.utcnow().isoformat()}] [SUCCESS] All core component tests passed!")
     except Exception as e:

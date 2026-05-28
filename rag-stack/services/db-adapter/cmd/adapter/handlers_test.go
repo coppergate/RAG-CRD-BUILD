@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/encoding/protojson"
 	"strconv"
 )
 
@@ -163,6 +164,12 @@ func TestHandleResponsePlanningTrace(t *testing.T) {
 				"raw_response": "raw planner text",
 				"parser_mode":  "json_object",
 			},
+			"evaluation_metrics": map[string]interface{}{
+				"planner": map[string]interface{}{
+					"prompt_char_count": 11,
+					"context_budget":    2,
+				},
+			},
 		}),
 	}
 	data, _ := json.Marshal(&payload)
@@ -181,6 +188,13 @@ func TestHandleResponsePlanningTrace(t *testing.T) {
 	meta := resp.Metadata
 	assert.Contains(t, meta, "planner_task")
 	assert.Contains(t, meta, "planner_trace")
+	assert.Contains(t, meta, "evaluation_metrics")
+	eval, ok := meta["evaluation_metrics"].(map[string]interface{})
+	assert.True(t, ok, "expected evaluation_metrics to persist as a nested map")
+	plannerMetrics, ok := eval["planner"].(map[string]interface{})
+	assert.True(t, ok, "expected planner metrics to persist inside evaluation_metrics")
+	assert.Equal(t, float64(11), plannerMetrics["prompt_char_count"])
+	assert.Equal(t, float64(2), plannerMetrics["context_budget"])
 }
 
 func TestHandleGetSessionHealth(t *testing.T) {
@@ -332,7 +346,12 @@ func TestHandleGetFiles(t *testing.T) {
 
 	_, err = client.CodeEmbedding.Create().
 		SetIngestion(ci).
-		SetMetadata(map[string]interface{}{"path": "test/path/file.go"}).
+		SetMetadata(map[string]interface{}{
+			"path":            "test/path/file.go",
+			"embedding_model": "embed-model",
+			"vector_size":     384,
+			"source_hash":     "abc123",
+		}).
 		AddTags(t1).
 		Save(context.Background())
 	assert.NoError(t, err)
@@ -350,6 +369,8 @@ func TestHandleGetFiles(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, files, 1)
 	assert.Equal(t, "test/path/file.go", files[0]["path"])
+	assert.Equal(t, "embed-model", files[0]["embedding_model"])
+	assert.Equal(t, float64(384), files[0]["vector_size"])
 	assert.Contains(t, files[0]["tags"], "test-tag")
 }
 
@@ -391,7 +412,11 @@ func TestHandleGetFilesBySession(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = client.CodeEmbedding.Create().
-		SetMetadata(map[string]interface{}{"path": "test/path/session_file.go"}).
+		SetMetadata(map[string]interface{}{
+			"path":            "test/path/session_file.go",
+			"embedding_model": "embed-model",
+			"vector_size":     384,
+		}).
 		AddTags(t1).
 		Save(context.Background())
 	assert.NoError(t, err)
@@ -409,6 +434,60 @@ func TestHandleGetFilesBySession(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, files, 1)
 	assert.Equal(t, "test/path/session_file.go", files[0]["path"])
+	assert.Equal(t, "embed-model", files[0]["embedding_model"])
+}
+
+func TestHandleGetFilesByEmbeddingModel(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_model?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	tagID := time.Now().UnixNano() % 100000
+	t1, err := client.Tag.Create().SetID(tagID).SetName("test-tag").Save(context.Background())
+	assert.NoError(t, err)
+
+	ingestionID := time.Now().UnixNano()%100000 + 100000
+	ci, err := client.CodeIngestion.Create().
+		SetID(ingestionID).
+		SetS3BucketID("test-bucket").
+		AddTags(t1).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	_, err = client.CodeEmbedding.Create().
+		SetIngestion(ci).
+		SetMetadata(map[string]interface{}{
+			"path":            "test/path/file.go",
+			"embedding_model": "llama3.1:latest",
+			"vector_size":     4096,
+		}).
+		AddTags(t1).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	_, err = client.CodeEmbedding.Create().
+		SetIngestion(ci).
+		SetMetadata(map[string]interface{}{
+			"path":            "test/path/file.go",
+			"embedding_model": "granite3.1-dense:8b",
+			"vector_size":     4096,
+		}).
+		AddTags(t1).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/storage/files?tag_id="+strconv.FormatInt(tagID, 10)+"&embedding_model=llama3.1:latest", nil)
+	w := httptest.NewRecorder()
+
+	svc := service.NewStorageService(client)
+	svc.GetFiles(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var files []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &files)
+	assert.NoError(t, err)
+	assert.Len(t, files, 1)
+	assert.Equal(t, "llama3.1:latest", files[0]["embedding_model"])
 }
 
 func TestHandleGetFilesNoFilters(t *testing.T) {
@@ -439,6 +518,43 @@ func TestHandleGetFilesNoFilters(t *testing.T) {
 	assert.Len(t, files, 2)
 }
 
+func TestHandleGetFileVectorsByEmbeddingModel(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_vectors?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	_, err := client.CodeEmbedding.Create().
+		SetMetadata(map[string]interface{}{
+			"path":            "test/path/vector.go",
+			"embedding_model": "llama3.1:latest",
+			"vector_size":     4096,
+		}).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	_, err = client.CodeEmbedding.Create().
+		SetMetadata(map[string]interface{}{
+			"path":            "test/path/vector.go",
+			"embedding_model": "granite3.1-dense:8b",
+			"vector_size":     4096,
+		}).
+		Save(context.Background())
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/storage/file-vectors?path=test/path/vector.go&embedding_model=llama3.1:latest", nil)
+	w := httptest.NewRecorder()
+
+	svc := service.NewStorageService(client)
+	svc.GetFileVectors(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var vectors []map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &vectors)
+	assert.NoError(t, err)
+	assert.Len(t, vectors, 1)
+	assert.Equal(t, "llama3.1:latest", vectors[0]["metadata"].(map[string]interface{})["embedding_model"])
+}
+
 type mockProducer struct {
 	pulsar.Producer
 	sentMessages []*pulsar.ProducerMessage
@@ -467,10 +583,37 @@ func TestHandleMaintenanceTagMerge(t *testing.T) {
 	sess, _ := client.Session.Create().SetID(2000).SetName("sess").AddTags(sTag).Save(ctx)
 
 	// Create an embedding with source tag
-	client.CodeEmbedding.Create().
-		SetMetadata(map[string]interface{}{"path": "file1.go"}).
+	createdEmbedding, err := client.CodeEmbedding.Create().
+		SetMetadata(map[string]interface{}{"path": "file1.go", "embedding_model": "embed-model", "vector_size": 384}).
 		AddTags(sTag).
 		Save(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "embed-model", createdEmbedding.Metadata["embedding_model"])
+	switch v := createdEmbedding.Metadata["vector_size"].(type) {
+	case int:
+		assert.Equal(t, 384, v)
+	case float64:
+		assert.Equal(t, float64(384), v)
+	default:
+		t.Fatalf("unexpected vector_size type on created embedding: %T", v)
+	}
+
+	queriedEmbedding, err := client.CodeEmbedding.Query().
+		Where(func(sel *sql.Selector) {
+			sel.Where(sqljson.ValueEQ("metadata", "file1.go", sqljson.Path("path")))
+		}).
+		WithTags().
+		Only(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "embed-model", queriedEmbedding.Metadata["embedding_model"])
+	switch v := queriedEmbedding.Metadata["vector_size"].(type) {
+	case int:
+		assert.Equal(t, 384, v)
+	case float64:
+		assert.Equal(t, float64(384), v)
+	default:
+		t.Fatalf("unexpected vector_size type on queried embedding: %T", v)
+	}
 
 	payload := struct {
 		SourceIDs []int64 `json:"source_ids"`
@@ -509,6 +652,14 @@ func TestHandleMaintenanceTagMerge(t *testing.T) {
 		Exist(ctx)
 	assert.NoError(t, err)
 	assert.False(t, embeddingExists)
+
+	if assert.Len(t, prod.sentMessages, 1) {
+		var op contracts.QdrantOp
+		err = protojson.Unmarshal(prod.sentMessages[0].Payload, &op)
+		assert.NoError(t, err)
+		assert.Equal(t, "embed-model", op.EmbeddingModel)
+		assert.Equal(t, int32(384), op.VectorSize)
+	}
 }
 
 func TestListSessions(t *testing.T) {

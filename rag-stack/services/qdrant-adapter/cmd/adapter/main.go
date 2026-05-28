@@ -244,17 +244,18 @@ func main() {
 	logging.Info("Qdrant Adapter shutdown complete")
 }
 
-
 func (a *Adapter) executeOp(ctx context.Context, data *contracts.QdrantOp) (*contracts.QdrantResponse, error) {
 	start := time.Now()
 	opID := data.Id
 	action := data.Action
 	collection := data.Collection
+	embeddingModel := data.EmbeddingModel
 	vs := int(data.VectorSize)
+	effectiveCollection := contracts.BuildEmbeddingCollection(collection, embeddingModel, vs)
 
 	attrs := []attribute.KeyValue{
 		attribute.String("action", action),
-		attribute.String("collection", collection),
+		attribute.String("collection", effectiveCollection),
 		attribute.Int("vector_size", vs),
 		attribute.Int64("session_id", data.SessionId),
 	}
@@ -265,7 +266,7 @@ func (a *Adapter) executeOp(ctx context.Context, data *contracts.QdrantOp) (*con
 	}()
 	opCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 
-	logging.L.WithTrace(ctx).Info("executing Qdrant op", "session_id", data.SessionId, "action", action, "collection", collection)
+	logging.L.WithTrace(ctx).Info("executing Qdrant op", "session_id", data.SessionId, "action", action, "collection", effectiveCollection)
 
 	var (
 		result interface{}
@@ -274,27 +275,27 @@ func (a *Adapter) executeOp(ctx context.Context, data *contracts.QdrantOp) (*con
 
 	switch action {
 	case "search":
-		res, err := a.qdrant.Search(collection, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId, data.IncludeGlobal)
+		res, err := a.qdrant.Search(collection, embeddingModel, vs, data.Vector, int(data.Limit), data.Tags, data.SessionId, data.IncludeGlobal)
 		if err == nil {
 			logging.L.WithTrace(ctx).Info("Qdrant search successful", "op_id", opID, "results", len(res))
 		}
 		result, opErr = res, err
 	case "retrieve_paths":
-		res, err := a.qdrant.RetrieveByPaths(collection, vs, data.Paths, int(data.Limit))
+		res, err := a.qdrant.RetrieveByPaths(collection, embeddingModel, vs, data.Paths, int(data.Limit))
 		if err == nil {
 			logging.L.WithTrace(ctx).Info("Qdrant retrieve_paths successful", "op_id", opID, "results", len(res))
 		}
 		result, opErr = res, err
 	case "delete":
-		logging.L.WithTrace(ctx).Info("deleting points from collection", "op_id", opID, "collection", collection, "tags", data.Tags, "paths", data.Paths)
-		opErr = a.qdrant.DeleteByFilter(collection, vs, data.Tags, data.Paths)
+		logging.L.WithTrace(ctx).Info("deleting points from collection", "op_id", opID, "collection", effectiveCollection, "tags", data.Tags, "paths", data.Paths)
+		opErr = a.qdrant.DeleteByFilter(collection, embeddingModel, vs, data.Tags, data.Paths)
 	case "upsert":
-		logging.L.WithTrace(ctx).Info("upserting points into collection", "op_id", opID, "points", len(data.Points), "collection", collection)
-		opErr = a.qdrant.UpsertProto(collection, vs, data.Points)
+		logging.L.WithTrace(ctx).Info("upserting points into collection", "op_id", opID, "points", len(data.Points), "collection", effectiveCollection)
+		opErr = a.qdrant.UpsertProto(collection, embeddingModel, vs, data.Points)
 	case "create_collection":
-		opErr = a.qdrant.CreateCollection(collection, vs)
+		opErr = a.qdrant.CreateCollection(collection, embeddingModel, vs)
 	case "merge_tags":
-		opErr = a.qdrant.MergeTags(collection, vs, data.SourceTag, data.TargetTag)
+		opErr = a.qdrant.MergeTags(collection, embeddingModel, vs, data.SourceTag, data.TargetTag)
 	default:
 		return nil, fmt.Errorf("unsupported action: %s", action)
 	}
@@ -307,7 +308,7 @@ func (a *Adapter) executeOp(ctx context.Context, data *contracts.QdrantOp) (*con
 	resp := &contracts.QdrantResponse{
 		Id:         opID,
 		Action:     action,
-		Collection: collection,
+		Collection: effectiveCollection,
 		Timestamp:  time.Now().Format(time.RFC3339),
 	}
 	if opErr != nil {

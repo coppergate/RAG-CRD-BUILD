@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"app-builds/common/contracts"
@@ -30,11 +32,11 @@ func NewClient(cfg *config.Config) *QdrantClient {
 	}
 }
 
-func (q *QdrantClient) Search(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error) {
+func (q *QdrantClient) Search(collection string, embeddingModel string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool) ([]interface{}, error) {
 	if limit <= 0 {
 		limit = 20 // Default limit
 	}
-	return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
+	return q.searchWithRetry(collection, embeddingModel, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
 }
 
 func buildTagSessionFilter(tags []int64, sessionID int64, includeGlobal bool) map[string]interface{} {
@@ -101,11 +103,39 @@ func ensureConditionSlice(v interface{}) []map[string]interface{} {
 	return []map[string]interface{}{}
 }
 
-func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]interface{}, error) {
+func resolveCollection(q *QdrantClient, collection, embeddingModel string, vectorSize int) string {
+	resolved := contracts.BuildEmbeddingCollection(collection, embeddingModel, vectorSize)
+	if q == nil || vectorSize > 0 {
+		return resolved
+	}
+
+	prefix := contracts.BuildEmbeddingCollection(collection, embeddingModel, 0)
+	names, err := q.listCollectionNames()
+	if err != nil {
+		return resolved
+	}
+
+	matches := make([]string, 0, 1)
+	for _, name := range names {
+		if name == prefix || strings.HasPrefix(name, prefix+"-") {
+			matches = append(matches, name)
+		}
+	}
+	if len(matches) == 0 {
+		return resolved
+	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		return len(matches[i]) > len(matches[j])
+	})
+	return matches[0]
+}
+
+func (q *QdrantClient) searchWithRetry(collection string, embeddingModel string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]interface{}, error) {
 	if len(vector) == 0 {
 		if len(tags) > 0 {
 			logging.Printf("Empty vector but tags provided, falling back to filter-only retrieval")
-			return q.RetrieveByFilter(collection, vectorSize, tags, sessionID, includeGlobal, limit)
+			return q.RetrieveByFilter(collection, embeddingModel, vectorSize, tags, sessionID, includeGlobal, limit)
 		}
 		return nil, nil // Cannot search with empty vector and no tags
 	}
@@ -115,10 +145,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 		vs = q.cfg.DefaultVectorSize
 	}
 
-	effectiveColl := collection
-	if vs > 0 {
-		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
-	}
+	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/search", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
@@ -145,11 +172,7 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound && retry && vs > 0 {
-		fmt.Printf("Collection '%s' not found. Creating it with size %d...\n", effectiveColl, vs)
-		if err := q.CreateCollection(collection, vs); err != nil {
-			return nil, fmt.Errorf("failed to auto-create collection %s: %v", effectiveColl, err)
-		}
-		return q.searchWithRetry(collection, vectorSize, vector, limit, tags, sessionID, includeGlobal, false)
+		return nil, fmt.Errorf("qdrant collection not found: %s", effectiveColl)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -180,16 +203,13 @@ func (q *QdrantClient) searchWithRetry(collection string, vectorSize int, vector
 	return contexts, nil
 }
 
-func (q *QdrantClient) RetrieveByFilter(collection string, vectorSize int, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
+func (q *QdrantClient) RetrieveByFilter(collection string, embeddingModel string, vectorSize int, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
 	}
 
-	effectiveColl := collection
-	if vs > 0 {
-		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
-	}
+	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/scroll", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
@@ -217,6 +237,9 @@ func (q *QdrantClient) RetrieveByFilter(collection string, vectorSize int, tags 
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("qdrant collection not found: %s", effectiveColl)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("qdrant scroll returned %d", resp.StatusCode)
 	}
@@ -246,7 +269,7 @@ func (q *QdrantClient) RetrieveByFilter(collection string, vectorSize int, tags 
 	return results, nil
 }
 
-func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths []string, limit int) ([]interface{}, error) {
+func (q *QdrantClient) RetrieveByPaths(collection string, embeddingModel string, vectorSize int, paths []string, limit int) ([]interface{}, error) {
 	if len(paths) == 0 {
 		return nil, nil
 	}
@@ -256,10 +279,7 @@ func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths 
 		vs = q.cfg.DefaultVectorSize
 	}
 
-	effectiveColl := collection
-	if vs > 0 {
-		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
-	}
+	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/scroll", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
@@ -293,6 +313,9 @@ func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths 
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("qdrant collection not found: %s", effectiveColl)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("qdrant scroll by paths returned %d", resp.StatusCode)
 	}
@@ -322,12 +345,12 @@ func (q *QdrantClient) RetrieveByPaths(collection string, vectorSize int, paths 
 	return results, nil
 }
 
-func (q *QdrantClient) CreateCollection(collection string, vectorSize int) error {
+func (q *QdrantClient) CreateCollection(collection string, embeddingModel string, vectorSize int) error {
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
 	}
-	effectiveColl := fmt.Sprintf("%s-%d", collection, vs)
+	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
@@ -367,16 +390,17 @@ func (q *QdrantClient) CreateCollection(collection string, vectorSize int) error
 	return nil
 }
 
-func (q *QdrantClient) DeleteByFilter(collection string, vectorSize int, tags []int64, paths []string) error {
+func (q *QdrantClient) DeleteByFilter(collection string, embeddingModel string, vectorSize int, tags []int64, paths []string) error {
+	if embeddingModel == "" && vectorSize <= 0 {
+		return q.deleteAcrossMatchingCollections(collection, tags, paths)
+	}
+
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
 	}
 
-	effectiveColl := collection
-	if vs > 0 {
-		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
-	}
+	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/delete?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
@@ -439,6 +463,83 @@ func (q *QdrantClient) DeleteByFilter(collection string, vectorSize int, tags []
 	return nil
 }
 
+func (q *QdrantClient) deleteAcrossMatchingCollections(collection string, tags []int64, paths []string) error {
+	names, err := q.listCollectionNames()
+	if err != nil {
+		return err
+	}
+
+	prefix := collection
+	if prefix == "" {
+		prefix = "vectors"
+	}
+
+	for _, name := range names {
+		if name == prefix || strings.HasPrefix(name, prefix+"-") {
+			if err := q.deleteFromCollection(name, tags, paths); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (q *QdrantClient) deleteFromCollection(effectiveColl string, tags []int64, paths []string) error {
+	if len(tags) == 0 && len(paths) == 0 {
+		return nil
+	}
+
+	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
+	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/delete?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
+
+	var mustFilters []map[string]interface{}
+	if len(tags) > 0 {
+		mustFilters = append(mustFilters, map[string]interface{}{
+			"key": "tags",
+			"match": map[string]interface{}{
+				"any": tags,
+			},
+		})
+	}
+	if len(paths) > 0 {
+		mustFilters = append(mustFilters, map[string]interface{}{
+			"key": "path",
+			"match": map[string]interface{}{
+				"any": paths,
+			},
+		})
+	}
+
+	body, err := json.Marshal(map[string]interface{}{
+		"filter": map[string]interface{}{
+			"must": mustFilters,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal delete filter: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := q.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("qdrant (coll: %s) returned status %d on delete", effectiveColl, resp.StatusCode)
+	}
+	return nil
+}
+
 func (q *QdrantClient) ListCollections() (interface{}, error) {
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort)
@@ -450,6 +551,31 @@ func (q *QdrantClient) ListCollections() (interface{}, error) {
 	var result interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 	return result, nil
+}
+
+func (q *QdrantClient) listCollectionNames() ([]string, error) {
+	raw, err := q.ListCollections()
+	if err != nil {
+		return nil, err
+	}
+	payload, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected collections response")
+	}
+	result, _ := payload["result"].(map[string]interface{})
+	rawCollections, _ := result["collections"].([]interface{})
+	names := make([]string, 0, len(rawCollections))
+	for _, item := range rawCollections {
+		entry, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := entry["name"].(string)
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 func (q *QdrantClient) GetCollection(name string) (interface{}, error) {
@@ -465,7 +591,7 @@ func (q *QdrantClient) GetCollection(name string) (interface{}, error) {
 	return result, nil
 }
 
-func (q *QdrantClient) UpsertProto(collection string, vectorSize int, points []*contracts.QdrantPoint) error {
+func (q *QdrantClient) UpsertProto(collection string, embeddingModel string, vectorSize int, points []*contracts.QdrantPoint) error {
 	qdrantPoints := make([]interface{}, len(points))
 	for i, p := range points {
 		qdrantPoints[i] = map[string]interface{}{
@@ -474,23 +600,20 @@ func (q *QdrantClient) UpsertProto(collection string, vectorSize int, points []*
 			"payload": contracts.FromStruct(p.Payload),
 		}
 	}
-	return q.Upsert(collection, vectorSize, qdrantPoints)
+	return q.Upsert(collection, embeddingModel, vectorSize, qdrantPoints)
 }
 
-func (q *QdrantClient) Upsert(collection string, vectorSize int, points []interface{}) error {
-	return q.upsertWithRetry(collection, vectorSize, points, true)
+func (q *QdrantClient) Upsert(collection string, embeddingModel string, vectorSize int, points []interface{}) error {
+	return q.upsertWithRetry(collection, embeddingModel, vectorSize, points, true)
 }
 
-func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points []interface{}, retry bool) error {
+func (q *QdrantClient) upsertWithRetry(collection string, embeddingModel string, vectorSize int, points []interface{}, retry bool) error {
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
 	}
 
-	effectiveColl := collection
-	if vs > 0 {
-		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
-	}
+	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	url := fmt.Sprintf("%s://%s:%s/collections/%s/points?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
@@ -517,10 +640,10 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 
 	if resp.StatusCode == http.StatusNotFound && retry && vs > 0 {
 		fmt.Printf("Collection '%s' not found. Creating it with size %d...\n", effectiveColl, vs)
-		if err := q.CreateCollection(collection, vs); err != nil {
+		if err := q.CreateCollection(collection, embeddingModel, vs); err != nil {
 			return fmt.Errorf("failed to auto-create collection %s: %v", effectiveColl, err)
 		}
-		return q.upsertWithRetry(collection, vectorSize, points, false)
+		return q.upsertWithRetry(collection, embeddingModel, vectorSize, points, false)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -533,16 +656,13 @@ func (q *QdrantClient) upsertWithRetry(collection string, vectorSize int, points
 	return nil
 }
 
-func (q *QdrantClient) MergeTags(collection string, vectorSize int, sourceTag, targetTag int64) error {
+func (q *QdrantClient) MergeTags(collection string, embeddingModel string, vectorSize int, sourceTag, targetTag int64) error {
 	vs := vectorSize
 	if vs <= 0 {
 		vs = q.cfg.DefaultVectorSize
 	}
 
-	effectiveColl := collection
-	if vs > 0 {
-		effectiveColl = fmt.Sprintf("%s-%d", collection, vs)
-	}
+	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
 
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
 	// Qdrant doesn't have a direct "update payload for all matching" with arbitrary logic,

@@ -83,67 +83,91 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type Group struct {
-		TagIDs   []int64
-		TagNames []string
-		Paths    []string
+		TagIDs         []int64
+		TagNames       []string
+		Paths          []string
+		EmbeddingModel string
+		VectorSize     int
 	}
 	groups := make(map[string]*Group)
 
-	pathTags := make(map[string]map[int64]bool)
+	pathTags := make(map[string]map[string]map[int64]bool)
+	pathModels := make(map[string]map[string]int)
 	for _, ce := range embeddings {
 		path, _ := ce.Metadata["path"].(string)
 		if path == "" {
 			continue
 		}
+		model, _ := ce.Metadata["embedding_model"].(string)
+		vecSize := 0
+		if rawVS, ok := ce.Metadata["vector_size"]; ok {
+			switch t := rawVS.(type) {
+			case float64:
+				vecSize = int(t)
+			case int:
+				vecSize = t
+			}
+		}
 		if _, ok := pathTags[path]; !ok {
-			pathTags[path] = make(map[int64]bool)
+			pathTags[path] = make(map[string]map[int64]bool)
+		}
+		if _, ok := pathTags[path][model]; !ok {
+			pathTags[path][model] = make(map[int64]bool)
+		}
+		if _, ok := pathModels[path]; !ok {
+			pathModels[path] = make(map[string]int)
 		}
 		for _, t := range ce.Edges.Tags {
-			pathTags[path][t.ID] = true
+			pathTags[path][model][t.ID] = true
 		}
+		pathModels[path][model] = vecSize
 	}
 
-	for path, currentTags := range pathTags {
-		newTagIDsMap := make(map[int64]bool)
-		newTagIDsMap[targetID] = true
+	for path, modelTags := range pathTags {
+		for model, currentTags := range modelTags {
+			newTagIDsMap := make(map[int64]bool)
+			newTagIDsMap[targetID] = true
 
-		for tid := range currentTags {
-			isSource := false
-			for _, srcID := range sourceIDs {
-				if tid == srcID {
-					isSource = true
-					break
+			for tid := range currentTags {
+				isSource := false
+				for _, srcID := range sourceIDs {
+					if tid == srcID {
+						isSource = true
+						break
+					}
+				}
+				if !isSource {
+					newTagIDsMap[tid] = true
 				}
 			}
-			if !isSource {
-				newTagIDsMap[tid] = true
-			}
-		}
 
-		var newTagIDs []int64
-		var newTagNames []string
-		var newTagIDsStr []string
-		for tid := range newTagIDsMap {
-			newTagIDs = append(newTagIDs, tid)
-			if name, ok := tagMap[tid]; ok {
-				newTagNames = append(newTagNames, name)
+			var newTagIDs []int64
+			var newTagNames []string
+			var newTagIDsStr []string
+			for tid := range newTagIDsMap {
+				newTagIDs = append(newTagIDs, tid)
+				if name, ok := tagMap[tid]; ok {
+					newTagNames = append(newTagNames, name)
+				}
 			}
-		}
-		// For consistency in grouping, sort the IDs as strings or ints
-		sort.Slice(newTagIDs, func(i, j int) bool { return newTagIDs[i] < newTagIDs[j] })
-		for _, tid := range newTagIDs {
-			newTagIDsStr = append(newTagIDsStr, strconv.FormatInt(tid, 10))
-		}
-		key := strings.Join(newTagIDsStr, ",")
+			// For consistency in grouping, sort the IDs as strings or ints
+			sort.Slice(newTagIDs, func(i, j int) bool { return newTagIDs[i] < newTagIDs[j] })
+			for _, tid := range newTagIDs {
+				newTagIDsStr = append(newTagIDsStr, strconv.FormatInt(tid, 10))
+			}
+			key := strings.Join(newTagIDsStr, ",") + "|" + model
 
-		if _, ok := groups[key]; !ok {
-			groups[key] = &Group{
-				TagIDs:   newTagIDs,
-				TagNames: newTagNames,
-				Paths:    []string{},
+			if _, ok := groups[key]; !ok {
+				groups[key] = &Group{
+					TagIDs:         newTagIDs,
+					TagNames:       newTagNames,
+					Paths:          []string{},
+					EmbeddingModel: model,
+					VectorSize:     pathModels[path][model],
+				}
 			}
+			groups[key].Paths = append(groups[key].Paths, path)
 		}
-		groups[key].Paths = append(groups[key].Paths, path)
 	}
 
 	httpClient, _ := tlsutil.NewHTTPClient(true, 10*time.Minute)
@@ -162,25 +186,29 @@ func (s *MaintenanceService) MergeTags(w http.ResponseWriter, r *http.Request) {
 
 		if s.qdrantProducer != nil {
 			delOp := &contracts.QdrantOp{
-				Id:         strconv.FormatInt(time.Now().UnixNano(), 10),
-				Action:     "delete",
-				Collection: "vectors",
-				Paths:      group.Paths,
+				Id:             strconv.FormatInt(time.Now().UnixNano(), 10),
+				Action:         "delete",
+				Collection:     "vectors",
+				Paths:          group.Paths,
+				EmbeddingModel: group.EmbeddingModel,
+				VectorSize:     int32(group.VectorSize),
 			}
 			p, _ := protojson.Marshal(delOp)
 			s.qdrantProducer.Send(ctx, &pulsar.ProducerMessage{Payload: p})
 		}
 
 		ingestReq := struct {
-			IngestionID int64    `json:"ingestion_id"`
-			TagNames    []string `json:"tag_names"`
-			TagIDs      []int64  `json:"tag_ids"`
-			FileNames   []string `json:"file_names"`
+			IngestionID    int64    `json:"ingestion_id"`
+			TagNames       []string `json:"tag_names"`
+			TagIDs         []int64  `json:"tag_ids"`
+			FileNames      []string `json:"file_names"`
+			EmbeddingModel string   `json:"embedding_model"`
 		}{
-			IngestionID: time.Now().UnixNano(),
-			TagNames:    group.TagNames,
-			TagIDs:      group.TagIDs,
-			FileNames:   group.Paths,
+			IngestionID:    time.Now().UnixNano(),
+			TagNames:       group.TagNames,
+			TagIDs:         group.TagIDs,
+			FileNames:      group.Paths,
+			EmbeddingModel: group.EmbeddingModel,
 		}
 
 		body, _ := json.Marshal(ingestReq)

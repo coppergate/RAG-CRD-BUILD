@@ -46,7 +46,7 @@ class _MemoryWriteFormState extends State<MemoryWriteForm> {
         Text('Write Memory', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: _memoryType,
+          initialValue: _memoryType,
           decoration: const InputDecoration(
             labelText: 'Memory type',
             border: OutlineInputBorder(),

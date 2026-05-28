@@ -10,6 +10,12 @@ import (
 func TestExecutor_Execute(t *testing.T) {
 	mock := &models.MockChatClient{
 		ChatFunc: func(messages []map[string]string) (string, interface{}, error) {
+			if len(messages) != 1 {
+				t.Fatalf("expected a single user prompt message, got %d", len(messages))
+			}
+			if messages[0]["content"] == "" {
+				t.Fatalf("expected non-empty user prompt")
+			}
 			return "granite answer", nil, nil
 		},
 	}
@@ -24,8 +30,8 @@ func TestExecutor_Execute(t *testing.T) {
 }
 
 func TestExecutor_IsInsufficientContext(t *testing.T) {
-        e := NewExecutor(nil)
-        tests := []struct {
+	e := NewExecutor(nil)
+	tests := []struct {
 		result string
 		want   bool
 	}{

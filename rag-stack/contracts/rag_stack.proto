@@ -14,11 +14,12 @@ message InternalRequest {
   string system_prompt = 5;
   string planner_model = 6;
   string executor_model = 7;
-  google.protobuf.Struct metadata = 8;
-  repeated int64 tags = 9;
-  string timestamp = 10;
-  bool stream = 11;
-  bool include_global = 12;
+  string embedding_model = 8;
+  google.protobuf.Struct metadata = 9;
+  repeated int64 tags = 10;
+  string timestamp = 11;
+  bool stream = 12;
+  bool include_global = 13;
 }
 
 message StreamChunk {
@@ -119,6 +120,7 @@ message IngestRequest {
   int64 session_id = 4;
   int32 vector_size = 5;
   repeated string file_names = 6;
+  string embedding_model = 7;
 }
 
 message QdrantPoint {
@@ -132,15 +134,16 @@ message QdrantOp {
   string action = 2;
   string collection = 3;
   int32 vector_size = 4;
-  repeated QdrantPoint points = 5;
-  repeated float vector = 6;
-  int32 limit = 7;
-  repeated int64 tags = 8;
-  int64 session_id = 9;
-  repeated string paths = 10;
-  int64 source_tag = 11;
-  int64 target_tag = 12;
-  bool include_global = 13;
+  string embedding_model = 5;
+  repeated QdrantPoint points = 6;
+  repeated float vector = 7;
+  int32 limit = 8;
+  repeated int64 tags = 9;
+  int64 session_id = 10;
+  repeated string paths = 11;
+  int64 source_tag = 12;
+  int64 target_tag = 13;
+  bool include_global = 14;
 }
 
 message QdrantResponse {

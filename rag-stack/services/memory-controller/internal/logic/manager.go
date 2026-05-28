@@ -236,10 +236,14 @@ func (m *MemoryManager) DeleteSession(ctx context.Context, id int64) error {
 	return tx.Commit()
 }
 
-func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetrieveRequest) (*contracts.MemoryPack, error) {
+func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetrieveRequest, actionType string) (*contracts.MemoryPack, error) {
 	sessionID := req.Scope.SessionId
 	if sessionID == 0 {
 		return nil, fmt.Errorf("session ID required in scope")
+	}
+	requestActionType := strings.ToUpper(strings.TrimSpace(actionType))
+	if requestActionType == "" {
+		requestActionType = contracts.PlannerActionUnknown
 	}
 
 	limit := req.Limit
@@ -332,7 +336,7 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 		Items: []*contracts.MemoryWriteItem{},
 	}
 
-	// Add Behavioral Rules first (System instructions)
+	// Add Behavioral Rules first (System instructions).
 	// Apply overrides and filter/sort by scope specificity, priority, and recency.
 	type ruleWithPriority struct {
 		rule     *ent.BehavioralRule
@@ -340,6 +344,9 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 	}
 	var prioritizedRules []ruleWithPriority
 	for _, rule := range rules {
+		if !ruleMatchesActionType(rule.ActionType, requestActionType) && !isGlobalFallbackRule(rule, requestActionType) {
+			continue
+		}
 		p := rule.Priority
 		if ov, ok := overrides[rule.ID]; ok {
 			p = ov
@@ -349,6 +356,11 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 
 	// Sort by session > project > global, then priority, then newest rule.
 	sort.Slice(prioritizedRules, func(i, j int) bool {
+		iFallback := isGlobalFallbackRule(prioritizedRules[i].rule, requestActionType)
+		jFallback := isGlobalFallbackRule(prioritizedRules[j].rule, requestActionType)
+		if iFallback != jFallback {
+			return !iFallback && jFallback
+		}
 		ri := scopeRank(prioritizedRules[i].rule.Scope)
 		rj := scopeRank(prioritizedRules[j].rule.Scope)
 		if ri != rj {
@@ -366,12 +378,16 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 			MemoryType: "behavioral_rule",
 			Content:    pr.rule.RuleContent,
 			Metadata: contracts.ToStruct(map[string]interface{}{
-				"action_type": string(pr.rule.ActionType),
-				"priority":    pr.priority,
-				"scope":       string(pr.rule.Scope),
-				"category":    pr.rule.Category,
-				"state":       string(pr.rule.State),
-				"updated_at":  pr.rule.UpdatedAt.Format(time.RFC3339),
+				"action_type":      string(pr.rule.ActionType),
+				"applied_priority": pr.priority,
+				"context_bucket":   ruleBucket(pr.rule, requestActionType),
+				"priority":         pr.priority,
+				"scope":            string(pr.rule.Scope),
+				"category":         pr.rule.Category,
+				"state":            string(pr.rule.State),
+				"updated_at":       pr.rule.UpdatedAt.Format(time.RFC3339),
+				"role":             "system",
+				"rule_id":          pr.rule.ID,
 			}),
 		})
 	}
@@ -386,7 +402,10 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 			SalienceHint:  mi.Salience,
 			RetentionHint: mi.RetentionScore,
 			Pinned:        mi.Pinned,
-			Metadata:      contracts.ToStruct(mi.Metadata),
+			Metadata: contracts.ToStruct(mergeContextMetadata(mi.Metadata, map[string]interface{}{
+				"context_bucket": "task_local_retrieval",
+				"role":           "system",
+			})),
 		})
 	}
 
@@ -397,9 +416,10 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 			MemoryType: "chat_history",
 			Content:    p.Content,
 			Metadata: contracts.ToStruct(map[string]interface{}{
-				"role":      "user",
-				"timestamp": p.CreatedAt.Format(time.RFC3339),
-				"id":        p.PromptID.String(),
+				"context_bucket": "episodic_history",
+				"role":           "user",
+				"timestamp":      p.CreatedAt.Format(time.RFC3339),
+				"id":             p.PromptID.String(),
 			}),
 		})
 
@@ -408,9 +428,10 @@ func (m *MemoryManager) Retrieve(ctx context.Context, req *contracts.MemoryRetri
 				MemoryType: "chat_history",
 				Content:    res.Content,
 				Metadata: contracts.ToStruct(map[string]interface{}{
-					"role":      "assistant",
-					"timestamp": res.CreatedAt.Format(time.RFC3339),
-					"id":        res.ResponseID.String(),
+					"context_bucket": "episodic_history",
+					"role":           "assistant",
+					"timestamp":      res.CreatedAt.Format(time.RFC3339),
+					"id":             res.ResponseID.String(),
 				}),
 			})
 		}
@@ -430,4 +451,49 @@ func scopeRank(scope behavioralrule.Scope) int {
 	default:
 		return 1
 	}
+}
+
+func ruleMatchesActionType(ruleActionType, requestActionType string) bool {
+	ruleActionType = strings.ToUpper(strings.TrimSpace(ruleActionType))
+	requestActionType = strings.ToUpper(strings.TrimSpace(requestActionType))
+	if requestActionType == "" || requestActionType == contracts.PlannerActionUnknown {
+		return true
+	}
+	if ruleActionType == "" || ruleActionType == contracts.PlannerActionUnknown {
+		return true
+	}
+	return ruleActionType == requestActionType
+}
+
+func isGlobalFallbackRule(rule *ent.BehavioralRule, requestActionType string) bool {
+	requestActionType = strings.ToUpper(strings.TrimSpace(requestActionType))
+	if requestActionType == "" || requestActionType == contracts.PlannerActionUnknown {
+		return false
+	}
+	if rule.Scope != behavioralrule.ScopeGLOBAL {
+		return false
+	}
+	ruleActionType := strings.ToUpper(strings.TrimSpace(string(rule.ActionType)))
+	return ruleActionType != requestActionType
+}
+
+func ruleBucket(rule *ent.BehavioralRule, requestActionType string) string {
+	if isGlobalFallbackRule(rule, requestActionType) {
+		return "global_fallback_policy"
+	}
+	if ruleMatchesActionType(rule.ActionType, requestActionType) {
+		return "action_scoped_behavior"
+	}
+	return "task_local_retrieval"
+}
+
+func mergeContextMetadata(base map[string]interface{}, overlay map[string]interface{}) map[string]interface{} {
+	merged := make(map[string]interface{}, len(base)+len(overlay))
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range overlay {
+		merged[k] = v
+	}
+	return merged
 }

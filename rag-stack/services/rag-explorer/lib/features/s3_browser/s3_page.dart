@@ -35,6 +35,7 @@ class S3Page extends ConsumerWidget {
         data: (state) => Column(
           children: [
             S3FilterBar(
+              context: context,
               availableBuckets: state.availableBuckets,
               selectedBucket: state.selectedBucket,
               availableTags: state.availableTags,

@@ -1,4 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
+import hashlib
+import re
 import os
 import ssl
 import boto3
@@ -88,7 +90,7 @@ QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 # the current ollama deploy does not support https
 _ollama_default = "http://ollama.llms-ollama.svc.cluster.local:11434"
 OLLAMA_URL = os.getenv("OLLAMA_URL", _ollama_default)
-QDRANT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
+DEFAULT_EMBEDDING_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "vectors")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
@@ -143,6 +145,7 @@ class IngestRequest(BaseModel):
     session_id: Optional[int] = None
     vector_size: Optional[int] = None
     file_names: Optional[List[str]] = None
+    embedding_model: Optional[str] = None
     bucket_name: Optional[str] = None
     prefix: Optional[str] = None
     index: Optional[str] = None
@@ -160,11 +163,36 @@ def get_s3_client():
         verify=verify
     )
 
-def get_ollama_embeddings_with_retry(text: str) -> List[float]:
+def _effective_embedding_model(requested_model: Optional[str]) -> str:
+    model = (requested_model or "").strip()
+    if model:
+        return model
+    return DEFAULT_EMBEDDING_MODEL
+
+
+def _normalize_model_name(model: str) -> str:
+    model = model.strip().lower()
+    model = re.sub(r"[^a-z0-9]+", "-", model)
+    return model.strip("-")
+
+
+def _build_collection_name(prefix: str, embedding_model: str, vector_size: int) -> str:
+    prefix = (prefix or "").strip() or "vectors"
+    model = _normalize_model_name(embedding_model)
+    if model and vector_size > 0:
+        return f"{prefix}-{model}-{vector_size}"
+    if model:
+        return f"{prefix}-{model}"
+    if vector_size > 0:
+        return f"{prefix}-{vector_size}"
+    return prefix
+
+
+def get_ollama_embeddings_with_retry(text: str, model_name: str) -> List[float]:
     """Get embeddings from Ollama with exponential backoff retry."""
     url = f"{OLLAMA_URL}/api/embeddings"
     payload = {
-        "model": QDRANT_MODEL,
+        "model": model_name,
         "prompt": text
     }
     last_error = None
@@ -208,19 +236,25 @@ def _create_pulsar_client():
             logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
     return pulsar.Client(PULSAR_URL, **kwargs)
 
-def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int], 
-                  vector_size: Optional[int] = None, file_names: Optional[List[str]] = None, 
-                  session_id: Optional[int] = None, bucket_name: Optional[str] = None, 
-                  prefix: Optional[str] = None, index: Optional[str] = None):
+def _source_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
+                  vector_size: Optional[int] = None, file_names: Optional[List[str]] = None,
+                  session_id: Optional[int] = None, bucket_name: Optional[str] = None,
+                  prefix: Optional[str] = None, index: Optional[str] = None,
+                  embedding_model: Optional[str] = None):
     pool = get_db_pool()
     conn = None
     pulsar_client = None
     failed_chunks = []
+    current_model = _effective_embedding_model(embedding_model)
 
     try:
         current_vs = vector_size
         if not current_vs:
-            current_vs = get_model_dimensions(QDRANT_MODEL)
+            current_vs = get_model_dimensions(current_model)
 
         effective_bucket = bucket_name or BUCKET_NAME
         effective_prefix = index or prefix or ""
@@ -229,19 +263,21 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
         if effective_prefix.startswith("/"):
             effective_prefix = effective_prefix.lstrip("/")
 
-        logger.info(f"[SID:{session_id}] Starting ingestion task for {ingestion_id} using Ollama model {QDRANT_MODEL} (dims: {current_vs}) on bucket {effective_bucket} (prefix: {effective_prefix}), tags: {tag_ids}")
+        logger.info(f"[SID:{session_id}] Starting ingestion task for {ingestion_id} using Ollama model {current_model} (dims: {current_vs}) on bucket {effective_bucket} (prefix: {effective_prefix}), tags: {tag_ids}")
 
         pulsar_client = _create_pulsar_client()
         q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
 
         s3_client = get_s3_client()
+        collection_name = _build_collection_name(COLLECTION_NAME, current_model, current_vs)
 
-        logger.info(f"Ensuring collection {COLLECTION_NAME} via Protobuf Pulsar (vector_size: {current_vs})")
+        logger.info(f"Ensuring collection {collection_name} via Protobuf Pulsar (vector_size: {current_vs}, model: {current_model})")
         op = rag_stack_pb2.QdrantOp()
         op.id = f"create-{ingestion_id}"
         op.action = "create_collection"
         op.collection = COLLECTION_NAME
         op.vector_size = current_vs
+        op.embedding_model = current_model
         q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
 
         # List files
@@ -315,7 +351,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
 
                 for i, chunk in enumerate(chunks):
                     try:
-                        vector = get_ollama_embeddings_with_retry(chunk)
+                        vector = get_ollama_embeddings_with_retry(chunk, current_model)
                     except Exception as e:
                         logger.error(f"Skipping chunk {i} of {s3_key} after all retries failed: {e}")
                         failed_chunks.append({"file": s3_key, "chunk": i, "error": str(e)})
@@ -332,7 +368,10 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         "chunk": i,
                         "text": chunk,
                         "tags": effective_tags,
-                        "ingestion_id": ingestion_id
+                        "ingestion_id": ingestion_id,
+                        "embedding_model": current_model,
+                        "vector_size": current_vs,
+                        "source_hash": _source_hash(chunk),
                     }
                     if session_id:
                         payload_dict["session_id"] = session_id
@@ -348,7 +387,15 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                     with conn.cursor() as cur:
                         cur.execute(
                             "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata) VALUES (%s, %s, %s) RETURNING embedding_id",
-                            (ingestion_id, json.dumps(vector), json.dumps({"path": s3_key, "chunk": i}))
+                            (ingestion_id, json.dumps(vector), json.dumps({
+                                "path": s3_key,
+                                "chunk": i,
+                                "embedding_model": current_model,
+                                "vector_size": current_vs,
+                                "source_hash": _source_hash(chunk),
+                                "tags": effective_tags,
+                                "session_id": session_id,
+                            }))
                         )
                         emb_id = cur.fetchone()[0]
                         for t_id in tag_ids:
@@ -361,6 +408,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         op.action = "upsert"
                         op.collection = COLLECTION_NAME
                         op.vector_size = current_vs
+                        op.embedding_model = current_model
                         op.points.extend(points)
                         q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
                         points = []
@@ -376,6 +424,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
             op.action = "upsert"
             op.collection = COLLECTION_NAME
             op.vector_size = current_vs
+            op.embedding_model = current_model
             op.points.extend(points)
             q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
             conn.commit()
@@ -434,7 +483,8 @@ async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
         req.session_id,
         req.bucket_name,
         req.prefix,
-        req.index
+        req.index,
+        req.embedding_model
     )
     return {"status": "accepted", "ingestion_id": ingestion_id}
 

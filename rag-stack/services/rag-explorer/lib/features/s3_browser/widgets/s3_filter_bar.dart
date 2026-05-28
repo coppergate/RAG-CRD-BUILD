@@ -4,6 +4,7 @@ import '../../../core/models/session.dart';
 import '../../../core/widgets/tag_picker_dialog.dart';
 
 class S3FilterBar extends StatelessWidget {
+  final BuildContext context;
   final List<String> availableBuckets;
   final String? selectedBucket;
   final List<Tag> availableTags;
@@ -16,6 +17,7 @@ class S3FilterBar extends StatelessWidget {
 
   const S3FilterBar({
     super.key,
+    required this.context,
     required this.availableBuckets,
     required this.selectedBucket,
     required this.availableTags,

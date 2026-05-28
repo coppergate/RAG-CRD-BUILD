@@ -23,21 +23,22 @@ const (
 )
 
 type InternalRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId     int64                  `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	SessionName   string                 `protobuf:"bytes,3,opt,name=session_name,json=sessionName,proto3" json:"session_name,omitempty"`
-	Prompt        string                 `protobuf:"bytes,4,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	SystemPrompt  string                 `protobuf:"bytes,5,opt,name=system_prompt,json=systemPrompt,proto3" json:"system_prompt,omitempty"`
-	PlannerModel  string                 `protobuf:"bytes,6,opt,name=planner_model,json=plannerModel,proto3" json:"planner_model,omitempty"`
-	ExecutorModel string                 `protobuf:"bytes,7,opt,name=executor_model,json=executorModel,proto3" json:"executor_model,omitempty"`
-	Metadata      *structpb.Struct       `protobuf:"bytes,8,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	Tags          []int64                `protobuf:"varint,9,rep,packed,name=tags,proto3" json:"tags,omitempty"`
-	Timestamp     string                 `protobuf:"bytes,10,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	Stream        bool                   `protobuf:"varint,11,opt,name=stream,proto3" json:"stream,omitempty"`
-	IncludeGlobal bool                   `protobuf:"varint,12,opt,name=include_global,json=includeGlobal,proto3" json:"include_global,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SessionId      int64                  `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SessionName    string                 `protobuf:"bytes,3,opt,name=session_name,json=sessionName,proto3" json:"session_name,omitempty"`
+	Prompt         string                 `protobuf:"bytes,4,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	SystemPrompt   string                 `protobuf:"bytes,5,opt,name=system_prompt,json=systemPrompt,proto3" json:"system_prompt,omitempty"`
+	PlannerModel   string                 `protobuf:"bytes,6,opt,name=planner_model,json=plannerModel,proto3" json:"planner_model,omitempty"`
+	ExecutorModel  string                 `protobuf:"bytes,7,opt,name=executor_model,json=executorModel,proto3" json:"executor_model,omitempty"`
+	EmbeddingModel string                 `protobuf:"bytes,8,opt,name=embedding_model,json=embeddingModel,proto3" json:"embedding_model,omitempty"`
+	Metadata       *structpb.Struct       `protobuf:"bytes,9,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Tags           []int64                `protobuf:"varint,10,rep,packed,name=tags,proto3" json:"tags,omitempty"`
+	Timestamp      string                 `protobuf:"bytes,11,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Stream         bool                   `protobuf:"varint,12,opt,name=stream,proto3" json:"stream,omitempty"`
+	IncludeGlobal  bool                   `protobuf:"varint,13,opt,name=include_global,json=includeGlobal,proto3" json:"include_global,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *InternalRequest) Reset() {
@@ -115,6 +116,13 @@ func (x *InternalRequest) GetPlannerModel() string {
 func (x *InternalRequest) GetExecutorModel() string {
 	if x != nil {
 		return x.ExecutorModel
+	}
+	return ""
+}
+
+func (x *InternalRequest) GetEmbeddingModel() string {
+	if x != nil {
+		return x.EmbeddingModel
 	}
 	return ""
 }
@@ -996,15 +1004,16 @@ func (x *StatusMessage) GetTimestamp() string {
 }
 
 type IngestRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	IngestionId   int64                  `protobuf:"varint,1,opt,name=ingestion_id,json=ingestionId,proto3" json:"ingestion_id,omitempty"`
-	TagNames      []string               `protobuf:"bytes,2,rep,name=tag_names,json=tagNames,proto3" json:"tag_names,omitempty"`
-	TagIds        []int64                `protobuf:"varint,3,rep,packed,name=tag_ids,json=tagIds,proto3" json:"tag_ids,omitempty"`
-	SessionId     int64                  `protobuf:"varint,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	VectorSize    int32                  `protobuf:"varint,5,opt,name=vector_size,json=vectorSize,proto3" json:"vector_size,omitempty"`
-	FileNames     []string               `protobuf:"bytes,6,rep,name=file_names,json=fileNames,proto3" json:"file_names,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	IngestionId    int64                  `protobuf:"varint,1,opt,name=ingestion_id,json=ingestionId,proto3" json:"ingestion_id,omitempty"`
+	TagNames       []string               `protobuf:"bytes,2,rep,name=tag_names,json=tagNames,proto3" json:"tag_names,omitempty"`
+	TagIds         []int64                `protobuf:"varint,3,rep,packed,name=tag_ids,json=tagIds,proto3" json:"tag_ids,omitempty"`
+	SessionId      int64                  `protobuf:"varint,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	VectorSize     int32                  `protobuf:"varint,5,opt,name=vector_size,json=vectorSize,proto3" json:"vector_size,omitempty"`
+	FileNames      []string               `protobuf:"bytes,6,rep,name=file_names,json=fileNames,proto3" json:"file_names,omitempty"`
+	EmbeddingModel string                 `protobuf:"bytes,7,opt,name=embedding_model,json=embeddingModel,proto3" json:"embedding_model,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *IngestRequest) Reset() {
@@ -1079,6 +1088,13 @@ func (x *IngestRequest) GetFileNames() []string {
 	return nil
 }
 
+func (x *IngestRequest) GetEmbeddingModel() string {
+	if x != nil {
+		return x.EmbeddingModel
+	}
+	return ""
+}
+
 type QdrantPoint struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1140,22 +1156,23 @@ func (x *QdrantPoint) GetPayload() *structpb.Struct {
 }
 
 type QdrantOp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	Collection    string                 `protobuf:"bytes,3,opt,name=collection,proto3" json:"collection,omitempty"`
-	VectorSize    int32                  `protobuf:"varint,4,opt,name=vector_size,json=vectorSize,proto3" json:"vector_size,omitempty"`
-	Points        []*QdrantPoint         `protobuf:"bytes,5,rep,name=points,proto3" json:"points,omitempty"`
-	Vector        []float32              `protobuf:"fixed32,6,rep,packed,name=vector,proto3" json:"vector,omitempty"`
-	Limit         int32                  `protobuf:"varint,7,opt,name=limit,proto3" json:"limit,omitempty"`
-	Tags          []int64                `protobuf:"varint,8,rep,packed,name=tags,proto3" json:"tags,omitempty"`
-	SessionId     int64                  `protobuf:"varint,9,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Paths         []string               `protobuf:"bytes,10,rep,name=paths,proto3" json:"paths,omitempty"`
-	SourceTag     int64                  `protobuf:"varint,11,opt,name=source_tag,json=sourceTag,proto3" json:"source_tag,omitempty"`
-	TargetTag     int64                  `protobuf:"varint,12,opt,name=target_tag,json=targetTag,proto3" json:"target_tag,omitempty"`
-	IncludeGlobal bool                   `protobuf:"varint,13,opt,name=include_global,json=includeGlobal,proto3" json:"include_global,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Action         string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	Collection     string                 `protobuf:"bytes,3,opt,name=collection,proto3" json:"collection,omitempty"`
+	VectorSize     int32                  `protobuf:"varint,4,opt,name=vector_size,json=vectorSize,proto3" json:"vector_size,omitempty"`
+	EmbeddingModel string                 `protobuf:"bytes,5,opt,name=embedding_model,json=embeddingModel,proto3" json:"embedding_model,omitempty"`
+	Points         []*QdrantPoint         `protobuf:"bytes,6,rep,name=points,proto3" json:"points,omitempty"`
+	Vector         []float32              `protobuf:"fixed32,7,rep,packed,name=vector,proto3" json:"vector,omitempty"`
+	Limit          int32                  `protobuf:"varint,8,opt,name=limit,proto3" json:"limit,omitempty"`
+	Tags           []int64                `protobuf:"varint,9,rep,packed,name=tags,proto3" json:"tags,omitempty"`
+	SessionId      int64                  `protobuf:"varint,10,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Paths          []string               `protobuf:"bytes,11,rep,name=paths,proto3" json:"paths,omitempty"`
+	SourceTag      int64                  `protobuf:"varint,12,opt,name=source_tag,json=sourceTag,proto3" json:"source_tag,omitempty"`
+	TargetTag      int64                  `protobuf:"varint,13,opt,name=target_tag,json=targetTag,proto3" json:"target_tag,omitempty"`
+	IncludeGlobal  bool                   `protobuf:"varint,14,opt,name=include_global,json=includeGlobal,proto3" json:"include_global,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *QdrantOp) Reset() {
@@ -1214,6 +1231,13 @@ func (x *QdrantOp) GetVectorSize() int32 {
 		return x.VectorSize
 	}
 	return 0
+}
+
+func (x *QdrantOp) GetEmbeddingModel() string {
+	if x != nil {
+		return x.EmbeddingModel
+	}
+	return ""
 }
 
 func (x *QdrantOp) GetPoints() []*QdrantPoint {
@@ -1367,7 +1391,7 @@ var File_rag_stack_proto protoreflect.FileDescriptor
 
 const file_rag_stack_proto_rawDesc = "" +
 	"\n" +
-	"\x0frag_stack.proto\x12\trag_stack\x1a\x1cgoogle/protobuf/struct.proto\"\x92\x03\n" +
+	"\x0frag_stack.proto\x12\trag_stack\x1a\x1cgoogle/protobuf/struct.proto\"\xbb\x03\n" +
 	"\x0fInternalRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1376,13 +1400,14 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\x06prompt\x18\x04 \x01(\tR\x06prompt\x12#\n" +
 	"\rsystem_prompt\x18\x05 \x01(\tR\fsystemPrompt\x12#\n" +
 	"\rplanner_model\x18\x06 \x01(\tR\fplannerModel\x12%\n" +
-	"\x0eexecutor_model\x18\a \x01(\tR\rexecutorModel\x123\n" +
-	"\bmetadata\x18\b \x01(\v2\x17.google.protobuf.StructR\bmetadata\x12\x12\n" +
-	"\x04tags\x18\t \x03(\x03R\x04tags\x12\x1c\n" +
-	"\ttimestamp\x18\n" +
-	" \x01(\tR\ttimestamp\x12\x16\n" +
-	"\x06stream\x18\v \x01(\bR\x06stream\x12%\n" +
-	"\x0einclude_global\x18\f \x01(\bR\rincludeGlobal\"\xcd\x02\n" +
+	"\x0eexecutor_model\x18\a \x01(\tR\rexecutorModel\x12'\n" +
+	"\x0fembedding_model\x18\b \x01(\tR\x0eembeddingModel\x123\n" +
+	"\bmetadata\x18\t \x01(\v2\x17.google.protobuf.StructR\bmetadata\x12\x12\n" +
+	"\x04tags\x18\n" +
+	" \x03(\x03R\x04tags\x12\x1c\n" +
+	"\ttimestamp\x18\v \x01(\tR\ttimestamp\x12\x16\n" +
+	"\x06stream\x18\f \x01(\bR\x06stream\x12%\n" +
+	"\x0einclude_global\x18\r \x01(\bR\rincludeGlobal\"\xcd\x02\n" +
 	"\vStreamChunk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -1466,7 +1491,7 @@ const file_rag_stack_proto_rawDesc = "" +
 	"session_id\x18\x02 \x01(\x03R\tsessionId\x12\x14\n" +
 	"\x05state\x18\x03 \x01(\tR\x05state\x12\x18\n" +
 	"\adetails\x18\x04 \x01(\tR\adetails\x12\x1c\n" +
-	"\ttimestamp\x18\x05 \x01(\tR\ttimestamp\"\xc7\x01\n" +
+	"\ttimestamp\x18\x05 \x01(\tR\ttimestamp\"\xf0\x01\n" +
 	"\rIngestRequest\x12!\n" +
 	"\fingestion_id\x18\x01 \x01(\x03R\vingestionId\x12\x1b\n" +
 	"\ttag_names\x18\x02 \x03(\tR\btagNames\x12\x17\n" +
@@ -1476,11 +1501,12 @@ const file_rag_stack_proto_rawDesc = "" +
 	"\vvector_size\x18\x05 \x01(\x05R\n" +
 	"vectorSize\x12\x1d\n" +
 	"\n" +
-	"file_names\x18\x06 \x03(\tR\tfileNames\"h\n" +
+	"file_names\x18\x06 \x03(\tR\tfileNames\x12'\n" +
+	"\x0fembedding_model\x18\a \x01(\tR\x0eembeddingModel\"h\n" +
 	"\vQdrantPoint\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06vector\x18\x02 \x03(\x02R\x06vector\x121\n" +
-	"\apayload\x18\x03 \x01(\v2\x17.google.protobuf.StructR\apayload\"\xff\x02\n" +
+	"\apayload\x18\x03 \x01(\v2\x17.google.protobuf.StructR\apayload\"\xa8\x03\n" +
 	"\bQdrantOp\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1e\n" +
@@ -1488,20 +1514,21 @@ const file_rag_stack_proto_rawDesc = "" +
 	"collection\x18\x03 \x01(\tR\n" +
 	"collection\x12\x1f\n" +
 	"\vvector_size\x18\x04 \x01(\x05R\n" +
-	"vectorSize\x12.\n" +
-	"\x06points\x18\x05 \x03(\v2\x16.rag_stack.QdrantPointR\x06points\x12\x16\n" +
-	"\x06vector\x18\x06 \x03(\x02R\x06vector\x12\x14\n" +
-	"\x05limit\x18\a \x01(\x05R\x05limit\x12\x12\n" +
-	"\x04tags\x18\b \x03(\x03R\x04tags\x12\x1d\n" +
+	"vectorSize\x12'\n" +
+	"\x0fembedding_model\x18\x05 \x01(\tR\x0eembeddingModel\x12.\n" +
+	"\x06points\x18\x06 \x03(\v2\x16.rag_stack.QdrantPointR\x06points\x12\x16\n" +
+	"\x06vector\x18\a \x03(\x02R\x06vector\x12\x14\n" +
+	"\x05limit\x18\b \x01(\x05R\x05limit\x12\x12\n" +
+	"\x04tags\x18\t \x03(\x03R\x04tags\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\t \x01(\x03R\tsessionId\x12\x14\n" +
-	"\x05paths\x18\n" +
-	" \x03(\tR\x05paths\x12\x1d\n" +
+	"session_id\x18\n" +
+	" \x01(\x03R\tsessionId\x12\x14\n" +
+	"\x05paths\x18\v \x03(\tR\x05paths\x12\x1d\n" +
 	"\n" +
-	"source_tag\x18\v \x01(\x03R\tsourceTag\x12\x1d\n" +
+	"source_tag\x18\f \x01(\x03R\tsourceTag\x12\x1d\n" +
 	"\n" +
-	"target_tag\x18\f \x01(\x03R\ttargetTag\x12%\n" +
-	"\x0einclude_global\x18\r \x01(\bR\rincludeGlobal\"\xbc\x01\n" +
+	"target_tag\x18\r \x01(\x03R\ttargetTag\x12%\n" +
+	"\x0einclude_global\x18\x0e \x01(\bR\rincludeGlobal\"\xbc\x01\n" +
 	"\x0eQdrantResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1e\n" +

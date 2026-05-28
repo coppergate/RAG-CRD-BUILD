@@ -26,6 +26,7 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 
 	cfg := &config.Config{
 		PlannerModel:         "default-planner",
+		EmbeddingModel:       "embed-model",
 		ChunkVectorLimit:     50,
 		QdrantRetrievalLimit: 10000,
 	}
@@ -44,13 +45,15 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	}
 
 	req := &contracts.InternalRequest{
-		Id:        "large-test-id",
-		SessionId: 1,
-		Prompt:    "analyze the whole project",
-		Tags:      []int64{101},
+		Id:             "large-test-id",
+		SessionId:      1,
+		Prompt:         "analyze the whole project",
+		Tags:           []int64{101},
+		EmbeddingModel: "embed-model",
 	}
 
 	mockRegistry.On("GetPlanner", "default-planner").Return(mockPlanner, nil)
+	mockRegistry.On("GetPlanner", "embed-model").Return(mockPlanner, nil)
 
 	// Mock status updates
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
@@ -64,30 +67,36 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	// Just return a subset in Search, let RetrieveByPaths fetch the rest
 	for i := 0; i < 30; i++ {
 		tagResults = append(tagResults, map[string]interface{}{
-			"_qdrant_id": fmt.Sprintf("f1-%d", i),
-			"path":       "file1.txt",
-			"chunk":      float64(i),
-			"content":    fmt.Sprintf("file1 content %d", i),
+			"_qdrant_id":      fmt.Sprintf("f1-%d", i),
+			"path":            "file1.txt",
+			"chunk":           float64(i),
+			"content":         fmt.Sprintf("file1 content %d", i),
+			"embedding_model": "embed-model",
+			"vector_size":     float64(384),
 		})
 	}
 	for i := 0; i < 40; i++ {
 		tagResults = append(tagResults, map[string]interface{}{
-			"_qdrant_id": fmt.Sprintf("f2-%d", i),
-			"path":       "file2.txt",
-			"chunk":      float64(i),
-			"content":    fmt.Sprintf("file2 content %d", i),
+			"_qdrant_id":      fmt.Sprintf("f2-%d", i),
+			"path":            "file2.txt",
+			"chunk":           float64(i),
+			"content":         fmt.Sprintf("file2 content %d", i),
+			"embedding_model": "embed-model",
+			"vector_size":     float64(384),
 		})
 	}
 	for i := 0; i < 40; i++ {
 		tagResults = append(tagResults, map[string]interface{}{
-			"_qdrant_id": fmt.Sprintf("f3-%d", i),
-			"path":       "file3.txt",
-			"chunk":      float64(i),
-			"content":    fmt.Sprintf("file3 content %d", i),
+			"_qdrant_id":      fmt.Sprintf("f3-%d", i),
+			"path":            "file3.txt",
+			"chunk":           float64(i),
+			"content":         fmt.Sprintf("file3 content %d", i),
+			"embedding_model": "embed-model",
+			"vector_size":     float64(384),
 		})
 	}
 
-	mockSearcher.On("Search", mock.Anything, []float32(nil), []int64{101}, int64(1), false, 10000).Return(tagResults, nil)
+	mockSearcher.On("Search", mock.Anything, "embed-model", []float32(nil), []int64{101}, int64(1), false, 10000).Return(tagResults, nil)
 
 	// Mock RetrieveByPaths for all files
 	var allFileChunks []interface{}
@@ -95,40 +104,52 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	// Full file1 (60 chunks)
 	for i := 0; i < 60; i++ {
 		allFileChunks = append(allFileChunks, map[string]interface{}{
-			"_qdrant_id": fmt.Sprintf("f1-%d", i),
-			"path":       "file1.txt",
-			"chunk":      float64(i),
-			"content":    fmt.Sprintf("file1 content %d", i),
+			"_qdrant_id":      fmt.Sprintf("f1-%d", i),
+			"path":            "file1.txt",
+			"chunk":           float64(i),
+			"content":         fmt.Sprintf("file1 content %d", i),
+			"embedding_model": "embed-model",
+			"vector_size":     float64(384),
 		})
 	}
 	// Full file2 (40 chunks)
 	for i := 0; i < 40; i++ {
 		allFileChunks = append(allFileChunks, map[string]interface{}{
-			"_qdrant_id": fmt.Sprintf("f2-%d", i),
-			"path":       "file2.txt",
-			"chunk":      float64(i),
-			"content":    fmt.Sprintf("file2 content %d", i),
+			"_qdrant_id":      fmt.Sprintf("f2-%d", i),
+			"path":            "file2.txt",
+			"chunk":           float64(i),
+			"content":         fmt.Sprintf("file2 content %d", i),
+			"embedding_model": "embed-model",
+			"vector_size":     float64(384),
 		})
 	}
 	// Full file3 (40 chunks)
 	for i := 0; i < 40; i++ {
 		allFileChunks = append(allFileChunks, map[string]interface{}{
-			"_qdrant_id": fmt.Sprintf("f3-%d", i),
-			"path":       "file3.txt",
-			"chunk":      float64(i),
-			"content":    fmt.Sprintf("file3 content %d", i),
+			"_qdrant_id":      fmt.Sprintf("f3-%d", i),
+			"path":            "file3.txt",
+			"chunk":           float64(i),
+			"content":         fmt.Sprintf("file3 content %d", i),
+			"embedding_model": "embed-model",
+			"vector_size":     float64(384),
 		})
 	}
 
 	// RetrieveByPaths called with all 3 paths
-	mockSearcher.On("RetrieveByPaths", mock.Anything, mock.MatchedBy(func(paths []string) bool {
+	mockSearcher.On("RetrieveByPaths", mock.Anything, "embed-model", mock.MatchedBy(func(paths []string) bool {
 		return len(paths) == 3
 	})).Return(allFileChunks, nil)
 
 	// Mock planner embeddings for the prompt itself
 	mockPlanner.On("GetEmbeddings", mock.Anything, "analyze the whole project").Return([]float32{0.1}, nil)
+	mockPlanner.On("Plan", mock.Anything, "analyze the whole project", mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
+		Objective:     "analyze the whole project",
+		ActionType:    "FILE_SEARCH",
+		SearchQueries: []string{"refined coverage"},
+		ContextBudget: 2,
+	}, nil, nil)
 	// Mock vector search for prompt (returns empty for simplicity, we focus on tag results)
-	mockSearcher.On("Search", mock.Anything, []float32{0.1}, []int64{101}, int64(1), false, mock.Anything).Return([]interface{}{}, nil)
+	mockSearcher.On("Search", mock.Anything, "embed-model", []float32{0.1}, []int64{101}, int64(1), false, mock.Anything).Return([]interface{}{}, nil)
 
 	// Mock memory retrieval
 	mockMem.On("Retrieve", mock.Anything, int64(1), []int64{101}, "analyze the whole project").Return(&contracts.MemoryPack{}, nil)
@@ -166,7 +187,7 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	chunk1 := chunks[0].([]interface{})
 	assert.Len(t, chunk1, 1, "Chunk 1 should contain 1 large reassembled file part")
 	c1Str := chunk1[0].(string)
-	assert.Contains(t, c1Str, "--- File: file1.txt (Part 1) ---")
+	assert.Contains(t, c1Str, "--- File: file1.txt [embed-model] (Part 1) ---")
 	assert.Contains(t, c1Str, "file1 content 0")
 	assert.Contains(t, c1Str, "file1 content 49")
 	assert.NotContains(t, c1Str, "file1 content 50")
@@ -174,16 +195,16 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	chunk2 := chunks[1].([]interface{})
 	// Chunk 2 contains Part 2 of File 1 AND all of File 2 (because 10 + 40 <= 50)
 	assert.Len(t, chunk2, 2)
-	assert.Contains(t, chunk2[0].(string), "--- File: file1.txt (Part 2) ---")
+	assert.Contains(t, chunk2[0].(string), "--- File: file1.txt [embed-model] (Part 2) ---")
 	assert.Contains(t, chunk2[0].(string), "file1 content 50")
 	assert.Contains(t, chunk2[0].(string), "file1 content 59")
-	assert.Contains(t, chunk2[1].(string), "--- File: file2.txt ---")
+	assert.Contains(t, chunk2[1].(string), "--- File: file2.txt [embed-model] ---")
 	assert.Contains(t, chunk2[1].(string), "file2 content 0")
 	assert.Contains(t, chunk2[1].(string), "file2 content 39")
 
 	chunk3 := chunks[2].([]interface{})
 	assert.Len(t, chunk3, 1)
-	assert.Contains(t, chunk3[0].(string), "--- File: file3.txt ---")
+	assert.Contains(t, chunk3[0].(string), "--- File: file3.txt [embed-model] ---")
 	assert.Contains(t, chunk3[0].(string), "file3 content 0")
 	assert.Contains(t, chunk3[0].(string), "file3 content 39")
 
@@ -266,7 +287,7 @@ func TestHandleExec_MultiChunk(t *testing.T) {
 	// Grounding check for each chunk and then final
 	mockExecutor.On("IsInsufficientContext", "part 1").Return(false)
 	mockExecutor.On("IsInsufficientContext", "part 2").Return(false)
-	mockExecutor.On("IsInsufficientContext", "part 1\npart 2\n").Return(false)
+	mockExecutor.On("IsInsufficientContext", "part 1part 2").Return(false)
 
 	// Mock status updates
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
@@ -284,7 +305,7 @@ func TestHandleExec_MultiChunk(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, dlq.Success, result)
-	assert.Equal(t, "part 1\npart 2\n", finalResult)
+	assert.Equal(t, "part 1part 2", finalResult)
 
 	mockPlanner.AssertExpectations(t)
 	mockExecutor.AssertExpectations(t)

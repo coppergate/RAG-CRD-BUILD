@@ -36,14 +36,14 @@ func TestSearch_Success(t *testing.T) {
 		Result: contracts.ToValue(expectedResult),
 	}, nil)
 
-	res, err := s.Search(context.Background(), []float32{0.1}, nil, 1, false, 0)
+	res, err := s.Search(context.Background(), "embed-model", []float32{0.1}, nil, 1, false, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedResult, res)
 }
 
 func TestSearch_Empty(t *testing.T) {
 	s := &QdrantSearcher{}
-	res, err := s.Search(context.Background(), nil, nil, 1, false, 0)
+	res, err := s.Search(context.Background(), "", nil, nil, 1, false, 0)
 	assert.NoError(t, err)
 	assert.Nil(t, res)
 }
@@ -57,13 +57,13 @@ func TestRetrieveByPaths_Success(t *testing.T) {
 
 	expectedResult := []interface{}{map[string]interface{}{"path": "test.txt"}}
 	mockClient.On("Search", mock.Anything, mock.MatchedBy(func(op *contracts.QdrantOp) bool {
-		return op.Action == "retrieve_paths" && len(op.Paths) == 1 && op.Paths[0] == "test.txt"
+		return op.Action == "retrieve_paths" && len(op.Paths) == 1 && op.Paths[0] == "test.txt" && op.EmbeddingModel == "embed-model"
 	})).Return(&contracts.QdrantResponse{
 		Id:     "paths-123",
 		Result: contracts.ToValue(expectedResult),
 	}, nil)
 
-	res, err := s.RetrieveByPaths(context.Background(), []string{"test.txt"})
+	res, err := s.RetrieveByPaths(context.Background(), "embed-model", []string{"test.txt"})
 	assert.NoError(t, err)
 	assert.Equal(t, expectedResult, res)
 }

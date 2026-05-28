@@ -8,6 +8,7 @@ import (
 	"app-builds/common/ent"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/enttest"
+	"app-builds/memory-controller/internal/behavioral"
 	"github.com/google/uuid"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -117,7 +118,7 @@ func TestMemoryManager(t *testing.T) {
 			Limit: 5,
 		}
 
-		pack, err := m.Retrieve(ctx, req)
+		pack, err := m.Retrieve(ctx, req, "")
 		if err != nil {
 			t.Fatalf("Failed to retrieve: %v", err)
 		}
@@ -233,7 +234,7 @@ func TestMemoryManager(t *testing.T) {
 		pack, err := localManager.Retrieve(localCtx, &contracts.MemoryRetrieveRequest{
 			Scope: &contracts.MemoryScope{SessionId: sessionID},
 			Limit: 5,
-		})
+		}, "FILE_EDIT")
 		if err != nil {
 			t.Fatalf("Failed to retrieve behavioral pack: %v", err)
 		}
@@ -249,6 +250,93 @@ func TestMemoryManager(t *testing.T) {
 		}
 		if pack.Items[2].Content != "global rule" {
 			t.Fatalf("Expected global rule third, got %q", pack.Items[2].Content)
+		}
+	})
+
+	t.Run("RetrieveBucketsRulesByActionType", func(t *testing.T) {
+		localClient := enttest.Open(t, "sqlite3", "file:behavioral-bucket?mode=memory&cache=shared&_fk=1")
+		defer localClient.Close()
+		localManager := NewMemoryManager(localClient)
+		localCtx := context.Background()
+
+		sessionID := int64(3030)
+		localManager.CreateSession(localCtx, sessionID, "bucket-session")
+
+		_, err := localClient.BehavioralRule.Create().
+			SetActionType("FILE_EDIT").
+			SetRuleContent("edit rule").
+			SetPriority(9).
+			SetScope(behavioralrule.ScopeSESSION).
+			SetState(behavioralrule.StateACTIVE).
+			Save(localCtx)
+		if err != nil {
+			t.Fatalf("Failed to create edit rule: %v", err)
+		}
+
+		_, err = localClient.BehavioralRule.Create().
+			SetActionType("FILE_SEARCH").
+			SetRuleContent("search rule").
+			SetPriority(9).
+			SetScope(behavioralrule.ScopeGLOBAL).
+			SetState(behavioralrule.StateACTIVE).
+			Save(localCtx)
+		if err != nil {
+			t.Fatalf("Failed to create search rule: %v", err)
+		}
+
+		_, err = localClient.BehavioralRule.Create().
+			SetActionType("FILE_EDIT").
+			SetRuleContent("fallback rule").
+			SetPriority(1).
+			SetScope(behavioralrule.ScopeGLOBAL).
+			SetState(behavioralrule.StateACTIVE).
+			Save(localCtx)
+		if err != nil {
+			t.Fatalf("Failed to create fallback rule: %v", err)
+		}
+
+		pack, err := localManager.Retrieve(localCtx, &contracts.MemoryRetrieveRequest{
+			Scope: &contracts.MemoryScope{SessionId: sessionID},
+			Limit: 10,
+		}, "FILE_EDIT")
+		if err != nil {
+			t.Fatalf("Failed to retrieve bucketed context: %v", err)
+		}
+
+		if len(pack.Items) != 3 {
+			t.Fatalf("Expected 3 rules in pack, got %d", len(pack.Items))
+		}
+		if pack.Items[0].Content != "edit rule" {
+			t.Fatalf("Expected edit rule first, got %q", pack.Items[0].Content)
+		}
+		if pack.Items[1].Content != "fallback rule" {
+			t.Fatalf("Expected fallback rule second, got %q", pack.Items[1].Content)
+		}
+		if pack.Items[2].Content != "search rule" {
+			t.Fatalf("Expected search rule third, got %q", pack.Items[2].Content)
+		}
+		if meta := contracts.FromStruct(pack.Items[0].Metadata); meta["context_bucket"] != "action_scoped_behavior" {
+			t.Fatalf("Expected action bucket for first rule, got %v", meta["context_bucket"])
+		}
+		if meta := contracts.FromStruct(pack.Items[1].Metadata); meta["context_bucket"] != "action_scoped_behavior" {
+			t.Fatalf("Expected fallback bucket for second rule, got %v", meta["context_bucket"])
+		}
+		if meta := contracts.FromStruct(pack.Items[2].Metadata); meta["context_bucket"] != "global_fallback_policy" {
+			t.Fatalf("Expected fallback bucket for third rule, got %v", meta["context_bucket"])
+		}
+	})
+
+	t.Run("RecordLearningStagesRules", func(t *testing.T) {
+		localClient := enttest.Open(t, "sqlite3", "file:behavioral-stage?mode=memory&cache=shared&_fk=1")
+		defer localClient.Close()
+		manager := behavioral.NewBehaviorManager(localClient)
+
+		rule, err := manager.RecordLearning(context.Background(), "stage this", "FILE_EDIT", "Optimization", 55)
+		if err != nil {
+			t.Fatalf("Failed to stage learning: %v", err)
+		}
+		if rule.State != behavioralrule.StateSTAGED {
+			t.Fatalf("Expected staged rule state, got %s", rule.State)
 		}
 	})
 }

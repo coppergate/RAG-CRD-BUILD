@@ -73,25 +73,27 @@ type OpenAIHandler struct {
 }
 
 type ChatCompletionRequest struct {
-	Model         string  `json:"model"`
-	SessionId     int64   `json:"session_id,omitempty"`   // Changed to int64
-	SessionName   string  `json:"session_name,omitempty"` // Added for friendly name
-	Tags          []int64 `json:"tags,omitempty"`         // Changed to int64
-	IncludeGlobal bool    `json:"include_global,omitempty"`
-	Messages      []struct {
+	Model          string  `json:"model"`
+	SessionId      int64   `json:"session_id,omitempty"`   // Changed to int64
+	SessionName    string  `json:"session_name,omitempty"` // Added for friendly name
+	Tags           []int64 `json:"tags,omitempty"`         // Changed to int64
+	EmbeddingModel string  `json:"embedding_model,omitempty"`
+	IncludeGlobal  bool    `json:"include_global,omitempty"`
+	Messages       []struct {
 		Role    string `json:"role"`
 		Content string `json:"content"`
 	} `json:"messages"`
 }
 
 type GenericChatRequest struct {
-	SessionId     int64   `json:"session_id"` // Changed to int64
-	SessionName   string  `json:"session_name,omitempty"`
-	Prompt        string  `json:"prompt"`
-	Planner       string  `json:"planner"`
-	Executor      string  `json:"executor"`
-	Tags          []int64 `json:"tags"` // Changed to int64
-	IncludeGlobal bool    `json:"include_global,omitempty"`
+	SessionId      int64   `json:"session_id"` // Changed to int64
+	SessionName    string  `json:"session_name,omitempty"`
+	Prompt         string  `json:"prompt"`
+	Planner        string  `json:"planner"`
+	Executor       string  `json:"executor"`
+	EmbeddingModel string  `json:"embedding_model,omitempty"`
+	Tags           []int64 `json:"tags"` // Changed to int64
+	IncludeGlobal  bool    `json:"include_global,omitempty"`
 }
 
 func validateChatCompletionRequest(req ChatCompletionRequest) error {
@@ -242,15 +244,16 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 	}
 
 	internalReq := &contracts.InternalRequest{
-		Id:            correlationID,
-		SessionId:     sessionID,
-		SessionName:   req.SessionName,
-		Prompt:        prompt,
-		PlannerModel:  req.Model,
-		ExecutorModel: req.Model,
-		Tags:          effectiveTags,
-		IncludeGlobal: req.IncludeGlobal,
-		Timestamp:     time.Now().Format(time.RFC3339),
+		Id:             correlationID,
+		SessionId:      sessionID,
+		SessionName:    req.SessionName,
+		Prompt:         prompt,
+		PlannerModel:   req.Model,
+		ExecutorModel:  req.Model,
+		EmbeddingModel: req.EmbeddingModel,
+		Tags:           effectiveTags,
+		IncludeGlobal:  req.IncludeGlobal,
+		Timestamp:      time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source":        "openai-api",
 			"selected_tags": effectiveTags,
@@ -357,16 +360,17 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 	}
 
 	internalReq := &contracts.InternalRequest{
-		Id:            correlationID,
-		SessionId:     sessionID,
-		SessionName:   req.SessionName,
-		Prompt:        req.Prompt,
-		PlannerModel:  req.Planner,
-		ExecutorModel: req.Executor,
-		Tags:          effectiveTags,
-		IncludeGlobal: req.IncludeGlobal,
-		Timestamp:     time.Now().Format(time.RFC3339),
-		Stream:        true,
+		Id:             correlationID,
+		SessionId:      sessionID,
+		SessionName:    req.SessionName,
+		Prompt:         req.Prompt,
+		PlannerModel:   req.Planner,
+		ExecutorModel:  req.Executor,
+		EmbeddingModel: req.EmbeddingModel,
+		Tags:           effectiveTags,
+		IncludeGlobal:  req.IncludeGlobal,
+		Timestamp:      time.Now().Format(time.RFC3339),
+		Stream:         true,
 		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source":        "websocket-api",
 			"selected_tags": effectiveTags,
@@ -499,15 +503,16 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 
 	internalReq := &contracts.InternalRequest{
-		Id:            correlationID,
-		SessionId:     sessionID,
-		SessionName:   req.SessionName,
-		Prompt:        req.Prompt,
-		PlannerModel:  req.Planner,
-		ExecutorModel: req.Executor,
-		Tags:          effectiveTags,
-		IncludeGlobal: req.IncludeGlobal,
-		Timestamp:     time.Now().Format(time.RFC3339),
+		Id:             correlationID,
+		SessionId:      sessionID,
+		SessionName:    req.SessionName,
+		Prompt:         req.Prompt,
+		PlannerModel:   req.Planner,
+		ExecutorModel:  req.Executor,
+		EmbeddingModel: req.EmbeddingModel,
+		Tags:           effectiveTags,
+		IncludeGlobal:  req.IncludeGlobal,
+		Timestamp:      time.Now().Format(time.RFC3339),
 		Metadata: contracts.ToStruct(map[string]interface{}{
 			"source":        "generic-api",
 			"selected_tags": effectiveTags,

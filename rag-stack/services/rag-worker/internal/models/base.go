@@ -66,36 +66,55 @@ func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, context
 func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, history []interface{}) []map[string]string {
 	var messages []map[string]string
 
-	// 1. Add Behavioral Rules as System Messages
+	// Preserve the retrieval order chosen by the memory-controller.
 	for _, h := range history {
 		content, memType, role := m.extractMemoryFields(h)
-		if memType == "behavioral_rule" && content != "" {
-			messages = append(messages, map[string]string{"role": "system", "content": content})
+		if content == "" {
+			continue
 		}
-		_ = role // Not used for rules
+		if role == "" {
+			role = inferRoleFromMemoryType(memType)
+		}
+		if role == "" {
+			role = "system"
+		}
+		messages = append(messages, map[string]string{"role": role, "content": content})
 	}
 
-	// 2. Add Episodic History (Chat History)
-	for _, h := range history {
-		content, memType, role := m.extractMemoryFields(h)
-		if memType != "behavioral_rule" && role != "" && content != "" {
-			messages = append(messages, map[string]string{"role": role, "content": content})
-		}
-	}
-
-	// 3. Add current augmented prompt
-	var augmentedPrompt string
 	if len(contexts) > 0 {
-		augmentedPrompt = m.Config.ExecutionHeader
-		for _, c := range contexts {
-			augmentedPrompt += fmt.Sprintf("- %v\n\n", c)
+		var userPrompt strings.Builder
+		header := strings.TrimSpace(m.Config.ExecutionHeader)
+		if header == "" {
+			header = "Retrieved context:"
 		}
-		augmentedPrompt += m.Config.ExecutionFooter + prompt + m.Config.ExecutionSuffix
-	} else {
-		augmentedPrompt = prompt
+		userPrompt.WriteString(header)
+		userPrompt.WriteString("\n")
+		for _, c := range contexts {
+			userPrompt.WriteString(fmt.Sprintf("- %v\n", c))
+		}
+		userPrompt.WriteString("\n")
+		footer := strings.TrimSpace(m.Config.ExecutionFooter)
+		if footer != "" {
+			userPrompt.WriteString(footer)
+			userPrompt.WriteString("\n")
+		}
+		userPrompt.WriteString(prompt)
+		if suffix := m.Config.ExecutionSuffix; suffix != "" {
+			userPrompt.WriteString(suffix)
+		}
+		messages = append(messages, map[string]string{"role": "user", "content": userPrompt.String()})
+		return messages
 	}
 
-	messages = append(messages, map[string]string{"role": "user", "content": augmentedPrompt})
+	userPrompt := prompt
+	if footer := m.Config.ExecutionFooter; footer != "" {
+		userPrompt = footer + userPrompt
+	}
+	if suffix := m.Config.ExecutionSuffix; suffix != "" {
+		userPrompt += suffix
+	}
+
+	messages = append(messages, map[string]string{"role": "user", "content": userPrompt})
 	return messages
 }
 
@@ -107,6 +126,11 @@ func (m *GenericModel) extractMemoryFields(item interface{}) (content, memType, 
 		if it.Metadata != nil {
 			meta := contracts.FromStruct(it.Metadata)
 			role, _ = meta["role"].(string)
+			if role == "" {
+				if bucket, ok := meta["context_bucket"].(string); ok && bucket != "" {
+					role = inferRoleFromContextBucket(bucket)
+				}
+			}
 		}
 		return
 	}
@@ -117,11 +141,38 @@ func (m *GenericModel) extractMemoryFields(item interface{}) (content, memType, 
 		memType, _ = hMap["memory_type"].(string)
 		if meta, ok := hMap["metadata"].(map[string]interface{}); ok {
 			role, _ = meta["role"].(string)
+			if role == "" {
+				if bucket, ok := meta["context_bucket"].(string); ok && bucket != "" {
+					role = inferRoleFromContextBucket(bucket)
+				}
+			}
 		}
 		return
 	}
 
 	return
+}
+
+func inferRoleFromMemoryType(memType string) string {
+	switch strings.ToLower(strings.TrimSpace(memType)) {
+	case "behavioral_rule", "task_local_retrieval", "global_fallback_policy":
+		return "system"
+	case "chat_history":
+		return ""
+	default:
+		return ""
+	}
+}
+
+func inferRoleFromContextBucket(bucket string) string {
+	switch strings.ToLower(strings.TrimSpace(bucket)) {
+	case "behavioral_rules", "action_scoped_behavior", "global_fallback_policy", "task_local_retrieval":
+		return "system"
+	case "episodic_history":
+		return ""
+	default:
+		return "system"
+	}
 }
 
 // IsInsufficientContext checks if the model result indicates missing information based on configured phrases

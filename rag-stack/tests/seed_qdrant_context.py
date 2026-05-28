@@ -7,12 +7,27 @@ from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from e2e_tag_state import ensure_test_tag
+from model_matrix import EMBEDDING_MODEL
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "4096"))
-COLLECTION_NAME = f"vectors-{VECTOR_SIZE}"
+
+
+def _normalize_model_name(model: str) -> str:
+    normalized = []
+    last_dash = False
+    for ch in model.strip().lower():
+        if ch.isalnum():
+            normalized.append(ch)
+            last_dash = False
+        elif not last_dash:
+            normalized.append("-")
+            last_dash = True
+    return "".join(normalized).strip("-")
+
+
+COLLECTION_NAME = f"vectors-{_normalize_model_name(EMBEDDING_MODEL)}-{VECTOR_SIZE}"
 TAG_STATE_FILE = os.getenv(
     "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
 )
@@ -21,19 +36,19 @@ TEST_DATA = [
     {
         "id": 1001,
         "text": "Project Alpha uses the 'Zeltron-9' protocol for inter-pod communication. The primary maintainer is 'Dr. Aris Thorne'.",
-        "metadata": {"source": "project_alpha/README.md", "tags": ["test-tag"]}
+        "metadata": {"source": "project_alpha/README.md", "tags": ["test-tag"], "embedding_model": EMBEDDING_MODEL}
     },
     {
         "id": 1002,
         "text": "The secret passphrase for the beta portal is 'Crimson-Sky-77'. Contact 'Unit-X' for access.",
-        "metadata": {"source": "project_beta/secrets.txt", "tags": ["test-tag"]}
+        "metadata": {"source": "project_beta/secrets.txt", "tags": ["test-tag"], "embedding_model": EMBEDDING_MODEL}
     }
 ]
 
 def get_ollama_embeddings(text: str):
     url = f"{OLLAMA_URL}/api/embeddings"
     payload = {
-        "model": OLLAMA_MODEL,
+        "model": EMBEDDING_MODEL,
         "prompt": text
     }
     resp = requests.post(url, json=payload, timeout=60)
@@ -42,14 +57,14 @@ def get_ollama_embeddings(text: str):
 
 def ensure_ollama_model_available():
     url = f"{OLLAMA_URL}/api/tags"
-    print(f"[SEED] Preflight: checking Ollama model '{OLLAMA_MODEL}' at {url}")
+    print(f"[SEED] Preflight: checking Ollama model '{EMBEDDING_MODEL}' at {url}")
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
     data = resp.json()
 
     for model in data.get("models", []):
         candidate = model.get("name") or model.get("model")
-        if candidate == OLLAMA_MODEL:
+        if candidate == EMBEDDING_MODEL:
             return
 
     available = []
@@ -59,7 +74,7 @@ def ensure_ollama_model_available():
             available.append(candidate)
 
     raise RuntimeError(
-        f"Ollama model '{OLLAMA_MODEL}' is not available; found: {available or 'none'}"
+        f"Ollama model '{EMBEDDING_MODEL}' is not available; found: {available or 'none'}"
     )
 
 def seed_data():
@@ -94,7 +109,7 @@ def seed_data():
     points = []
     failures = []
     for item in TEST_DATA:
-        print(f"  - Embedding chunk {item['id']} using {OLLAMA_MODEL}...")
+        print(f"  - Embedding chunk {item['id']} using {EMBEDDING_MODEL}...")
         try:
             vector = get_ollama_embeddings(item["text"])
             
@@ -106,6 +121,8 @@ def seed_data():
             # The stack expects 'text' and 'tags' in the top-level payload for search.
             # Use the real tag ID so the query filter and Qdrant payload stay aligned.
             payload["tags"] = [tag_id]
+            payload["embedding_model"] = EMBEDDING_MODEL
+            payload["vector_size"] = VECTOR_SIZE
             
             points.append(models.PointStruct(
                 id=item["id"],

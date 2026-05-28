@@ -68,6 +68,7 @@ echo "[STEP] Refresh tests ConfigMap" | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" create configmap rag-integration-tests \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/integration_test.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/e2e_tag_state.py \
+  --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/model_matrix.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/context_verification.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/pulsar_crud_test.py \
   --from-file=/mnt/hegemon-share/share/code/complete-build/rag-stack/tests/test_contracts.py \
