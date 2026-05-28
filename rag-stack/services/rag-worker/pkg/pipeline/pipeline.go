@@ -108,17 +108,19 @@ type Handler struct {
 	registry     ModelRegistry
 	searcher     QdrantSearcher
 	memoryClient MemoryClient
+	tagSource    TagSource
 	httpClient   *http.Client
 }
 
 // NewHandler creates a new pipeline stage handler.
-func NewHandler(cfg *config.Config, msg *messaging.Client, registry ModelRegistry, searcher QdrantSearcher, mem MemoryClient) *Handler {
+func NewHandler(cfg *config.Config, msg *messaging.Client, registry ModelRegistry, searcher QdrantSearcher, mem MemoryClient, tagSource TagSource) *Handler {
 	return &Handler{
 		cfg:          cfg,
 		msg:          msg,
 		registry:     registry,
 		searcher:     searcher,
 		memoryClient: mem,
+		tagSource:    tagSource,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -432,7 +434,12 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		return dlq.PermanentFailure, fmt.Errorf("planner resolution: %w", err)
 	}
 
-	tags := req.Tags
+	tags, err := h.resolveSearchTags(ctx, req)
+	if err != nil {
+		logging.Printf("[%s][SID:%d] Failed to resolve retrieval tags: %v", req.Id, req.SessionId, err)
+		h.msg.SendError(ctx, req.Id, "Failed to resolve retrieval tags", false)
+		return dlq.TransientFailure, fmt.Errorf("resolve retrieval tags: %w", err)
+	}
 	contextFiles, err := h.fetchContextFiles(ctx, req)
 	if err != nil {
 		logging.Printf("[%s][SID:%d] Context file discovery failed: %v", req.Id, req.SessionId, err)

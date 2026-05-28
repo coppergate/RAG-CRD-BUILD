@@ -393,15 +393,14 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         cur.execute(
                             "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata, created_at) VALUES (%s, %s, %s, %s) RETURNING embedding_id",
                             (ingestion_id, json.dumps(vector), json.dumps({
-                                "path": s3_key,
-                                "chunk": i,
-                                "embedding_model": current_model,
-                                "vector_size": current_vs,
-                                "source_hash": _source_hash(chunk),
-                                "tags": effective_tags,
-                                "session_id": session_id,
-                            }), _pg_now())
-                        )
+                            "path": s3_key,
+                            "chunk": i,
+                            "embedding_model": current_model,
+                            "vector_size": current_vs,
+                            "source_hash": _source_hash(chunk),
+                            "session_id": session_id,
+                        }), _pg_now())
+                    )
                         emb_id = cur.fetchone()[0]
                         for t_id in tag_ids:
                             cur.execute("INSERT INTO code_embedding_tag (embedding_id, tag_id) VALUES (%s, %s)", (emb_id, t_id))

@@ -48,6 +48,7 @@ type Config struct {
 	QdrantAdapterURL    string
 	IngestionURL        string
 	DBAdapterURL        string
+	DBConnString        string
 
 	TLSCert string
 	TLSKey  string
@@ -104,6 +105,7 @@ func LoadConfig() *Config {
 		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "https://qdrant-adapter.rag-system.svc.cluster.local:8082"),
 		IngestionURL:        envutil.GetEnv("RAG_INGESTION_URL", "https://rag-ingestion.rag-system.svc.cluster.local"),
 		DBAdapterURL:        envutil.GetEnv("DB_ADAPTER_URL", "https://db-adapter.rag-system.svc.cluster.local"),
+		DBConnString:        envutil.GetEnv("DB_CONN_STRING", ""),
 
 		TLSCert: envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:  envutil.GetEnv("TLS_KEY", ""),

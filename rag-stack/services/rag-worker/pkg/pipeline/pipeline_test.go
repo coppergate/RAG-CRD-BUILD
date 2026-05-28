@@ -25,6 +25,10 @@ type MockSearcher struct {
 	mock.Mock
 }
 
+type MockTagSource struct {
+	mock.Mock
+}
+
 func (m *MockSearcher) Search(ctx context.Context, embeddingModel string, vector []float32, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
 	args := m.Called(ctx, embeddingModel, vector, tags, sessionID, includeGlobal, limit)
 	if args.Get(0) == nil {
@@ -39,6 +43,14 @@ func (m *MockSearcher) RetrieveByPaths(ctx context.Context, embeddingModel strin
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]interface{}), args.Error(1)
+}
+
+func (m *MockTagSource) TagsForSession(ctx context.Context, sessionID int64) ([]int64, error) {
+	args := m.Called(ctx, sessionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]int64), args.Error(1)
 }
 
 // MockMemoryClient is a mock implementation of MemoryClient interface
@@ -311,6 +323,26 @@ func TestHandleSearch(t *testing.T) {
 	mockPlanner.AssertExpectations(t)
 	mockMem.AssertExpectations(t)
 	mockExecProd.AssertExpectations(t)
+}
+
+func TestResolveSearchTags_UsesDatabaseSource(t *testing.T) {
+	mockTags := new(MockTagSource)
+	h := &Handler{
+		tagSource: mockTags,
+	}
+
+	req := &contracts.InternalRequest{
+		SessionId: 123,
+		Tags:      []int64{1, 2},
+	}
+
+	mockTags.On("TagsForSession", mock.Anything, int64(123)).Return([]int64{9, 10}, nil)
+
+	tags, err := h.resolveSearchTags(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []int64{9, 10}, tags)
+	mockTags.AssertExpectations(t)
 }
 
 func TestHandlePlan(t *testing.T) {
