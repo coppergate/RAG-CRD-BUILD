@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -124,6 +125,8 @@ func NewHandler(cfg *config.Config, msg *messaging.Client, registry ModelRegistr
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
+
+var errUnsupportedEmbeddingModel = fmt.Errorf("unsupported embedding model")
 
 // HandleStageMessage processes a message for the given stage with DLQ support.
 func (h *Handler) HandleStageMessage(ctx context.Context, stage string, msg pulsar.Message) (dlq.ProcessResult, error) {
@@ -440,23 +443,28 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		h.msg.SendError(ctx, req.Id, "Failed to resolve retrieval tags", false)
 		return dlq.TransientFailure, fmt.Errorf("resolve retrieval tags: %w", err)
 	}
-	contextFiles, err := h.fetchContextFiles(ctx, req)
-	if err != nil {
-		logging.Printf("[%s][SID:%d] Context file discovery failed: %v", req.Id, req.SessionId, err)
-	}
-	embeddingModels := h.resolveEmbeddingModelCandidates(req, contextFiles)
+	embeddingModels := h.resolveEmbeddingModelCandidates(req, plannerModelID)
 	var allRawResults []interface{}
 	var retrievalProvenance []map[string]interface{}
 
-	for _, embeddingModel := range embeddingModels {
+	for idx, embeddingModel := range embeddingModels {
 		embedder, err := h.registry.GetPlanner(embeddingModel)
 		if err != nil {
 			logging.Printf("[%s][SID:%d] Embedding model resolution error for %q: %v", req.Id, req.SessionId, embeddingModel, err)
 			continue
 		}
 
+		contextFiles, err := h.fetchContextFiles(ctx, req, embeddingModel)
+		if err != nil {
+			logging.Printf("[%s][SID:%d] Context file discovery failed for %q: %v", req.Id, req.SessionId, embeddingModel, err)
+		}
+
 		modelResults, hydrated, hydrationNotes, err := h.searchWithEmbeddingModel(ctx, req, embeddingModel, embedder, subQueries, tags, contextFiles)
 		if err != nil {
+			if errors.Is(err, errUnsupportedEmbeddingModel) && idx+1 < len(embeddingModels) {
+				logging.Printf("[%s][SID:%d] Embedding model %q is not embedding-capable; falling back to carried override %q", req.Id, req.SessionId, embeddingModel, embeddingModels[idx+1])
+				continue
+			}
 			logging.Printf("[%s][SID:%d] Retrieval failed for embedding model %q: %v", req.Id, req.SessionId, embeddingModel, err)
 			continue
 		}
@@ -464,18 +472,6 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 			retrievalProvenance = append(retrievalProvenance, hydrationNotes...)
 		}
 		allRawResults = append(allRawResults, modelResults...)
-	}
-
-	if len(allRawResults) == 0 && len(embeddingModels) == 0 && h.cfg.EmbeddingModel != "" {
-		if embedder, err := h.registry.GetPlanner(h.cfg.EmbeddingModel); err == nil {
-			modelResults, hydrated, hydrationNotes, err := h.searchWithEmbeddingModel(ctx, req, h.cfg.EmbeddingModel, embedder, subQueries, tags, contextFiles)
-			if err == nil {
-				if hydrated {
-					retrievalProvenance = append(retrievalProvenance, hydrationNotes...)
-				}
-				allRawResults = append(allRawResults, modelResults...)
-			}
-		}
 	}
 
 	// 3. Deduplicate and chunk context
@@ -572,9 +568,9 @@ type contextFileRecord struct {
 	IngestionID    int64    `json:"ingestion_id"`
 }
 
-func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest, files []contextFileRecord) []string {
+func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest, primaryModelID string) []string {
 	seen := make(map[string]bool)
-	candidates := make([]string, 0, 4)
+	candidates := make([]string, 0, 2)
 
 	add := func(model string) {
 		model = strings.TrimSpace(model)
@@ -592,17 +588,13 @@ func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest
 		candidates = append(candidates, model)
 	}
 
+	add(primaryModelID)
 	add(req.EmbeddingModel)
-	if len(candidates) == 0 && req.Metadata != nil {
+	if len(candidates) == 1 && req.Metadata != nil {
 		if meta := contracts.FromStruct(req.Metadata); meta != nil {
 			if model, _ := meta["embedding_model"].(string); model != "" {
 				add(model)
 			}
-		}
-	}
-	if len(candidates) == 0 {
-		for _, file := range files {
-			add(file.EmbeddingModel)
 		}
 	}
 	if len(candidates) == 0 && h.cfg.EmbeddingModel != "" {
@@ -611,7 +603,7 @@ func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest
 	return candidates
 }
 
-func (h *Handler) fetchContextFiles(ctx context.Context, req *contracts.InternalRequest) ([]contextFileRecord, error) {
+func (h *Handler) fetchContextFiles(ctx context.Context, req *contracts.InternalRequest, embeddingModel string) ([]contextFileRecord, error) {
 	baseURL := strings.TrimRight(h.cfg.DBAdapterURL, "/")
 	if baseURL == "" {
 		return nil, nil
@@ -624,12 +616,7 @@ func (h *Handler) fetchContextFiles(ctx context.Context, req *contracts.Internal
 	for _, tagID := range req.Tags {
 		params.Add("tag_id", fmt.Sprintf("%d", tagID))
 	}
-	embeddingModel := strings.TrimSpace(req.EmbeddingModel)
-	if embeddingModel == "" && req.Metadata != nil {
-		if meta := contracts.FromStruct(req.Metadata); meta != nil {
-			embeddingModel, _ = meta["embedding_model"].(string)
-		}
-	}
+	embeddingModel = strings.TrimSpace(embeddingModel)
 	if embeddingModel != "" {
 		params.Set("embedding_model", embeddingModel)
 	}
@@ -744,6 +731,9 @@ func (h *Handler) searchEmbeddingModelOnce(ctx context.Context, req *contracts.I
 			logging.Printf("[%s][SID:%d] Failed to get embeddings for sub-query '%s' using %s: %v", req.Id, req.SessionId, sq, embeddingModel, err)
 			if ollama.IsMissingModelError(err) {
 				return nil, false, fmt.Errorf("embedding model unavailable: %w", err)
+			}
+			if ollama.IsUnsupportedEmbeddingModelError(err) {
+				return nil, false, errUnsupportedEmbeddingModel
 			}
 			continue
 		}

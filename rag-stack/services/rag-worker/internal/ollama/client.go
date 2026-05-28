@@ -61,6 +61,19 @@ func IsMissingModelError(err error) bool {
 	return errors.As(err, &statusErr) && statusErr.NotFound()
 }
 
+// IsUnsupportedEmbeddingModelError reports whether Ollama rejected the request
+// because the target model cannot produce embeddings.
+func IsUnsupportedEmbeddingModelError(err error) bool {
+	var statusErr *APIStatusError
+	if !errors.As(err, &statusErr) {
+		return false
+	}
+	body := strings.ToLower(statusErr.Body)
+	return strings.Contains(body, "does not support embeddings") ||
+		strings.Contains(body, "doesn't support embeddings") ||
+		strings.Contains(body, "not support embeddings")
+}
+
 func NewClient(url, model string) *OllamaClient {
 	useTLS := strings.HasPrefix(url, "https://")
 	httpClient, err := tlsutil.NewHTTPClient(useTLS, 60*time.Second)

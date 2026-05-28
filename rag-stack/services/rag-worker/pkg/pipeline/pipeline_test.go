@@ -291,7 +291,14 @@ func TestHandleSearch(t *testing.T) {
 
 	mockRegistry.On("GetPlanner", "default-planner").Return(mockPlanner, nil)
 	mockRegistry.On("GetPlanner", "embed-model").Return(mockPlanner, nil)
-	mockPlanner.On("GetEmbeddings", mock.Anything, "test prompt").Return([]float32{0.1, 0.2}, nil)
+	unsupportedErr := &ollama.APIStatusError{
+		Operation:  "embeddings",
+		URL:        "http://ollama",
+		StatusCode: http.StatusBadRequest,
+		Body:       "this model does not support embeddings",
+	}
+	mockPlanner.On("GetEmbeddings", mock.Anything, "test prompt").Return([]float32(nil), unsupportedErr).Once()
+	mockPlanner.On("GetEmbeddings", mock.Anything, "test prompt").Return([]float32{0.1, 0.2}, nil).Once()
 	mockPlanner.On("Plan", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
 		Objective:     "test prompt",
 		ActionType:    "FILE_SEARCH",
