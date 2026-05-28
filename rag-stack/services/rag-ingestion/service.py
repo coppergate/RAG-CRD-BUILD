@@ -28,6 +28,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from datetime import datetime, timezone
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +50,10 @@ def _build_requests_session() -> requests.Session:
     else:
         logger.warning("Running in INSECURE mode (ALLOW_INSECURE=true)")
     return session
+
+
+def _pg_now():
+    return datetime.now(timezone.utc)
 
 
 http_session = _build_requests_session()
@@ -323,8 +328,8 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
         # Ingestion entry is now created in trigger_ingest, but we ensure it here just in case
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO code_ingestion (ingestion_id, s3_bucket_id) VALUES (%s, %s) ON CONFLICT (ingestion_id) DO NOTHING",
-                (ingestion_id, effective_bucket)
+                "INSERT INTO code_ingestion (ingestion_id, s3_bucket_id, created_at) VALUES (%s, %s, %s) ON CONFLICT (ingestion_id) DO NOTHING",
+                (ingestion_id, effective_bucket, _pg_now())
             )
             
             # Populate code_ingestion_tag mapping
@@ -386,7 +391,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                     # TimescaleDB Backup
                     with conn.cursor() as cur:
                         cur.execute(
-                            "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata) VALUES (%s, %s, %s) RETURNING embedding_id",
+                            "INSERT INTO code_embedding (ingestion_id, embedding_vector, metadata, created_at) VALUES (%s, %s, %s, %s) RETURNING embedding_id",
                             (ingestion_id, json.dumps(vector), json.dumps({
                                 "path": s3_key,
                                 "chunk": i,
@@ -395,7 +400,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                                 "source_hash": _source_hash(chunk),
                                 "tags": effective_tags,
                                 "session_id": session_id,
-                            }))
+                            }), _pg_now())
                         )
                         emb_id = cur.fetchone()[0]
                         for t_id in tag_ids:
@@ -460,8 +465,8 @@ async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
             try:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO code_ingestion (s3_bucket_id) VALUES (%s) RETURNING ingestion_id",
-                        (effective_bucket,)
+                        "INSERT INTO code_ingestion (s3_bucket_id, created_at) VALUES (%s, %s) RETURNING ingestion_id",
+                        (effective_bucket, _pg_now())
                     )
                     ingestion_id = cur.fetchone()[0]
                     conn.commit()
