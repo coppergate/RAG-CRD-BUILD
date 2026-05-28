@@ -39,7 +39,7 @@ func (q *QdrantClient) Search(collection string, embeddingModel string, vectorSi
 	return q.searchWithRetry(collection, embeddingModel, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
 }
 
-func buildTagSessionFilter(tags []int64, sessionID int64, includeGlobal bool) map[string]interface{} {
+func buildTagFilter(tags []int64) map[string]interface{} {
 	filter := map[string]interface{}{}
 
 	if len(tags) > 0 {
@@ -53,54 +53,7 @@ func buildTagSessionFilter(tags []int64, sessionID int64, includeGlobal bool) ma
 		}
 	}
 
-	if sessionID > 0 {
-		if includeGlobal || len(tags) > 0 {
-			filter["should"] = []map[string]interface{}{
-				{
-					"key": "session_id",
-					"match": map[string]interface{}{
-						"value": sessionID,
-					},
-				},
-				{
-					"is_empty": map[string]interface{}{
-						"key": "session_id",
-					},
-				},
-			}
-		} else {
-			filter["must"] = append(
-				ensureConditionSlice(filter["must"]),
-				map[string]interface{}{
-					"key": "session_id",
-					"match": map[string]interface{}{
-						"value": sessionID,
-					},
-				},
-			)
-		}
-	} else {
-		filter["must"] = append(
-			ensureConditionSlice(filter["must"]),
-			map[string]interface{}{
-				"is_empty": map[string]interface{}{
-					"key": "session_id",
-				},
-			},
-		)
-	}
-
 	return filter
-}
-
-func ensureConditionSlice(v interface{}) []map[string]interface{} {
-	if v == nil {
-		return []map[string]interface{}{}
-	}
-	if conditions, ok := v.([]map[string]interface{}); ok {
-		return conditions
-	}
-	return []map[string]interface{}{}
 }
 
 func resolveCollection(q *QdrantClient, collection, embeddingModel string, vectorSize int) string {
@@ -156,9 +109,9 @@ func (q *QdrantClient) searchWithRetry(collection string, embeddingModel string,
 		"with_payload": true,
 	}
 
-	if filter := buildTagSessionFilter(tags, sessionID, includeGlobal); len(filter) > 0 {
+	if filter := buildTagFilter(tags); len(filter) > 0 {
 		query["filter"] = filter
-		logging.Printf("DEBUG: Qdrant Search Filter (tags=%v, session=%d): %+v", tags, sessionID, query["filter"])
+		logging.Printf("DEBUG: Qdrant Search Filter (tags=%v): %+v", tags, query["filter"])
 	}
 
 	body, err := json.Marshal(query)
@@ -223,7 +176,7 @@ func (q *QdrantClient) RetrieveByFilter(collection string, embeddingModel string
 		"with_payload": true,
 	}
 
-	if filter := buildTagSessionFilter(tags, sessionID, includeGlobal); len(filter) > 0 {
+	if filter := buildTagFilter(tags); len(filter) > 0 {
 		query["filter"] = filter
 	}
 

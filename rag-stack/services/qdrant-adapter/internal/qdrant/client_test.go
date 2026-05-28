@@ -59,7 +59,7 @@ func TestSearch(t *testing.T) {
 	assert.Equal(t, "test content", res["content"])
 }
 
-func TestSearch_WithTagsAndSessionFilter(t *testing.T) {
+func TestSearch_WithTagsUsesTagFilter(t *testing.T) {
 	cfg := &config.Config{
 		QdrantHost: "localhost",
 		QdrantPort: "6333",
@@ -77,7 +77,7 @@ func TestSearch_WithTagsAndSessionFilter(t *testing.T) {
 				_, hasMust := filter["must"].([]interface{})
 				_, hasShould := filter["should"].([]interface{})
 				assert.True(t, hasMust, "expected top-level must filter")
-				assert.True(t, hasShould, "expected top-level should filter")
+				assert.False(t, hasShould, "did not expect session-based should filter")
 			}
 
 			resp := map[string]interface{}{"result": []interface{}{}}
@@ -98,7 +98,7 @@ func TestSearch_WithTagsAndSessionFilter(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestSearch_SessionOnlyUsesMustFilter(t *testing.T) {
+func TestSearch_NoTagsDoesNotAddSessionFilter(t *testing.T) {
 	cfg := &config.Config{
 		QdrantHost: "localhost",
 		QdrantPort: "6333",
@@ -112,12 +112,8 @@ func TestSearch_SessionOnlyUsesMustFilter(t *testing.T) {
 			assert.NoError(t, err)
 
 			filter, ok := payload["filter"].(map[string]interface{})
-			if assert.True(t, ok) {
-				_, hasMust := filter["must"].([]interface{})
-				_, hasShould := filter["should"].([]interface{})
-				assert.True(t, hasMust, "expected top-level must filter")
-				assert.False(t, hasShould, "did not expect should filter for session-only retrieval")
-			}
+			assert.False(t, ok, "did not expect a filter when only session_id is provided")
+			assert.Nil(t, filter)
 
 			resp := map[string]interface{}{"result": []interface{}{}}
 			respBody, _ := json.Marshal(resp)

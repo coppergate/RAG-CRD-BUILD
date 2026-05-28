@@ -362,10 +362,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         failed_chunks.append({"file": s3_key, "chunk": i, "error": str(e)})
                         continue
 
-                    # Ensure ingestion_id is in the tags list for searchability
                     effective_tags = list(tag_ids)
-                    if ingestion_id not in effective_tags:
-                        effective_tags.append(ingestion_id)
 
                     payload_struct = Struct()
                     payload_dict = {
@@ -378,8 +375,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         "vector_size": current_vs,
                         "source_hash": _source_hash(chunk),
                     }
-                    if session_id:
-                        payload_dict["session_id"] = session_id
                     payload_struct.update(payload_dict)
 
                     p = rag_stack_pb2.QdrantPoint()
@@ -398,7 +393,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                             "embedding_model": current_model,
                             "vector_size": current_vs,
                             "source_hash": _source_hash(chunk),
-                            "session_id": session_id,
                         }), _pg_now())
                     )
                         emb_id = cur.fetchone()[0]

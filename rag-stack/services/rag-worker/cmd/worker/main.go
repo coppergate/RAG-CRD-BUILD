@@ -50,7 +50,7 @@ func main() {
 	defer msgClient.Close()
 
 	registry := initModelRegistry(cfg)
-	tagSource, closeTagSource := initEmbeddingTagSource(cfg)
+	tagSource, closeTagSource := initSessionTagSource(cfg)
 	if closeTagSource != nil {
 		defer closeTagSource()
 	}
@@ -165,19 +165,19 @@ func initQdrantSearcher(cfg *config.Config) *search.QdrantSearcher {
 	return search.NewQdrantSearcher(cfg, client)
 }
 
-func initEmbeddingTagSource(cfg *config.Config) (pipeline.TagSource, func()) {
+func initSessionTagSource(cfg *config.Config) (pipeline.TagSource, func()) {
 	if strings.TrimSpace(cfg.DBConnString) == "" {
-		logging.Warn("DB_CONN_STRING not set; using request tags for retrieval")
+		logging.Warn("DB_CONN_STRING not set; using request tags for retrieval fallback")
 		return nil, nil
 	}
 
 	client, err := ent.Open("postgres", cfg.DBConnString)
 	if err != nil {
-		logging.Warn("failed to open DB connection for tag resolution", "error", err)
+		logging.Warn("failed to open DB connection for session tag resolution", "error", err)
 		return nil, nil
 	}
 
-	return pipeline.NewEmbeddingTagSource(client), func() {
+	return pipeline.NewSessionTagSource(client), func() {
 		_ = client.Close()
 	}
 }

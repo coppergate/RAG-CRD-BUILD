@@ -103,7 +103,7 @@ func LoadConfig() *Config {
 
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "https://memory-controller.rag-system.svc.cluster.local"),
 		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "https://qdrant-adapter.rag-system.svc.cluster.local:8082"),
-		IngestionURL:        envutil.GetEnv("RAG_INGESTION_URL", "https://rag-ingestion.rag-system.svc.cluster.local"),
+		IngestionURL:        envutil.GetEnv("RAG_INGESTION_URL", "https://rag-ingestion-service.rag-system.svc.cluster.local"),
 		DBAdapterURL:        envutil.GetEnv("DB_ADAPTER_URL", "https://db-adapter.rag-system.svc.cluster.local"),
 		DBConnString:        envutil.GetEnv("DB_CONN_STRING", ""),
 

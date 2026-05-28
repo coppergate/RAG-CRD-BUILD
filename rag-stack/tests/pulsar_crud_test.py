@@ -8,6 +8,7 @@ from datetime import datetime
 import psycopg2
 from pulsar import Client, MessageId, Producer, Consumer
 from e2e_tag_state import ensure_test_tag
+from e2e_session_state import unique_session_id, unique_session_name
 
 # Optional OpenTelemetry tracing for test visibility
 OTEL_ENABLED = bool(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
@@ -147,11 +148,16 @@ def test_pulsar_db_crud():
     cur = conn.cursor()
 
     # 3. Setup Test Session
-    session_id = int(time.time() * 1000)
-    session_name = f"CRUD-Test-{int(time.time())}"
+    session_id = unique_session_id()
+    session_name = unique_session_name("CRUD-Test")
     print(f"  - Creating test session: {session_id}")
-    cur.execute("INSERT INTO sessions (session_id, name, description) VALUES (%s, %s, %s)", 
-                (session_id, session_name, "Pulsar CRUD Test Session"))
+    cur.execute(
+        """
+        INSERT INTO sessions (session_id, name, description, created_at, last_active_at)
+        VALUES (%s, %s, %s, NOW(), NOW())
+        """,
+        (session_id, session_name, "Pulsar CRUD Test Session"),
+    )
 
     # 4. Step A: Send Prompt via Pulsar
     correlation_id = str(uuid.uuid4())

@@ -14,6 +14,7 @@ import (
 	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 	"app-builds/llm-gateway/internal/pulsar"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel"
@@ -474,16 +475,23 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 	}
 	sessionID := sess.ID
 
+	logging.Printf("Ensured session id : %d", sessionID)
+
 	// Fetch all tags for the session and preserve the request tags if the
 	// session association has not been materialized yet.
 	var sessionTags []int64
 	for _, t := range sess.Edges.Tags {
 		sessionTags = append(sessionTags, t.ID)
 	}
+
+	logging.Printf("got session tags: %v", sessionTags)
+
 	effectiveTags := sessionTags
 	if len(effectiveTags) == 0 && len(req.Tags) > 0 {
 		effectiveTags = req.Tags
 	}
+
+	logging.Printf("setting effective tags: %v", effectiveTags)
 
 	// Record prompt size
 	promptSizeHist.Record(ctx, int64(len(req.Prompt)), metric.WithAttributes(attrs...))
@@ -495,12 +503,15 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		logging.Printf("[%s] Failed to send prompt event for session %d: %v", correlationID, sessionID, err)
 	}
 
+	logging.Printf("sent the prompt event for session %d with correlation ID %s", sessionID, correlationID)
+
 	if req.Planner == "" {
 		req.Planner = "llama3.1:latest"
 	}
 	if req.Executor == "" {
 		req.Executor = "llama3.1:latest"
 	}
+	logging.Printf("have set planner and executor to %s and %s", req.Planner, req.Executor)
 
 	internalReq := &contracts.InternalRequest{
 		Id:             correlationID,
@@ -534,6 +545,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Service unavailable: "+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	logging.Printf("sent the request to pulsar for session %d with correlation ID %s", sessionID, correlationID)
 
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{

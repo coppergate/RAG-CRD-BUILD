@@ -7,6 +7,7 @@ import requests
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+from e2e_session_state import unique_session_id, unique_session_name
 from e2e_tag_state import ensure_test_tag
 from model_matrix import EMBEDDING_MODEL, model_cases
 
@@ -139,12 +140,13 @@ def test_rag_retrieval(tag_id):
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing RAG Retrieval via Gateway...")
     print(f"  - RAG_CHAT_URL={CHAT_URL}")
     print(f"  - Embedding model: {EMBEDDING_MODEL}")
+    print(f"  - Tag ID: {tag_id}")
     query = "What is the primary protocol for Project Alpha?"
     system_prompt = "Use only the uploaded context. Reply with the exact secret code and nothing else."
 
     for case in model_cases():
-        session_name = f"test-session-{case['label']}-{int(time.time())}"
-        session_id = int(time.time() * 1000)
+        session_name = unique_session_name(f"test-session-{case['label']}")
+        session_id = unique_session_id()
         payload = {
             "prompt": query,
             "session_id": session_id,
@@ -214,7 +216,7 @@ def test_planner_trace_replay():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Verifying planner trace replay...")
     query = "Inspect the planner output contract and summarize the actions."
     for case in model_cases():
-        session_name = f"trace-session-{case['label']}-{int(time.time())}"
+        session_name = unique_session_name(f"trace-session-{case['label']}")
         payload = {
             "prompt": query,
             "session_name": session_name,

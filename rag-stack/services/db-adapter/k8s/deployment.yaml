@@ -64,6 +64,8 @@ spec:
             secretKeyRef:
               name: timescaledb-secret
               key: url
+        - name: RAG_INGESTION_URL
+          value: "https://rag-ingestion-service.rag-system.svc.cluster.local"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OTEL_USE_TLS

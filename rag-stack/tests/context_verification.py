@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+from e2e_session_state import unique_session_id, unique_session_name
 from e2e_tag_state import ensure_test_tag
 from model_matrix import EMBEDDING_MODEL, model_cases
 
@@ -74,17 +75,18 @@ def run_context_tests():
     print(f"  - Using tag {tag['tag_name']} (ID: {tag_id})")
 
     for case in model_cases():
-        session_id = int(time.time() * 1000)
         print(
             f"  - Case planner={case['planner']} executor={case['executor']} "
-            f"embedding={EMBEDDING_MODEL} session_id={session_id}"
+            f"embedding={EMBEDDING_MODEL}"
         )
         for query in CONTEXT_QUERIES:
-            print(f"    - Query: {query['question']}")
+            session_id = unique_session_id()
+            request_session_name = unique_session_name(f"context-{case['label']}")
+            print(f"    - Query: {query['question']} (session_id={session_id})")
             payload = {
                 "prompt": query["question"],
                 "session_id": session_id,
-                "session_name": f"context-{case['label']}",
+                "session_name": request_session_name,
                 "tags": [tag_id],
                 "planner": case["planner"],
                 "executor": case["executor"],

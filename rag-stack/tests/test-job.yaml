@@ -44,9 +44,14 @@ spec:
             
             # Update DB_CONN_STRING to use combined bundle
             export DB_CONN_STRING=$(echo "$DB_CONN_STRING" | sed "s|/etc/ssl/certs/ca-certificates.crt|$COMBINED_CA|g")
-            
+
+            echo "--- Cleaning up stale test sessions ---"
+            python /tests/cleanup_test_sessions.py
+
             echo "--- Seeding Qdrant Context ---"
             python /tests/seed_qdrant_context.py
+            echo "--- Running Retrieval Path Isolation Test ---"
+            python /tests/retrieval_path_test.py
             echo "--- Running Integration Tests ---"
             python /tests/integration_test.py
             echo "--- Running API Health and Functionality Tests ---"

@@ -345,6 +345,20 @@ func TestResolveSearchTags_UsesDatabaseSource(t *testing.T) {
 	mockTags.AssertExpectations(t)
 }
 
+func TestResolveSearchTags_FallsBackToRequestTags(t *testing.T) {
+	h := &Handler{}
+
+	req := &contracts.InternalRequest{
+		SessionId: 123,
+		Tags:      []int64{10, 2, 10, 5},
+	}
+
+	tags, err := h.resolveSearchTags(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []int64{2, 5, 10}, tags)
+}
+
 func TestHandlePlan(t *testing.T) {
 	mockRegistry := new(MockRegistry)
 	mockPlanner := new(MockPlanner)

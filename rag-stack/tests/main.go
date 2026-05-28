@@ -28,9 +28,10 @@ var (
 )
 
 func main() {
-	tagName := fmt.Sprintf("test-tag-%d", time.Now().Unix())
-	sessionID = time.Now().Unix()
-	sessionName = fmt.Sprintf("e2e-session-%d", time.Now().Unix())
+	now := time.Now().UnixNano()
+	tagName := fmt.Sprintf("test-tag-%d", now)
+	sessionID = now
+	sessionName = fmt.Sprintf("e2e-session-%d-%x", now, now)
 	fmt.Printf("[%s] --- Starting E2E Test (Isolation) ---\n", time.Now().Format(time.RFC3339))
 	fmt.Printf("Tag Name: %s\nSession ID: %d\nSession Name: %s\n", tagName, sessionID, sessionName)
 

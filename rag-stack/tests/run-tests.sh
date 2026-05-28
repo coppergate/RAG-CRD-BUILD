@@ -19,10 +19,13 @@ echo "--- Preparing RAG Integration Tests ---"
 echo "Updating tests ConfigMap..."
 $KUBECTL delete configmap rag-integration-tests -n $NAMESPACE --ignore-not-found
 $KUBECTL create configmap rag-integration-tests -n $NAMESPACE \
+    --from-file="${TEST_DIR}/cleanup_test_sessions.py" \
+    --from-file="${TEST_DIR}/e2e_session_state.py" \
     --from-file="${TEST_DIR}/integration_test.py" \
     --from-file="${TEST_DIR}/e2e_tag_state.py" \
     --from-file="${TEST_DIR}/model_matrix.py" \
     --from-file="${TEST_DIR}/api_health_test.py" \
+    --from-file="${TEST_DIR}/retrieval_path_test.py" \
     --from-file="${TEST_DIR}/context_verification.py" \
     --from-file="${TEST_DIR}/recursive_rag_test.py" \
     --from-file="${TEST_DIR}/pulsar_crud_test.py" \
