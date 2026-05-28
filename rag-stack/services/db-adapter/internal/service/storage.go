@@ -12,6 +12,7 @@ import (
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqljson"
 )
 
 type StorageService struct {
@@ -23,16 +24,21 @@ func NewStorageService(client *ent.Client) *StorageService {
 }
 
 type FileInfo struct {
-	Path      string    `json:"path"`
-	Bucket    string    `json:"bucket"`
-	CreatedAt time.Time `json:"created_at"`
-	Tags      []string  `json:"tags"`
-	Status    string    `json:"status"`
+	Path           string    `json:"path"`
+	Bucket         string    `json:"bucket"`
+	CreatedAt      time.Time `json:"created_at"`
+	Tags           []string  `json:"tags"`
+	Status         string    `json:"status"`
+	EmbeddingModel string    `json:"embedding_model"`
+	VectorSize     int       `json:"vector_size"`
+	IngestionID    int64     `json:"ingestion_id"`
+	SourceHash     string    `json:"source_hash,omitempty"`
 }
 
 func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 	sessionIDStr := r.URL.Query().Get("session_id")
 	tagIDs := r.URL.Query()["tag_id"]
+	embeddingModel := r.URL.Query().Get("embedding_model")
 
 	ctx := r.Context()
 	query := s.client.CodeEmbedding.Query()
@@ -48,6 +54,11 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 				query = query.Where(codeembedding.HasTagsWith(tag.ID(tID)))
 			}
 		}
+	}
+	if embeddingModel != "" {
+		query = query.Where(func(sq *sql.Selector) {
+			sq.Where(sqljson.ValueEQ(codeembedding.FieldMetadata, embeddingModel, sqljson.Path("embedding_model")))
+		})
 	}
 
 	embeddings, err := query.
@@ -76,30 +87,46 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 		if path == "" {
 			continue
 		}
+		model, _ := ce.Metadata["embedding_model"].(string)
+		vectorSize := 0
+		if rawVS, ok := ce.Metadata["vector_size"]; ok {
+			switch t := rawVS.(type) {
+			case float64:
+				vectorSize = int(t)
+			case int:
+				vectorSize = t
+			}
+		}
+		sourceHash, _ := ce.Metadata["source_hash"].(string)
+		key := path + "|" + model + "|" + strconv.Itoa(vectorSize)
 
-		if _, ok := fileMap[path]; !ok {
+		if _, ok := fileMap[key]; !ok {
 			bucket := ""
 			createdAt := ce.CreatedAt
 			if ce.Edges.Ingestion != nil {
 				bucket = ce.Edges.Ingestion.S3BucketID
 				createdAt = ce.Edges.Ingestion.CreatedAt
 			}
-			fileMap[path] = &FileInfo{
-				Path:      path,
-				Bucket:    bucket,
-				CreatedAt: createdAt,
-				Tags:      []string{},
-				Status:    "SYNCED",
+			fileMap[key] = &FileInfo{
+				Path:           path,
+				Bucket:         bucket,
+				CreatedAt:      createdAt,
+				Tags:           []string{},
+				Status:         "SYNCED",
+				EmbeddingModel: model,
+				VectorSize:     vectorSize,
+				IngestionID:    ce.IngestionID,
+				SourceHash:     sourceHash,
 			}
 		}
 
 		tagSet := make(map[string]bool)
-		for _, t := range fileMap[path].Tags {
+		for _, t := range fileMap[key].Tags {
 			tagSet[t] = true
 		}
 		for _, t := range ce.Edges.Tags {
 			if !tagSet[t.Name] {
-				fileMap[path].Tags = append(fileMap[path].Tags, t.Name)
+				fileMap[key].Tags = append(fileMap[key].Tags, t.Name)
 				tagSet[t.Name] = true
 			}
 		}
@@ -110,6 +137,9 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 		files = append(files, f)
 	}
 	sort.Slice(files, func(i, j int) bool {
+		if files[i].Path == files[j].Path {
+			return files[i].EmbeddingModel < files[j].EmbeddingModel
+		}
 		return files[i].Path < files[j].Path
 	})
 
@@ -119,6 +149,7 @@ func (s *StorageService) GetFiles(w http.ResponseWriter, r *http.Request) {
 
 func (s *StorageService) GetFileVectors(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
+	embeddingModel := r.URL.Query().Get("embedding_model")
 	if path == "" {
 		http.Error(w, "Path is required", http.StatusBadRequest)
 		return
@@ -128,7 +159,10 @@ func (s *StorageService) GetFileVectors(w http.ResponseWriter, r *http.Request) 
 	// Query embeddings where metadata->'path' matches the given path
 	embeddings, err := s.client.CodeEmbedding.Query().
 		Where(func(sq *sql.Selector) {
-			sq.Where(sql.ExprP("metadata->>'path' = ?", path))
+			sq.Where(sqljson.ValueEQ(codeembedding.FieldMetadata, path, sqljson.Path("path")))
+			if embeddingModel != "" {
+				sq.Where(sqljson.ValueEQ(codeembedding.FieldMetadata, embeddingModel, sqljson.Path("embedding_model")))
+			}
 		}).
 		WithIngestion().
 		WithTags().

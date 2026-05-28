@@ -83,6 +83,7 @@ const DefaultState = StateACTIVE
 const (
 	StatePENDING  State = "PENDING"
 	StateACTIVE   State = "ACTIVE"
+	StateSTAGED   State = "STAGED"
 	StateREJECTED State = "REJECTED"
 	StateEXPIRED  State = "EXPIRED"
 )
@@ -94,7 +95,7 @@ func (s State) String() string {
 // StateValidator is a validator for the "state" field enum values. It is called by the builders before save.
 func StateValidator(s State) error {
 	switch s {
-	case StatePENDING, StateACTIVE, StateREJECTED, StateEXPIRED:
+	case StatePENDING, StateACTIVE, StateSTAGED, StateREJECTED, StateEXPIRED:
 		return nil
 	default:
 		return fmt.Errorf("behavioralrule: invalid enum value for state field: %q", s)

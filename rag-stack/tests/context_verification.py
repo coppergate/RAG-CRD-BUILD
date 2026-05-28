@@ -6,7 +6,9 @@ import json
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
+from e2e_session_state import unique_session_id, unique_session_name
 from e2e_tag_state import ensure_test_tag
+from model_matrix import EMBEDDING_MODEL, model_cases
 
 # Environment Configuration
 endpoint_env = os.getenv("S3_ENDPOINT", "https://rook-ceph-rgw-ceph-object-store.rook-ceph.svc")
@@ -16,11 +18,12 @@ else:
     S3_ENDPOINT = endpoint_env
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
-GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
+CHAT_URL = os.getenv("RAG_CHAT_URL", "https://rag-admin-api.rag.hierocracy.home/api/chat/v1/rag/chat")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase-bucket")
 TAG_STATE_FILE = os.getenv(
     "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
 )
+GATEWAY_TIMEOUT_SECONDS = int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "600"))
 
 # A set of facts that are NOT in the model's base training but will be in the context
 TEST_CODEBASE = {
@@ -32,15 +35,15 @@ TEST_CODEBASE = {
 # Queries designed to verify context injection
 CONTEXT_QUERIES = [
     {
-        "question": "What protocol does Project Alpha use?",
+        "question": "Using only the uploaded context, what protocol does Project Alpha use? Answer with the exact protocol name.",
         "expected_substring": "Zeltron-9"
     },
     {
-        "question": "Who is the primary maintainer of Project Alpha?",
+        "question": "Using only the uploaded context, who is the primary maintainer of Project Alpha? Answer with the exact name.",
         "expected_substring": "Aris Thorne"
     },
     {
-        "question": "What is the secret passphrase for the beta portal?",
+        "question": "Using only the uploaded context, what is the secret passphrase for the beta portal? Answer with the exact passphrase.",
         "expected_substring": "Crimson-Sky-77"
     }
 ]
@@ -67,36 +70,59 @@ def run_context_tests():
     results = []
     
     # We use a unique session for this test run to track it in TimescaleDB
-    session_id = int(time.time())
     tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-context-")
     tag_id = tag["tag_id"]
-    print(f"  - Using Session ID: {session_id}, Tag {tag['tag_name']} (ID: {tag_id})")
-    
-    for query in CONTEXT_QUERIES:
-        print(f"  - Query: {query['question']}")
-        payload = {
-            "model": "llama3.1:latest",
-            "session_id": session_id,
-            "tags": [tag_id],
-            "messages": [{"role": "user", "content": query['question']}],
-            "temperature": 0.0 # Heat 0 for deterministic output
-        }
-        
-        try:
-            response = requests.post(GATEWAY_URL, json=payload, timeout=60)
-            if response.status_code == 200:
-                answer = response.json()['choices'][0]['message']['content']
-                passed = query['expected_substring'].lower() in answer.lower()
+    print(f"  - Using tag {tag['tag_name']} (ID: {tag_id})")
+
+    for case in model_cases():
+        print(
+            f"  - Case planner={case['planner']} executor={case['executor']} "
+            f"embedding={EMBEDDING_MODEL}"
+        )
+        for query in CONTEXT_QUERIES:
+            session_id = unique_session_id()
+            request_session_name = unique_session_name(f"context-{case['label']}")
+            print(f"    - Query: {query['question']} (session_id={session_id})")
+            payload = {
+                "prompt": query["question"],
+                "session_id": session_id,
+                "session_name": request_session_name,
+                "tags": [tag_id],
+                "planner": case["planner"],
+                "executor": case["executor"],
+                "embedding_model": EMBEDDING_MODEL,
+                "include_global": False,
+            }
+
+            try:
+                response = requests.post(CHAT_URL, json=payload, timeout=GATEWAY_TIMEOUT_SECONDS, verify=False)
+                if response.status_code == 200:
+                    data = response.json()
+                    answer = data.get("result", "")
+                    passed = query["expected_substring"].lower() in answer.lower()
+                    results.append({
+                        "case": case["name"],
+                        "question": query["question"],
+                        "passed": passed,
+                        "answer": answer[:100] + "...",
+                    })
+                    print(f"      - Pass: {passed}")
+                else:
+                    print(f"      - Error: {response.status_code} - {response.text}")
+                    results.append({
+                        "case": case["name"],
+                        "question": query["question"],
+                        "passed": False,
+                        "answer": response.text[:100] + "...",
+                    })
+            except Exception as e:
+                print(f"      - Failed to connect: {e}")
                 results.append({
-                    "question": query['question'],
-                    "passed": passed,
-                    "answer": answer[:100] + "..."
+                    "case": case["name"],
+                    "question": query["question"],
+                    "passed": False,
+                    "answer": str(e)[:100] + "...",
                 })
-                print(f"    - Pass: {passed}")
-            else:
-                print(f"    - Error: {response.status_code} - {response.text}")
-        except Exception as e:
-            print(f"    - Failed to connect: {e}")
 
     return results
 

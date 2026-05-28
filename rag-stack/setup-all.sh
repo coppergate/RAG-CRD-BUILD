@@ -248,7 +248,7 @@ fi
 echo "Repairing ingestion defaults to match current schema"
 if ! $KUBECTL exec -i -n "$DB_NAMESPACE" "$DB_POD" -- \
   psql -U postgres -d app -v ON_ERROR_STOP=1 -c \
-  "ALTER TABLE code_ingestion ALTER COLUMN created_at SET DEFAULT now();"; then
+  "ALTER TABLE code_ingestion ALTER COLUMN created_at SET DEFAULT now(); ALTER TABLE code_ingestion ALTER COLUMN created_at SET NOT NULL;"; then
   echo "ERROR: failed repairing ingestion defaults."
   exit 1
 fi
@@ -256,7 +256,7 @@ fi
 echo "Repairing embedding defaults to match current schema"
 if ! $KUBECTL exec -i -n "$DB_NAMESPACE" "$DB_POD" -- \
   psql -U postgres -d app -v ON_ERROR_STOP=1 -c \
-  "ALTER TABLE code_embedding ALTER COLUMN created_at SET DEFAULT now();"; then
+  "ALTER TABLE code_embedding ALTER COLUMN created_at SET DEFAULT now(); ALTER TABLE code_embedding ALTER COLUMN created_at SET NOT NULL;"; then
   echo "ERROR: failed repairing embedding defaults."
   exit 1
 fi

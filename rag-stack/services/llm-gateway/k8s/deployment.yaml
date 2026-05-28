@@ -67,7 +67,7 @@ spec:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "otel-collector.monitoring.svc.cluster.local:4317"
         - name: REQUEST_TIMEOUT
-          value: "120s"
+          value: "600s"
         envFrom:
         - configMapRef:
             name: llm-gateway-config

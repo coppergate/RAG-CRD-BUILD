@@ -38,7 +38,7 @@ var Config = models.ModelConfig{
 }
 If the request is ambiguous, use action_type UNKNOWN and put the exact prompt in search_queries.
 Query: %s`,
-	ExecutionHeader: "Use the following retrieved context to answer the user query. If the context does not contain the answer, state that you don't know based on the provided information.\n\nContext:\n",
+	ExecutionHeader: "Use the following retrieved context to answer the user query. If the answer appears in the context, return the exact literal answer from the context and nothing else. The answer may appear inside a longer sentence; extract the shortest exact phrase that answers the question. If the context does not contain the answer, say that you don't know.\n\nContext:\n",
 	ExecutionFooter: "\n\nUser Query: ",
 	ExecutionSuffix: "\n\nAssistant Answer: ",
 	InsufficientContextPhrases: []string{

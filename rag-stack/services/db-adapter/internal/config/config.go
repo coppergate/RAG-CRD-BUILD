@@ -24,11 +24,11 @@ func Load() *Config {
 
 	pulsarDefault := "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
 	dbDefault := "postgres://app:app@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=require"
-	ingestionDefault := "https://rag-ingestion.rag-system.svc.cluster.local"
+	ingestionDefault := "https://rag-ingestion-service.rag-system.svc.cluster.local"
 	if insecure {
 		pulsarDefault = "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
 		dbDefault = "postgres://app:app@timescaledb-rw.timescaledb.svc.cluster.local:5432/app?sslmode=disable"
-		ingestionDefault = "http://rag-ingestion.rag-system.svc.cluster.local"
+		ingestionDefault = "http://rag-ingestion-service.rag-system.svc.cluster.local"
 	}
 
 	return &Config{

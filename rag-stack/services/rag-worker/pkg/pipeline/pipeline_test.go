@@ -25,20 +25,32 @@ type MockSearcher struct {
 	mock.Mock
 }
 
-func (m *MockSearcher) Search(ctx context.Context, vector []float32, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
-	args := m.Called(ctx, vector, tags, sessionID, includeGlobal, limit)
+type MockTagSource struct {
+	mock.Mock
+}
+
+func (m *MockSearcher) Search(ctx context.Context, embeddingModel string, vector []float32, tags []int64, sessionID int64, includeGlobal bool, limit int) ([]interface{}, error) {
+	args := m.Called(ctx, embeddingModel, vector, tags, sessionID, includeGlobal, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]interface{}), args.Error(1)
 }
 
-func (m *MockSearcher) RetrieveByPaths(ctx context.Context, paths []string) ([]interface{}, error) {
-	args := m.Called(ctx, paths)
+func (m *MockSearcher) RetrieveByPaths(ctx context.Context, embeddingModel string, paths []string) ([]interface{}, error) {
+	args := m.Called(ctx, embeddingModel, paths)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]interface{}), args.Error(1)
+}
+
+func (m *MockTagSource) TagsForSession(ctx context.Context, sessionID int64) ([]int64, error) {
+	args := m.Called(ctx, sessionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]int64), args.Error(1)
 }
 
 // MockMemoryClient is a mock implementation of MemoryClient interface
@@ -46,8 +58,8 @@ type MockMemoryClient struct {
 	mock.Mock
 }
 
-func (m *MockMemoryClient) Retrieve(ctx context.Context, sessionID int64, tags []int64, query string) (*contracts.MemoryPack, error) {
-	args := m.Called(ctx, sessionID, tags, query)
+func (m *MockMemoryClient) Retrieve(ctx context.Context, sessionID int64, tags []int64, actionType, query string) (*contracts.MemoryPack, error) {
+	args := m.Called(ctx, sessionID, tags, actionType, query)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -185,7 +197,7 @@ func TestChunkResults(t *testing.T) {
 	}
 
 	// Mock RetrieveByPaths to return all chunks for file1.txt
-	mockSearcher.On("RetrieveByPaths", mock.Anything, []string{"file1.txt"}).Return([]interface{}{
+	mockSearcher.On("RetrieveByPaths", mock.Anything, "", []string{"file1.txt"}).Return([]interface{}{
 		map[string]interface{}{
 			"_qdrant_id": "1",
 			"path":       "file1.txt",
@@ -252,7 +264,8 @@ func TestHandleSearch(t *testing.T) {
 	mockExecProd := new(MockProducer)
 
 	cfg := &config.Config{
-		PlannerModel: "default-planner",
+		PlannerModel:   "default-planner",
+		EmbeddingModel: "embed-model",
 	}
 
 	h := &Handler{
@@ -270,13 +283,21 @@ func TestHandleSearch(t *testing.T) {
 	}
 
 	req := &contracts.InternalRequest{
-		Id:        "test-id",
-		SessionId: 1,
-		Prompt:    "test prompt",
+		Id:             "test-id",
+		SessionId:      1,
+		Prompt:         "test prompt",
+		EmbeddingModel: "embed-model",
 	}
 
 	mockRegistry.On("GetPlanner", "default-planner").Return(mockPlanner, nil)
+	mockRegistry.On("GetPlanner", "embed-model").Return(mockPlanner, nil)
 	mockPlanner.On("GetEmbeddings", mock.Anything, "test prompt").Return([]float32{0.1, 0.2}, nil)
+	mockPlanner.On("Plan", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
+		Objective:     "test prompt",
+		ActionType:    "FILE_SEARCH",
+		SearchQueries: []string{"found context"},
+		ContextBudget: 1,
+	}, nil, nil)
 
 	// Mock status updates
 	mockStatusProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
@@ -284,7 +305,7 @@ func TestHandleSearch(t *testing.T) {
 	})).Return(nil, nil)
 
 	// Mock search
-	mockSearcher.On("Search", mock.Anything, []float32{0.1, 0.2}, []int64(nil), int64(1), false, mock.Anything).Return([]interface{}{
+	mockSearcher.On("Search", mock.Anything, "embed-model", []float32{0.1, 0.2}, []int64(nil), int64(1), false, mock.Anything).Return([]interface{}{
 		map[string]interface{}{"content": "found context"},
 	}, nil)
 
@@ -302,6 +323,40 @@ func TestHandleSearch(t *testing.T) {
 	mockPlanner.AssertExpectations(t)
 	mockMem.AssertExpectations(t)
 	mockExecProd.AssertExpectations(t)
+}
+
+func TestResolveSearchTags_UsesDatabaseSource(t *testing.T) {
+	mockTags := new(MockTagSource)
+	h := &Handler{
+		tagSource: mockTags,
+	}
+
+	req := &contracts.InternalRequest{
+		SessionId: 123,
+		Tags:      []int64{1, 2},
+	}
+
+	mockTags.On("TagsForSession", mock.Anything, int64(123)).Return([]int64{9, 10}, nil)
+
+	tags, err := h.resolveSearchTags(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []int64{9, 10}, tags)
+	mockTags.AssertExpectations(t)
+}
+
+func TestResolveSearchTags_FallsBackToRequestTags(t *testing.T) {
+	h := &Handler{}
+
+	req := &contracts.InternalRequest{
+		SessionId: 123,
+		Tags:      []int64{10, 2, 10, 5},
+	}
+
+	tags, err := h.resolveSearchTags(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []int64{2, 5, 10}, tags)
 }
 
 func TestHandlePlan(t *testing.T) {
@@ -336,12 +391,12 @@ func TestHandlePlan(t *testing.T) {
 	}
 
 	mockRegistry.On("GetPlanner", "default-planner").Return(mockPlanner, nil)
-	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), "test prompt").Return(&contracts.MemoryPack{
+	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{"FILE_EDIT": {"edit"}}, nil)
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), "UNKNOWN", "test prompt").Return(&contracts.MemoryPack{
 		Items: []*contracts.MemoryWriteItem{
 			{Content: "history item", MemoryType: "episodic", Metadata: contracts.ToStruct(map[string]interface{}{"role": "user"})},
 		},
 	}, nil)
-	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{"FILE_EDIT": {"edit"}}, nil)
 	mockPlanner.On("Plan", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
 		Objective:     "test prompt",
 		ActionType:    "FILE_EDIT",
@@ -402,8 +457,8 @@ func TestHandlePlan_LearningLoop(t *testing.T) {
 	}
 
 	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
-	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
 	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{}, nil)
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), "UNKNOWN", req.Prompt).Return(&contracts.MemoryPack{}, nil)
 	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
 		Objective:     req.Prompt,
 		ActionType:    "FILE_EDIT",
@@ -458,7 +513,8 @@ func TestHandlePlan_MissingPlannerModel_IsPermanentFailure(t *testing.T) {
 	}
 
 	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
-	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
+	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{}, nil)
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), "UNKNOWN", req.Prompt).Return(&contracts.MemoryPack{}, nil)
 	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return(
 		(*contracts.PlannerTaskPlan)(nil),
 		nil,
@@ -505,8 +561,8 @@ func TestHandlePlan_ResetBehavior(t *testing.T) {
 	}
 
 	mockRegistry.On("GetPlanner", "p-model").Return(mockPlanner, nil)
-	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), req.Prompt).Return(&contracts.MemoryPack{}, nil)
 	mockMem.On("GetActionIdentifiers", mock.Anything).Return(map[string][]string{}, nil)
+	mockMem.On("Retrieve", mock.Anything, int64(1), []int64(nil), "UNKNOWN", req.Prompt).Return(&contracts.MemoryPack{}, nil)
 	mockPlanner.On("Plan", mock.Anything, req.Prompt, mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
 		Objective:     req.Prompt,
 		ActionType:    "UNKNOWN",
@@ -576,7 +632,6 @@ func TestHandleExec_Recursion(t *testing.T) {
 
 	// Grounding check for chunk and then final
 	mockExecutor.On("IsInsufficientContext", "I don't know enough").Return(true)
-	mockExecutor.On("IsInsufficientContext", "I don't know enough\n").Return(true)
 
 	// Mock status updates
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
@@ -596,4 +651,73 @@ func TestHandleExec_Recursion(t *testing.T) {
 	mockRegistry.AssertExpectations(t)
 	mockExecutor.AssertExpectations(t)
 	mockPlanProd.AssertExpectations(t)
+}
+
+func TestHandleExec_UsesRawResultsWhenChunkMetadataIsMissing(t *testing.T) {
+	mockRegistry := new(MockRegistry)
+	mockExecutor := new(MockExecutor)
+	mockStatusProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+	mockSessionProd := new(MockProducer)
+	mockCompletionProd := new(MockProducer)
+
+	cfg := &config.Config{
+		ExecutorModel:     "default-executor",
+		PlannerModel:      "default-planner",
+		MaxRecursionCount: 3,
+		MaxTotalChunks:    100,
+	}
+
+	h := &Handler{
+		cfg:      cfg,
+		registry: mockRegistry,
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:     mockStatusProd,
+				Results:    mockResultsProd,
+				Completion: mockCompletionProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("test-id"), mockSessionProd)
+
+	req := &contracts.InternalRequest{
+		Id:        "test-id",
+		SessionId: 1,
+		Prompt:    "test prompt",
+		Metadata: contracts.ToStruct(map[string]interface{}{
+			"raw_results": []interface{}{
+				map[string]interface{}{
+					"content": "Project Alpha uses the Zeltron-9 protocol.",
+				},
+			},
+			"recursion_budget": float64(1),
+		}),
+		ExecutorModel: "default-executor",
+	}
+
+	mockRegistry.On("GetExecutor", "default-executor").Return(mockExecutor, nil)
+	mockRegistry.On("GetPlanner", "default-planner").Return(nil, fmt.Errorf("not needed"))
+
+	mockExecutor.On("Execute", mock.Anything, "test prompt", mock.MatchedBy(func(contexts []interface{}) bool {
+		return len(contexts) == 1 && strings.Contains(fmt.Sprintf("%v", contexts[0]), "Zeltron-9")
+	}), mock.Anything).Return("Zeltron-9", nil, nil)
+	mockExecutor.On("IsInsufficientContext", "Zeltron-9").Return(false)
+
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockSessionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockCompletionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	result, err := h.handleExec(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+
+	mockRegistry.AssertExpectations(t)
+	mockExecutor.AssertExpectations(t)
+	mockStatusProd.AssertExpectations(t)
+	mockResultsProd.AssertExpectations(t)
+	mockSessionProd.AssertExpectations(t)
+	mockCompletionProd.AssertExpectations(t)
 }

@@ -4,14 +4,21 @@ import (
 	"context"
 	"strings"
 	"testing"
+
 	"app-builds/rag-worker/internal/models"
 )
 
 func TestExecutor_Execute(t *testing.T) {
 	mock := &models.MockChatClient{
 		ChatFunc: func(messages []map[string]string) (string, interface{}, error) {
-			content := messages[0]["content"]
-			if strings.Contains(content, "Query: my question") {
+			if len(messages) != 1 {
+				t.Fatalf("expected a single user prompt message, got %d", len(messages))
+			}
+
+			userContent := messages[0]["content"]
+			if strings.Contains(userContent, "some context") &&
+				strings.Contains(userContent, "User Query:") &&
+				strings.Contains(userContent, "Assistant Answer:") {
 				return "my answer", nil, nil
 			}
 			return "wrong answer", nil, nil
@@ -28,8 +35,8 @@ func TestExecutor_Execute(t *testing.T) {
 }
 
 func TestExecutor_IsInsufficientContext(t *testing.T) {
-        e := NewExecutor(nil)
-        tests := []struct {
+	e := NewExecutor(nil)
+	tests := []struct {
 		result string
 		want   bool
 	}{

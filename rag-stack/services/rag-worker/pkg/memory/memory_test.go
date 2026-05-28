@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"app-builds/common/contracts"
+	"github.com/stretchr/testify/assert"
 )
 
 type MockRoundTripper struct {
@@ -24,7 +24,11 @@ func TestRetrieve_Success(t *testing.T) {
 	mockRT := &MockRoundTripper{
 		roundTrip: func(req *http.Request) (*http.Response, error) {
 			assert.Equal(t, "/retrieve", req.URL.Path)
-			
+			var payload map[string]interface{}
+			bodyBytes, _ := io.ReadAll(req.Body)
+			_ = json.Unmarshal(bodyBytes, &payload)
+			assert.Equal(t, "FILE_EDIT", payload["action_type"])
+
 			resp := contracts.MemoryPack{
 				Items: []*contracts.MemoryWriteItem{
 					{Content: "memory 1"},
@@ -40,12 +44,12 @@ func TestRetrieve_Success(t *testing.T) {
 	}
 
 	client := &MemoryClient{
-		url: "http://localhost:8080",
+		url:    "http://localhost:8080",
 		client: &http.Client{Transport: mockRT},
 	}
 
-	pack, err := client.Retrieve(context.Background(), 1, []int64{101}, "test query")
-	
+	pack, err := client.Retrieve(context.Background(), 1, []int64{101}, "FILE_EDIT", "test query")
+
 	assert.NoError(t, err)
 	assert.Len(t, pack.Items, 2)
 	assert.Equal(t, "memory 1", pack.Items[0].Content)
@@ -62,12 +66,12 @@ func TestRetrieve_Failure(t *testing.T) {
 	}
 
 	client := &MemoryClient{
-		url: "http://localhost:8080",
+		url:    "http://localhost:8080",
 		client: &http.Client{Transport: mockRT},
 	}
 
-	pack, err := client.Retrieve(context.Background(), 1, nil, "test query")
-	
+	pack, err := client.Retrieve(context.Background(), 1, nil, "UNKNOWN", "test query")
+
 	assert.Error(t, err)
 	assert.Nil(t, pack)
 	assert.Contains(t, err.Error(), "status 500")

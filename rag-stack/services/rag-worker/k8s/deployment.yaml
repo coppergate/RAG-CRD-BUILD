@@ -86,6 +86,8 @@ spec:
           value: "2.0"
         - name: MEMORY_CONTROLLER_URL
           value: "https://memory-controller.rag-system.svc.cluster.local"
+        - name: RAG_INGESTION_URL
+          value: "https://rag-ingestion-service.rag-system.svc.cluster.local"
         - name: SSL_CERT_FILE
           value: "/etc/ssl/certs/ca-certificates.crt"
         - name: OTEL_USE_TLS

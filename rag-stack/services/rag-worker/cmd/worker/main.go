@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"app-builds/common/ent"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -23,10 +24,10 @@ import (
 	"app-builds/rag-worker/internal/models/granite31"
 	"app-builds/rag-worker/internal/models/llama3"
 	"app-builds/rag-worker/internal/ollama"
+	"app-builds/rag-worker/pkg/memory"
 	"app-builds/rag-worker/pkg/messaging"
 	"app-builds/rag-worker/pkg/pipeline"
 	"app-builds/rag-worker/pkg/search"
-	"app-builds/rag-worker/pkg/memory"
 )
 
 // main is the entry point for the rag-worker service.
@@ -49,6 +50,10 @@ func main() {
 	defer msgClient.Close()
 
 	registry := initModelRegistry(cfg)
+	tagSource, closeTagSource := initSessionTagSource(cfg)
+	if closeTagSource != nil {
+		defer closeTagSource()
+	}
 
 	dlqHandler := initDLQHandler(msgClient)
 	defer dlqHandler.Close()
@@ -87,7 +92,7 @@ func main() {
 		return nil
 	})
 
-	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher, memoryClient)
+	handler := pipeline.NewHandler(cfg, msgClient, registry, searcher, memoryClient, tagSource)
 
 	logging.Info("RAG Worker started", "stages", "multiple")
 
@@ -158,6 +163,23 @@ func initDLQHandler(msgClient *messaging.Client) *dlq.Handler {
 func initQdrantSearcher(cfg *config.Config) *search.QdrantSearcher {
 	client := clients.NewQdrantHTTPClient(cfg.QdrantAdapterURL)
 	return search.NewQdrantSearcher(cfg, client)
+}
+
+func initSessionTagSource(cfg *config.Config) (pipeline.TagSource, func()) {
+	if strings.TrimSpace(cfg.DBConnString) == "" {
+		logging.Warn("DB_CONN_STRING not set; using request tags for retrieval fallback")
+		return nil, nil
+	}
+
+	client, err := ent.Open("postgres", cfg.DBConnString)
+	if err != nil {
+		logging.Warn("failed to open DB connection for session tag resolution", "error", err)
+		return nil, nil
+	}
+
+	return pipeline.NewSessionTagSource(client), func() {
+		_ = client.Close()
+	}
 }
 
 // subscribeToStageTopics creates a shared consumer for the RAG pipeline stage topics.

@@ -7,9 +7,9 @@ import (
 // Config provides the specific configuration for Granite 3.1
 var Config = models.ModelConfig{
 	PlanningPromptTemplate: `You are a RAG Planner. Return ONLY a JSON object with the keys objective, action_type, inputs, outputs, dependencies, context_budget, confidence, blocking, risk, evidence_requirements, search_queries, and steps. Use action_type UNKNOWN when uncertain and keep search_queries narrow. Query: %s`,
-	ExecutionHeader:        "Relevant Context:\n",
-	ExecutionFooter:        "\nUser Query: ",
-	ExecutionSuffix:        "\nPlease answer based on the context above. Answer: ",
+	ExecutionHeader:        "You are a strict extraction assistant. Use the following retrieved context to answer the user query. If the answer appears in the context, return the exact literal answer from the context and nothing else. The answer may appear inside a longer sentence; extract the shortest exact phrase that answers the question. If the context does not contain the answer, say that you don't know.\n\nContext:\n",
+	ExecutionFooter:        "\n\nUser Query: ",
+	ExecutionSuffix:        "\n\nExact Answer: ",
 	InsufficientContextPhrases: []string{
 		"insufficient context",
 		"i don't have enough information",

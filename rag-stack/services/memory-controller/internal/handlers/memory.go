@@ -8,12 +8,12 @@ import (
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
 	"app-builds/common/ent/session"
+	"app-builds/common/logging"
 	"app-builds/memory-controller/internal/logic"
-	"strings"
-	"time"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"app-builds/common/logging"
+	"strings"
+	"time"
 )
 
 type SessionResponse struct {
@@ -78,7 +78,7 @@ func (h *MemoryHandler) HandleItems(w http.ResponseWriter, r *http.Request) {
 func (h *MemoryHandler) listItems(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	span := trace.SpanFromContext(ctx)
-	
+
 	sessionIDStr := r.URL.Query().Get("session_id")
 	var sessionID int64
 	if sessionIDStr != "" {
@@ -95,7 +95,7 @@ func (h *MemoryHandler) listItems(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
 }
@@ -112,13 +112,13 @@ func (h *MemoryHandler) writeItems(w http.ResponseWriter, r *http.Request) {
 	if req.Scope != nil && req.Scope.SessionId > 0 {
 		span.SetAttributes(attribute.Int64("session_id", req.Scope.SessionId))
 	}
-	
+
 	if err := h.manager.WriteItems(ctx, &req); err != nil {
 		logging.Printf("[MEMCTRL][SID:%d] Failed to write items: %v", req.Scope.SessionId, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -144,7 +144,7 @@ func (h *MemoryHandler) listSessions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	resp := make([]SessionResponse, 0, len(sessions))
 	for _, s := range sessions {
 		resp = append(resp, toSessionResponse(s))
@@ -216,7 +216,10 @@ func (h *MemoryHandler) HandleRetrieve(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	span := trace.SpanFromContext(ctx)
-	var req contracts.MemoryRetrieveRequest
+	var req struct {
+		contracts.MemoryRetrieveRequest
+		ActionType string `json:"action_type"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -226,7 +229,7 @@ func (h *MemoryHandler) HandleRetrieve(w http.ResponseWriter, r *http.Request) {
 		span.SetAttributes(attribute.Int64("session_id", req.Scope.SessionId))
 	}
 
-	pack, err := h.manager.Retrieve(ctx, &req)
+	pack, err := h.manager.Retrieve(ctx, &req.MemoryRetrieveRequest, req.ActionType)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

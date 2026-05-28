@@ -38,11 +38,17 @@ run_scenario() {
 
 echo "--- Starting Cross-Model Verification ---"
 
-# Scenario A: Llama (Planner) + Granite (Executor)
+# Scenario A: Llama (Planner) + Llama (Executor)
+run_scenario "$MODEL_LLAMA" "$MODEL_LLAMA"
+
+# Scenario B: Llama (Planner) + Granite (Executor)
 run_scenario "$MODEL_LLAMA" "$MODEL_GRANITE"
 
-# Scenario B: Granite (Planner) + Llama (Executor)
+# Scenario C: Granite (Planner) + Llama (Executor)
 run_scenario "$MODEL_GRANITE" "$MODEL_LLAMA"
+
+# Scenario D: Granite (Planner) + Granite (Executor)
+run_scenario "$MODEL_GRANITE" "$MODEL_GRANITE"
 
 echo "========================================================================"
 echo " CROSS-MODEL VERIFICATION COMPLETE"
