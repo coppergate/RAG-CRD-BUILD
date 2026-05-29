@@ -136,10 +136,12 @@ def main():
 
     tag = ensure_test_tag(state_file=TAG_STATE_FILE, prefix="test-tag-retrieval-")
     tag_id = tag["tag_id"]
-    session_id = unique_session_id()
-    session_name = unique_session_name("retrieval-path")
-    file_name = f"e2eTestBucket/retrieval-path-{session_id}.txt"
-    secret_code = f"BLUE-RETRIEVAL-{session_id}"
+    ingest_session_id = unique_session_id()
+    ingest_session_name = unique_session_name("retrieval-path-ingest")
+    query_session_id = unique_session_id()
+    query_session_name = unique_session_name("retrieval-path-query")
+    file_name = f"e2eTestBucket/retrieval-path-{ingest_session_id}.txt"
+    secret_code = f"BLUE-RETRIEVAL-{ingest_session_id}"
     content = (
         f"Retrieval path test document. The secret code is {secret_code}. "
         f"This text is used to verify ingestion, retrieval, submission, and response."
@@ -147,31 +149,34 @@ def main():
     failures = []
 
     print(f"  - Using tag {tag['tag_name']} (ID: {tag_id})")
-    print(f"  - Session ID: {session_id}")
-    print(f"  - Session Name: {session_name}")
+    print(f"  - Ingest Session ID: {ingest_session_id}")
+    print(f"  - Ingest Session Name: {ingest_session_name}")
+    print(f"  - Query Session ID: {query_session_id}")
+    print(f"  - Query Session Name: {query_session_name}")
     print(f"  - Uploading file: {file_name}")
     _upload_file(file_name, content)
 
     print("  - Triggering ingestion...")
-    _trigger_ingest(session_id, session_name, tag_id, file_name)
-    _associate_session_tags(session_id, tag_id)
-    if not _wait_for_synced_file(session_id, file_name):
+    _trigger_ingest(ingest_session_id, ingest_session_name, tag_id, file_name)
+    _associate_session_tags(ingest_session_id, tag_id)
+    if not _wait_for_synced_file(ingest_session_id, file_name):
         failures.append("file did not reach SYNCED state within the wait window")
 
+    _associate_session_tags(query_session_id, tag_id)
     print("  - Submitting retrieval query...")
     question = "What is the secret code in the retrieval path test document? Answer with the exact code."
     try:
-        _submit_query(session_id, session_name, tag_id, question, secret_code)
+        _submit_query(query_session_id, query_session_name, tag_id, question, secret_code)
     except Exception as exc:
         failures.append(f"retrieval query failed: {exc}")
     else:
         try:
-            _verify_replay(session_id)
+            _verify_replay(query_session_id)
         except Exception as exc:
             failures.append(f"session replay verification failed: {exc}")
 
         try:
-            _verify_audit(session_id)
+            _verify_audit(query_session_id)
         except Exception as exc:
             failures.append(f"retrieval audit verification failed: {exc}")
 
