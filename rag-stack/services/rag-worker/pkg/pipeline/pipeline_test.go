@@ -809,3 +809,49 @@ func TestHandleExec_ExtractsLiteralAnswerWhenExecutorRefuses(t *testing.T) {
 	mockResultsProd.AssertExpectations(t)
 	mockCompletionProd.AssertExpectations(t)
 }
+
+func TestBuildPlanStepContexts_OmitsUnknownActionFromStepPrompt(t *testing.T) {
+	plan := &contracts.PlannerTaskPlan{
+		Objective: "What is the best way to tend a flower?",
+		Steps: []contracts.PlannerStep{
+			{
+				Order:      1,
+				Objective:  "Answer from retrieved context",
+				ActionType: "UNKNOWN",
+				SearchQueries: []string{
+					"best way to tend a flower",
+				},
+				ContextBudget: 1,
+			},
+		},
+	}
+
+	groups := []chunkGroupDetail{
+		{
+			Texts: []string{
+				"--- File: e2eTestBucket/retrieval-path.txt ---\nThe best way to tend a flower is to water it lightly, trim dead petals, and place it where it gets soft morning sunlight.",
+			},
+		},
+	}
+
+	metadata := buildPlanStepContexts(plan, groups)
+	if len(metadata) != 1 {
+		t.Fatalf("expected one step context, got %d", len(metadata))
+	}
+
+	stepPrompt, _ := metadata[0]["step_prompt"].(string)
+	if strings.Contains(stepPrompt, "Step action: UNKNOWN") {
+		t.Fatalf("unexpected UNKNOWN action in step prompt: %q", stepPrompt)
+	}
+	if !strings.Contains(stepPrompt, "Answer from retrieved context") {
+		t.Fatalf("missing step objective in step prompt: %q", stepPrompt)
+	}
+
+	contexts, _ := metadata[0]["contexts"].([]interface{})
+	if len(contexts) != 1 {
+		t.Fatalf("expected one grouped context, got %d", len(contexts))
+	}
+	if !strings.Contains(fmt.Sprintf("%v", contexts[0]), "The best way to tend a flower is") {
+		t.Fatalf("grouped context did not preserve answer text: %#v", contexts[0])
+	}
+}

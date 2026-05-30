@@ -1445,11 +1445,12 @@ func buildPlanStepContexts(plan *contracts.PlannerTaskPlan, groups []chunkGroupD
 		if strings.TrimSpace(stepPrompt) == "" {
 			stepPrompt = plan.Objective
 		}
-		if strings.TrimSpace(step.ActionType) != "" {
+		actionType := strings.TrimSpace(step.ActionType)
+		if actionType != "" && strings.ToUpper(actionType) != contracts.PlannerActionUnknown {
 			if stepPrompt != "" {
 				stepPrompt += "\n"
 			}
-			stepPrompt += fmt.Sprintf("Step action: %s", step.ActionType)
+			stepPrompt += fmt.Sprintf("Step action: %s", actionType)
 		}
 
 		results = append(results, map[string]interface{}{
