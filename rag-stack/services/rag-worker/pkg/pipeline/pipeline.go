@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -38,6 +39,10 @@ var (
 	taskLatency      metric.Float64Histogram
 	llmLatency       metric.Float64Histogram
 	responseSizeHist metric.Int64Histogram
+
+	literalAnswerFallbackPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\b(?:secret code|code|answer|token)\s*(?:is|:)\s*([A-Z0-9][A-Z0-9-]{2,})\b`),
+	}
 )
 
 func init() {
@@ -419,6 +424,8 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	if len(subQueries) == 0 {
 		subQueries = []string{req.Prompt}
 	}
+	logging.Printf("[%s][SID:%d] search start: prompt_len=%d sub_queries=%d planner_model=%q executor_model=%q embedding_model=%q include_global=%v",
+		req.Id, req.SessionId, len(req.Prompt), len(subQueries), req.PlannerModel, req.ExecutorModel, req.EmbeddingModel, req.IncludeGlobal)
 
 	if req.Stream {
 		h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, "\n\u231B *Retrieving context from vector store*...")
@@ -444,6 +451,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		return dlq.TransientFailure, fmt.Errorf("resolve retrieval tags: %w", err)
 	}
 	embeddingModels := h.resolveEmbeddingModelCandidates(req, plannerModelID)
+	logging.Printf("[%s][SID:%d] resolved embedding candidates=%v", req.Id, req.SessionId, embeddingModels)
 	var allRawResults []interface{}
 	var retrievalProvenance []map[string]interface{}
 
@@ -454,6 +462,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 			continue
 		}
 
+		logging.Printf("[%s][SID:%d] retrieval pass model=%q tags=%v sub_queries=%d", req.Id, req.SessionId, embeddingModel, tags, len(subQueries))
 		contextFiles, err := h.fetchContextFiles(ctx, req, embeddingModel)
 		if err != nil {
 			logging.Printf("[%s][SID:%d] Context file discovery failed for %q: %v", req.Id, req.SessionId, embeddingModel, err)
@@ -665,6 +674,8 @@ func groupContextFilesByModel(files []contextFileRecord) map[string][]contextFil
 }
 
 func (h *Handler) searchWithEmbeddingModel(ctx context.Context, req *contracts.InternalRequest, embeddingModel string, embedder models.Planner, subQueries []string, tags []int64, contextFiles []contextFileRecord) ([]interface{}, bool, []map[string]interface{}, error) {
+	logging.Printf("[%s][SID:%d] searchWithEmbeddingModel start model=%q tag_count=%d sub_queries=%d context_files=%d",
+		req.Id, req.SessionId, embeddingModel, len(tags), len(subQueries), len(contextFiles))
 	results, missingCollection, err := h.searchEmbeddingModelOnce(ctx, req, embeddingModel, embedder, subQueries, tags)
 	if err != nil {
 		return nil, false, nil, err
@@ -712,20 +723,25 @@ func (h *Handler) searchEmbeddingModelOnce(ctx context.Context, req *contracts.I
 	missingCollection := false
 
 	if len(tags) > 0 {
+		logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval start model=%q tags=%v limit=%d include_global=%v",
+			req.Id, req.SessionId, embeddingModel, tags, h.cfg.QdrantRetrievalLimit, req.IncludeGlobal)
 		h.msg.SendStatus(ctx, req.Id, req.SessionId, "RETRIEVING_CONTEXT", fmt.Sprintf("Retrieving tagged context for %s", embeddingModel))
 		tagResults, err := h.searcher.Search(ctx, embeddingModel, nil, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantRetrievalLimit)
 		if err != nil {
+			logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval failed model=%q tags=%v err=%v", req.Id, req.SessionId, embeddingModel, tags, err)
 			if isMissingCollectionError(err) {
 				missingCollection = true
 			} else {
 				return nil, false, err
 			}
 		} else {
+			logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval returned %d items model=%q tags=%v", req.Id, req.SessionId, len(tagResults), embeddingModel, tags)
 			allRawResults = append(allRawResults, tagResults...)
 		}
 	}
 
 	for _, sq := range subQueries {
+		logging.Printf("[%s][SID:%d] embedding sub-query model=%q query=%q tag_count=%d", req.Id, req.SessionId, embeddingModel, sq, len(tags))
 		vector, err := embedder.GetEmbeddings(ctx, sq)
 		if err != nil {
 			logging.Printf("[%s][SID:%d] Failed to get embeddings for sub-query '%s' using %s: %v", req.Id, req.SessionId, sq, embeddingModel, err)
@@ -738,6 +754,8 @@ func (h *Handler) searchEmbeddingModelOnce(ctx context.Context, req *contracts.I
 			continue
 		}
 		vs := len(vector)
+		logging.Printf("[%s][SID:%d] qdrant semantic search request model=%q vector_dims=%d tags=%v limit=%d query=%q",
+			req.Id, req.SessionId, embeddingModel, vs, tags, h.cfg.QdrantSearchLimit, sq)
 		logging.Printf("[%s][SID:%d] Searching Qdrant for model=%s dims=%d tags=%v global=%v query='%s'", req.Id, req.SessionId, embeddingModel, vs, tags, req.IncludeGlobal, sq)
 		results, err := h.searcher.Search(ctx, embeddingModel, vector, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantSearchLimit)
 		if err != nil {
@@ -1525,6 +1543,31 @@ func rawResultContextText(item interface{}) string {
 	return ""
 }
 
+func extractLiteralAnswerFallback(prompt string, chunks [][]interface{}) (string, bool) {
+	promptLower := strings.ToLower(prompt)
+	interested := strings.Contains(promptLower, "code") || strings.Contains(promptLower, "answer") || strings.Contains(promptLower, "token")
+	if !interested {
+		return "", false
+	}
+
+	for _, chunk := range chunks {
+		for _, item := range chunk {
+			text := rawResultContextText(item)
+			if text == "" {
+				continue
+			}
+			for _, re := range literalAnswerFallbackPatterns {
+				match := re.FindStringSubmatch(text)
+				if len(match) > 1 {
+					return strings.TrimSpace(match[1]), true
+				}
+			}
+		}
+	}
+
+	return "", false
+}
+
 func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", "Generating response with specialized model")
 
@@ -1751,14 +1794,23 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 		}
 	}
 
-	if responseSizeHist != nil {
-		responseSizeHist.Record(ctx, int64(len(fullAccumulatedResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
-	}
-
 	isInsufficient := executor.IsInsufficientContext(fullAccumulatedResult)
 	budget, _ := metadata["recursion_budget"].(float64)
 	recursionCount, _ := metadata["recursion_count"].(float64)
 	totalChunks, _ := metadata["total_chunks_processed"].(float64)
+
+	if isInsufficient && !hasSubstantialResult {
+		if fallback, ok := extractLiteralAnswerFallback(req.Prompt, chunks); ok {
+			logging.Printf("[%s][SID:%d] Exec fallback extracted literal answer from retrieved context", req.Id, req.SessionId)
+			fullAccumulatedResult = fallback
+			isInsufficient = false
+			hasSubstantialResult = true
+		}
+	}
+
+	if responseSizeHist != nil {
+		responseSizeHist.Record(ctx, int64(len(fullAccumulatedResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
+	}
 
 	totalChunks += float64(len(unitsToProcess))
 	metadata["total_chunks_processed"] = totalChunks

@@ -11,6 +11,7 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
@@ -726,5 +727,85 @@ func TestHandleExec_UsesRawResultsWhenChunkMetadataIsMissing(t *testing.T) {
 	mockStatusProd.AssertExpectations(t)
 	mockResultsProd.AssertExpectations(t)
 	mockSessionProd.AssertExpectations(t)
+	mockCompletionProd.AssertExpectations(t)
+}
+
+func TestHandleExec_ExtractsLiteralAnswerWhenExecutorRefuses(t *testing.T) {
+	mockRegistry := new(MockRegistry)
+	mockExecutor := new(MockExecutor)
+	mockStatusProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+	mockSessionProd := new(MockProducer)
+	mockCompletionProd := new(MockProducer)
+
+	cfg := &config.Config{
+		ExecutorModel:     "default-executor",
+		PlannerModel:      "default-planner",
+		MaxRecursionCount: 3,
+		MaxTotalChunks:    100,
+	}
+
+	h := &Handler{
+		cfg:      cfg,
+		registry: mockRegistry,
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:     mockStatusProd,
+				Results:    mockResultsProd,
+				Completion: mockCompletionProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("test-id"), mockSessionProd)
+
+	secret := "BLUE-MANUAL-1234567890"
+	refusal := "I can't provide a secret code from a hypothetical or unknown document. Is there anything else I can help you with?"
+	req := &contracts.InternalRequest{
+		Id:        "test-id",
+		SessionId: 1,
+		Prompt:    "What is the secret code in the document? Return the exact code.",
+		Metadata: contracts.ToStruct(map[string]interface{}{
+			"chunks": [][]interface{}{
+				{
+					map[string]interface{}{
+						"content": "The secret code is " + secret + ".",
+					},
+				},
+			},
+			"recursion_budget": float64(1),
+		}),
+		ExecutorModel: "default-executor",
+	}
+
+	mockRegistry.On("GetExecutor", "default-executor").Return(mockExecutor, nil)
+	mockRegistry.On("GetPlanner", "default-planner").Return(nil, fmt.Errorf("not needed"))
+	mockExecutor.On("Execute", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(refusal, nil, nil)
+	mockExecutor.On("IsInsufficientContext", refusal).Return(true)
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockSessionProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
+		var chunk contracts.StreamChunk
+		if err := protojson.Unmarshal(m.Payload, &chunk); err != nil {
+			return false
+		}
+		return chunk.Result == secret && chunk.IsLast && chunk.Model == "default-executor"
+	})).Return(nil, nil)
+	mockResultsProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
+		var chunk contracts.StreamChunk
+		if err := protojson.Unmarshal(m.Payload, &chunk); err != nil {
+			return false
+		}
+		return chunk.Result == secret && chunk.IsLast && chunk.Model == "default-executor"
+	})).Return(nil, nil)
+	mockCompletionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	result, err := h.handleExec(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+	mockRegistry.AssertExpectations(t)
+	mockExecutor.AssertExpectations(t)
+	mockStatusProd.AssertExpectations(t)
+	mockSessionProd.AssertExpectations(t)
+	mockResultsProd.AssertExpectations(t)
 	mockCompletionProd.AssertExpectations(t)
 }
