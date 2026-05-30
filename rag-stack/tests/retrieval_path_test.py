@@ -5,6 +5,8 @@ from datetime import datetime
 
 import boto3
 import requests
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
 
 from e2e_session_state import cleanup_test_sessions, unique_session_id, unique_session_name
 from e2e_tag_state import ensure_test_tag
@@ -18,11 +20,121 @@ BUCKET_NAME = os.getenv("BUCKET_NAME", "rag-codebase-bucket")
 TAG_STATE_FILE = os.getenv("RAG_E2E_RETRIEVAL_TAG_STATE_FILE", "/tmp/rag-e2e-retrieval-tag-state.json")
 GATEWAY_TIMEOUT_SECONDS = int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "600"))
 VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "4096"))
+QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+QDRANT_USE_TLS = os.getenv("QDRANT_USE_TLS", "false").lower() == "true"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "https://ollama.llms-ollama.svc.cluster.local:11434").rstrip("/")
+QDRANT_BYPASS_ONLY = os.getenv("RAG_E2E_QDRANT_BYPASS_ONLY", "false").lower() == "true"
 
 
 def _s3_client():
     verify = os.getenv("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt")
     return boto3.client("s3", endpoint_url=S3_ENDPOINT, verify=verify)
+
+
+def _normalize_model_name(model: str) -> str:
+    normalized = []
+    last_dash = False
+    for ch in model.strip().lower():
+        if ch.isalnum():
+            normalized.append(ch)
+            last_dash = False
+        elif not last_dash:
+            normalized.append("-")
+            last_dash = True
+    return "".join(normalized).strip("-")
+
+
+def _collection_name(prefix: str, embedding_model: str, vector_size: int) -> str:
+    base = prefix.strip() or "vectors"
+    normalized = _normalize_model_name(embedding_model)
+    if normalized and vector_size > 0:
+        return f"{base}-{normalized}-{vector_size}"
+    if normalized:
+        return f"{base}-{normalized}"
+    if vector_size > 0:
+        return f"{base}-{vector_size}"
+    return base
+
+
+def _qdrant_client():
+    return QdrantClient(
+        host=QDRANT_HOST,
+        port=QDRANT_PORT,
+        https=QDRANT_USE_TLS,
+        prefer_grpc=False,
+        timeout=60,
+    )
+
+
+def _ollama_embeddings(text: str, model: str):
+    resp = requests.post(
+        f"{OLLAMA_URL}/api/embeddings",
+        json={"model": model, "prompt": text},
+        timeout=120,
+        verify=False,
+    )
+    resp.raise_for_status()
+    return resp.json()["embedding"]
+
+
+def _probe_qdrant_storage(tag_id: int, question: str, embedding_model: str):
+    collection_name = _collection_name("vectors", embedding_model, VECTOR_SIZE)
+    print(
+        f"  - [QDRANT] Direct probe collection={collection_name} "
+        f"model={embedding_model} dim={VECTOR_SIZE} tag={tag_id}"
+    )
+
+    client = _qdrant_client()
+    try:
+        info = client.get_collection(collection_name)
+        points = getattr(info, "points_count", None)
+        print(f"    - Collection exists; points_count={points}")
+    except Exception as exc:
+        print(f"    - [WARN] collection lookup failed: {exc}")
+        return {"scroll_count": 0, "search_count": 0}
+
+    tag_filter = models.Filter(
+        must=[
+            models.FieldCondition(
+                key="tags",
+                match=models.MatchAny(any=[tag_id]),
+            )
+        ]
+    )
+
+    scroll_points, _ = client.scroll(
+        collection_name=collection_name,
+        scroll_filter=tag_filter,
+        limit=20,
+        with_payload=True,
+        with_vectors=False,
+    )
+    print(f"    - Filter-only scroll returned {len(scroll_points)} points")
+    for point in scroll_points[:3]:
+        payload = point.payload or {}
+        print(
+            f"      - point_id={point.id} path={payload.get('path')} "
+            f"session_id={payload.get('session_id')} tags={payload.get('tags')}"
+        )
+
+    query_vector = _ollama_embeddings(question, embedding_model)
+    search_points = client.search(
+        collection_name=collection_name,
+        query_vector=query_vector,
+        query_filter=tag_filter,
+        limit=10,
+        with_payload=True,
+    )
+    print(f"    - Vector+tag search returned {len(search_points)} points")
+    for point in search_points[:3]:
+        payload = point.payload or {}
+        print(
+            f"      - point_id={point.id} score={point.score:.4f} path={payload.get('path')} "
+            f"session_id={payload.get('session_id')} tags={payload.get('tags')}"
+        )
+
+    return {"scroll_count": len(scroll_points), "search_count": len(search_points)}
 
 
 def _upload_file(key: str, content: str) -> None:
@@ -141,9 +253,10 @@ def main():
     query_session_id = unique_session_id()
     query_session_name = unique_session_name("retrieval-path-query")
     file_name = f"e2eTestBucket/retrieval-path-{ingest_session_id}.txt"
-    secret_code = f"BLUE-RETRIEVAL-{ingest_session_id}"
+    answer = "the best way to tend a flower is to water it lightly, trim dead petals, and place it where it gets soft morning sunlight"
+    question = "What is the best way to tend a flower? Return the exact answer from the document."
     content = (
-        f"Retrieval path test document. The secret code is {secret_code}. "
+        f"Retrieval path test document. The best way to tend a flower is {answer}. "
         f"This text is used to verify ingestion, retrieval, submission, and response."
     )
     failures = []
@@ -163,10 +276,20 @@ def main():
         failures.append("file did not reach SYNCED state within the wait window")
 
     _associate_session_tags(query_session_id, tag_id)
+    qdrant_probe = _probe_qdrant_storage(tag_id, question, EMBEDDING_MODEL)
+    print(f"  - Qdrant direct probe summary: {qdrant_probe}")
+    if QDRANT_BYPASS_ONLY:
+        print("  - QDRANT bypass-only mode enabled; skipping gateway submission.")
+        if qdrant_probe["scroll_count"] == 0 and qdrant_probe["search_count"] == 0:
+            failures.append("direct Qdrant probe returned no rows")
+        if failures:
+            raise RuntimeError("; ".join(failures))
+        print("[SUCCESS] Retrieval path test passed.")
+        return
+
     print("  - Submitting retrieval query...")
-    question = "What is the secret code in the retrieval path test document? Answer with the exact code."
     try:
-        _submit_query(query_session_id, query_session_name, tag_id, question, secret_code)
+        _submit_query(query_session_id, query_session_name, tag_id, question, answer)
     except Exception as exc:
         failures.append(f"retrieval query failed: {exc}")
     else:

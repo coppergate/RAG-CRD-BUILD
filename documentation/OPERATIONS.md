@@ -704,6 +704,18 @@ Session context is managed by the `memory-controller` service and consumed by th
 ### 10.1 Context Paging and Chunking Verification
 The RAG pipeline supports exhaustive context retrieval (up to 10,000 vectors) and partitioning into 50-vector chunks for LLM processing. This ensures that large tag-based collections can be processed within the model's context window.
 
+#### 10.1.1 Isolated Retrieval Path Test
+When troubleshooting ingestion/retrieval behavior, run the isolated retrieval test first so you can compare direct Qdrant storage access with the gateway path.
+
+```bash
+cd /mnt/hegemon-share/share/code/complete-build/rag-stack/tests
+RAG_E2E_QDRANT_BYPASS_ONLY=true python retrieval_path_test.py
+```
+
+- The test probes Qdrant directly using the resolved embedding model, vector size, and tags before submitting the gateway request.
+- Set `RAG_E2E_QDRANT_BYPASS_ONLY=true` to stop after the direct Qdrant probe and confirm whether the storage layer contains the expected points.
+- Use the full test run without the bypass flag once the direct probe shows the expected rows, so the gateway and response path are validated against the same data.
+
 #### 10.2 Behavioral Governance (Iteration 9)
 
 ##### 10.2.1 Action Taxonomy

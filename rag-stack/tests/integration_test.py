@@ -58,15 +58,124 @@ else:
     S3_ENDPOINT = endpoint_env
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+QDRANT_USE_TLS = os.getenv("QDRANT_USE_TLS", "false").lower() == "true"
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
 CHAT_URL = os.getenv("RAG_CHAT_URL", "https://rag-admin-api.rag.hierocracy.home/api/chat/v1/rag/chat")
 ADMIN_URL = os.getenv("ADMIN_URL", "https://rag-admin-api.rag.hierocracy.home")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "https://ollama.llms-ollama.svc.cluster.local:11434").rstrip("/")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "e2eTestBucket")
 S3_INDEX = "/e2eTestBucket"
 TAG_STATE_FILE = os.getenv(
     "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
 )
 GATEWAY_TIMEOUT_SECONDS = int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "600"))
+QDRANT_BYPASS_ONLY = os.getenv("RAG_E2E_QDRANT_BYPASS_ONLY", "false").lower() == "true"
+
+
+def _normalize_model_name(model: str) -> str:
+    normalized = []
+    last_dash = False
+    for ch in model.strip().lower():
+        if ch.isalnum():
+            normalized.append(ch)
+            last_dash = False
+        elif not last_dash:
+            normalized.append("-")
+            last_dash = True
+    return "".join(normalized).strip("-")
+
+
+def _collection_name(prefix: str, embedding_model: str, vector_size: int) -> str:
+    base = prefix.strip() or "vectors"
+    normalized = _normalize_model_name(embedding_model)
+    if normalized and vector_size > 0:
+        return f"{base}-{normalized}-{vector_size}"
+    if normalized:
+        return f"{base}-{normalized}"
+    if vector_size > 0:
+        return f"{base}-{vector_size}"
+    return base
+
+
+def _qdrant_client():
+    return QdrantClient(
+        host=QDRANT_HOST,
+        port=QDRANT_PORT,
+        https=QDRANT_USE_TLS,
+        prefer_grpc=False,
+        timeout=60,
+    )
+
+
+def _ollama_embeddings(text: str, model: str):
+    resp = requests.post(
+        f"{OLLAMA_URL}/api/embeddings",
+        json={"model": model, "prompt": text},
+        timeout=120,
+        verify=False,
+    )
+    resp.raise_for_status()
+    return resp.json()["embedding"]
+
+
+def _probe_qdrant_storage(tag_id: int, question: str, embedding_model: str):
+    collection_name = _collection_name("vectors", embedding_model, VECTOR_SIZE)
+    print(
+        f"  - [QDRANT] Direct probe collection={collection_name} "
+        f"model={embedding_model} dim={VECTOR_SIZE} tag={tag_id}"
+    )
+
+    client = _qdrant_client()
+    try:
+        info = client.get_collection(collection_name)
+        points = getattr(info, "points_count", None)
+        print(f"    - Collection exists; points_count={points}")
+    except Exception as exc:
+        print(f"    - [WARN] collection lookup failed: {exc}")
+        return {"scroll_count": 0, "search_count": 0}
+
+    tag_filter = models.Filter(
+        must=[
+            models.FieldCondition(
+                key="tags",
+                match=models.MatchAny(any=[tag_id]),
+            )
+        ]
+    )
+
+    scroll_points, _ = client.scroll(
+        collection_name=collection_name,
+        scroll_filter=tag_filter,
+        limit=20,
+        with_payload=True,
+        with_vectors=False,
+    )
+    print(f"    - Filter-only scroll returned {len(scroll_points)} points")
+    for point in scroll_points[:3]:
+        payload = point.payload or {}
+        print(
+            f"      - point_id={point.id} path={payload.get('path')} "
+            f"session_id={payload.get('session_id')} tags={payload.get('tags')}"
+        )
+
+    query_vector = _ollama_embeddings(question, embedding_model)
+    search_points = client.search(
+        collection_name=collection_name,
+        query_vector=query_vector,
+        query_filter=tag_filter,
+        limit=10,
+        with_payload=True,
+    )
+    print(f"    - Vector+tag search returned {len(search_points)} points")
+    for point in search_points[:3]:
+        payload = point.payload or {}
+        print(
+            f"      - point_id={point.id} score={point.score:.4f} path={payload.get('path')} "
+            f"session_id={payload.get('session_id')} tags={payload.get('tags')}"
+        )
+
+    return {"scroll_count": len(scroll_points), "search_count": len(search_points)}
 
 def test_s3_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing S3 Operations...")
@@ -175,6 +284,15 @@ def test_rag_retrieval(tag_id):
                 ],
             }
             try:
+                qdrant_probe = _probe_qdrant_storage(tag_id, query, EMBEDDING_MODEL)
+                print(f"    - Qdrant direct probe summary: {qdrant_probe}")
+                if QDRANT_BYPASS_ONLY:
+                    print("    - QDRANT bypass-only mode enabled; skipping gateway submission.")
+                    if qdrant_probe["scroll_count"] == 0 and qdrant_probe["search_count"] == 0:
+                        raise RuntimeError("direct Qdrant probe returned no rows")
+                    case_results.append("qdrant-bypass")
+                    continue
+
                 headers = {}
                 if OTEL_ENABLED:
                     with tracer.start_as_current_span("gateway_request") as span:

@@ -7,6 +7,7 @@ import (
 	"app-builds/common/contracts"
 	"app-builds/common/ent"
 	"app-builds/common/ent/session"
+	"app-builds/common/logging"
 )
 
 // TagSource resolves the authoritative retrieval tags for a session.
@@ -28,12 +29,15 @@ type sessionTagSource struct {
 
 func (s *sessionTagSource) TagsForSession(ctx context.Context, sessionID int64) ([]int64, error) {
 	if s == nil || s.client == nil {
+		logging.Printf("[tag-source] no DB client available for session %d", sessionID)
 		return nil, nil
 	}
 	if sessionID <= 0 {
+		logging.Printf("[tag-source] invalid session id %d", sessionID)
 		return nil, nil
 	}
 
+	logging.Printf("[tag-source] resolving tags for session %d", sessionID)
 	sess, err := s.client.Session.Query().
 		Where(session.ID(sessionID)).
 		WithTags().
@@ -56,6 +60,7 @@ func (s *sessionTagSource) TagsForSession(ctx context.Context, sessionID int64) 
 	}
 
 	sort.Slice(tagIDs, func(i, j int) bool { return tagIDs[i] < tagIDs[j] })
+	logging.Printf("[tag-source] resolved tags for session %d: %v", sessionID, tagIDs)
 	return tagIDs, nil
 }
 
@@ -80,18 +85,27 @@ func normalizeTagIDs(tagIDs []int64) []int64 {
 }
 
 func (h *Handler) resolveSearchTags(ctx context.Context, req *contracts.InternalRequest) ([]int64, error) {
+	logging.Printf("[%s][SID:%d] resolving search tags from request tags=%v", req.Id, req.SessionId, req.Tags)
 	if h.tagSource == nil {
-		return normalizeTagIDs(req.Tags), nil
+		tags := normalizeTagIDs(req.Tags)
+		logging.Printf("[%s][SID:%d] no tag source configured; using request tags=%v", req.Id, req.SessionId, tags)
+		return tags, nil
 	}
 	tags, err := h.tagSource.TagsForSession(ctx, req.SessionId)
 	if err != nil {
+		logging.Printf("[%s][SID:%d] tag source lookup failed: %v", req.Id, req.SessionId, err)
 		if len(req.Tags) > 0 {
-			return normalizeTagIDs(req.Tags), nil
+			tags := normalizeTagIDs(req.Tags)
+			logging.Printf("[%s][SID:%d] falling back to request tags=%v", req.Id, req.SessionId, tags)
+			return tags, nil
 		}
 		return nil, err
 	}
 	if len(tags) == 0 && len(req.Tags) > 0 {
-		return normalizeTagIDs(req.Tags), nil
+		tags := normalizeTagIDs(req.Tags)
+		logging.Printf("[%s][SID:%d] session tags empty; falling back to request tags=%v", req.Id, req.SessionId, tags)
+		return tags, nil
 	}
+	logging.Printf("[%s][SID:%d] resolved retrieval tags=%v", req.Id, req.SessionId, tags)
 	return tags, nil
 }

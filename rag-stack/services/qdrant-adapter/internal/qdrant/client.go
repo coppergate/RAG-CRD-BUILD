@@ -36,6 +36,8 @@ func (q *QdrantClient) Search(collection string, embeddingModel string, vectorSi
 	if limit <= 0 {
 		limit = 20 // Default limit
 	}
+	logging.Printf("[qdrant] search request collection=%q model=%q vector_dims=%d limit=%d tags=%v session_id=%d include_global=%v",
+		collection, embeddingModel, len(vector), limit, tags, sessionID, includeGlobal)
 	return q.searchWithRetry(collection, embeddingModel, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
 }
 
@@ -87,9 +89,11 @@ func resolveCollection(q *QdrantClient, collection, embeddingModel string, vecto
 func (q *QdrantClient) searchWithRetry(collection string, embeddingModel string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]interface{}, error) {
 	if len(vector) == 0 {
 		if len(tags) > 0 {
-			logging.Printf("Empty vector but tags provided, falling back to filter-only retrieval")
+			logging.Printf("[qdrant] empty vector with tags, using filter-only retrieval collection=%q model=%q vector_size=%d tags=%v session_id=%d include_global=%v limit=%d",
+				collection, embeddingModel, vectorSize, tags, sessionID, includeGlobal, limit)
 			return q.RetrieveByFilter(collection, embeddingModel, vectorSize, tags, sessionID, includeGlobal, limit)
 		}
+		logging.Printf("[qdrant] empty vector and no tags, returning no results collection=%q model=%q session_id=%d", collection, embeddingModel, sessionID)
 		return nil, nil // Cannot search with empty vector and no tags
 	}
 
@@ -111,7 +115,7 @@ func (q *QdrantClient) searchWithRetry(collection string, embeddingModel string,
 
 	if filter := buildTagFilter(tags); len(filter) > 0 {
 		query["filter"] = filter
-		logging.Printf("DEBUG: Qdrant Search Filter (tags=%v): %+v", tags, query["filter"])
+		logging.Printf("[qdrant] search filter tags=%v filter=%+v", tags, query["filter"])
 	}
 
 	body, err := json.Marshal(query)
@@ -152,6 +156,7 @@ func (q *QdrantClient) searchWithRetry(collection string, embeddingModel string,
 		payload["_qdrant_id"] = fmt.Sprintf("%v", r.Id)
 		contexts = append(contexts, payload)
 	}
+	logging.Printf("[qdrant] search response collection=%q model=%q vector_dims=%d tags=%v results=%d", effectiveColl, embeddingModel, len(vector), tags, len(contexts))
 
 	return contexts, nil
 }
@@ -179,6 +184,8 @@ func (q *QdrantClient) RetrieveByFilter(collection string, embeddingModel string
 	if filter := buildTagFilter(tags); len(filter) > 0 {
 		query["filter"] = filter
 	}
+	logging.Printf("[qdrant] filter-only retrieval request collection=%q model=%q vector_size=%d tags=%v session_id=%d include_global=%v limit=%d",
+		effectiveColl, embeddingModel, vs, tags, sessionID, includeGlobal, limit)
 
 	body, _ := json.Marshal(query)
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
@@ -219,6 +226,7 @@ func (q *QdrantClient) RetrieveByFilter(collection string, embeddingModel string
 		payload["_qdrant_id"] = fmt.Sprintf("%v", p.Id)
 		results = append(results, payload)
 	}
+	logging.Printf("[qdrant] filter-only retrieval response collection=%q model=%q vector_size=%d tags=%v results=%d", effectiveColl, embeddingModel, vs, tags, len(results))
 	return results, nil
 }
 

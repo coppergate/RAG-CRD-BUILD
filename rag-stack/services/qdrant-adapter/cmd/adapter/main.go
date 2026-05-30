@@ -267,6 +267,7 @@ func (a *Adapter) executeOp(ctx context.Context, data *contracts.QdrantOp) (*con
 	opCounter.Add(ctx, 1, metric.WithAttributes(attrs...))
 
 	logging.L.WithTrace(ctx).Info("executing Qdrant op", "session_id", data.SessionId, "action", action, "collection", effectiveCollection)
+	logging.L.WithTrace(ctx).Info("Qdrant request details", "op_id", opID, "session_id", data.SessionId, "action", action, "collection", effectiveCollection, "vector_len", len(data.Vector), "tag_count", len(data.Tags), "include_global", data.IncludeGlobal, "limit", data.Limit)
 
 	var (
 		result interface{}
