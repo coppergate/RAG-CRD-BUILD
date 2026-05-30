@@ -834,17 +834,20 @@ func TestBuildPlanStepContexts_OmitsUnknownActionFromStepPrompt(t *testing.T) {
 		},
 	}
 
-	metadata := buildPlanStepContexts(plan, groups)
+	originalPrompt := "What is the best way to tend a flower?"
+	metadata := buildPlanStepContexts(plan, groups, originalPrompt)
 	if len(metadata) != 1 {
 		t.Fatalf("expected one step context, got %d", len(metadata))
 	}
 
 	stepPrompt, _ := metadata[0]["step_prompt"].(string)
-	if strings.Contains(stepPrompt, "Step action: UNKNOWN") {
-		t.Fatalf("unexpected UNKNOWN action in step prompt: %q", stepPrompt)
+	if strings.Contains(stepPrompt, "Step action:") {
+		t.Fatalf("action type must not appear in executor step prompt: %q", stepPrompt)
 	}
-	if !strings.Contains(stepPrompt, "Answer from retrieved context") {
-		t.Fatalf("missing step objective in step prompt: %q", stepPrompt)
+	// The original user question must be preserved verbatim so the executor
+	// knows what to extract. The planner's step objective must not replace it.
+	if stepPrompt != originalPrompt {
+		t.Fatalf("step_prompt must equal the original user question, got: %q", stepPrompt)
 	}
 
 	contexts, _ := metadata[0]["contexts"].([]interface{})

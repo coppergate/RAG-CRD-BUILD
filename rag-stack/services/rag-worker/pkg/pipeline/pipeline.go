@@ -520,7 +520,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	} else if refinedPlan != nil {
 		metadataMap["planner_task"] = refinedPlan.ToMap()
 		metadataMap["planner_trace"] = refinedPlan.Trace.ToMap()
-		metadataMap["plan_step_contexts"] = buildPlanStepContexts(refinedPlan, chunkGroups)
+		metadataMap["plan_step_contexts"] = buildPlanStepContexts(refinedPlan, chunkGroups, req.Prompt)
 		metadataMap["planner_refinement_metrics"] = planMetrics
 	}
 
@@ -1366,7 +1366,7 @@ func scoreChunkGroup(step contracts.PlannerStep, group chunkGroupDetail) int {
 	return score
 }
 
-func buildPlanStepContexts(plan *contracts.PlannerTaskPlan, groups []chunkGroupDetail) []map[string]interface{} {
+func buildPlanStepContexts(plan *contracts.PlannerTaskPlan, groups []chunkGroupDetail, originalPrompt string) []map[string]interface{} {
 	if plan == nil || len(plan.Steps) == 0 || len(groups) == 0 {
 		return nil
 	}
@@ -1441,16 +1441,13 @@ func buildPlanStepContexts(plan *contracts.PlannerTaskPlan, groups []chunkGroupD
 			}
 		}
 
-		stepPrompt := step.Objective
-		if strings.TrimSpace(stepPrompt) == "" {
-			stepPrompt = plan.Objective
-		}
-		actionType := strings.TrimSpace(step.ActionType)
-		if actionType != "" && strings.ToUpper(actionType) != contracts.PlannerActionUnknown {
-			if stepPrompt != "" {
-				stepPrompt += "\n"
-			}
-			stepPrompt += fmt.Sprintf("Step action: %s", actionType)
+		// Always use the original user question as the executor prompt so the
+		// extraction instruction ("return the exact answer") is never replaced by
+		// the planner's decomposed step objective. Step objectives are useful for
+		// scoring/ranking context groups but must not reach the executor model.
+		stepPrompt := strings.TrimSpace(originalPrompt)
+		if stepPrompt == "" {
+			stepPrompt = strings.TrimSpace(plan.Objective)
 		}
 
 		results = append(results, map[string]interface{}{
