@@ -2,6 +2,7 @@ package granite31
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"app-builds/rag-worker/internal/models"
@@ -13,8 +14,11 @@ func TestExecutor_Execute(t *testing.T) {
 			if len(messages) != 1 {
 				t.Fatalf("expected a single user prompt message, got %d", len(messages))
 			}
-			if messages[0]["content"] == "" {
-				t.Fatalf("expected non-empty user prompt")
+			userContent := messages[0]["content"]
+			if !strings.Contains(userContent, "Context 1:") ||
+				!strings.Contains(userContent, "User Query:") ||
+				!strings.Contains(userContent, "Exact Answer:") {
+				t.Fatalf("unexpected granite execution prompt: %q", userContent)
 			}
 			return "granite answer", nil, nil
 		},

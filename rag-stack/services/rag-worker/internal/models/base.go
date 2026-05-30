@@ -15,6 +15,7 @@ type ModelConfig struct {
 	ExecutionHeader            string
 	ExecutionFooter            string
 	ExecutionSuffix            string
+	ExecutionPromptFormatter   func(ModelConfig, string, []interface{}) string
 	InsufficientContextPhrases []string
 }
 
@@ -82,8 +83,25 @@ func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, h
 	}
 
 	if len(contexts) > 0 {
+		messages = append(messages, map[string]string{"role": "user", "content": m.buildExecutionPrompt(prompt, contexts)})
+		return messages
+	}
+
+	messages = append(messages, map[string]string{"role": "user", "content": m.buildExecutionPrompt(prompt, nil)})
+	return messages
+}
+
+func (m *GenericModel) buildExecutionPrompt(prompt string, contexts []interface{}) string {
+	if formatter := m.Config.ExecutionPromptFormatter; formatter != nil {
+		return formatter(m.Config, prompt, contexts)
+	}
+	return BuildDefaultExecutionPrompt(m.Config, prompt, contexts)
+}
+
+func BuildDefaultExecutionPrompt(config ModelConfig, prompt string, contexts []interface{}) string {
+	if len(contexts) > 0 {
 		var userPrompt strings.Builder
-		header := strings.TrimSpace(m.Config.ExecutionHeader)
+		header := strings.TrimSpace(config.ExecutionHeader)
 		if header == "" {
 			header = "Retrieved context:"
 		}
@@ -93,29 +111,105 @@ func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, h
 			userPrompt.WriteString(fmt.Sprintf("- %v\n", c))
 		}
 		userPrompt.WriteString("\n")
-		footer := strings.TrimSpace(m.Config.ExecutionFooter)
+		footer := strings.TrimSpace(config.ExecutionFooter)
 		if footer != "" {
 			userPrompt.WriteString(footer)
 			userPrompt.WriteString("\n")
 		}
 		userPrompt.WriteString(prompt)
-		if suffix := m.Config.ExecutionSuffix; suffix != "" {
+		if suffix := config.ExecutionSuffix; suffix != "" {
 			userPrompt.WriteString(suffix)
 		}
-		messages = append(messages, map[string]string{"role": "user", "content": userPrompt.String()})
-		return messages
+		return userPrompt.String()
 	}
 
 	userPrompt := prompt
-	if footer := m.Config.ExecutionFooter; footer != "" {
+	if footer := config.ExecutionFooter; footer != "" {
 		userPrompt = footer + userPrompt
 	}
-	if suffix := m.Config.ExecutionSuffix; suffix != "" {
+	if suffix := config.ExecutionSuffix; suffix != "" {
 		userPrompt += suffix
 	}
+	return userPrompt
+}
 
-	messages = append(messages, map[string]string{"role": "user", "content": userPrompt})
-	return messages
+func BuildTaggedExecutionPrompt(config ModelConfig, prompt string, contexts []interface{}) string {
+	if len(contexts) == 0 {
+		return BuildDefaultExecutionPrompt(config, prompt, contexts)
+	}
+
+	var userPrompt strings.Builder
+	header := strings.TrimSpace(config.ExecutionHeader)
+	if header == "" {
+		header = "Retrieved context:"
+	}
+	userPrompt.WriteString(header)
+	userPrompt.WriteString("\n")
+	for i, c := range contexts {
+		if i > 0 {
+			userPrompt.WriteString("\n")
+		}
+		content := strings.TrimSpace(fmt.Sprintf("%v", c))
+		if content == "" {
+			continue
+		}
+		userPrompt.WriteString(fmt.Sprintf("<<<CONTEXT %d>>>\n", i+1))
+		userPrompt.WriteString(content)
+		if !strings.HasSuffix(content, "\n") {
+			userPrompt.WriteString("\n")
+		}
+		userPrompt.WriteString(fmt.Sprintf("<<<END CONTEXT %d>>>\n", i+1))
+	}
+	userPrompt.WriteString("\n")
+	footer := strings.TrimSpace(config.ExecutionFooter)
+	if footer != "" {
+		userPrompt.WriteString(footer)
+		userPrompt.WriteString("\n")
+	}
+	userPrompt.WriteString(prompt)
+	if suffix := config.ExecutionSuffix; suffix != "" {
+		userPrompt.WriteString(suffix)
+	}
+	return userPrompt.String()
+}
+
+func BuildNumberedExecutionPrompt(config ModelConfig, prompt string, contexts []interface{}) string {
+	if len(contexts) == 0 {
+		return BuildDefaultExecutionPrompt(config, prompt, contexts)
+	}
+
+	var userPrompt strings.Builder
+	header := strings.TrimSpace(config.ExecutionHeader)
+	if header == "" {
+		header = "Retrieved context:"
+	}
+	userPrompt.WriteString(header)
+	userPrompt.WriteString("\n")
+	for i, c := range contexts {
+		content := strings.TrimSpace(fmt.Sprintf("%v", c))
+		if content == "" {
+			continue
+		}
+		if i > 0 {
+			userPrompt.WriteString("\n")
+		}
+		userPrompt.WriteString(fmt.Sprintf("Context %d:\n", i+1))
+		userPrompt.WriteString(content)
+		if !strings.HasSuffix(content, "\n") {
+			userPrompt.WriteString("\n")
+		}
+	}
+	userPrompt.WriteString("\n")
+	footer := strings.TrimSpace(config.ExecutionFooter)
+	if footer != "" {
+		userPrompt.WriteString(footer)
+		userPrompt.WriteString("\n")
+	}
+	userPrompt.WriteString(prompt)
+	if suffix := config.ExecutionSuffix; suffix != "" {
+		userPrompt.WriteString(suffix)
+	}
+	return userPrompt.String()
 }
 
 func (m *GenericModel) extractMemoryFields(item interface{}) (content, memType, role string) {

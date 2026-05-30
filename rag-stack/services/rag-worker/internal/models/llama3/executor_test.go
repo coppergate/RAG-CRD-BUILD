@@ -17,6 +17,8 @@ func TestExecutor_Execute(t *testing.T) {
 
 			userContent := messages[0]["content"]
 			if strings.Contains(userContent, "some context") &&
+				strings.Contains(userContent, "<<<CONTEXT 1>>>") &&
+				strings.Contains(userContent, "<<<END CONTEXT 1>>>") &&
 				strings.Contains(userContent, "User Query:") &&
 				strings.Contains(userContent, "Assistant Answer:") {
 				return "my answer", nil, nil
