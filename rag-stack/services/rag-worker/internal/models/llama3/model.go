@@ -42,15 +42,18 @@ Query: %s`,
 	ExecutionHeader:          "Retrieved context:\n",
 	ExecutionFooter:          "\n\nUser Query: ",
 	ExecutionSuffix:          "\n\nAnswer: ",
-	ExecutionPromptFormatter: models.BuildTaggedExecutionPrompt,
+	// Use the simpler numbered format. The XML-style <<<CONTEXT N>>> tags
+	// used by BuildTaggedExecutionPrompt are not standard llama3.1 training
+	// format and can cause the model to fail to ground in the context.
+	ExecutionPromptFormatter: models.BuildNumberedExecutionPrompt,
 	InsufficientContextPhrases: []string{
 		"\"insufficient_context\": true",
 		"insufficient context",
-		"i can't provide",
+		"i can’t provide",
 		"i cannot provide",
 		"i can not provide",
-		"i'm sorry",
-		"i can’t provide",
+		"i’m sorry",
+		"i don’t know",
 	},
 }
 
