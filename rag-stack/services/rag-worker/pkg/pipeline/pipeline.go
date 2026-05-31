@@ -1785,7 +1785,12 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 				finalMetrics.TotalDurationUsec += m.TotalDurationUsec
 			}
 
-			if h.cfg.StreamIntermediate {
+			// Only send intermediate stream chunks when the request is itself a
+			// streaming request. In non-streaming mode SendResult will transmit the
+			// full accumulated result as the single final chunk, so emitting an
+			// additional non-final chunk here would cause the db-adapter to append
+			// the content twice and produce a duplicated response.
+			if h.cfg.StreamIntermediate && req.Stream {
 				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, res, seq, false, modelID, inConversation, nil)
 				seq++
 			}

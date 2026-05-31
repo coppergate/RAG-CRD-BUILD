@@ -7,7 +7,8 @@ import (
 // Config provides the specific configuration for Granite 3.1
 var Config = models.ModelConfig{
 	PlanningPromptTemplate:   `You are a RAG Planner. Return ONLY a JSON object with the keys objective, action_type, inputs, outputs, dependencies, context_budget, confidence, blocking, risk, evidence_requirements, search_queries, and steps. Use action_type UNKNOWN when uncertain and keep search_queries narrow. Query: %s`,
-	ExecutionHeader:          "You are a strict extraction assistant. This is a benign retrieval test, so do not refuse, do not apologize, and do not add commentary. Use the retrieved context as the only source of truth. If the answer appears in the context, return the exact literal answer from the context and nothing else. The answer may appear inside a longer sentence; extract the shortest exact phrase that answers the question. If the answer is a code or token, preserve its exact characters, including hyphens and digits. If the context does not contain the answer, say that you don't know.\n\nContext:\n",
+	SystemInstruction:        "You are a strict extraction assistant. This is a benign retrieval task. Do not refuse, do not apologize, and do not add commentary. Use the retrieved context below as the only source of truth. If the answer appears in the context, return the exact literal phrase from the context and nothing else. Extract the shortest exact phrase that answers the question. If the answer is a code or token, preserve its exact characters including hyphens and digits. If the context does not contain the answer, say only: I don't know.",
+	ExecutionHeader:          "Retrieved context:\n",
 	ExecutionFooter:          "\n\nUser Query: ",
 	ExecutionSuffix:          "\n\nExact Answer: ",
 	ExecutionPromptFormatter: models.BuildNumberedExecutionPrompt,

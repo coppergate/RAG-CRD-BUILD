@@ -12,6 +12,11 @@ import (
 // ModelConfig defines model-specific strings and behavior for the GenericModel
 type ModelConfig struct {
 	PlanningPromptTemplate     string
+	// SystemInstruction is sent as a "system" role message before any user
+	// content. This carries higher behavioral weight than embedding the same
+	// text inside the user message. Leave empty to use the legacy single-message
+	// format (ExecutionHeader is prepended to the user message instead).
+	SystemInstruction          string
 	ExecutionHeader            string
 	ExecutionFooter            string
 	ExecutionSuffix            string
@@ -66,6 +71,14 @@ func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, context
 
 func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, history []interface{}) []map[string]string {
 	var messages []map[string]string
+
+	// If the model config supplies a dedicated system instruction, emit it as a
+	// system role message so the model gives it appropriate behavioral weight.
+	// This prevents the extraction instruction from being diluted by embedding
+	// it inside the user turn alongside the context blocks.
+	if instr := strings.TrimSpace(m.Config.SystemInstruction); instr != "" {
+		messages = append(messages, map[string]string{"role": "system", "content": instr})
+	}
 
 	// Preserve the retrieval order chosen by the memory-controller.
 	for _, h := range history {
