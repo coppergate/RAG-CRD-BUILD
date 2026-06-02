@@ -376,6 +376,11 @@ As of version `2.11.x`, the build system supports hardened parallel execution to
 4.  **Parallel Loops**:
     -   **Skip-and-Deploy**: Services that are already built but need a deployment update are processed in parallel (default 4).
     -   **Service Builds**: New builds are processed in parallel (default 4) using background subshells and `set -m` for job control.
+5.  **`--wait` Deploy Race Condition Fix**: After triggering Kaniko builds, `kubectl wait` previously selected only jobs that existed at the moment it ran, silently missing jobs the build-orchestrator created asynchronously. The fix uses a 3-phase approach:
+    - **Phase 1**: Poll until each triggered service's Kaniko job EXISTS in k8s (per-job appearance timeout: 300s).
+    - **Phase 2**: Once all expected jobs are present, run a single `kubectl wait --for=condition=complete` with the remaining overall deadline.
+    - **Phase 3**: Deploy each service whose job succeeded (`status.succeeded == 1`).
+    - Services triggered this run are identified by `last_build` containing `"(triggered)"` — set by `build_service` immediately after firing the Pulsar trigger.
 
 #### Test Data Cleanup
 1.  **Automated Cleanup**: A `rag-test-cleanup` job runs before each E2E test. It removes any data with `test-`, `iso-`, or `e2e-` prefixes from TimescaleDB and Qdrant.
