@@ -577,6 +577,8 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                             op.embedding_model,
                             len(points),
                         )
+                        conn.commit()
+                        logger.info("[ingestion=%s] committed batch; total processed chunks=%d", ingestion_id, idx)
                         q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
                         logger.info(
                             "[ingestion=%s] sent qdrant upsert op id=%s points=%d collection=%r model=%r dims=%d",
@@ -588,8 +590,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                             op.vector_size,
                         )
                         points = []
-                        conn.commit()
-                        logger.info("[ingestion=%s] committed batch; total processed chunks=%d", ingestion_id, idx)
 
             except Exception as e:
                 logger.error(f"Error processing {s3_key}: {e}")
@@ -610,6 +610,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                 op.embedding_model,
                 len(points),
             )
+            conn.commit()
             q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
             logger.info(
                 "[ingestion=%s] sent final qdrant upsert op id=%s points=%d collection=%r model=%r dims=%d",
@@ -620,7 +621,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                 op.embedding_model,
                 op.vector_size,
             )
-            conn.commit()
 
         if failed_chunks:
             logger.warning(
