@@ -374,7 +374,7 @@ def main() -> None:
     query_session_id = unique_session_id()
     query_session_name = unique_session_name("manual-path-query")
     file_name = f"e2eTestBucket/manual-path-{ingest_session_id}.txt"
-    answer = "the best way to tend a flower is to water it lightly, trim dead petals, and place it where it gets soft morning sunlight"
+    answer = "water it lightly, trim dead petals, and place it where it gets soft morning sunlight"
     question = "What is the best way to tend a flower? Return the exact answer from the document."
 
     content = (

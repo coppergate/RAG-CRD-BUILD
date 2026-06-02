@@ -107,9 +107,10 @@ func (o *OllamaClient) Chat(messages []map[string]string) (string, interface{}, 
 	url := fmt.Sprintf("%s/api/chat", o.url)
 
 	payload := map[string]interface{}{
-		"model":    o.model,
-		"messages": messages,
-		"stream":   false,
+		"model":      o.model,
+		"messages":   messages,
+		"stream":     false,
+		"keep_alive": -1,
 	}
 
 	body, err := json.Marshal(payload)
@@ -146,9 +147,10 @@ func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, 
 
 		url := fmt.Sprintf("%s/api/chat", o.url)
 		payload := map[string]interface{}{
-			"model":    o.model,
-			"messages": messages,
-			"stream":   true,
+			"model":      o.model,
+			"messages":   messages,
+			"stream":     true,
+			"keep_alive": -1,
 		}
 
 		body, err := json.Marshal(payload)
@@ -227,8 +229,9 @@ func (r *ChatResponse) GetMetrics() *contracts.ExecutionMetrics {
 func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
 
 	payload := map[string]interface{}{
-		"model":  o.model,
-		"prompt": text,
+		"model":      o.model,
+		"prompt":     text,
+		"keep_alive": -1,
 	}
 
 	body, err := json.Marshal(payload)

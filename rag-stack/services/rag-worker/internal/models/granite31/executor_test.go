@@ -28,7 +28,7 @@ func TestExecutor_Execute(t *testing.T) {
 			userContent := messages[1]["content"]
 			if !strings.Contains(userContent, "Context 1:") ||
 				!strings.Contains(userContent, "User Query:") ||
-				!strings.Contains(userContent, "Exact Answer:") {
+				!strings.Contains(userContent, "Exact Answer (no quotes, exact text only):") {
 				t.Fatalf("unexpected granite execution prompt: %q", userContent)
 			}
 			return "granite answer", nil, nil

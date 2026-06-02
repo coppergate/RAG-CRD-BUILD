@@ -854,7 +854,7 @@ func TestBuildPlanStepContexts_OmitsUnknownActionFromStepPrompt(t *testing.T) {
 	if len(contexts) != 1 {
 		t.Fatalf("expected one grouped context, got %d", len(contexts))
 	}
-	if !strings.Contains(fmt.Sprintf("%v", contexts[0]), "The best way to tend a flower is") {
+	if !strings.Contains(fmt.Sprintf("%v", contexts[0]), "water it lightly, trim dead petals, and place it where it gets soft morning sunlight") {
 		t.Fatalf("grouped context did not preserve answer text: %#v", contexts[0])
 	}
 }

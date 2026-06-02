@@ -10,7 +10,6 @@ import (
 type Config struct {
 	PulsarURL       string
 	RequestTopic    string
-	ResponseTopic   string
 	ListenAddr      string
 	PulsarNamespace string
 	DBConnString    string
@@ -33,7 +32,6 @@ func Load() *Config {
 	return &Config{
 		PulsarURL:       envutil.GetEnv("PULSAR_URL", pulsarDefault),
 		RequestTopic:    envutil.GetEnv("PULSAR_REQUEST_TOPIC", "persistent://rag-pipeline/stage/ingress"),
-		ResponseTopic:   envutil.GetEnv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/stage/results"),
 		ListenAddr:      envutil.GetEnv("LISTEN_ADDR", ":8080"),
 		PulsarNamespace: envutil.GetEnv("PULSAR_NAMESPACE", "apache-pulsar"),
 		DBConnString:    envutil.GetEnv("DB_CONN_STRING", dbDefault),

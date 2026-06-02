@@ -173,6 +173,17 @@ func (p *PulsarProcessor) mergeMetadata(
 	return merged
 }
 
+func (p *PulsarProcessor) hasContentSegment(metadata map[string]interface{}) bool {
+	for _, seg := range p.extractResponseSegments(metadata) {
+		if m, ok := seg.(map[string]interface{}); ok {
+			if kind, _ := m["kind"].(string); kind == "content" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (p *PulsarProcessor) hasResponseSegments(metadata map[string]interface{}) bool {
 	if metadata == nil {
 		return false
@@ -484,7 +495,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 			payload.IsLast,
 			p.hasResponseSegments(existing.Metadata),
 			payload.InConversation,
-			false,
+			!p.hasContentSegment(existing.Metadata),
 		)
 
 		// Update existing record

@@ -63,13 +63,14 @@ QDRANT_USE_TLS = os.getenv("QDRANT_USE_TLS", "false").lower() == "true"
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
 CHAT_URL = os.getenv("RAG_CHAT_URL", "https://rag-admin-api.rag.hierocracy.home/api/chat/v1/rag/chat")
 ADMIN_URL = os.getenv("ADMIN_URL", "https://rag-admin-api.rag.hierocracy.home")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "https://ollama.llms-ollama.svc.cluster.local:11434").rstrip("/")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434").rstrip("/")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "e2eTestBucket")
 S3_INDEX = "/e2eTestBucket"
 TAG_STATE_FILE = os.getenv(
     "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
 )
 GATEWAY_TIMEOUT_SECONDS = int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "600"))
+VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "4096"))
 QDRANT_BYPASS_ONLY = os.getenv("RAG_E2E_QDRANT_BYPASS_ONLY", "false").lower() == "true"
 
 
@@ -215,8 +216,10 @@ def test_qdrant_ops():
     vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
     collection_name = f"test_collection_{vector_size}"
     
-    # Recreate collection (handles existing collections gracefully)
-    client.recreate_collection(
+    # Create collection (drop existing if present)
+    if client.collection_exists(collection_name):
+        client.delete_collection(collection_name)
+    client.create_collection(
         collection_name=collection_name,
         vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
     )

@@ -23,7 +23,7 @@ VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "4096"))
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 QDRANT_USE_TLS = os.getenv("QDRANT_USE_TLS", "false").lower() == "true"
-OLLAMA_URL = os.getenv("OLLAMA_URL", "https://ollama.llms-ollama.svc.cluster.local:11434").rstrip("/")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434").rstrip("/")
 QDRANT_BYPASS_ONLY = os.getenv("RAG_E2E_QDRANT_BYPASS_ONLY", "false").lower() == "true"
 
 
@@ -253,10 +253,10 @@ def main():
     query_session_id = unique_session_id()
     query_session_name = unique_session_name("retrieval-path-query")
     file_name = f"e2eTestBucket/retrieval-path-{ingest_session_id}.txt"
-    answer = "the best way to tend a flower is to water it lightly, trim dead petals, and place it where it gets soft morning sunlight"
+    answer = "water it lightly, trim dead petals, and place it where it gets soft morning sunlight"
     question = "What is the best way to tend a flower? Return the exact answer from the document."
     content = (
-        f"Retrieval path test document. The best way to tend a flower is {answer}. "
+        f"Retrieval path test document. The best way to tend a flower is to {answer}. "
         f"This text is used to verify ingestion, retrieval, submission, and response."
     )
     failures = []

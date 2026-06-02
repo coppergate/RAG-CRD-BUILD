@@ -514,14 +514,13 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		history = hist
 	}
 
-	refinedPlan, planMetrics, err := planner.Plan(ctx, req.Prompt, flattenChunkContexts(allChunks), history)
+	refinedPlan, _, err := planner.Plan(ctx, req.Prompt, flattenChunkContexts(allChunks), history)
 	if err != nil {
 		logging.Printf("[%s][SID:%d] Refined planning with chunk context failed: %v", req.Id, req.SessionId, err)
 	} else if refinedPlan != nil {
 		metadataMap["planner_task"] = refinedPlan.ToMap()
 		metadataMap["planner_trace"] = refinedPlan.Trace.ToMap()
 		metadataMap["plan_step_contexts"] = buildPlanStepContexts(refinedPlan, chunkGroups, req.Prompt)
-		metadataMap["planner_refinement_metrics"] = planMetrics
 	}
 
 	metadataMap["evaluation_metrics"] = mergeNestedMetricMap(metadataMap["evaluation_metrics"], map[string]interface{}{
