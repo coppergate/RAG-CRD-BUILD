@@ -109,25 +109,27 @@ type executionUnit struct {
 
 // Handler processes RAG pipeline stage messages.
 type Handler struct {
-	cfg          *config.Config
-	msg          *messaging.Client
-	registry     ModelRegistry
-	searcher     QdrantSearcher
-	memoryClient MemoryClient
-	tagSource    TagSource
-	httpClient   *http.Client
+	cfg              *config.Config
+	msg              *messaging.Client
+	registry         ModelRegistry
+	searcher         QdrantSearcher
+	memoryClient     MemoryClient
+	tagSource        TagSource
+	httpClient       *http.Client
+	hydrationClient  *http.Client
 }
 
 // NewHandler creates a new pipeline stage handler.
 func NewHandler(cfg *config.Config, msg *messaging.Client, registry ModelRegistry, searcher QdrantSearcher, mem MemoryClient, tagSource TagSource) *Handler {
 	return &Handler{
-		cfg:          cfg,
-		msg:          msg,
-		registry:     registry,
-		searcher:     searcher,
-		memoryClient: mem,
-		tagSource:    tagSource,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		cfg:             cfg,
+		msg:             msg,
+		registry:        registry,
+		searcher:        searcher,
+		memoryClient:    mem,
+		tagSource:       tagSource,
+		httpClient:      &http.Client{Timeout: 30 * time.Second},
+		hydrationClient: &http.Client{Timeout: cfg.HydrationTimeout},
 	}
 }
 
@@ -814,7 +816,7 @@ func (h *Handler) hydrateContextFiles(ctx context.Context, req *contracts.Intern
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		resp, err := h.httpClient.Do(httpReq)
+		resp, err := h.hydrationClient.Do(httpReq)
 		if err != nil {
 			return notes, err
 		}

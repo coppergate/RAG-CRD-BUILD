@@ -69,8 +69,9 @@ func init() {
 }
 
 type OpenAIHandler struct {
-	Pulsar pulsar.Client
-	Ent    *ent.Client
+	Pulsar        pulsar.Client
+	Ent           *ent.Client
+	StreamTimeout time.Duration
 }
 
 type ChatCompletionRequest struct {
@@ -418,8 +419,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 			}
 		case <-ctx.Done():
 			return
-		case <-time.After(60 * time.Second): // Timeout
-			logging.Printf("[%s] WebSocket stream timed out", correlationID)
+		case <-time.After(h.StreamTimeout):
+			logging.Printf("[%s] WebSocket stream timed out after %v", correlationID, h.StreamTimeout)
+			conn.WriteJSON(map[string]interface{}{"error": "stream timeout", "is_last": true})
 			return
 		}
 	}

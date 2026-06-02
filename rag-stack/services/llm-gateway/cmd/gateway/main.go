@@ -49,8 +49,9 @@ func main() {
 	defer pc.Close()
 
 	openAIHandler := &handlers.OpenAIHandler{
-		Pulsar: pc,
-		Ent:    entClient,
+		Pulsar:        pc,
+		Ent:           entClient,
+		StreamTimeout: cfg.StreamTimeout,
 	}
 
 	// Register readiness checks

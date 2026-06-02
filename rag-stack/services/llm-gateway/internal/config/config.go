@@ -17,6 +17,7 @@ type Config struct {
 
 	// Configurable values (previously hardcoded)
 	RequestTimeout time.Duration
+	StreamTimeout  time.Duration
 }
 
 func Load() *Config {
@@ -38,5 +39,6 @@ func Load() *Config {
 		PromptTopic:     envutil.GetEnv("PULSAR_PROMPT_TOPIC", "persistent://rag-pipeline/data/chat-prompts"),
 
 		RequestTimeout: envutil.GetEnvDuration("REQUEST_TIMEOUT", 120*time.Second),
+		StreamTimeout:  envutil.GetEnvDuration("STREAM_TIMEOUT", 120*time.Second),
 	}
 }

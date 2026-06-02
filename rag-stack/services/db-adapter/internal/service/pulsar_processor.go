@@ -602,7 +602,10 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 
 	m := payload.Metrics
 	sessID := payload.SessionId
-	respID, _ := uuid.Parse(payload.Id)
+	respID, err := uuid.Parse(payload.Id)
+	if err != nil {
+		return dlq.PermanentFailure, fmt.Errorf("invalid response ID %q in completion: %w", payload.Id, err)
+	}
 
 	var dbResponseID *int64
 	res, err := p.client.Response.Query().

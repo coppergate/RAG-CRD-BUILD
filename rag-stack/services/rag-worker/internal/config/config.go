@@ -43,6 +43,7 @@ type Config struct {
 	StreamIntermediate    bool
 
 	StreamAccumulationCount int
+	HydrationTimeout        time.Duration
 
 	MemoryControllerURL string
 	QdrantAdapterURL    string
@@ -100,6 +101,7 @@ func LoadConfig() *Config {
 		ShutdownTimeout:         envutil.GetEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 		StreamAccumulationCount: envutil.GetEnvInt("STREAM_ACCUMULATION_COUNT", 10),
 		StreamIntermediate:      envutil.GetEnvBool("STREAM_INTERMEDIATE", true),
+		HydrationTimeout:        envutil.GetEnvDuration("HYDRATION_TIMEOUT", 5*time.Minute),
 
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "https://memory-controller.rag-system.svc.cluster.local"),
 		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "https://qdrant-adapter.rag-system.svc.cluster.local:8082"),

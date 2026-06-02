@@ -32,7 +32,7 @@ func main() {
 
 	endpoint := os.Getenv("S3_ENDPOINT")
 	if endpoint != "" && !strings.HasPrefix(endpoint, "http") {
-		endpoint = "http://" + endpoint
+		endpoint = "https://" + endpoint
 	}
 	bucket := os.Getenv("BUCKET_NAME")
 
