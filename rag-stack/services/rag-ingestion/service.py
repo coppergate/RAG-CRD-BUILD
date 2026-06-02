@@ -335,6 +335,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                   embedding_model: Optional[str] = None):
     pool = get_db_pool()
     conn = None
+    q_prod = None
     failed_chunks = []
     current_model = _effective_embedding_model(embedding_model)
 
@@ -577,8 +578,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                             op.embedding_model,
                             len(points),
                         )
-                        conn.commit()
-                        logger.info("[ingestion=%s] committed batch; total processed chunks=%d", ingestion_id, idx)
                         q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
                         logger.info(
                             "[ingestion=%s] sent qdrant upsert op id=%s points=%d collection=%r model=%r dims=%d",
@@ -589,6 +588,8 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                             op.embedding_model,
                             op.vector_size,
                         )
+                        conn.commit()
+                        logger.info("[ingestion=%s] committed batch; total processed chunks=%d", ingestion_id, idx)
                         points = []
 
             except Exception as e:
@@ -610,7 +611,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                 op.embedding_model,
                 len(points),
             )
-            conn.commit()
             q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
             logger.info(
                 "[ingestion=%s] sent final qdrant upsert op id=%s points=%d collection=%r model=%r dims=%d",
@@ -621,6 +621,8 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                 op.embedding_model,
                 op.vector_size,
             )
+            conn.commit()
+            logger.info("[ingestion=%s] committed final batch; total processed chunks=%d", ingestion_id, idx)
 
         if failed_chunks:
             logger.warning(
@@ -636,6 +638,11 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
     except Exception as e:
         logger.error("[ingestion=%s] ingestion task failed: %s", ingestion_id, e)
     finally:
+        if q_prod is not None:
+            try:
+                q_prod.close()
+            except Exception as e:
+                logger.warning("[ingestion=%s] error closing Pulsar producer: %s", ingestion_id, e)
         if conn and pool:
             pool.putconn(conn)
 
@@ -754,7 +761,13 @@ async def health_legacy():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global _db_pool
+    global _db_pool, _pulsar_client
+    if _pulsar_client is not None:
+        try:
+            _pulsar_client.close()
+            logger.info("Pulsar client closed")
+        except Exception as e:
+            logger.warning(f"Error closing Pulsar client: {e}")
     if _db_pool:
         _db_pool.closeall()
         logger.info("Database connection pool closed")

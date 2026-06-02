@@ -2,23 +2,20 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	"app-builds/common/health"
+	"app-builds/common/logging"
 	"app-builds/common/telemetry"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"app-builds/common/logging"
 )
 
 func main() {
@@ -71,100 +68,7 @@ func main() {
 		return err
 	})
 
-	mux := http.NewServeMux()
-	
-	healthSrv.RegisterRoutes(mux)
-	
-	mux.HandleFunc("/buckets", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		resp, err := client.ListBuckets(r.Context(), &s3.ListBucketsInput{})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		buckets := resp.Buckets
-		if buckets == nil {
-			buckets = []types.Bucket{}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(buckets)
-	})
-
-	mux.HandleFunc("/buckets/", func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/buckets/"), "/")
-		if len(parts) < 1 {
-			http.Error(w, "Bucket name required", http.StatusBadRequest)
-			return
-		}
-		bucketName := parts[0]
-
-		if len(parts) == 1 { // List objects
-			prefix := r.URL.Query().Get("prefix")
-			logging.Printf("[S3] ListObjectsV2: bucket=%s, prefix=%s", bucketName, prefix)
-			resp, err := client.ListObjectsV2(r.Context(), &s3.ListObjectsV2Input{
-				Bucket: aws.String(bucketName),
-				Prefix: aws.String(prefix),
-			})
-			if err != nil {
-				logging.Printf("[S3] Error listing objects: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			contents := resp.Contents
-			if contents == nil {
-				contents = []types.Object{}
-			}
-			logging.Printf("[S3] Returning %d objects", len(contents))
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(contents)
-			return
-		}
-
-		// Object operations
-		objectKey := strings.Join(parts[1:], "/")
-		switch r.Method {
-		case http.MethodGet:
-			resp, err := client.GetObject(r.Context(), &s3.GetObjectInput{
-				Bucket: aws.String(bucketName),
-				Key:    aws.String(objectKey),
-			})
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			defer resp.Body.Close()
-			io.Copy(w, resp.Body)
-		case http.MethodPut:
-			logging.Printf("[S3] PutObject: bucket=%s, key=%s", bucketName, objectKey)
-			r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
-			_, err = client.PutObject(r.Context(), &s3.PutObjectInput{
-				Bucket: aws.String(bucketName),
-				Key:    aws.String(objectKey),
-				Body:   r.Body,
-			})
-			if err != nil {
-				logging.Printf("[S3] Error putting object: %v", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(http.StatusCreated)
-		case http.MethodDelete:
-			_, err := client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
-				Bucket: aws.String(bucketName),
-				Key:    aws.String(objectKey),
-			})
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	mux := buildMux(client, healthSrv, maxUploadBytes)
 
 	otelHandler := otelhttp.NewHandler(mux, "object-store-mgr")
 

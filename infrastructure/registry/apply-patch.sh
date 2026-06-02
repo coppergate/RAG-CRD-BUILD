@@ -18,6 +18,8 @@ for ip in "${NODES[@]}"; do
   echo "Patching node $ip..."
   # Clear existing extraHostEntries to avoid duplicates/stale entries
   TALOSCONFIG=$TALOS_CONFIG $TALOS_BIN -n $ip patch machineconfig --patch '[{"op": "replace", "path": "/machine/network/extraHostEntries", "value": []}]'
+  # Clear existing registries config to avoid duplicate endpoint accumulation on repeated runs
+  TALOSCONFIG=$TALOS_CONFIG $TALOS_BIN -n $ip patch machineconfig --patch '[{"op": "replace", "path": "/machine/registries", "value": {}}]' 2>/dev/null || true
   # Apply the desired registry configuration
   TALOSCONFIG=$TALOS_CONFIG $TALOS_BIN -n $ip patch machineconfig --patch "@$PATCH_FILE"
 done

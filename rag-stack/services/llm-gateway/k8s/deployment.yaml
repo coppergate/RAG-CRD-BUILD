@@ -68,6 +68,8 @@ spec:
           value: "otel-collector.monitoring.svc.cluster.local:4317"
         - name: REQUEST_TIMEOUT
           value: "600s"
+        - name: STREAM_TIMEOUT
+          value: "600s"
         envFrom:
         - configMapRef:
             name: llm-gateway-config
