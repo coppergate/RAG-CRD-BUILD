@@ -1845,11 +1845,17 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			req.Metadata = contracts.ToStruct(metadata)
 			marshaller := protojson.MarshalOptions{UseProtoNames: true}
 			payload, err := marshaller.Marshal(req)
-			if err == nil {
-				if _, err := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err == nil {
-					return dlq.Success, nil
-				}
+			if err != nil {
+				logging.Printf("[%s][SID:%d] Failed to marshal request for exec pagination: %v", req.Id, req.SessionId, err)
+				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to continue pagination", inConversation)
+				return dlq.TransientFailure, fmt.Errorf("marshal for exec pagination [%s]: %w", req.Id, err)
 			}
+			if _, sendErr := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); sendErr != nil {
+				logging.Printf("[%s][SID:%d] Failed to send to exec topic for pagination: %v", req.Id, req.SessionId, sendErr)
+				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to continue pagination", inConversation)
+				return dlq.TransientFailure, fmt.Errorf("send to exec for pagination [%s]: %w", req.Id, sendErr)
+			}
+			return dlq.Success, nil
 		}
 	} else if isInsufficient && !hasSubstantialResult && budget >= 1.0 {
 		if recursionCount >= float64(h.cfg.MaxRecursionCount) {
@@ -1862,11 +1868,17 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			req.Metadata = contracts.ToStruct(metadata)
 			marshaller := protojson.MarshalOptions{UseProtoNames: true}
 			payload, err := marshaller.Marshal(req)
-			if err == nil {
-				if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err == nil {
-					return dlq.Success, nil
-				}
+			if err != nil {
+				logging.Printf("[%s][SID:%d] Failed to marshal request for re-plan: %v", req.Id, req.SessionId, err)
+				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to trigger re-plan", inConversation)
+				return dlq.TransientFailure, fmt.Errorf("marshal for re-plan [%s]: %w", req.Id, err)
 			}
+			if _, sendErr := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); sendErr != nil {
+				logging.Printf("[%s][SID:%d] Failed to send to plan topic for re-plan: %v", req.Id, req.SessionId, sendErr)
+				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to trigger re-plan", inConversation)
+				return dlq.TransientFailure, fmt.Errorf("send to plan for re-plan [%s]: %w", req.Id, sendErr)
+			}
+			return dlq.Success, nil
 		}
 	} else if end < len(executionUnits) && hasSubstantialResult {
 		logging.Printf("[%s][SID:%d] Found substantial result, stopping processing early at %d/%d", req.Id, req.SessionId, end, len(executionUnits))
