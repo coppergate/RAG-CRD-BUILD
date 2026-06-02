@@ -534,7 +534,26 @@ flutter run -d chrome # Web browser
 
 ## 7. Testing & Verification
 
-### 7.0 Pre-Test Verification (CRITICAL)
+### 7.0 Full Test Suite (Run This First)
+`rag-stack/tests/run-tests.sh` is the single entry point for a full test of all services. Run it whenever asked for a "full test", before merging a branch, or after a deploy that touches multiple services. It runs Go unit tests (vet + test) across all service modules first, then runs the E2E cluster tests via `run-e2e-on-hierophant.sh`.
+
+```bash
+# Full test: unit tests + E2E cluster tests (run this for a full test of the services)
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-tests.sh"
+
+# Unit tests only — no cluster required, fast feedback during development
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-tests.sh --unit-only"
+
+# E2E only — skip unit tests, run cluster tests directly
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-tests.sh --e2e-only"
+```
+
+The unit phase runs `go vet ./...` and `go test ./...` on each service module and prints a per-module summary table. The E2E phase deploys a test job to the `rag-system` namespace and runs the full Python integration suite plus the Go E2E driver. Both phases must pass for the overall run to succeed.
+
+### 7.0.1 Pre-Test Verification (CRITICAL)
 Before executing any integration or E2E tests, you MUST verify that the cluster state is stable at the pod level. Simply checking that a Deployment is "Ready" or has "Available" replicas is insufficient, as it may be in the middle of a rolling update or have stale replicas from a previous version.
 
 **Verification Steps**:
