@@ -501,7 +501,6 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	metadataMap["chunks"] = allChunks
 	metadataMap["chunk_groups"] = chunkGroupsToMetadata(chunkGroups)
 	metadataMap["contexts"] = flattenChunkContexts(allChunks)
-	metadataMap["raw_results"] = allRawResults
 	if len(embeddingModels) > 0 {
 		metadataMap["embedding_models"] = embeddingModels
 	}
@@ -1590,16 +1589,6 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			chunks = append(chunks, c)
 		}
 	}
-	if len(chunks) == 0 {
-		if raw, ok := metadata["raw_results"].([]interface{}); ok {
-			for _, item := range raw {
-				if text := rawResultContextText(item); text != "" {
-					chunks = append(chunks, []interface{}{text})
-				}
-			}
-		}
-	}
-
 	executionUnits := extractExecutionUnits(metadata, req.Prompt, chunks)
 	if len(executionUnits) == 0 && len(chunks) == 0 {
 		executionUnits = []executionUnit{{Prompt: req.Prompt, Contexts: []interface{}{}, Label: "step-1"}}
