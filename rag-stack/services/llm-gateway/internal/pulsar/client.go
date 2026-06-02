@@ -12,22 +12,18 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"app-builds/common/contracts"
+	"app-builds/common/logging"
 	pulsarCommon "app-builds/common/pulsar"
 	"app-builds/llm-gateway/internal/config"
-	"app-builds/common/logging"
 )
 
 type pulsarClient struct {
 	client         *pulsarCommon.Client
 	producer       pulsar.Producer
 	promptProducer pulsar.Producer
-	consumer       pulsar.Consumer
-	pending        sync.Map // correlationID -> chan response
 	streams        sync.Map // correlationID -> context.CancelFunc
 	requestTimeout time.Duration
 }
-
-type response = *contracts.StreamChunk
 
 func NewPulsarClient(cfg *config.Config) (Client, error) {
 	client, err := pulsarCommon.NewClient(pulsarCommon.Config{URL: cfg.PulsarURL})
@@ -48,83 +44,73 @@ func NewPulsarClient(cfg *config.Config) (Client, error) {
 		return nil, fmt.Errorf("could not create prompt producer: %w", err)
 	}
 
-	consumer, err := client.NewSharedConsumer(cfg.ResponseTopic, "gateway-results-sub")
-	if err != nil {
-		promptProducer.Close()
-		producer.Close()
-		client.Close()
-		return nil, fmt.Errorf("could not subscribe to results topic %s: %w", cfg.ResponseTopic, err)
-	}
-
 	pc := &pulsarClient{
 		client:         client,
 		producer:       producer,
 		promptProducer: promptProducer,
-		consumer:       consumer,
 		requestTimeout: cfg.RequestTimeout,
 	}
-
-	go pc.consumeResults()
 
 	return pc, nil
 }
 
-func (pc *pulsarClient) consumeResults() {
-	for {
-		msg, err := pc.consumer.Receive(context.Background())
-		if err != nil {
-			fmt.Printf("Error receiving message: %v\n", err)
-			continue
-		}
-
-		resp := &contracts.StreamChunk{}
-		if err := protojson.Unmarshal(msg.Payload(), resp); err == nil {
-			if ch, ok := pc.pending.Load(resp.Id); ok {
-				ch.(chan response) <- resp
-			}
-		}
-		pc.consumer.Ack(msg)
-	}
-}
-
 func (pc *pulsarClient) SendRequest(ctx context.Context, id string, payload proto.Message) (*contracts.StreamChunk, error) {
-	tracer := otel.Tracer("pulsar-client")
-	ctx, span := tracer.Start(ctx, "SendRequest")
+	ctx, span := otel.Tracer("pulsar-client").Start(ctx, "SendRequest")
 	defer span.End()
 
-	resChan := make(chan response, 10) // Buffered channel for multiple chunks
-	pc.pending.Store(id, resChan)
-	defer pc.pending.Delete(id)
-
-	_, err := pulsarCommon.SendProto(ctx, pc.producer, payload)
+	// Subscribe to the per-request session topic BEFORE publishing to avoid
+	// a race where a very fast worker publishes chunks before we are ready.
+	topic := pc.SessionTopic(id)
+	consumer, err := pc.client.Subscribe(pulsar.ConsumerOptions{
+		Topic:            topic,
+		SubscriptionName: fmt.Sprintf("gateway-sync-%s", id),
+		Type:             pulsar.Exclusive,
+	})
 	if err != nil {
+		return nil, fmt.Errorf("subscribe session topic %s: %w", topic, err)
+	}
+	defer consumer.Close()
+
+	if _, err := pulsarCommon.SendProto(ctx, pc.producer, payload); err != nil {
 		return nil, err
 	}
 
+	timeoutCtx, cancel := context.WithTimeout(ctx, pc.requestTimeout)
+	defer cancel()
+
 	var finalRes *contracts.StreamChunk
 	for {
-		select {
-		case res := <-resChan:
-			if res.Error != "" {
-				return nil, fmt.Errorf("worker error: %s", res.Error)
+		msg, err := consumer.Receive(timeoutCtx)
+		if err != nil {
+			if timeoutCtx.Err() != nil {
+				return nil, fmt.Errorf("request timed out after %s", pc.requestTimeout)
 			}
-			if finalRes == nil {
-				// Clone the first response
-				finalRes = proto.Clone(res).(*contracts.StreamChunk)
-			} else {
-				// Accumulate
-				finalRes.Result += res.Result
-				if res.PlanningResponse != "" {
-					finalRes.PlanningResponse = res.PlanningResponse
-				}
+			return nil, fmt.Errorf("session topic receive error: %w", err)
+		}
+
+		chunk := &contracts.StreamChunk{}
+		if protojson.Unmarshal(msg.Payload(), chunk) != nil {
+			consumer.Ack(msg)
+			continue
+		}
+		consumer.Ack(msg)
+
+		if chunk.Error != "" {
+			return nil, fmt.Errorf("worker error: %s", chunk.Error)
+		}
+		if finalRes == nil {
+			finalRes = proto.Clone(chunk).(*contracts.StreamChunk)
+		} else {
+			finalRes.Result += chunk.Result
+			if chunk.PlanningResponse != "" {
+				finalRes.PlanningResponse = chunk.PlanningResponse
 			}
-			if res.IsLast {
-				return finalRes, nil
+			if chunk.Metadata != nil {
+				finalRes.Metadata = chunk.Metadata
 			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(pc.requestTimeout):
-			return nil, fmt.Errorf("request timed out after %s", pc.requestTimeout)
+		}
+		if chunk.IsLast {
+			return finalRes, nil
 		}
 	}
 }
@@ -197,7 +183,6 @@ func (pc *pulsarClient) SendRawRequest(ctx context.Context, payload proto.Messag
 }
 
 func (pc *pulsarClient) Close() {
-	pc.consumer.Close()
 	pc.producer.Close()
 	pc.promptProducer.Close()
 	pc.client.Close()

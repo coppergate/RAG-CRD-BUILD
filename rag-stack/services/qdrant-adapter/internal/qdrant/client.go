@@ -36,6 +36,8 @@ func (q *QdrantClient) Search(collection string, embeddingModel string, vectorSi
 	if limit <= 0 {
 		limit = 20 // Default limit
 	}
+	logging.Printf("[qdrant] search request collection=%q model=%q vector_dims=%d limit=%d tags=%v session_id=%d include_global=%v",
+		collection, embeddingModel, len(vector), limit, tags, sessionID, includeGlobal)
 	return q.searchWithRetry(collection, embeddingModel, vectorSize, vector, limit, tags, sessionID, includeGlobal, true)
 }
 
@@ -87,9 +89,11 @@ func resolveCollection(q *QdrantClient, collection, embeddingModel string, vecto
 func (q *QdrantClient) searchWithRetry(collection string, embeddingModel string, vectorSize int, vector []float32, limit int, tags []int64, sessionID int64, includeGlobal bool, retry bool) ([]interface{}, error) {
 	if len(vector) == 0 {
 		if len(tags) > 0 {
-			logging.Printf("Empty vector but tags provided, falling back to filter-only retrieval")
+			logging.Printf("[qdrant] empty vector with tags, using filter-only retrieval collection=%q model=%q vector_size=%d tags=%v session_id=%d include_global=%v limit=%d",
+				collection, embeddingModel, vectorSize, tags, sessionID, includeGlobal, limit)
 			return q.RetrieveByFilter(collection, embeddingModel, vectorSize, tags, sessionID, includeGlobal, limit)
 		}
+		logging.Printf("[qdrant] empty vector and no tags, returning no results collection=%q model=%q session_id=%d", collection, embeddingModel, sessionID)
 		return nil, nil // Cannot search with empty vector and no tags
 	}
 
@@ -111,7 +115,7 @@ func (q *QdrantClient) searchWithRetry(collection string, embeddingModel string,
 
 	if filter := buildTagFilter(tags); len(filter) > 0 {
 		query["filter"] = filter
-		logging.Printf("DEBUG: Qdrant Search Filter (tags=%v): %+v", tags, query["filter"])
+		logging.Printf("[qdrant] search filter tags=%v filter=%+v", tags, query["filter"])
 	}
 
 	body, err := json.Marshal(query)
@@ -152,6 +156,7 @@ func (q *QdrantClient) searchWithRetry(collection string, embeddingModel string,
 		payload["_qdrant_id"] = fmt.Sprintf("%v", r.Id)
 		contexts = append(contexts, payload)
 	}
+	logging.Printf("[qdrant] search response collection=%q model=%q vector_dims=%d tags=%v results=%d", effectiveColl, embeddingModel, len(vector), tags, len(contexts))
 
 	return contexts, nil
 }
@@ -179,6 +184,8 @@ func (q *QdrantClient) RetrieveByFilter(collection string, embeddingModel string
 	if filter := buildTagFilter(tags); len(filter) > 0 {
 		query["filter"] = filter
 	}
+	logging.Printf("[qdrant] filter-only retrieval request collection=%q model=%q vector_size=%d tags=%v session_id=%d include_global=%v limit=%d",
+		effectiveColl, embeddingModel, vs, tags, sessionID, includeGlobal, limit)
 
 	body, _ := json.Marshal(query)
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
@@ -219,6 +226,7 @@ func (q *QdrantClient) RetrieveByFilter(collection string, embeddingModel string
 		payload["_qdrant_id"] = fmt.Sprintf("%v", p.Id)
 		results = append(results, payload)
 	}
+	logging.Printf("[qdrant] filter-only retrieval response collection=%q model=%q vector_size=%d tags=%v results=%d", effectiveColl, embeddingModel, vs, tags, len(results))
 	return results, nil
 }
 
@@ -586,13 +594,13 @@ func (q *QdrantClient) upsertWithRetry(collection string, embeddingModel string,
 
 	resp, err := q.httpClient.Do(req)
 	if err != nil {
-		fmt.Printf("ERROR: Qdrant PUT request failed: %v\n", err)
+		logging.Error("Qdrant PUT request failed", "error", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound && retry && vs > 0 {
-		fmt.Printf("Collection '%s' not found. Creating it with size %d...\n", effectiveColl, vs)
+		logging.Info("collection not found, auto-creating", "collection", effectiveColl, "size", vs)
 		if err := q.CreateCollection(collection, embeddingModel, vs); err != nil {
 			return fmt.Errorf("failed to auto-create collection %s: %v", effectiveColl, err)
 		}
@@ -601,11 +609,11 @@ func (q *QdrantClient) upsertWithRetry(collection string, embeddingModel string,
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		fmt.Printf("ERROR: Qdrant (coll: %s) returned %d: %s\n", effectiveColl, resp.StatusCode, string(bodyBytes))
+		logging.Error("qdrant returned non-OK status", "collection", effectiveColl, "status", resp.StatusCode, "body", string(bodyBytes))
 		return fmt.Errorf("qdrant (coll: %s) returned status %d", effectiveColl, resp.StatusCode)
 	}
 
-	fmt.Printf("DEBUG: Successfully upserted %d points into %s\n", len(points), effectiveColl)
+	logging.Debug("upserted points into collection", "count", len(points), "collection", effectiveColl)
 	return nil
 }
 
@@ -616,24 +624,11 @@ func (q *QdrantClient) MergeTags(collection string, embeddingModel string, vecto
 	}
 
 	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
-
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
-	// Qdrant doesn't have a direct "update payload for all matching" with arbitrary logic,
-	// but it has a "set payload" for a filter.
-	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/payload?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
+	scrollURL := fmt.Sprintf("%s://%s:%s/collections/%s/points/scroll", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
+	setPayloadURL := fmt.Sprintf("%s://%s:%s/collections/%s/points/payload?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
 
-	// Step 1: Add targetTag to all points that have sourceTag
-	// We use the "overwrite" (or just set) payload with a filter.
-	// Since tags is usually an array, this is slightly tricky with "set_payload".
-	// If we want to properly merge (append to array), we'd need to fetch and update or use a more advanced Qdrant feature if available.
-	// For now, we'll implement a simple "add to tags array" using Qdrant's payload update features.
-	// Note: Qdrant's /points/payload (POST) adds/updates keys. If 'tags' is a list, it might overwrite the whole list.
-
-	// Better approach for true merge in Qdrant:
-	// Use a filter to find all points with sourceTag, then use a script or multi-step update.
-	// Simpler approach: Set the targetTag as a value in the tags array.
-
-	filter := map[string]interface{}{
+	sourceFilter := map[string]interface{}{
 		"must": []map[string]interface{}{
 			{
 				"key": "tags",
@@ -644,33 +639,133 @@ func (q *QdrantClient) MergeTags(collection string, embeddingModel string, vecto
 		},
 	}
 
-	// We'll use a multi-step update if needed, but for now let's try the simplest:
-	// Replace sourceTag with targetTag in the array.
-	// Actually, Qdrant's payload update doesn't support "array remove/add" natively in a single atomic call across all points.
+	// Step 1: Scroll all points that carry sourceTag, grouped by their resulting new tag set.
+	// Grouping minimises the number of payload-update API calls.
+	type pointGroup struct {
+		newTags []int64
+		ids     []interface{}
+	}
+	groups := make(map[string]*pointGroup)
 
-	// Recommendation: For this iteration, we'll implement the "Overwrite with Target" for the session/tag field.
-	// If the user wants to merge tags, they likely want to unify them.
+	var nextOffset interface{}
+	const pageSize = 1000
+	for {
+		query := map[string]interface{}{
+			"limit":        pageSize,
+			"with_payload": true,
+			"filter":       sourceFilter,
+		}
+		if nextOffset != nil {
+			query["offset"] = nextOffset
+		}
 
-	payload := map[string]interface{}{
-		"tags": []int64{targetTag},
+		body, err := json.Marshal(query)
+		if err != nil {
+			return err
+		}
+		req, err := http.NewRequest("POST", scrollURL, bytes.NewBuffer(body))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := q.httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+
+		var scrollResp struct {
+			Result struct {
+				Points []struct {
+					Id      interface{}            `json:"id"`
+					Payload map[string]interface{} `json:"payload"`
+				} `json:"points"`
+				NextPageOffset interface{} `json:"next_page_offset"`
+			} `json:"result"`
+		}
+		decodeErr := json.NewDecoder(resp.Body).Decode(&scrollResp)
+		statusCode := resp.StatusCode
+		resp.Body.Close()
+
+		if statusCode != http.StatusOK {
+			return fmt.Errorf("qdrant scroll for merge failed: status %d", statusCode)
+		}
+		if decodeErr != nil {
+			return decodeErr
+		}
+
+		for _, p := range scrollResp.Result.Points {
+			// Parse the point's current tags.
+			var currentTags []int64
+			if rawTags, ok := p.Payload["tags"]; ok {
+				if tagSlice, ok := rawTags.([]interface{}); ok {
+					for _, v := range tagSlice {
+						switch n := v.(type) {
+						case float64:
+							currentTags = append(currentTags, int64(n))
+						case int64:
+							currentTags = append(currentTags, n)
+						}
+					}
+				}
+			}
+
+			// Build new tags: drop sourceTag, ensure targetTag is present.
+			hasTarget := false
+			var newTags []int64
+			for _, tag := range currentTags {
+				if tag == sourceTag {
+					continue
+				}
+				if tag == targetTag {
+					hasTarget = true
+				}
+				newTags = append(newTags, tag)
+			}
+			if !hasTarget {
+				newTags = append(newTags, targetTag)
+			}
+
+			// Sort for a stable grouping key.
+			sort.Slice(newTags, func(i, j int) bool { return newTags[i] < newTags[j] })
+			key := fmt.Sprintf("%v", newTags)
+
+			if g, exists := groups[key]; exists {
+				g.ids = append(g.ids, p.Id)
+			} else {
+				groups[key] = &pointGroup{newTags: newTags, ids: []interface{}{p.Id}}
+			}
+		}
+
+		nextOffset = scrollResp.Result.NextPageOffset
+		if nextOffset == nil {
+			break
+		}
 	}
 
-	body, err := json.Marshal(map[string]interface{}{
-		"payload": payload,
-		"filter":  filter,
-	})
-	if err != nil {
-		return err
+	if len(groups) == 0 {
+		return nil
 	}
 
-	resp, err := q.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("qdrant merge tags failed: status %d", resp.StatusCode)
+	// Step 2: Apply updated tag arrays — one request per distinct resulting tag set.
+	for _, group := range groups {
+		body, err := json.Marshal(map[string]interface{}{
+			"payload": map[string]interface{}{"tags": group.newTags},
+			"points":  group.ids,
+		})
+		if err != nil {
+			return err
+		}
+		resp, err := q.httpClient.Post(setPayloadURL, "application/json", bytes.NewBuffer(body))
+		if err != nil {
+			return err
+		}
+		statusCode := resp.StatusCode
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if statusCode != http.StatusOK {
+			return fmt.Errorf("qdrant set payload for merge failed: status %d", statusCode)
+		}
 	}
 
 	return nil

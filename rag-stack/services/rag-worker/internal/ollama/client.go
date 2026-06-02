@@ -3,6 +3,7 @@ package ollama
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 
 	"app-builds/common/contracts"
 	"app-builds/common/logging"
@@ -21,6 +24,7 @@ type OllamaClient struct {
 	url        string
 	model      string
 	httpClient *http.Client
+	sem        *semaphore.Weighted
 }
 
 // APIStatusError captures a non-200 Ollama response.
@@ -61,16 +65,33 @@ func IsMissingModelError(err error) bool {
 	return errors.As(err, &statusErr) && statusErr.NotFound()
 }
 
-func NewClient(url, model string) *OllamaClient {
+// IsUnsupportedEmbeddingModelError reports whether Ollama rejected the request
+// because the target model cannot produce embeddings.
+func IsUnsupportedEmbeddingModelError(err error) bool {
+	var statusErr *APIStatusError
+	if !errors.As(err, &statusErr) {
+		return false
+	}
+	body := strings.ToLower(statusErr.Body)
+	return strings.Contains(body, "does not support embeddings") ||
+		strings.Contains(body, "doesn't support embeddings") ||
+		strings.Contains(body, "not support embeddings")
+}
+
+func NewClient(url, model string, maxConcurrency int) *OllamaClient {
 	useTLS := strings.HasPrefix(url, "https://")
 	httpClient, err := tlsutil.NewHTTPClient(useTLS, 60*time.Second)
 	if err != nil {
 		logging.Fatalf("Failed to create Ollama HTTP client with TLS: %v", err)
 	}
+	if maxConcurrency <= 0 {
+		maxConcurrency = 5
+	}
 	return &OllamaClient{
 		url:        url,
 		model:      model,
 		httpClient: httpClient,
+		sem:        semaphore.NewWeighted(int64(maxConcurrency)),
 	}
 }
 
@@ -91,12 +112,18 @@ type ChatResponse struct {
 }
 
 func (o *OllamaClient) Chat(messages []map[string]string) (string, interface{}, error) {
+	if err := o.sem.Acquire(context.Background(), 1); err != nil {
+		return "", nil, fmt.Errorf("ollama semaphore acquire: %w", err)
+	}
+	defer o.sem.Release(1)
+
 	url := fmt.Sprintf("%s/api/chat", o.url)
 
 	payload := map[string]interface{}{
-		"model":    o.model,
-		"messages": messages,
-		"stream":   false,
+		"model":      o.model,
+		"messages":   messages,
+		"stream":     false,
+		"keep_alive": -1,
 	}
 
 	body, err := json.Marshal(payload)
@@ -131,11 +158,18 @@ func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, 
 		defer close(errCh)
 		defer close(resCh)
 
+		if err := o.sem.Acquire(context.Background(), 1); err != nil {
+			errCh <- fmt.Errorf("ollama semaphore acquire: %w", err)
+			return
+		}
+		defer o.sem.Release(1)
+
 		url := fmt.Sprintf("%s/api/chat", o.url)
 		payload := map[string]interface{}{
-			"model":    o.model,
-			"messages": messages,
-			"stream":   true,
+			"model":      o.model,
+			"messages":   messages,
+			"stream":     true,
+			"keep_alive": -1,
 		}
 
 		body, err := json.Marshal(payload)
@@ -212,10 +246,15 @@ func (r *ChatResponse) GetMetrics() *contracts.ExecutionMetrics {
 }
 
 func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
+	if err := o.sem.Acquire(context.Background(), 1); err != nil {
+		return nil, fmt.Errorf("ollama semaphore acquire: %w", err)
+	}
+	defer o.sem.Release(1)
 
 	payload := map[string]interface{}{
-		"model":  o.model,
-		"prompt": text,
+		"model":      o.model,
+		"prompt":     text,
+		"keep_alive": -1,
 	}
 
 	body, err := json.Marshal(payload)

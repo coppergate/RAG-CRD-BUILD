@@ -14,8 +14,9 @@ RUN python -m pip install --upgrade pip==26.0.1 \
     && pip --version \
     && pip install --no-cache-dir \
     boto3 \
+    "urllib3<2.0" \
     requests \
-    qdrant-client==1.7.3 \
+    qdrant-client==1.12.1 \
     pulsar-client \
     psycopg2-binary \
     jsonschema \

@@ -226,7 +226,7 @@ Every new session for the **Junie** agent MUST establish the operational context
         - Create a merge request (if applicable) and ensure it's ready for merge.
     - Create a new session branch named `work-YYYY-MM-DD` (e.g., `work-2026-03-02`).
     - During the session, commit with timestamp messages (e.g., `2026-03-02 08:30`).
-    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies:"`.
+    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies"`.
 2. **File Size Limit**: Do not commit any files larger than 1MB without asking first.
    - **Clean History (Rebase & Squash)**:
    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
@@ -235,11 +235,8 @@ Every new session for the **Junie** agent MUST establish the operational context
    - **Daily Push & Merge**: Every day, make a new push to GIT with the current committed code, create a pull request/merge request, and then merge it into the main branch.
    - **Merge Policy**: When merging, create an appropriate summary of the work contained in the commits.
    - **Pull Requests**: Create a pull request for each day's branch.
-3. **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project.
-    - Verify the current project version in `CURRENT_VERSION`.
-    - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
-    - `build.sh` performs automatic version incrementing when code changes are detected via hashing.
-    - `CURRENT_VERSION` is generated build metadata; do not commit it to git unless the build workflow explicitly requires a source-side version change.
+3. **Versioning**: The source of truth for all service versions is the **build processor API backed by the database**. `build.sh` resolves and increments versions automatically by querying the API — do not read or write `CURRENT_VERSION` manually.
+    - `CURRENT_VERSION` at the project root is a **synced backup cache** only. It is written by `build.sh` after a successful build+deploy via `sync_current_version_file()`. Do not treat it as authoritative, do not commit it to git.
 4. **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
@@ -290,7 +287,7 @@ All RAG service image builds MUST go through the in-cluster Kaniko build pipelin
 
 #### Triggering a Build
 1.  **Access Hierophant**: Use `./run-on-hierophant.sh` or SSH.
-2.  **Versioning**: The version is read from `CURRENT_VERSION` at the project root.
+2.  **Versioning**: Resolved automatically by `build.sh` from the build processor API. No manual version management required.
 3.  **Command**: Run `rag-stack/build.sh` (defaults to cluster-mode).
 4.  **Wait Mode**: Use the `--wait` flag to wait for build completion.
 
@@ -371,14 +368,19 @@ As of version `2.11.x`, the build system supports hardened parallel execution to
 
 #### Build Script Locking (build.sh)
 1.  **Global Atomic Lock**: `build.sh` uses a global lock directory `/tmp/rag-stack-build.lock`. This lock is shared across ALL users on **hierophant**, preventing concurrent script executions from interfering with each other's versioning and hashing.
-2.  **Version File Lock**: `update_svc_info` uses `flock` on `/tmp/rag-stack-version-shared.lock` to ensure atomic updates to `CURRENT_VERSION`.
+2.  **Version File Lock**: `update_svc_info` uses `flock` on `/tmp/rag-stack-version-shared.lock` to ensure atomic updates to the version DB via the build processor API.
 3.  **Permissions and Multi-User Support**:
     - Lock files in `/tmp` are created with `666` permissions where possible to allow both `wjones` and `junie` to manage them.
     - If a lock is held by a dead process (checked via PID), it is automatically cleared.
-    - The `CURRENT_VERSION` file must have group-write permissions (`chmod 666`) for the `super-user` group.
+    - The `CURRENT_VERSION` backup file is written with `chmod 664` by `sync_current_version_file()` after each successful build.
 4.  **Parallel Loops**:
     -   **Skip-and-Deploy**: Services that are already built but need a deployment update are processed in parallel (default 4).
     -   **Service Builds**: New builds are processed in parallel (default 4) using background subshells and `set -m` for job control.
+5.  **`--wait` Deploy Race Condition Fix**: After triggering Kaniko builds, `kubectl wait` previously selected only jobs that existed at the moment it ran, silently missing jobs the build-orchestrator created asynchronously. The fix uses a 3-phase approach:
+    - **Phase 1**: Poll until each triggered service's Kaniko job EXISTS in k8s (per-job appearance timeout: 300s).
+    - **Phase 2**: Once all expected jobs are present, run a single `kubectl wait --for=condition=complete` with the remaining overall deadline.
+    - **Phase 3**: Deploy each service whose job succeeded (`status.succeeded == 1`).
+    - Services triggered this run are identified by `last_build` containing `"(triggered)"` — set by `build_service` immediately after firing the Pulsar trigger.
 
 #### Test Data Cleanup
 1.  **Automated Cleanup**: A `rag-test-cleanup` job runs before each E2E test. It removes any data with `test-`, `iso-`, or `e2e-` prefixes from TimescaleDB and Qdrant.
@@ -532,7 +534,26 @@ flutter run -d chrome # Web browser
 
 ## 7. Testing & Verification
 
-### 7.0 Pre-Test Verification (CRITICAL)
+### 7.0 Full Test Suite (Run This First)
+`rag-stack/tests/run-tests.sh` is the single entry point for a full test of all services. Run it whenever asked for a "full test", before merging a branch, or after a deploy that touches multiple services. It runs Go unit tests (vet + test) across all service modules first, then runs the E2E cluster tests via `run-e2e-on-hierophant.sh`.
+
+```bash
+# Full test: unit tests + E2E cluster tests (run this for a full test of the services)
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-tests.sh"
+
+# Unit tests only — no cluster required, fast feedback during development
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-tests.sh --unit-only"
+
+# E2E only — skip unit tests, run cluster tests directly
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "bash /mnt/hegemon-share/share/code/complete-build/rag-stack/tests/run-tests.sh --e2e-only"
+```
+
+The unit phase runs `go vet ./...` and `go test ./...` on each service module and prints a per-module summary table. The E2E phase deploys a test job to the `rag-system` namespace and runs the full Python integration suite plus the Go E2E driver. Both phases must pass for the overall run to succeed.
+
+### 7.0.1 Pre-Test Verification (CRITICAL)
 Before executing any integration or E2E tests, you MUST verify that the cluster state is stable at the pod level. Simply checking that a Deployment is "Ready" or has "Available" replicas is insufficient, as it may be in the middle of a rolling update or have stale replicas from a previous version.
 
 **Verification Steps**:
@@ -651,22 +672,15 @@ The Chat Panel in RAG Explorer supports associating multiple existing tags with 
 
 ## 9. Cluster Build System
 
-### 9.1 Shared Build State (CURRENT_VERSION & Locks)
-The `CURRENT_VERSION` file and build lock files track state across multiple users and environments.
-- **Location**:
-    - Version: `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`
+### 9.1 Shared Build State (Locks & Version Cache)
+Build lock files and the `CURRENT_VERSION` backup cache track state across multiple users and environments.
+- **Version source of truth**: Build processor API + database. `build.sh` queries and updates this automatically.
+- **`CURRENT_VERSION` file**: A synced backup written by `build.sh` after each successful build (`chmod 664`). Do not read it as authoritative; do not edit it manually; do not commit it to git.
+- **Lock locations**:
     - Locks: `/tmp/rag-stack-build.*`
     - Journals: `/tmp/.build_journal_junie/`
-- **Permissions (Pinning)**: To avoid recurrent permission issues when files are recreated, we use a combination of SELinux `fcontext` and Default ACLs on **hierophant**.
-- **Setup**: Run the following script as **root** on hierophant to 'pin' these permissions:
-    ```bash
-    sudo /mnt/hegemon-share/share/code/complete-build/scripts/setup-selinux-permissions.sh
-    ```
-- **DANGER**: DO NOT use `mv` to update `CURRENT_VERSION`. ALWAYS use redirection to preserve the 'pinned' permissions and contexts.
-- **Workaround**: If `Permission denied` occurs and the setup script cannot be run, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
-- **Git Note**: Leave `CURRENT_VERSION` uncommitted after build/deploy runs unless you are intentionally changing version tracking behavior in the repository.
 - **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.
-- **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666, but should be managed by the pinning script for maximum reliability.
+- **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666.
 ### 9.2 Protobuf Generation
 To regenerate Go bindings for the `rag_stack.proto` contract:
 ```bash
@@ -703,6 +717,18 @@ Session context is managed by the `memory-controller` service and consumed by th
 
 ### 10.1 Context Paging and Chunking Verification
 The RAG pipeline supports exhaustive context retrieval (up to 10,000 vectors) and partitioning into 50-vector chunks for LLM processing. This ensures that large tag-based collections can be processed within the model's context window.
+
+#### 10.1.1 Isolated Retrieval Path Test
+When troubleshooting ingestion/retrieval behavior, run the isolated retrieval test first so you can compare direct Qdrant storage access with the gateway path.
+
+```bash
+cd /mnt/hegemon-share/share/code/complete-build/rag-stack/tests
+RAG_E2E_QDRANT_BYPASS_ONLY=true python retrieval_path_test.py
+```
+
+- The test probes Qdrant directly using the resolved embedding model, vector size, and tags before submitting the gateway request.
+- Set `RAG_E2E_QDRANT_BYPASS_ONLY=true` to stop after the direct Qdrant probe and confirm whether the storage layer contains the expected points.
+- Use the full test run without the bypass flag once the direct probe shows the expected rows, so the gateway and response path are validated against the same data.
 
 #### 10.2 Behavioral Governance (Iteration 9)
 

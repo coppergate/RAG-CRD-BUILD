@@ -173,6 +173,17 @@ func (p *PulsarProcessor) mergeMetadata(
 	return merged
 }
 
+func (p *PulsarProcessor) hasContentSegment(metadata map[string]interface{}) bool {
+	for _, seg := range p.extractResponseSegments(metadata) {
+		if m, ok := seg.(map[string]interface{}); ok {
+			if kind, _ := m["kind"].(string); kind == "content" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (p *PulsarProcessor) hasResponseSegments(metadata map[string]interface{}) bool {
 	if metadata == nil {
 		return false
@@ -484,7 +495,7 @@ func (p *PulsarProcessor) HandleResponse(ctx context.Context, msg pulsar.Message
 			payload.IsLast,
 			p.hasResponseSegments(existing.Metadata),
 			payload.InConversation,
-			false,
+			!p.hasContentSegment(existing.Metadata),
 		)
 
 		// Update existing record
@@ -591,13 +602,16 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 
 	m := payload.Metrics
 	sessID := payload.SessionId
-	respID, _ := uuid.Parse(payload.Id)
+	respID, err := uuid.Parse(payload.Id)
+	if err != nil {
+		return dlq.PermanentFailure, fmt.Errorf("invalid response ID %q in completion: %w", payload.Id, err)
+	}
 
 	var dbResponseID *int64
 	res, err := p.client.Response.Query().
 		Where(response.ResponseID(respID)).
 		Order(ent.Desc(response.FieldID)).
-		First(ctx)
+		First(msgCtx)
 	if err == nil {
 		dbResponseID = &res.ID
 	}
@@ -609,7 +623,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 			sql.ConflictColumns(modeldefinition.FieldModelName),
 		).
 		UpdateNewValues().
-		ID(ctx)
+		ID(msgCtx)
 	if err != nil {
 		logging.Printf("Failed to upsert model definition: %v", err)
 	}
@@ -624,7 +638,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 			sql.ConflictColumns(inferencenode.FieldHostname),
 		).
 		UpdateNewValues().
-		ID(ctx)
+		ID(msgCtx)
 	if err != nil {
 		logging.Printf("Failed to upsert inference node: %v", err)
 	}
@@ -641,7 +655,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 		SetPromptEvalDurationUsec(m.PromptEvalDurationUsec).
 		SetEvalDurationUsec(m.EvalDurationUsec).
 		SetTokensPerSecond(float32(m.TokensPerSecond)).
-		Save(ctx)
+		Save(msgCtx)
 
 	if err != nil {
 		logging.Printf("Failed to insert execution metrics: %v", err)

@@ -11,11 +11,30 @@ import (
 
 // ModelConfig defines model-specific strings and behavior for the GenericModel
 type ModelConfig struct {
-	PlanningPromptTemplate     string
+	PlanningPromptTemplate string
+	// SystemInstruction is sent as a "system" role message before any user
+	// content. This carries higher behavioral weight than embedding the same
+	// text inside the user message. Leave empty to use the legacy single-message
+	// format (ExecutionHeader is prepended to the user message instead).
+	SystemInstruction          string
 	ExecutionHeader            string
 	ExecutionFooter            string
 	ExecutionSuffix            string
+	ExecutionPromptFormatter   func(ModelConfig, string, []interface{}) string
 	InsufficientContextPhrases []string
+	// FormatterName is the string key used when loading config from YAML
+	// ("default" | "numbered" | "tagged"). It mirrors ExecutionPromptFormatter.
+	FormatterName string
+}
+
+// NewPlannerWithConfig wraps a ChatClient with the given ModelConfig as a Planner.
+func NewPlannerWithConfig(client ChatClient, cfg ModelConfig) Planner {
+	return &GenericModel{BaseModel: BaseModel{Client: client}, Config: cfg}
+}
+
+// NewExecutorWithConfig wraps a ChatClient with the given ModelConfig as an Executor.
+func NewExecutorWithConfig(client ChatClient, cfg ModelConfig) Executor {
+	return &GenericModel{BaseModel: BaseModel{Client: client}, Config: cfg}
 }
 
 // GenericModel implements both Planner and Executor using a ModelConfig
@@ -37,7 +56,11 @@ func (m *GenericModel) Plan(ctx context.Context, prompt string, contexts []inter
 	sb.WriteString(fmt.Sprintf(m.Config.PlanningPromptTemplate, prompt))
 	planningPrompt := sb.String()
 
-	messages := m.assembleMessages(planningPrompt, nil, history)
+	// Planning must not use the executor's SystemInstruction (extraction assistant) or
+	// execution formatting (footer/suffix). Build a plain message list: history system
+	// messages only (skip prior user turns to avoid confusing the planner), then the
+	// planning prompt as a single user message.
+	messages := m.assemblePlanningMessages(planningPrompt, history)
 	planResult, metrics, err := m.Client.Chat(messages)
 	if err != nil {
 		return nil, nil, fmt.Errorf("planning Chat failed: %w", err)
@@ -66,7 +89,20 @@ func (m *GenericModel) ExecuteStream(ctx context.Context, prompt string, context
 func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, history []interface{}) []map[string]string {
 	var messages []map[string]string
 
+	// If the model config supplies a dedicated system instruction, emit it as a
+	// system role message so the model gives it appropriate behavioral weight.
+	// This prevents the extraction instruction from being diluted by embedding
+	// it inside the user turn alongside the context blocks.
+	if instr := strings.TrimSpace(m.Config.SystemInstruction); instr != "" {
+		messages = append(messages, map[string]string{"role": "system", "content": instr})
+	}
+
 	// Preserve the retrieval order chosen by the memory-controller.
+	// Skip any user-role history item whose content exactly matches the current
+	// prompt — the gateway often stores the user's question as the last history
+	// entry before we append it again as the execution user turn, which would
+	// produce two consecutive user messages and confuse most chat templates.
+	promptTrimmed := strings.TrimSpace(prompt)
 	for _, h := range history {
 		content, memType, role := m.extractMemoryFields(h)
 		if content == "" {
@@ -78,12 +114,62 @@ func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, h
 		if role == "" {
 			role = "system"
 		}
+		if role == "user" && strings.TrimSpace(content) == promptTrimmed {
+			continue
+		}
 		messages = append(messages, map[string]string{"role": role, "content": content})
 	}
 
 	if len(contexts) > 0 {
+		messages = append(messages, map[string]string{"role": "user", "content": m.buildExecutionPrompt(prompt, contexts)})
+		return messages
+	}
+
+	messages = append(messages, map[string]string{"role": "user", "content": m.buildExecutionPrompt(prompt, nil)})
+	return messages
+}
+
+// assemblePlanningMessages builds a message list for the planner without the
+// executor's SystemInstruction or execution-style formatting. Only system-role
+// history items are forwarded so the planner has context rules but no prior
+// user turns that would create an awkward multi-turn structure.
+func (m *GenericModel) assemblePlanningMessages(planningPrompt string, history []interface{}) []map[string]string {
+	var messages []map[string]string
+
+	for _, h := range history {
+		content, memType, role := m.extractMemoryFields(h)
+		if content == "" {
+			continue
+		}
+		if role == "" {
+			role = inferRoleFromMemoryType(memType)
+		}
+		if role == "" {
+			role = "system"
+		}
+		// Only forward system-role history items to the planner; prior user
+		// turns are not relevant and can confuse the planning response.
+		if role != "system" {
+			continue
+		}
+		messages = append(messages, map[string]string{"role": role, "content": content})
+	}
+
+	messages = append(messages, map[string]string{"role": "user", "content": planningPrompt})
+	return messages
+}
+
+func (m *GenericModel) buildExecutionPrompt(prompt string, contexts []interface{}) string {
+	if formatter := m.Config.ExecutionPromptFormatter; formatter != nil {
+		return formatter(m.Config, prompt, contexts)
+	}
+	return BuildDefaultExecutionPrompt(m.Config, prompt, contexts)
+}
+
+func BuildDefaultExecutionPrompt(config ModelConfig, prompt string, contexts []interface{}) string {
+	if len(contexts) > 0 {
 		var userPrompt strings.Builder
-		header := strings.TrimSpace(m.Config.ExecutionHeader)
+		header := strings.TrimSpace(config.ExecutionHeader)
 		if header == "" {
 			header = "Retrieved context:"
 		}
@@ -93,29 +179,105 @@ func (m *GenericModel) assembleMessages(prompt string, contexts []interface{}, h
 			userPrompt.WriteString(fmt.Sprintf("- %v\n", c))
 		}
 		userPrompt.WriteString("\n")
-		footer := strings.TrimSpace(m.Config.ExecutionFooter)
+		footer := strings.TrimSpace(config.ExecutionFooter)
 		if footer != "" {
 			userPrompt.WriteString(footer)
 			userPrompt.WriteString("\n")
 		}
 		userPrompt.WriteString(prompt)
-		if suffix := m.Config.ExecutionSuffix; suffix != "" {
+		if suffix := config.ExecutionSuffix; suffix != "" {
 			userPrompt.WriteString(suffix)
 		}
-		messages = append(messages, map[string]string{"role": "user", "content": userPrompt.String()})
-		return messages
+		return userPrompt.String()
 	}
 
 	userPrompt := prompt
-	if footer := m.Config.ExecutionFooter; footer != "" {
+	if footer := config.ExecutionFooter; footer != "" {
 		userPrompt = footer + userPrompt
 	}
-	if suffix := m.Config.ExecutionSuffix; suffix != "" {
+	if suffix := config.ExecutionSuffix; suffix != "" {
 		userPrompt += suffix
 	}
+	return userPrompt
+}
 
-	messages = append(messages, map[string]string{"role": "user", "content": userPrompt})
-	return messages
+func BuildTaggedExecutionPrompt(config ModelConfig, prompt string, contexts []interface{}) string {
+	if len(contexts) == 0 {
+		return BuildDefaultExecutionPrompt(config, prompt, contexts)
+	}
+
+	var userPrompt strings.Builder
+	header := strings.TrimSpace(config.ExecutionHeader)
+	if header == "" {
+		header = "Retrieved context:"
+	}
+	userPrompt.WriteString(header)
+	userPrompt.WriteString("\n")
+	for i, c := range contexts {
+		if i > 0 {
+			userPrompt.WriteString("\n")
+		}
+		content := strings.TrimSpace(fmt.Sprintf("%v", c))
+		if content == "" {
+			continue
+		}
+		userPrompt.WriteString(fmt.Sprintf("<<<CONTEXT %d>>>\n", i+1))
+		userPrompt.WriteString(content)
+		if !strings.HasSuffix(content, "\n") {
+			userPrompt.WriteString("\n")
+		}
+		userPrompt.WriteString(fmt.Sprintf("<<<END CONTEXT %d>>>\n", i+1))
+	}
+	userPrompt.WriteString("\n")
+	footer := strings.TrimSpace(config.ExecutionFooter)
+	if footer != "" {
+		userPrompt.WriteString(footer)
+		userPrompt.WriteString("\n")
+	}
+	userPrompt.WriteString(prompt)
+	if suffix := config.ExecutionSuffix; suffix != "" {
+		userPrompt.WriteString(suffix)
+	}
+	return userPrompt.String()
+}
+
+func BuildNumberedExecutionPrompt(config ModelConfig, prompt string, contexts []interface{}) string {
+	if len(contexts) == 0 {
+		return BuildDefaultExecutionPrompt(config, prompt, contexts)
+	}
+
+	var userPrompt strings.Builder
+	header := strings.TrimSpace(config.ExecutionHeader)
+	if header == "" {
+		header = "Retrieved context:"
+	}
+	userPrompt.WriteString(header)
+	userPrompt.WriteString("\n")
+	for i, c := range contexts {
+		content := strings.TrimSpace(fmt.Sprintf("%v", c))
+		if content == "" {
+			continue
+		}
+		if i > 0 {
+			userPrompt.WriteString("\n")
+		}
+		userPrompt.WriteString(fmt.Sprintf("Context %d:\n", i+1))
+		userPrompt.WriteString(content)
+		if !strings.HasSuffix(content, "\n") {
+			userPrompt.WriteString("\n")
+		}
+	}
+	userPrompt.WriteString("\n")
+	footer := strings.TrimSpace(config.ExecutionFooter)
+	if footer != "" {
+		userPrompt.WriteString(footer)
+		userPrompt.WriteString("\n")
+	}
+	userPrompt.WriteString(prompt)
+	if suffix := config.ExecutionSuffix; suffix != "" {
+		userPrompt.WriteString(suffix)
+	}
+	return userPrompt.String()
 }
 
 func (m *GenericModel) extractMemoryFields(item interface{}) (content, memType, role string) {

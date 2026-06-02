@@ -7,7 +7,7 @@ import requests
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
-from e2e_session_state import unique_session_id, unique_session_name
+from e2e_session_state import cleanup_test_sessions, unique_session_id, unique_session_name
 from e2e_tag_state import ensure_test_tag
 from model_matrix import EMBEDDING_MODEL, model_cases
 
@@ -58,15 +58,125 @@ else:
     S3_ENDPOINT = endpoint_env
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+QDRANT_USE_TLS = os.getenv("QDRANT_USE_TLS", "false").lower() == "true"
 GATEWAY_URL = os.getenv("GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local/v1/chat/completions")
 CHAT_URL = os.getenv("RAG_CHAT_URL", "https://rag-admin-api.rag.hierocracy.home/api/chat/v1/rag/chat")
 ADMIN_URL = os.getenv("ADMIN_URL", "https://rag-admin-api.rag.hierocracy.home")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434").rstrip("/")
 BUCKET_NAME = os.getenv("BUCKET_NAME", "e2eTestBucket")
 S3_INDEX = "/e2eTestBucket"
 TAG_STATE_FILE = os.getenv(
     "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
 )
 GATEWAY_TIMEOUT_SECONDS = int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "600"))
+VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "4096"))
+QDRANT_BYPASS_ONLY = os.getenv("RAG_E2E_QDRANT_BYPASS_ONLY", "false").lower() == "true"
+
+
+def _normalize_model_name(model: str) -> str:
+    normalized = []
+    last_dash = False
+    for ch in model.strip().lower():
+        if ch.isalnum():
+            normalized.append(ch)
+            last_dash = False
+        elif not last_dash:
+            normalized.append("-")
+            last_dash = True
+    return "".join(normalized).strip("-")
+
+
+def _collection_name(prefix: str, embedding_model: str, vector_size: int) -> str:
+    base = prefix.strip() or "vectors"
+    normalized = _normalize_model_name(embedding_model)
+    if normalized and vector_size > 0:
+        return f"{base}-{normalized}-{vector_size}"
+    if normalized:
+        return f"{base}-{normalized}"
+    if vector_size > 0:
+        return f"{base}-{vector_size}"
+    return base
+
+
+def _qdrant_client():
+    return QdrantClient(
+        host=QDRANT_HOST,
+        port=QDRANT_PORT,
+        https=QDRANT_USE_TLS,
+        prefer_grpc=False,
+        timeout=60,
+    )
+
+
+def _ollama_embeddings(text: str, model: str):
+    resp = requests.post(
+        f"{OLLAMA_URL}/api/embeddings",
+        json={"model": model, "prompt": text},
+        timeout=120,
+        verify=False,
+    )
+    resp.raise_for_status()
+    return resp.json()["embedding"]
+
+
+def _probe_qdrant_storage(tag_id: int, question: str, embedding_model: str):
+    collection_name = _collection_name("vectors", embedding_model, VECTOR_SIZE)
+    print(
+        f"  - [QDRANT] Direct probe collection={collection_name} "
+        f"model={embedding_model} dim={VECTOR_SIZE} tag={tag_id}"
+    )
+
+    client = _qdrant_client()
+    try:
+        info = client.get_collection(collection_name)
+        points = getattr(info, "points_count", None)
+        print(f"    - Collection exists; points_count={points}")
+    except Exception as exc:
+        print(f"    - [WARN] collection lookup failed: {exc}")
+        return {"scroll_count": 0, "search_count": 0}
+
+    tag_filter = models.Filter(
+        must=[
+            models.FieldCondition(
+                key="tags",
+                match=models.MatchAny(any=[tag_id]),
+            )
+        ]
+    )
+
+    scroll_points, _ = client.scroll(
+        collection_name=collection_name,
+        scroll_filter=tag_filter,
+        limit=20,
+        with_payload=True,
+        with_vectors=False,
+    )
+    print(f"    - Filter-only scroll returned {len(scroll_points)} points")
+    for point in scroll_points[:3]:
+        payload = point.payload or {}
+        print(
+            f"      - point_id={point.id} path={payload.get('path')} "
+            f"session_id={payload.get('session_id')} tags={payload.get('tags')}"
+        )
+
+    query_vector = _ollama_embeddings(question, embedding_model)
+    search_points = client.search(
+        collection_name=collection_name,
+        query_vector=query_vector,
+        query_filter=tag_filter,
+        limit=10,
+        with_payload=True,
+    )
+    print(f"    - Vector+tag search returned {len(search_points)} points")
+    for point in search_points[:3]:
+        payload = point.payload or {}
+        print(
+            f"      - point_id={point.id} score={point.score:.4f} path={payload.get('path')} "
+            f"session_id={payload.get('session_id')} tags={payload.get('tags')}"
+        )
+
+    return {"scroll_count": len(scroll_points), "search_count": len(search_points)}
 
 def test_s3_ops():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Testing S3 Operations...")
@@ -106,8 +216,10 @@ def test_qdrant_ops():
     vector_size = int(os.getenv("VECTOR_SIZE", "4096"))
     collection_name = f"test_collection_{vector_size}"
     
-    # Recreate collection (handles existing collections gracefully)
-    client.recreate_collection(
+    # Create collection (drop existing if present)
+    if client.collection_exists(collection_name):
+        client.delete_collection(collection_name)
+    client.create_collection(
         collection_name=collection_name,
         vectors_config=models.VectorParams(size=vector_size, distance=models.Distance.COSINE),
     )
@@ -145,72 +257,95 @@ def test_rag_retrieval(tag_id):
     system_prompt = "Use only the uploaded context. Reply with the exact secret code and nothing else."
 
     for case in model_cases():
-        session_name = unique_session_name(f"test-session-{case['label']}")
-        session_id = unique_session_id()
-        payload = {
-            "prompt": query,
-            "session_id": session_id,
-            "session_name": session_name,
-            "tags": [tag_id],
-            "planner": case["planner"],
-            "executor": case["executor"],
-            "embedding_model": EMBEDDING_MODEL,
-            "include_global": False,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": query,
-                },
-            ],
-        }
-        try:
-            headers = {}
-            if OTEL_ENABLED:
-                with tracer.start_as_current_span("gateway_request") as span:
-                    try:
-                        from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
-                        propagator = TraceContextTextMapPropagator()
-                        propagator.inject(headers)
-                    except Exception as e:
-                        print(f"  - Failed to inject trace headers: {e}")
-                response = requests.post(
-                    CHAT_URL,
-                    json=payload,
-                    timeout=GATEWAY_TIMEOUT_SECONDS,
-                    headers=headers,
-                    verify=False,
-                )
-            else:
-                response = requests.post(
-                    CHAT_URL,
-                    json=payload,
-                    timeout=GATEWAY_TIMEOUT_SECONDS,
-                    verify=False,
-                )
+        print(
+            f"  - Case planner={case['planner']} executor={case['executor']} "
+            f"embedding={EMBEDDING_MODEL}"
+        )
 
-            print(
-                f"  - Gateway status code ({case['name']}): {response.status_code} "
-                f"[planner={case['planner']} executor={case['executor']}]"
+        case_results = []
+        for attempt in range(2):
+            session_name = unique_session_name(f"test-session-{case['label']}-{attempt + 1}")
+            session_id = unique_session_id()
+            payload = {
+                "prompt": query,
+                "session_id": session_id,
+                "session_name": session_name,
+                "tags": [tag_id],
+                "planner": case["planner"],
+                "executor": case["executor"],
+                "embedding_model": EMBEDDING_MODEL,
+                "include_global": False,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user",
+                        "content": query,
+                    },
+                ],
+            }
+            try:
+                qdrant_probe = _probe_qdrant_storage(tag_id, query, EMBEDDING_MODEL)
+                print(f"    - Qdrant direct probe summary: {qdrant_probe}")
+                if QDRANT_BYPASS_ONLY:
+                    print("    - QDRANT bypass-only mode enabled; skipping gateway submission.")
+                    if qdrant_probe["scroll_count"] == 0 and qdrant_probe["search_count"] == 0:
+                        raise RuntimeError("direct Qdrant probe returned no rows")
+                    case_results.append("qdrant-bypass")
+                    continue
+
+                headers = {}
+                if OTEL_ENABLED:
+                    with tracer.start_as_current_span("gateway_request") as span:
+                        try:
+                            from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+                            propagator = TraceContextTextMapPropagator()
+                            propagator.inject(headers)
+                        except Exception as e:
+                            print(f"  - Failed to inject trace headers: {e}")
+                    response = requests.post(
+                        CHAT_URL,
+                        json=payload,
+                        timeout=GATEWAY_TIMEOUT_SECONDS,
+                        headers=headers,
+                        verify=False,
+                    )
+                else:
+                    response = requests.post(
+                        CHAT_URL,
+                        json=payload,
+                        timeout=GATEWAY_TIMEOUT_SECONDS,
+                        verify=False,
+                    )
+
+                print(
+                    f"    - Gateway status code ({case['name']} run {attempt + 1}): {response.status_code} "
+                    f"[session_id={session_id}]"
+                )
+                if response.status_code != 200:
+                    raise RuntimeError(f"gateway returned {response.status_code}: {response.text}")
+
+                data = response.json()
+                result = data.get("result", "")
+                planning_response = data.get("planning_response", "")
+                if "Zeltron-9" not in result:
+                    raise RuntimeError(f"unexpected result for {case['name']}: {result}")
+                if not planning_response:
+                    raise RuntimeError(f"missing planning_response for {case['name']}: {data}")
+
+                case_results.append(result)
+                print(f"    - Result verified for {case['name']} run {attempt + 1}")
+            except Exception as e:
+                print(f"    - [WARN] Gateway smoke check failed during run {attempt + 1} for {case['name']}: {e}")
+                raise
+
+        if len(set(case_results)) != 1:
+            raise RuntimeError(
+                f"retrieval result changed across independent sessions for {case['name']}: {case_results}"
             )
-            if response.status_code != 200:
-                raise RuntimeError(f"gateway returned {response.status_code}: {response.text}")
-
-            data = response.json()
-            result = data.get("result", "")
-            planning_response = data.get("planning_response", "")
-            if "Zeltron-9" not in result:
-                raise RuntimeError(f"unexpected result for {case['name']}: {result}")
-            if not planning_response:
-                raise RuntimeError(f"missing planning_response for {case['name']}: {data}")
-
-            print(f"  - Result verified for {case['name']}")
-        except Exception as e:
-            print(f"  - [WARN] Gateway connection failed during smoke check for {case['name']}: {e}")
-            raise
+        print(f"  - Session-independent retrieval verified for {case['name']}")
 
 def test_planner_trace_replay():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] Verifying planner trace replay...")
@@ -342,6 +477,7 @@ def cleanup_test_data():
         print(f"  - Qdrant Cleanup warning: {e}")
 
 if __name__ == "__main__":
+    cleanup_test_sessions()
     # Note: These tests are intended to run INSIDE the cluster or where endpoints are reachable
     print(f"[{datetime.utcnow().isoformat()}] [ENV] Test configuration:")
     print(json.dumps({

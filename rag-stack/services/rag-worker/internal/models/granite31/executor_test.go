@@ -2,6 +2,7 @@ package granite31
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"app-builds/rag-worker/internal/models"
@@ -10,11 +11,25 @@ import (
 func TestExecutor_Execute(t *testing.T) {
 	mock := &models.MockChatClient{
 		ChatFunc: func(messages []map[string]string) (string, interface{}, error) {
-			if len(messages) != 1 {
-				t.Fatalf("expected a single user prompt message, got %d", len(messages))
+			// Expect a system message followed by a user message now that
+			// SystemInstruction is set on the granite31 config.
+			if len(messages) != 2 {
+				t.Fatalf("expected system + user messages (2 total), got %d", len(messages))
 			}
-			if messages[0]["content"] == "" {
-				t.Fatalf("expected non-empty user prompt")
+
+			sysMsg := messages[0]
+			if sysMsg["role"] != "system" {
+				t.Fatalf("first message must be role=system, got %q", sysMsg["role"])
+			}
+			if !strings.Contains(sysMsg["content"], "strict extraction assistant") {
+				t.Fatalf("system message missing extraction instruction: %q", sysMsg["content"])
+			}
+
+			userContent := messages[1]["content"]
+			if !strings.Contains(userContent, "Context 1:") ||
+				!strings.Contains(userContent, "User Query:") ||
+				!strings.Contains(userContent, "Exact Answer (no quotes, exact text only):") {
+				t.Fatalf("unexpected granite execution prompt: %q", userContent)
 			}
 			return "granite answer", nil, nil
 		},

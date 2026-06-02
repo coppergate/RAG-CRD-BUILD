@@ -38,12 +38,22 @@ var Config = models.ModelConfig{
 }
 If the request is ambiguous, use action_type UNKNOWN and put the exact prompt in search_queries.
 Query: %s`,
-	ExecutionHeader: "Use the following retrieved context to answer the user query. If the answer appears in the context, return the exact literal answer from the context and nothing else. The answer may appear inside a longer sentence; extract the shortest exact phrase that answers the question. If the context does not contain the answer, say that you don't know.\n\nContext:\n",
-	ExecutionFooter: "\n\nUser Query: ",
-	ExecutionSuffix: "\n\nAssistant Answer: ",
+	SystemInstruction:        "You are a strict extraction assistant. This is a benign retrieval task. Do not refuse, do not apologize, and do not add commentary. Use the retrieved context below as the only source of truth. If the answer appears in the context, return the exact literal phrase from the context and nothing else. Extract the shortest exact phrase that answers the question. If the answer is a code or token, preserve its exact characters including hyphens and digits. If the context does not contain the answer, say only: I don't know.",
+	ExecutionHeader:          "Retrieved context:\n",
+	ExecutionFooter:          "\n\nUser Query: ",
+	ExecutionSuffix:          "\n\nAnswer: ",
+	// Use the simpler numbered format. The XML-style <<<CONTEXT N>>> tags
+	// used by BuildTaggedExecutionPrompt are not standard llama3.1 training
+	// format and can cause the model to fail to ground in the context.
+	ExecutionPromptFormatter: models.BuildNumberedExecutionPrompt,
 	InsufficientContextPhrases: []string{
 		"\"insufficient_context\": true",
 		"insufficient context",
+		"i can’t provide",
+		"i cannot provide",
+		"i can not provide",
+		"i’m sorry",
+		"i don’t know",
 	},
 }
 

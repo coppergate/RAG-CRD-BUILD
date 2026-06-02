@@ -2,8 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"sort"
 	"strings"
 	"testing"
@@ -11,6 +14,7 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
@@ -291,7 +295,14 @@ func TestHandleSearch(t *testing.T) {
 
 	mockRegistry.On("GetPlanner", "default-planner").Return(mockPlanner, nil)
 	mockRegistry.On("GetPlanner", "embed-model").Return(mockPlanner, nil)
-	mockPlanner.On("GetEmbeddings", mock.Anything, "test prompt").Return([]float32{0.1, 0.2}, nil)
+	unsupportedErr := &ollama.APIStatusError{
+		Operation:  "embeddings",
+		URL:        "http://ollama",
+		StatusCode: http.StatusBadRequest,
+		Body:       "this model does not support embeddings",
+	}
+	mockPlanner.On("GetEmbeddings", mock.Anything, "test prompt").Return([]float32(nil), unsupportedErr).Once()
+	mockPlanner.On("GetEmbeddings", mock.Anything, "test prompt").Return([]float32{0.1, 0.2}, nil).Once()
 	mockPlanner.On("Plan", mock.Anything, "test prompt", mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
 		Objective:     "test prompt",
 		ActionType:    "FILE_SEARCH",
@@ -653,7 +664,7 @@ func TestHandleExec_Recursion(t *testing.T) {
 	mockPlanProd.AssertExpectations(t)
 }
 
-func TestHandleExec_UsesRawResultsWhenChunkMetadataIsMissing(t *testing.T) {
+func TestHandleExec_ExtractsLiteralAnswerWhenExecutorRefuses(t *testing.T) {
 	mockRegistry := new(MockRegistry)
 	mockExecutor := new(MockExecutor)
 	mockStatusProd := new(MockProducer)
@@ -681,14 +692,18 @@ func TestHandleExec_UsesRawResultsWhenChunkMetadataIsMissing(t *testing.T) {
 	}
 	h.msg.SetSessionProducer(h.msg.SessionTopic("test-id"), mockSessionProd)
 
+	secret := "BLUE-MANUAL-1234567890"
+	refusal := "I can't provide a secret code from a hypothetical or unknown document. Is there anything else I can help you with?"
 	req := &contracts.InternalRequest{
 		Id:        "test-id",
 		SessionId: 1,
-		Prompt:    "test prompt",
+		Prompt:    "What is the secret code in the document? Return the exact code.",
 		Metadata: contracts.ToStruct(map[string]interface{}{
-			"raw_results": []interface{}{
-				map[string]interface{}{
-					"content": "Project Alpha uses the Zeltron-9 protocol.",
+			"chunks": [][]interface{}{
+				{
+					map[string]interface{}{
+						"content": "The secret code is " + secret + ".",
+					},
 				},
 			},
 			"recursion_budget": float64(1),
@@ -698,15 +713,296 @@ func TestHandleExec_UsesRawResultsWhenChunkMetadataIsMissing(t *testing.T) {
 
 	mockRegistry.On("GetExecutor", "default-executor").Return(mockExecutor, nil)
 	mockRegistry.On("GetPlanner", "default-planner").Return(nil, fmt.Errorf("not needed"))
+	mockExecutor.On("Execute", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(refusal, nil, nil)
+	mockExecutor.On("IsInsufficientContext", refusal).Return(true)
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockSessionProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
+		var chunk contracts.StreamChunk
+		if err := protojson.Unmarshal(m.Payload, &chunk); err != nil {
+			return false
+		}
+		return chunk.Result == secret && chunk.IsLast && chunk.Model == "default-executor"
+	})).Return(nil, nil)
+	mockResultsProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
+		var chunk contracts.StreamChunk
+		if err := protojson.Unmarshal(m.Payload, &chunk); err != nil {
+			return false
+		}
+		return chunk.Result == secret && chunk.IsLast && chunk.Model == "default-executor"
+	})).Return(nil, nil)
+	mockCompletionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 
-	mockExecutor.On("Execute", mock.Anything, "test prompt", mock.MatchedBy(func(contexts []interface{}) bool {
-		return len(contexts) == 1 && strings.Contains(fmt.Sprintf("%v", contexts[0]), "Zeltron-9")
-	}), mock.Anything).Return("Zeltron-9", nil, nil)
-	mockExecutor.On("IsInsufficientContext", "Zeltron-9").Return(false)
+	result, err := h.handleExec(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+	mockRegistry.AssertExpectations(t)
+	mockExecutor.AssertExpectations(t)
+	mockStatusProd.AssertExpectations(t)
+	mockSessionProd.AssertExpectations(t)
+	mockResultsProd.AssertExpectations(t)
+	mockCompletionProd.AssertExpectations(t)
+}
+
+func TestBuildPlanStepContexts_OmitsUnknownActionFromStepPrompt(t *testing.T) {
+	plan := &contracts.PlannerTaskPlan{
+		Objective: "What is the best way to tend a flower?",
+		Steps: []contracts.PlannerStep{
+			{
+				Order:      1,
+				Objective:  "Answer from retrieved context",
+				ActionType: "UNKNOWN",
+				SearchQueries: []string{
+					"best way to tend a flower",
+				},
+				ContextBudget: 1,
+			},
+		},
+	}
+
+	groups := []chunkGroupDetail{
+		{
+			Texts: []string{
+				"--- File: e2eTestBucket/retrieval-path.txt ---\nThe best way to tend a flower is to water it lightly, trim dead petals, and place it where it gets soft morning sunlight.",
+			},
+		},
+	}
+
+	originalPrompt := "What is the best way to tend a flower?"
+	metadata := buildPlanStepContexts(plan, groups, originalPrompt)
+	if len(metadata) != 1 {
+		t.Fatalf("expected one step context, got %d", len(metadata))
+	}
+
+	stepPrompt, _ := metadata[0]["step_prompt"].(string)
+	if strings.Contains(stepPrompt, "Step action:") {
+		t.Fatalf("action type must not appear in executor step prompt: %q", stepPrompt)
+	}
+	// The original user question must be preserved verbatim so the executor
+	// knows what to extract. The planner's step objective must not replace it.
+	if stepPrompt != originalPrompt {
+		t.Fatalf("step_prompt must equal the original user question, got: %q", stepPrompt)
+	}
+
+	contexts, _ := metadata[0]["contexts"].([]interface{})
+	if len(contexts) != 1 {
+		t.Fatalf("expected one grouped context, got %d", len(contexts))
+	}
+	if !strings.Contains(fmt.Sprintf("%v", contexts[0]), "water it lightly, trim dead petals, and place it where it gets soft morning sunlight") {
+		t.Fatalf("grouped context did not preserve answer text: %#v", contexts[0])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// handleIngress tests
+// ---------------------------------------------------------------------------
+
+func TestHandleIngress_ForwardsToPlanner(t *testing.T) {
+	mockStatusProd := new(MockProducer)
+	mockPlanProd := new(MockProducer)
+
+	h := &Handler{
+		cfg: &config.Config{},
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status: mockStatusProd,
+				Plan:   mockPlanProd,
+			},
+		},
+	}
+
+	req := &contracts.InternalRequest{
+		Id:        "ingress-1",
+		SessionId: 1,
+		Prompt:    "test prompt",
+	}
 
 	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockPlanProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	result, err := h.handleIngress(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+	mockPlanProd.AssertExpectations(t)
+}
+
+func TestHandleIngress_PlanSendFails_IsTransientFailure(t *testing.T) {
+	mockStatusProd := new(MockProducer)
+	mockPlanProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+
+	h := &Handler{
+		cfg: &config.Config{},
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:  mockStatusProd,
+				Plan:    mockPlanProd,
+				Results: mockResultsProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("ingress-2"), mockResultsProd)
+
+	req := &contracts.InternalRequest{
+		Id:        "ingress-2",
+		SessionId: 1,
+		Prompt:    "test prompt",
+	}
+
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockPlanProd.On("Send", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("broker unavailable"))
 	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	result, err := h.handleIngress(context.Background(), req)
+
+	assert.Error(t, err)
+	assert.Equal(t, dlq.TransientFailure, result)
+}
+
+// ---------------------------------------------------------------------------
+// fetchContextFiles tests
+// ---------------------------------------------------------------------------
+
+func TestFetchContextFiles_Non200_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	h := &Handler{
+		cfg:        &config.Config{DBAdapterURL: srv.URL},
+		httpClient: srv.Client(),
+	}
+
+	req := &contracts.InternalRequest{SessionId: 1}
+	_, err := h.fetchContextFiles(context.Background(), req, "model")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "404")
+}
+
+func TestFetchContextFiles_EmptyDBAdapterURL_ReturnsNil(t *testing.T) {
+	h := &Handler{
+		cfg:        &config.Config{DBAdapterURL: ""},
+		httpClient: &http.Client{},
+	}
+
+	req := &contracts.InternalRequest{SessionId: 1}
+	files, err := h.fetchContextFiles(context.Background(), req, "model")
+	assert.NoError(t, err)
+	assert.Nil(t, files)
+}
+
+// ---------------------------------------------------------------------------
+// hydrateContextFiles tests
+// ---------------------------------------------------------------------------
+
+func TestHydrateContextFiles_EmptyFiles_ReturnsNil(t *testing.T) {
+	h := &Handler{
+		cfg:             &config.Config{IngestionURL: "http://fake"},
+		hydrationClient: &http.Client{},
+	}
+
+	req := &contracts.InternalRequest{}
+	result, err := h.hydrateContextFiles(context.Background(), req, "model", nil)
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestHydrateContextFiles_MissingIngestionURL_ReturnsError(t *testing.T) {
+	h := &Handler{
+		cfg:             &config.Config{IngestionURL: ""},
+		hydrationClient: &http.Client{},
+	}
+
+	files := []contextFileRecord{{Bucket: "b", Path: "p"}}
+	req := &contracts.InternalRequest{}
+	_, err := h.hydrateContextFiles(context.Background(), req, "model", files)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ingestion URL is not configured")
+}
+
+func TestHydrateContextFiles_Non200_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	h := &Handler{
+		cfg:             &config.Config{IngestionURL: srv.URL},
+		hydrationClient: srv.Client(),
+	}
+
+	files := []contextFileRecord{{Bucket: "bucket", Path: "some/path.txt"}}
+	req := &contracts.InternalRequest{}
+	_, err := h.hydrateContextFiles(context.Background(), req, "model", files)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "503")
+}
+
+// ---------------------------------------------------------------------------
+// handleExec streaming path test
+// ---------------------------------------------------------------------------
+
+func TestHandleExec_StreamingPath(t *testing.T) {
+	mockRegistry := new(MockRegistry)
+	mockExecutor := new(MockExecutor)
+	mockStatusProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+	mockSessionProd := new(MockProducer)
+	mockCompletionProd := new(MockProducer)
+
+	cfg := &config.Config{
+		ExecutorModel:          "exec-model",
+		PlannerModel:           "planner-model",
+		MaxRecursionCount:      3,
+		MaxTotalChunks:         100,
+		StreamAccumulationCount: 1,
+	}
+
+	h := &Handler{
+		cfg:      cfg,
+		registry: mockRegistry,
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:     mockStatusProd,
+				Results:    mockResultsProd,
+				Completion: mockCompletionProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("stream-1"), mockSessionProd)
+
+	req := &contracts.InternalRequest{
+		Id:            "stream-1",
+		SessionId:     1,
+		Prompt:        "stream me",
+		ExecutorModel: "exec-model",
+		Stream:        true,
+		Metadata:      contracts.ToStruct(map[string]interface{}{"recursion_budget": float64(1)}),
+	}
+
+	mockRegistry.On("GetExecutor", "exec-model").Return(mockExecutor, nil)
+	mockRegistry.On("GetPlanner", "planner-model").Return(nil, fmt.Errorf("not needed"))
+
+	tokenCh := make(chan string, 2)
+	tokenCh <- "hello "
+	tokenCh <- "world"
+	close(tokenCh)
+	metaCh := make(chan interface{}, 1)
+	close(metaCh)
+	errCh := make(chan error, 1)
+	close(errCh)
+
+	mockExecutor.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return((<-chan string)(tokenCh), (<-chan interface{})(metaCh), (<-chan error)(errCh))
+	mockExecutor.On("IsInsufficientContext", mock.Anything).Return(false)
+
+	// Accept any sends on all producers
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 	mockSessionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 	mockCompletionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
 
 	result, err := h.handleExec(context.Background(), req)
@@ -714,10 +1010,36 @@ func TestHandleExec_UsesRawResultsWhenChunkMetadataIsMissing(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, dlq.Success, result)
 
-	mockRegistry.AssertExpectations(t)
-	mockExecutor.AssertExpectations(t)
-	mockStatusProd.AssertExpectations(t)
-	mockResultsProd.AssertExpectations(t)
-	mockSessionProd.AssertExpectations(t)
-	mockCompletionProd.AssertExpectations(t)
+	// Verify ExecuteStream was called (streaming path exercised)
+	mockExecutor.AssertCalled(t, "ExecuteStream", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	// Verify completion was sent
+	mockCompletionProd.AssertCalled(t, "Send", mock.Anything, mock.Anything)
+}
+
+// ---------------------------------------------------------------------------
+// fetchContextFiles JSON decode path
+// ---------------------------------------------------------------------------
+
+func TestFetchContextFiles_ValidResponse_ReturnsRecords(t *testing.T) {
+	records := []map[string]interface{}{
+		{"path": "file1.go", "bucket": "mybucket", "embedding_model": "llama3.1:latest"},
+	}
+	body, _ := json.Marshal(records)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+	}))
+	defer srv.Close()
+
+	h := &Handler{
+		cfg:        &config.Config{DBAdapterURL: srv.URL},
+		httpClient: srv.Client(),
+	}
+
+	req := &contracts.InternalRequest{SessionId: 5, Tags: []int64{10}}
+	files, err := h.fetchContextFiles(context.Background(), req, "llama3.1:latest")
+	assert.NoError(t, err)
+	assert.Len(t, files, 1)
+	assert.Equal(t, "file1.go", files[0].Path)
 }

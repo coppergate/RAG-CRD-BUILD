@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"app-builds/common/health"
@@ -32,7 +33,7 @@ func main() {
 
 	endpoint := os.Getenv("S3_ENDPOINT")
 	if endpoint != "" && !strings.HasPrefix(endpoint, "http") {
-		endpoint = "http://" + endpoint
+		endpoint = "https://" + endpoint
 	}
 	bucket := os.Getenv("BUCKET_NAME")
 
@@ -57,6 +58,13 @@ func main() {
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
+
+	maxUploadBytes := int64(100 << 20) // 100 MiB default
+	if v := os.Getenv("MAX_UPLOAD_BYTES"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			maxUploadBytes = n
+		}
+	}
 
 	healthSrv.RegisterCheck("s3", func() error {
 		_, err := client.ListBuckets(context.Background(), &s3.ListBucketsInput{})
@@ -131,6 +139,7 @@ func main() {
 			io.Copy(w, resp.Body)
 		case http.MethodPut:
 			logging.Printf("[S3] PutObject: bucket=%s, key=%s", bucketName, objectKey)
+			r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
 			_, err = client.PutObject(r.Context(), &s3.PutObjectInput{
 				Bucket: aws.String(bucketName),
 				Key:    aws.String(objectKey),

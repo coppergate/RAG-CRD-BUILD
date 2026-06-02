@@ -10,6 +10,7 @@ import json
 import uuid
 import logging
 import time
+import threading
 import requests
 import pulsar
 import rag_stack_pb2
@@ -176,9 +177,23 @@ def _effective_embedding_model(requested_model: Optional[str]) -> str:
 
 
 def _normalize_model_name(model: str) -> str:
-    model = model.strip().lower()
-    model = re.sub(r"[^a-z0-9]+", "-", model)
-    return model.strip("-")
+    """Normalize a model name to a safe identifier segment.
+
+    Matches the behaviour of Go's contracts.NormalizeEmbeddingModelName:
+    lowercase, collapse runs of non-alphanumeric chars to a single '-',
+    strip leading/trailing dashes.  Uses str.isalnum() so Unicode
+    letters/digits are treated identically to Go's unicode.IsLetter/IsDigit.
+    """
+    normalized = []
+    last_dash = False
+    for ch in model.strip().lower():
+        if ch.isalnum():
+            normalized.append(ch)
+            last_dash = False
+        elif not last_dash:
+            normalized.append("-")
+            last_dash = True
+    return "".join(normalized).strip("-")
 
 
 def _build_collection_name(prefix: str, embedding_model: str, vector_size: int) -> str:
@@ -230,19 +245,87 @@ def get_model_dimensions(model_name: str) -> int:
         logger.warning(f"Could not probe model dimensions for {model_name}: {e}")
     return 0
 
-def _create_pulsar_client():
-    """Create a Pulsar client with proper TLS configuration."""
-    kwargs = {}
-    if PULSAR_URL.startswith("pulsar+ssl://"):
-        if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
-            kwargs["tls_trust_certs_file_path"] = SSL_CERT_FILE
-            logger.info(f"Pulsar client using TLS with CA from: {SSL_CERT_FILE}")
-        else:
-            logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
-    return pulsar.Client(PULSAR_URL, **kwargs)
+_pulsar_client: "pulsar.Client | None" = None
+_pulsar_client_lock = threading.Lock()
+
+
+def get_pulsar_client() -> "pulsar.Client":
+    """Return the module-level Pulsar client, creating it on first call.
+
+    Creating a TLS connection per ingest job is expensive; sharing one client
+    across all background tasks avoids repeated TLS handshakes.
+    """
+    global _pulsar_client
+    if _pulsar_client is not None:
+        return _pulsar_client
+    with _pulsar_client_lock:
+        if _pulsar_client is not None:
+            return _pulsar_client
+        kwargs = {}
+        if PULSAR_URL.startswith("pulsar+ssl://"):
+            if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
+                kwargs["tls_trust_certs_file_path"] = SSL_CERT_FILE
+                logger.info(f"Pulsar client using TLS with CA from: {SSL_CERT_FILE}")
+            else:
+                logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
+        _pulsar_client = pulsar.Client(PULSAR_URL, **kwargs)
+        logger.info("Pulsar client singleton initialised")
+        return _pulsar_client
 
 def _source_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _vector_preview(vector: List[float], count: int = 5) -> str:
+    if not vector:
+        return "[]"
+    preview = ", ".join(f"{value:.6f}" for value in vector[:count])
+    if len(vector) > count:
+        preview += ", ..."
+    return f"[{preview}]"
+
+
+def _log_qdrant_point_summary(
+    ingestion_id: int,
+    file_name: str,
+    chunk_index: int,
+    tags: List[int],
+    vector: List[float],
+    current_model: str,
+    current_vs: int,
+    source_hash: str,
+) -> None:
+    logger.info(
+        "[ingestion=%s] qdrant-point file=%r chunk=%d model=%r vector_size=%d tag_count=%d tags=%r source_hash=%s vector_preview=%s",
+        ingestion_id,
+        file_name,
+        chunk_index,
+        current_model,
+        current_vs,
+        len(tags),
+        tags,
+        source_hash,
+        _vector_preview(vector),
+    )
+
+
+def _log_qdrant_op(
+    ingestion_id: int,
+    action: str,
+    collection: str,
+    vector_size: int,
+    embedding_model: str,
+    point_count: int = 0,
+) -> None:
+    logger.info(
+        "[ingestion=%s] qdrant-op action=%s collection=%r vector_size=%d embedding_model=%r point_count=%d",
+        ingestion_id,
+        action,
+        collection,
+        vector_size,
+        embedding_model,
+        point_count,
+    )
 
 
 def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
@@ -252,7 +335,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                   embedding_model: Optional[str] = None):
     pool = get_db_pool()
     conn = None
-    pulsar_client = None
     failed_chunks = []
     current_model = _effective_embedding_model(embedding_model)
 
@@ -268,27 +350,53 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
         if effective_prefix.startswith("/"):
             effective_prefix = effective_prefix.lstrip("/")
 
-        logger.info(f"[SID:{session_id}] Starting ingestion task for {ingestion_id} using Ollama model {current_model} (dims: {current_vs}) on bucket {effective_bucket} (prefix: {effective_prefix}), tags: {tag_ids}")
+        logger.info(
+            "[SID:%s] starting ingestion ingestion_id=%s model=%r dims=%d bucket=%r prefix=%r requested_tags=%r file_allowlist=%r",
+            session_id,
+            ingestion_id,
+            current_model,
+            current_vs,
+            effective_bucket,
+            effective_prefix,
+            tag_ids,
+            file_names,
+        )
 
-        pulsar_client = _create_pulsar_client()
-        q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
+        q_prod = get_pulsar_client().create_producer(PULSAR_QDRANT_OPS_TOPIC)
 
         s3_client = get_s3_client()
         collection_name = _build_collection_name(COLLECTION_NAME, current_model, current_vs)
 
-        logger.info(f"Ensuring collection {collection_name} via Protobuf Pulsar (vector_size: {current_vs}, model: {current_model})")
+        logger.info(
+            "[ingestion=%s] ensuring qdrant collection collection=%r base_collection=%r vector_size=%d embedding_model=%r",
+            ingestion_id,
+            collection_name,
+            COLLECTION_NAME,
+            current_vs,
+            current_model,
+        )
         op = rag_stack_pb2.QdrantOp()
         op.id = f"create-{ingestion_id}"
         op.action = "create_collection"
         op.collection = COLLECTION_NAME
         op.vector_size = current_vs
         op.embedding_model = current_model
+        _log_qdrant_op(ingestion_id, op.action, op.collection, op.vector_size, op.embedding_model)
         q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
+        logger.info(
+            "[ingestion=%s] sent qdrant collection creation op id=%s action=%s collection=%r vector_size=%d embedding_model=%r",
+            ingestion_id,
+            op.id,
+            op.action,
+            op.collection,
+            op.vector_size,
+            op.embedding_model,
+        )
 
         # List files
         files = []
         if file_names:
-            logger.info(f"Filtering ingestion to explicit file allowlist: {file_names}")
+            logger.info("[ingestion=%s] filtering to explicit file allowlist %r", ingestion_id, file_names)
             files = file_names
         else:
             paginator = s3_client.get_paginator('list_objects_v2')
@@ -302,13 +410,13 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         if any(obj['Key'].endswith(ext) for ext in ALLOWED_EXTENSIONS):
                             files.append(obj['Key'])
 
-        logger.info(f"Found {len(files)} files to process.")
+        logger.info("[ingestion=%s] discovered %d files to process", ingestion_id, len(files))
 
         conn = pool.getconn()
 
         # Resolve tag names if provided
         if tag_names:
-            logger.info(f"Resolving tag names: {tag_names}")
+            logger.info("[ingestion=%s] resolving tag names %r", ingestion_id, tag_names)
             try:
                 with conn.cursor() as cur:
                     for name in tag_names:
@@ -318,9 +426,9 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                             if row[0] not in tag_ids:
                                 tag_ids.append(row[0])
                         else:
-                            logger.warning(f"Tag name '{name}' not found in database")
+                            logger.warning("[ingestion=%s] tag name %r not found in database", ingestion_id, name)
             except Exception as e:
-                logger.error(f"Error resolving tag names: {e}")
+                logger.error("[ingestion=%s] error resolving tag names: %s", ingestion_id, e)
 
         # Ensure tag_ids are unique integers
         tag_ids = list(set([int(tid) for tid in tag_ids if tid is not None]))
@@ -340,25 +448,46 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                 )
             conn.commit()
             if tag_ids:
-                logger.info(f"Mapped ingestion {ingestion_id} to tags: {tag_ids}")
+                logger.info("[ingestion=%s] mapped ingestion to tags %r", ingestion_id, tag_ids)
 
         points = []
         idx = 0
 
         for s3_key in files:
-            logger.info(f"Processing file: {s3_key}")
+            logger.info("[ingestion=%s] processing file %r", ingestion_id, s3_key)
             try:
                 response = s3_client.get_object(Bucket=effective_bucket, Key=s3_key)
                 content = response['Body'].read().decode('utf-8')
 
                 # Use langchain text splitter for sentence/paragraph-aware chunking
                 chunks = text_splitter.split_text(content)
+                logger.info("[ingestion=%s] split file %r into %d chunks", ingestion_id, s3_key, len(chunks))
 
                 for i, chunk in enumerate(chunks):
                     try:
+                        source_hash = _source_hash(chunk)
+                        logger.info(
+                            "[ingestion=%s] embedding chunk file=%r chunk=%d chars=%d model=%r dims=%d tags=%r hash=%s",
+                            ingestion_id,
+                            s3_key,
+                            i,
+                            len(chunk),
+                            current_model,
+                            current_vs,
+                            tag_ids,
+                            source_hash,
+                        )
                         vector = get_ollama_embeddings_with_retry(chunk, current_model)
+                        logger.info(
+                            "[ingestion=%s] embedding ready file=%r chunk=%d vector_len=%d preview=%s",
+                            ingestion_id,
+                            s3_key,
+                            i,
+                            len(vector),
+                            _vector_preview(vector),
+                        )
                     except Exception as e:
-                        logger.error(f"Skipping chunk {i} of {s3_key} after all retries failed: {e}")
+                        logger.error("[ingestion=%s] skipping chunk file=%r chunk=%d after embedding failure: %s", ingestion_id, s3_key, i, e)
                         failed_chunks.append({"file": s3_key, "chunk": i, "error": str(e)})
                         continue
 
@@ -373,14 +502,31 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         "ingestion_id": ingestion_id,
                         "embedding_model": current_model,
                         "vector_size": current_vs,
-                        "source_hash": _source_hash(chunk),
+                        "source_hash": source_hash,
                     }
                     payload_struct.update(payload_dict)
+                    logger.info(
+                        "[ingestion=%s] qdrant payload file=%r chunk=%d payload=%s",
+                        ingestion_id,
+                        s3_key,
+                        i,
+                        json.dumps(payload_dict, sort_keys=True),
+                    )
 
                     p = rag_stack_pb2.QdrantPoint()
                     p.id = str(uuid.uuid4())
                     p.vector.extend(vector)
                     p.payload.CopyFrom(payload_struct)
+                    _log_qdrant_point_summary(
+                        ingestion_id,
+                        s3_key,
+                        i,
+                        effective_tags,
+                        vector,
+                        current_model,
+                        current_vs,
+                        source_hash,
+                    )
                     points.append(p)
 
                     # TimescaleDB Backup
@@ -394,10 +540,25 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                             "vector_size": current_vs,
                             "source_hash": _source_hash(chunk),
                         }), _pg_now())
-                    )
+                        )
                         emb_id = cur.fetchone()[0]
+                        logger.info(
+                            "[ingestion=%s] inserted code_embedding embedding_id=%s file=%r chunk=%d tags=%r",
+                            ingestion_id,
+                            emb_id,
+                            s3_key,
+                            i,
+                            effective_tags,
+                        )
                         for t_id in tag_ids:
                             cur.execute("INSERT INTO code_embedding_tag (embedding_id, tag_id) VALUES (%s, %s)", (emb_id, t_id))
+                        if tag_ids:
+                            logger.info(
+                                "[ingestion=%s] mapped code_embedding embedding_id=%s to tags=%r",
+                                ingestion_id,
+                                emb_id,
+                                tag_ids,
+                            )
 
                     idx += 1
                     if len(points) >= INGEST_BATCH_SIZE:
@@ -408,10 +569,27 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         op.vector_size = current_vs
                         op.embedding_model = current_model
                         op.points.extend(points)
-                        q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
-                        points = []
+                        _log_qdrant_op(
+                            ingestion_id,
+                            op.action,
+                            op.collection,
+                            op.vector_size,
+                            op.embedding_model,
+                            len(points),
+                        )
                         conn.commit()
-                        logger.info(f"Ingested {idx} chunks...")
+                        logger.info("[ingestion=%s] committed batch; total processed chunks=%d", ingestion_id, idx)
+                        q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
+                        logger.info(
+                            "[ingestion=%s] sent qdrant upsert op id=%s points=%d collection=%r model=%r dims=%d",
+                            ingestion_id,
+                            op.id,
+                            len(points),
+                            op.collection,
+                            op.embedding_model,
+                            op.vector_size,
+                        )
+                        points = []
 
             except Exception as e:
                 logger.error(f"Error processing {s3_key}: {e}")
@@ -424,21 +602,42 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
             op.vector_size = current_vs
             op.embedding_model = current_model
             op.points.extend(points)
-            q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
+            _log_qdrant_op(
+                ingestion_id,
+                op.action,
+                op.collection,
+                op.vector_size,
+                op.embedding_model,
+                len(points),
+            )
             conn.commit()
+            q_prod.send(json_format.MessageToJson(op, preserving_proto_field_name=True).encode('utf-8'))
+            logger.info(
+                "[ingestion=%s] sent final qdrant upsert op id=%s points=%d collection=%r model=%r dims=%d",
+                ingestion_id,
+                op.id,
+                len(points),
+                op.collection,
+                op.embedding_model,
+                op.vector_size,
+            )
 
         if failed_chunks:
-            logger.warning(f"Ingestion {ingestion_id} completed with {len(failed_chunks)} failed chunks out of {idx + len(failed_chunks)} total")
+            logger.warning(
+                "[ingestion=%s] completed with %d failed chunks out of %d total; failures=%r",
+                ingestion_id,
+                len(failed_chunks),
+                idx + len(failed_chunks),
+                failed_chunks,
+            )
         else:
-            logger.info(f"Ingestion {ingestion_id} completed successfully. Total chunks: {idx}")
+            logger.info("[ingestion=%s] completed successfully; total chunks=%d", ingestion_id, idx)
 
     except Exception as e:
-        logger.error(f"Ingestion task failed: {e}")
+        logger.error("[ingestion=%s] ingestion task failed: %s", ingestion_id, e)
     finally:
         if conn and pool:
             pool.putconn(conn)
-        if pulsar_client:
-            pulsar_client.close()
 
 @app.get("/extensions")
 async def get_extensions():
@@ -463,14 +662,26 @@ async def trigger_ingest(req: IngestRequest, background_tasks: BackgroundTasks):
                     )
                     ingestion_id = cur.fetchone()[0]
                     conn.commit()
-                    logger.info(f"Created new ingestion record: {ingestion_id}")
+                    logger.info("[ingest] created new ingestion record ingestion_id=%s bucket=%r", ingestion_id, effective_bucket)
             finally:
                 pool.putconn(conn)
         except Exception as e:
-            logger.error(f"Failed to create ingestion record: {e}")
+            logger.error("[ingest] failed to create ingestion record: %s", e)
             # Fallback to 0 if DB fails, though task might fail too
     
-    logger.info(f"Received ingestion request for ID: {ingestion_id} (bucket: {effective_bucket}, index/prefix: {req.index or req.prefix}, tags: {req.tag_ids}, names: {tag_names}, files: {req.file_names})")
+    logger.info(
+        "[ingest] received request ingestion_id=%s bucket=%r index=%r prefix=%r tag_ids=%r tag_names=%r file_names=%r vector_size=%r embedding_model=%r force_reingest=%r",
+        ingestion_id,
+        effective_bucket,
+        req.index,
+        req.prefix,
+        req.tag_ids,
+        tag_names,
+        req.file_names,
+        req.vector_size,
+        req.embedding_model,
+        req.force_reingest,
+    )
     background_tasks.add_task(
         run_ingestion, 
         ingestion_id, 
@@ -509,10 +720,9 @@ async def readyz():
     except Exception as e:
         errors["database"] = str(e)
 
-    # Check Pulsar
+    # Check Pulsar (uses shared singleton — no create/close per probe)
     try:
-        client = _create_pulsar_client()
-        client.close()
+        get_pulsar_client()
     except Exception as e:
         errors["pulsar"] = str(e)
 

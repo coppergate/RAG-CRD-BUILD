@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -13,6 +14,7 @@ import (
 	"app-builds/common/contracts"
 	"app-builds/common/dlq"
 	"app-builds/rag-worker/internal/config"
+	"app-builds/rag-worker/internal/ollama"
 	"app-builds/rag-worker/pkg/messaging"
 )
 
@@ -96,6 +98,7 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 		})
 	}
 
+	mockSearcher.On("Search", mock.Anything, "default-planner", []float32(nil), []int64{101}, int64(1), false, 10000).Return(tagResults, nil)
 	mockSearcher.On("Search", mock.Anything, "embed-model", []float32(nil), []int64{101}, int64(1), false, 10000).Return(tagResults, nil)
 
 	// Mock RetrieveByPaths for all files
@@ -141,7 +144,14 @@ func TestHandleSearch_LargeVectorStore(t *testing.T) {
 	})).Return(allFileChunks, nil)
 
 	// Mock planner embeddings for the prompt itself
-	mockPlanner.On("GetEmbeddings", mock.Anything, "analyze the whole project").Return([]float32{0.1}, nil)
+	unsupportedErr := &ollama.APIStatusError{
+		Operation:  "embeddings",
+		URL:        "http://ollama",
+		StatusCode: http.StatusBadRequest,
+		Body:       "this model does not support embeddings",
+	}
+	mockPlanner.On("GetEmbeddings", mock.Anything, "analyze the whole project").Return([]float32(nil), unsupportedErr).Once()
+	mockPlanner.On("GetEmbeddings", mock.Anything, "analyze the whole project").Return([]float32{0.1}, nil).Once()
 	mockPlanner.On("Plan", mock.Anything, "analyze the whole project", mock.Anything, mock.Anything).Return(&contracts.PlannerTaskPlan{
 		Objective:     "analyze the whole project",
 		ActionType:    "FILE_SEARCH",

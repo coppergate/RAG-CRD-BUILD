@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -37,6 +39,10 @@ var (
 	taskLatency      metric.Float64Histogram
 	llmLatency       metric.Float64Histogram
 	responseSizeHist metric.Int64Histogram
+
+	literalAnswerFallbackPatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\b(?:secret code|code|answer|token)\s*(?:is|:)\s*([A-Z0-9][A-Z0-9-]{2,})\b`),
+	}
 )
 
 func init() {
@@ -103,27 +109,31 @@ type executionUnit struct {
 
 // Handler processes RAG pipeline stage messages.
 type Handler struct {
-	cfg          *config.Config
-	msg          *messaging.Client
-	registry     ModelRegistry
-	searcher     QdrantSearcher
-	memoryClient MemoryClient
-	tagSource    TagSource
-	httpClient   *http.Client
+	cfg              *config.Config
+	msg              *messaging.Client
+	registry         ModelRegistry
+	searcher         QdrantSearcher
+	memoryClient     MemoryClient
+	tagSource        TagSource
+	httpClient       *http.Client
+	hydrationClient  *http.Client
 }
 
 // NewHandler creates a new pipeline stage handler.
 func NewHandler(cfg *config.Config, msg *messaging.Client, registry ModelRegistry, searcher QdrantSearcher, mem MemoryClient, tagSource TagSource) *Handler {
 	return &Handler{
-		cfg:          cfg,
-		msg:          msg,
-		registry:     registry,
-		searcher:     searcher,
-		memoryClient: mem,
-		tagSource:    tagSource,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		cfg:             cfg,
+		msg:             msg,
+		registry:        registry,
+		searcher:        searcher,
+		memoryClient:    mem,
+		tagSource:       tagSource,
+		httpClient:      &http.Client{Timeout: 30 * time.Second},
+		hydrationClient: &http.Client{Timeout: cfg.HydrationTimeout},
 	}
 }
+
+var errUnsupportedEmbeddingModel = fmt.Errorf("unsupported embedding model")
 
 // HandleStageMessage processes a message for the given stage with DLQ support.
 func (h *Handler) HandleStageMessage(ctx context.Context, stage string, msg pulsar.Message) (dlq.ProcessResult, error) {
@@ -416,6 +426,8 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	if len(subQueries) == 0 {
 		subQueries = []string{req.Prompt}
 	}
+	logging.Printf("[%s][SID:%d] search start: prompt_len=%d sub_queries=%d planner_model=%q executor_model=%q embedding_model=%q include_global=%v",
+		req.Id, req.SessionId, len(req.Prompt), len(subQueries), req.PlannerModel, req.ExecutorModel, req.EmbeddingModel, req.IncludeGlobal)
 
 	if req.Stream {
 		h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, "\n\u231B *Retrieving context from vector store*...")
@@ -440,23 +452,30 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		h.msg.SendError(ctx, req.Id, "Failed to resolve retrieval tags", false)
 		return dlq.TransientFailure, fmt.Errorf("resolve retrieval tags: %w", err)
 	}
-	contextFiles, err := h.fetchContextFiles(ctx, req)
-	if err != nil {
-		logging.Printf("[%s][SID:%d] Context file discovery failed: %v", req.Id, req.SessionId, err)
-	}
-	embeddingModels := h.resolveEmbeddingModelCandidates(req, contextFiles)
+	embeddingModels := h.resolveEmbeddingModelCandidates(req, plannerModelID)
+	logging.Printf("[%s][SID:%d] resolved embedding candidates=%v", req.Id, req.SessionId, embeddingModels)
 	var allRawResults []interface{}
 	var retrievalProvenance []map[string]interface{}
 
-	for _, embeddingModel := range embeddingModels {
+	for idx, embeddingModel := range embeddingModels {
 		embedder, err := h.registry.GetPlanner(embeddingModel)
 		if err != nil {
 			logging.Printf("[%s][SID:%d] Embedding model resolution error for %q: %v", req.Id, req.SessionId, embeddingModel, err)
 			continue
 		}
 
+		logging.Printf("[%s][SID:%d] retrieval pass model=%q tags=%v sub_queries=%d", req.Id, req.SessionId, embeddingModel, tags, len(subQueries))
+		contextFiles, err := h.fetchContextFiles(ctx, req, embeddingModel)
+		if err != nil {
+			logging.Printf("[%s][SID:%d] Context file discovery failed for %q: %v", req.Id, req.SessionId, embeddingModel, err)
+		}
+
 		modelResults, hydrated, hydrationNotes, err := h.searchWithEmbeddingModel(ctx, req, embeddingModel, embedder, subQueries, tags, contextFiles)
 		if err != nil {
+			if errors.Is(err, errUnsupportedEmbeddingModel) && idx+1 < len(embeddingModels) {
+				logging.Printf("[%s][SID:%d] Embedding model %q is not embedding-capable; falling back to carried override %q", req.Id, req.SessionId, embeddingModel, embeddingModels[idx+1])
+				continue
+			}
 			logging.Printf("[%s][SID:%d] Retrieval failed for embedding model %q: %v", req.Id, req.SessionId, embeddingModel, err)
 			continue
 		}
@@ -464,18 +483,6 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 			retrievalProvenance = append(retrievalProvenance, hydrationNotes...)
 		}
 		allRawResults = append(allRawResults, modelResults...)
-	}
-
-	if len(allRawResults) == 0 && len(embeddingModels) == 0 && h.cfg.EmbeddingModel != "" {
-		if embedder, err := h.registry.GetPlanner(h.cfg.EmbeddingModel); err == nil {
-			modelResults, hydrated, hydrationNotes, err := h.searchWithEmbeddingModel(ctx, req, h.cfg.EmbeddingModel, embedder, subQueries, tags, contextFiles)
-			if err == nil {
-				if hydrated {
-					retrievalProvenance = append(retrievalProvenance, hydrationNotes...)
-				}
-				allRawResults = append(allRawResults, modelResults...)
-			}
-		}
 	}
 
 	// 3. Deduplicate and chunk context
@@ -496,7 +503,6 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	metadataMap["chunks"] = allChunks
 	metadataMap["chunk_groups"] = chunkGroupsToMetadata(chunkGroups)
 	metadataMap["contexts"] = flattenChunkContexts(allChunks)
-	metadataMap["raw_results"] = allRawResults
 	if len(embeddingModels) > 0 {
 		metadataMap["embedding_models"] = embeddingModels
 	}
@@ -509,14 +515,13 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		history = hist
 	}
 
-	refinedPlan, planMetrics, err := planner.Plan(ctx, req.Prompt, flattenChunkContexts(allChunks), history)
+	refinedPlan, _, err := planner.Plan(ctx, req.Prompt, flattenChunkContexts(allChunks), history)
 	if err != nil {
 		logging.Printf("[%s][SID:%d] Refined planning with chunk context failed: %v", req.Id, req.SessionId, err)
 	} else if refinedPlan != nil {
 		metadataMap["planner_task"] = refinedPlan.ToMap()
 		metadataMap["planner_trace"] = refinedPlan.Trace.ToMap()
-		metadataMap["plan_step_contexts"] = buildPlanStepContexts(refinedPlan, chunkGroups)
-		metadataMap["planner_refinement_metrics"] = planMetrics
+		metadataMap["plan_step_contexts"] = buildPlanStepContexts(refinedPlan, chunkGroups, req.Prompt)
 	}
 
 	metadataMap["evaluation_metrics"] = mergeNestedMetricMap(metadataMap["evaluation_metrics"], map[string]interface{}{
@@ -572,9 +577,9 @@ type contextFileRecord struct {
 	IngestionID    int64    `json:"ingestion_id"`
 }
 
-func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest, files []contextFileRecord) []string {
+func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest, primaryModelID string) []string {
 	seen := make(map[string]bool)
-	candidates := make([]string, 0, 4)
+	candidates := make([]string, 0, 2)
 
 	add := func(model string) {
 		model = strings.TrimSpace(model)
@@ -592,17 +597,13 @@ func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest
 		candidates = append(candidates, model)
 	}
 
+	add(primaryModelID)
 	add(req.EmbeddingModel)
-	if len(candidates) == 0 && req.Metadata != nil {
+	if len(candidates) == 1 && req.Metadata != nil {
 		if meta := contracts.FromStruct(req.Metadata); meta != nil {
 			if model, _ := meta["embedding_model"].(string); model != "" {
 				add(model)
 			}
-		}
-	}
-	if len(candidates) == 0 {
-		for _, file := range files {
-			add(file.EmbeddingModel)
 		}
 	}
 	if len(candidates) == 0 && h.cfg.EmbeddingModel != "" {
@@ -611,7 +612,7 @@ func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest
 	return candidates
 }
 
-func (h *Handler) fetchContextFiles(ctx context.Context, req *contracts.InternalRequest) ([]contextFileRecord, error) {
+func (h *Handler) fetchContextFiles(ctx context.Context, req *contracts.InternalRequest, embeddingModel string) ([]contextFileRecord, error) {
 	baseURL := strings.TrimRight(h.cfg.DBAdapterURL, "/")
 	if baseURL == "" {
 		return nil, nil
@@ -624,12 +625,7 @@ func (h *Handler) fetchContextFiles(ctx context.Context, req *contracts.Internal
 	for _, tagID := range req.Tags {
 		params.Add("tag_id", fmt.Sprintf("%d", tagID))
 	}
-	embeddingModel := strings.TrimSpace(req.EmbeddingModel)
-	if embeddingModel == "" && req.Metadata != nil {
-		if meta := contracts.FromStruct(req.Metadata); meta != nil {
-			embeddingModel, _ = meta["embedding_model"].(string)
-		}
-	}
+	embeddingModel = strings.TrimSpace(embeddingModel)
 	if embeddingModel != "" {
 		params.Set("embedding_model", embeddingModel)
 	}
@@ -678,6 +674,8 @@ func groupContextFilesByModel(files []contextFileRecord) map[string][]contextFil
 }
 
 func (h *Handler) searchWithEmbeddingModel(ctx context.Context, req *contracts.InternalRequest, embeddingModel string, embedder models.Planner, subQueries []string, tags []int64, contextFiles []contextFileRecord) ([]interface{}, bool, []map[string]interface{}, error) {
+	logging.Printf("[%s][SID:%d] searchWithEmbeddingModel start model=%q tag_count=%d sub_queries=%d context_files=%d",
+		req.Id, req.SessionId, embeddingModel, len(tags), len(subQueries), len(contextFiles))
 	results, missingCollection, err := h.searchEmbeddingModelOnce(ctx, req, embeddingModel, embedder, subQueries, tags)
 	if err != nil {
 		return nil, false, nil, err
@@ -725,29 +723,39 @@ func (h *Handler) searchEmbeddingModelOnce(ctx context.Context, req *contracts.I
 	missingCollection := false
 
 	if len(tags) > 0 {
+		logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval start model=%q tags=%v limit=%d include_global=%v",
+			req.Id, req.SessionId, embeddingModel, tags, h.cfg.QdrantRetrievalLimit, req.IncludeGlobal)
 		h.msg.SendStatus(ctx, req.Id, req.SessionId, "RETRIEVING_CONTEXT", fmt.Sprintf("Retrieving tagged context for %s", embeddingModel))
 		tagResults, err := h.searcher.Search(ctx, embeddingModel, nil, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantRetrievalLimit)
 		if err != nil {
+			logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval failed model=%q tags=%v err=%v", req.Id, req.SessionId, embeddingModel, tags, err)
 			if isMissingCollectionError(err) {
 				missingCollection = true
 			} else {
 				return nil, false, err
 			}
 		} else {
+			logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval returned %d items model=%q tags=%v", req.Id, req.SessionId, len(tagResults), embeddingModel, tags)
 			allRawResults = append(allRawResults, tagResults...)
 		}
 	}
 
 	for _, sq := range subQueries {
+		logging.Printf("[%s][SID:%d] embedding sub-query model=%q query=%q tag_count=%d", req.Id, req.SessionId, embeddingModel, sq, len(tags))
 		vector, err := embedder.GetEmbeddings(ctx, sq)
 		if err != nil {
 			logging.Printf("[%s][SID:%d] Failed to get embeddings for sub-query '%s' using %s: %v", req.Id, req.SessionId, sq, embeddingModel, err)
 			if ollama.IsMissingModelError(err) {
 				return nil, false, fmt.Errorf("embedding model unavailable: %w", err)
 			}
+			if ollama.IsUnsupportedEmbeddingModelError(err) {
+				return nil, false, errUnsupportedEmbeddingModel
+			}
 			continue
 		}
 		vs := len(vector)
+		logging.Printf("[%s][SID:%d] qdrant semantic search request model=%q vector_dims=%d tags=%v limit=%d query=%q",
+			req.Id, req.SessionId, embeddingModel, vs, tags, h.cfg.QdrantSearchLimit, sq)
 		logging.Printf("[%s][SID:%d] Searching Qdrant for model=%s dims=%d tags=%v global=%v query='%s'", req.Id, req.SessionId, embeddingModel, vs, tags, req.IncludeGlobal, sq)
 		results, err := h.searcher.Search(ctx, embeddingModel, vector, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantSearchLimit)
 		if err != nil {
@@ -808,7 +816,7 @@ func (h *Handler) hydrateContextFiles(ctx context.Context, req *contracts.Intern
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		resp, err := h.httpClient.Do(httpReq)
+		resp, err := h.hydrationClient.Do(httpReq)
 		if err != nil {
 			return notes, err
 		}
@@ -1358,7 +1366,7 @@ func scoreChunkGroup(step contracts.PlannerStep, group chunkGroupDetail) int {
 	return score
 }
 
-func buildPlanStepContexts(plan *contracts.PlannerTaskPlan, groups []chunkGroupDetail) []map[string]interface{} {
+func buildPlanStepContexts(plan *contracts.PlannerTaskPlan, groups []chunkGroupDetail, originalPrompt string) []map[string]interface{} {
 	if plan == nil || len(plan.Steps) == 0 || len(groups) == 0 {
 		return nil
 	}
@@ -1433,15 +1441,13 @@ func buildPlanStepContexts(plan *contracts.PlannerTaskPlan, groups []chunkGroupD
 			}
 		}
 
-		stepPrompt := step.Objective
-		if strings.TrimSpace(stepPrompt) == "" {
-			stepPrompt = plan.Objective
-		}
-		if strings.TrimSpace(step.ActionType) != "" {
-			if stepPrompt != "" {
-				stepPrompt += "\n"
-			}
-			stepPrompt += fmt.Sprintf("Step action: %s", step.ActionType)
+		// Always use the original user question as the executor prompt so the
+		// extraction instruction ("return the exact answer") is never replaced by
+		// the planner's decomposed step objective. Step objectives are useful for
+		// scoring/ranking context groups but must not reach the executor model.
+		stepPrompt := strings.TrimSpace(originalPrompt)
+		if stepPrompt == "" {
+			stepPrompt = strings.TrimSpace(plan.Objective)
 		}
 
 		results = append(results, map[string]interface{}{
@@ -1535,6 +1541,31 @@ func rawResultContextText(item interface{}) string {
 	return ""
 }
 
+func extractLiteralAnswerFallback(prompt string, chunks [][]interface{}) (string, bool) {
+	promptLower := strings.ToLower(prompt)
+	interested := strings.Contains(promptLower, "code") || strings.Contains(promptLower, "answer") || strings.Contains(promptLower, "token")
+	if !interested {
+		return "", false
+	}
+
+	for _, chunk := range chunks {
+		for _, item := range chunk {
+			text := rawResultContextText(item)
+			if text == "" {
+				continue
+			}
+			for _, re := range literalAnswerFallbackPatterns {
+				match := re.FindStringSubmatch(text)
+				if len(match) > 1 {
+					return strings.TrimSpace(match[1]), true
+				}
+			}
+		}
+	}
+
+	return "", false
+}
+
 func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
 	h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", "Generating response with specialized model")
 
@@ -1560,16 +1591,6 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			chunks = append(chunks, c)
 		}
 	}
-	if len(chunks) == 0 {
-		if raw, ok := metadata["raw_results"].([]interface{}); ok {
-			for _, item := range raw {
-				if text := rawResultContextText(item); text != "" {
-					chunks = append(chunks, []interface{}{text})
-				}
-			}
-		}
-	}
-
 	executionUnits := extractExecutionUnits(metadata, req.Prompt, chunks)
 	if len(executionUnits) == 0 && len(chunks) == 0 {
 		executionUnits = []executionUnit{{Prompt: req.Prompt, Contexts: []interface{}{}, Label: "step-1"}}
@@ -1754,21 +1775,35 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 				finalMetrics.TotalDurationUsec += m.TotalDurationUsec
 			}
 
-			if h.cfg.StreamIntermediate {
+			// Only send intermediate stream chunks when the request is itself a
+			// streaming request. In non-streaming mode SendResult will transmit the
+			// full accumulated result as the single final chunk, so emitting an
+			// additional non-final chunk here would cause the db-adapter to append
+			// the content twice and produce a duplicated response.
+			if h.cfg.StreamIntermediate && req.Stream {
 				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, res, seq, false, modelID, inConversation, nil)
 				seq++
 			}
 		}
 	}
 
-	if responseSizeHist != nil {
-		responseSizeHist.Record(ctx, int64(len(fullAccumulatedResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
-	}
-
 	isInsufficient := executor.IsInsufficientContext(fullAccumulatedResult)
 	budget, _ := metadata["recursion_budget"].(float64)
 	recursionCount, _ := metadata["recursion_count"].(float64)
 	totalChunks, _ := metadata["total_chunks_processed"].(float64)
+
+	if isInsufficient && !hasSubstantialResult {
+		if fallback, ok := extractLiteralAnswerFallback(req.Prompt, chunks); ok {
+			logging.Printf("[%s][SID:%d] Exec fallback extracted literal answer from retrieved context", req.Id, req.SessionId)
+			fullAccumulatedResult = fallback
+			isInsufficient = false
+			hasSubstantialResult = true
+		}
+	}
+
+	if responseSizeHist != nil {
+		responseSizeHist.Record(ctx, int64(len(fullAccumulatedResult)), metric.WithAttributes(attribute.String("model", modelID), attribute.String("stage", "exec")))
+	}
 
 	totalChunks += float64(len(unitsToProcess))
 	metadata["total_chunks_processed"] = totalChunks
@@ -1801,11 +1836,17 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			req.Metadata = contracts.ToStruct(metadata)
 			marshaller := protojson.MarshalOptions{UseProtoNames: true}
 			payload, err := marshaller.Marshal(req)
-			if err == nil {
-				if _, err := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err == nil {
-					return dlq.Success, nil
-				}
+			if err != nil {
+				logging.Printf("[%s][SID:%d] Failed to marshal request for exec pagination: %v", req.Id, req.SessionId, err)
+				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to continue pagination", inConversation)
+				return dlq.TransientFailure, fmt.Errorf("marshal for exec pagination [%s]: %w", req.Id, err)
 			}
+			if _, sendErr := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); sendErr != nil {
+				logging.Printf("[%s][SID:%d] Failed to send to exec topic for pagination: %v", req.Id, req.SessionId, sendErr)
+				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to continue pagination", inConversation)
+				return dlq.TransientFailure, fmt.Errorf("send to exec for pagination [%s]: %w", req.Id, sendErr)
+			}
+			return dlq.Success, nil
 		}
 	} else if isInsufficient && !hasSubstantialResult && budget >= 1.0 {
 		if recursionCount >= float64(h.cfg.MaxRecursionCount) {
@@ -1818,11 +1859,17 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 			req.Metadata = contracts.ToStruct(metadata)
 			marshaller := protojson.MarshalOptions{UseProtoNames: true}
 			payload, err := marshaller.Marshal(req)
-			if err == nil {
-				if _, err := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); err == nil {
-					return dlq.Success, nil
-				}
+			if err != nil {
+				logging.Printf("[%s][SID:%d] Failed to marshal request for re-plan: %v", req.Id, req.SessionId, err)
+				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to trigger re-plan", inConversation)
+				return dlq.TransientFailure, fmt.Errorf("marshal for re-plan [%s]: %w", req.Id, err)
 			}
+			if _, sendErr := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); sendErr != nil {
+				logging.Printf("[%s][SID:%d] Failed to send to plan topic for re-plan: %v", req.Id, req.SessionId, sendErr)
+				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to trigger re-plan", inConversation)
+				return dlq.TransientFailure, fmt.Errorf("send to plan for re-plan [%s]: %w", req.Id, sendErr)
+			}
+			return dlq.Success, nil
 		}
 	} else if end < len(executionUnits) && hasSubstantialResult {
 		logging.Printf("[%s][SID:%d] Found substantial result, stopping processing early at %d/%d", req.Id, req.SessionId, end, len(executionUnits))

@@ -31,6 +31,20 @@ func TestParsePlannerTaskPlan(t *testing.T) {
 			wantType: contracts.PlannerActionUnknown,
 			wantSQ:   []string{"prompt"},
 		},
+		{
+			name:     "empty string",
+			raw:      "",
+			wantType: contracts.PlannerActionUnknown,
+			wantSQ:   []string{"prompt"},
+		},
+		{
+			// Prose contains braces before the markdown fence; the parser must
+			// extract the JSON object from inside the fence, not the prose brace.
+			name:     "prose braces then markdown json fence",
+			raw:      "Sure, here {action: none} ```json\n{\"objective\":\"x\",\"action_type\":\"FILE_SEARCH\",\"search_queries\":[\"q1\"]}\n```",
+			wantType: "FILE_SEARCH",
+			wantSQ:   []string{"q1"},
+		},
 	}
 
 	for _, tt := range tests {

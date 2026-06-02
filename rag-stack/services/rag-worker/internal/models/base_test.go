@@ -98,3 +98,39 @@ func TestAssembleMessagesPlacesRetrievedContextInUserPrompt(t *testing.T) {
 		t.Fatalf("unexpected user message: %#v", messages[0])
 	}
 }
+
+func TestBuildTaggedExecutionPrompt(t *testing.T) {
+	config := ModelConfig{
+		ExecutionHeader: "CTX:\n",
+		ExecutionFooter: "\nPROMPT:\n",
+		ExecutionSuffix: "\n",
+	}
+	got := BuildTaggedExecutionPrompt(config, "Answer the question.", []interface{}{"first chunk", "second chunk"})
+	if !strings.Contains(got, "<<<CONTEXT 1>>>") || !strings.Contains(got, "<<<END CONTEXT 2>>>") {
+		t.Fatalf("tagged prompt did not include context delimiters: %q", got)
+	}
+	if !strings.Contains(got, "first chunk") || !strings.Contains(got, "second chunk") {
+		t.Fatalf("tagged prompt did not preserve context text: %q", got)
+	}
+	if !strings.Contains(got, "\nPROMPT:\nAnswer the question.\n") {
+		t.Fatalf("tagged prompt did not include footer/suffix: %q", got)
+	}
+}
+
+func TestBuildNumberedExecutionPrompt(t *testing.T) {
+	config := ModelConfig{
+		ExecutionHeader: "CTX:\n",
+		ExecutionFooter: "\nPROMPT:\n",
+		ExecutionSuffix: "\n",
+	}
+	got := BuildNumberedExecutionPrompt(config, "Answer the question.", []interface{}{"first chunk", "second chunk"})
+	if !strings.Contains(got, "Context 1:") || !strings.Contains(got, "Context 2:") {
+		t.Fatalf("numbered prompt did not include numbered context sections: %q", got)
+	}
+	if !strings.Contains(got, "first chunk") || !strings.Contains(got, "second chunk") {
+		t.Fatalf("numbered prompt did not preserve context text: %q", got)
+	}
+	if !strings.Contains(got, "\nPROMPT:\nAnswer the question.\n") {
+		t.Fatalf("numbered prompt did not include footer/suffix: %q", got)
+	}
+}

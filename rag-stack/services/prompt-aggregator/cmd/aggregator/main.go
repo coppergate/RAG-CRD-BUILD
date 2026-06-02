@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/apache/pulsar-client-go/pulsar"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 
 	"app-builds/common/contracts"
 	"app-builds/common/health"
@@ -125,9 +127,12 @@ func main() {
 
 	logging.Printf("[%s] Received completion (Status: %s), aggregating chunks from session topic", comp.Id, comp.Status)
 
+	// Propagate trace context from the completion message
+	msgCtx := otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.Properties()))
+
 	// Aggregate chunks from session topic
 	sessionTopic := SessionTopic(comp.Id)
-	fullResult, metadata, err := aggregateChunks(ctx, client, sessionTopic, &comp)
+	fullResult, metadata, err := aggregateChunks(msgCtx, client, sessionTopic, &comp, cfg.AggregationTimeout)
 	if err != nil {
 		logging.Printf("[%s] Aggregation error on %s: %v (Partial result: %d chars)", comp.Id, sessionTopic, err, len(fullResult))
 		// We could send partial result or nack
@@ -157,7 +162,7 @@ func main() {
 	logging.Printf("Shutting down...")
 }
 
-func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, comp *contracts.ResponseCompletion) (string, *structpb.Struct, error) {
+func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, comp *contracts.ResponseCompletion, timeout time.Duration) (string, *structpb.Struct, error) {
 	reader, err := client.CreateReader(pulsar.ReaderOptions{
 		Topic:          topic,
 		StartMessageID: pulsar.EarliestMessageID(),
@@ -169,7 +174,7 @@ func aggregateChunks(ctx context.Context, client pulsar.Client, topic string, co
 
 	var chunks = make(map[int32]*contracts.StreamChunk)
 	var lastMetadata *structpb.Struct
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	for {

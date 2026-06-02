@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -28,8 +29,12 @@ var upgrader = websocket.Upgrader{
 		if origin == "" {
 			return true
 		}
-		// Allow internal domain
-		if strings.HasSuffix(origin, ".hierocracy.home") {
+		// Allow configured internal domain (env: WEBSOCKET_ORIGIN_DOMAIN, default: .hierocracy.home)
+		domain := os.Getenv("WEBSOCKET_ORIGIN_DOMAIN")
+		if domain == "" {
+			domain = ".hierocracy.home"
+		}
+		if strings.HasSuffix(origin, domain) {
 			return true
 		}
 		// Allow localhost for debugging
@@ -69,8 +74,9 @@ func init() {
 }
 
 type OpenAIHandler struct {
-	Pulsar pulsar.Client
-	Ent    *ent.Client
+	Pulsar        pulsar.Client
+	Ent           *ent.Client
+	StreamTimeout time.Duration
 }
 
 type ChatCompletionRequest struct {
@@ -178,6 +184,7 @@ func (h *OpenAIHandler) HandleChatCompletions(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 	var req ChatCompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logging.Printf("Bad request: %v", err)
@@ -418,8 +425,9 @@ func (h *OpenAIHandler) HandleStreamingChat(w http.ResponseWriter, r *http.Reque
 			}
 		case <-ctx.Done():
 			return
-		case <-time.After(60 * time.Second): // Timeout
-			logging.Printf("[%s] WebSocket stream timed out", correlationID)
+		case <-time.After(h.StreamTimeout):
+			logging.Printf("[%s] WebSocket stream timed out after %v", correlationID, h.StreamTimeout)
+			conn.WriteJSON(map[string]interface{}{"error": "stream timeout", "is_last": true})
 			return
 		}
 	}
@@ -449,6 +457,7 @@ func (h *OpenAIHandler) HandleGenericChat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 	var req GenericChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Bad request: "+err.Error(), http.StatusBadRequest)

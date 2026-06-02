@@ -67,10 +67,10 @@ curl -sk https://rag-admin-api.rag.hierocracy.home/api/health/all
 ### 5.1 Rebuilding Services
 To update the system with new code changes:
 1. Update code in `rag-stack/services/`.
-2. Check and increment version in `CURRENT_VERSION`.
-3. Run the cluster-native build from **hierophant**:
+2. Run `go vet ./...` in each changed Go service directory and fix any errors.
+3. Run the cluster-native build from **hierophant** — versions are resolved automatically from the build processor API:
    ```bash
-   ssh junie@hierophant "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && ./build.sh --override-version 3.1.3"
+   ssh junie@hierophant "cd /mnt/hegemon-share/share/code/complete-build/rag-stack && ./build.sh --mode cluster --wait"
    ```
 
 ### 5.2 Common Issues

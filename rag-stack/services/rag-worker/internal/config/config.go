@@ -43,6 +43,8 @@ type Config struct {
 	StreamIntermediate    bool
 
 	StreamAccumulationCount int
+	HydrationTimeout        time.Duration
+	OllamaMaxConcurrency    int
 
 	MemoryControllerURL string
 	QdrantAdapterURL    string
@@ -52,6 +54,12 @@ type Config struct {
 
 	TLSCert string
 	TLSKey  string
+
+	// Model shape config paths — each is a YAML file mounted from a ConfigMap.
+	// Leave empty to fall back to the hardcoded per-PromptType config.
+	ModelDefaultsConfigPath  string
+	PlannerModelConfigPath   string
+	ExecutorModelConfigPath  string
 }
 
 func LoadConfig() *Config {
@@ -100,6 +108,8 @@ func LoadConfig() *Config {
 		ShutdownTimeout:         envutil.GetEnvDuration("SHUTDOWN_TIMEOUT", 30*time.Second),
 		StreamAccumulationCount: envutil.GetEnvInt("STREAM_ACCUMULATION_COUNT", 10),
 		StreamIntermediate:      envutil.GetEnvBool("STREAM_INTERMEDIATE", true),
+		HydrationTimeout:        envutil.GetEnvDuration("HYDRATION_TIMEOUT", 5*time.Minute),
+		OllamaMaxConcurrency:    envutil.GetEnvInt("OLLAMA_MAX_CONCURRENCY", 5),
 
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "https://memory-controller.rag-system.svc.cluster.local"),
 		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "https://qdrant-adapter.rag-system.svc.cluster.local:8082"),
@@ -109,5 +119,9 @@ func LoadConfig() *Config {
 
 		TLSCert: envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:  envutil.GetEnv("TLS_KEY", ""),
+
+		ModelDefaultsConfigPath: envutil.GetEnv("MODEL_DEFAULTS_CONFIG_PATH", ""),
+		PlannerModelConfigPath:  envutil.GetEnv("PLANNER_MODEL_CONFIG_PATH", ""),
+		ExecutorModelConfigPath: envutil.GetEnv("EXECUTOR_MODEL_CONFIG_PATH", ""),
 	}
 }

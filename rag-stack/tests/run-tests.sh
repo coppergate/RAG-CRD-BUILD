@@ -1,91 +1,170 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# run-tests.sh — run Go unit tests for all services, then E2E tests on hierophant
+#
+# Usage:
+#   bash run-tests.sh              # unit tests + E2E
+#   bash run-tests.sh --unit-only  # unit tests only (no cluster required)
+#   bash run-tests.sh --e2e-only   # E2E only (skip unit tests)
+#   bash run-tests.sh --fail-fast  # stop at first unit test failure
 
-# Configuration
-NAMESPACE="rag-system"
-CODE_DIR="/mnt/hegemon-share/share/code/complete-build/rag-stack"
-TEST_DIR="${CODE_DIR}/tests"
-KUBECTL="/home/k8s/kube/kubectl"
-export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-VERSION_FILE="${CODE_DIR}/../CURRENT_VERSION"
-VERSION="${VERSION:-}"
-if [ -z "$VERSION" ]; then
-    VERSION=$(jq -r '."rag-test-runner".version' "$VERSION_FILE")
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICES_DIR="${SCRIPT_DIR}/../services"
+
+UNIT_ONLY=false
+E2E_ONLY=false
+FAIL_FAST=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --unit-only)  UNIT_ONLY=true ;;
+    --e2e-only)   E2E_ONLY=true ;;
+    --fail-fast)  FAIL_FAST=true ;;
+    *) echo "[ERROR] Unknown argument: $arg"; exit 1 ;;
+  esac
+done
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Go unit tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+# All modules — vet runs on all, test only on those with *_test.go files
+ALL_MODULES=(
+  common
+  build-orchestrator
+  db-adapter
+  llm-gateway
+  memory-controller
+  object-store-mgr
+  prompt-aggregator
+  qdrant-adapter
+  rag-admin-api
+  rag-worker
+)
+
+MODULES_WITH_TESTS=(
+  common
+  db-adapter
+  llm-gateway
+  memory-controller
+  prompt-aggregator
+  qdrant-adapter
+  rag-admin-api
+  rag-worker
+)
+
+run_unit_tests() {
+  echo ""
+  echo "════════════════════════════════════════════════════════"
+  echo "  Go Unit Tests"
+  echo "════════════════════════════════════════════════════════"
+
+  declare -A VET_RESULTS
+  declare -A TEST_RESULTS
+
+  # go vet — all modules
+  echo ""
+  echo "── go vet ──────────────────────────────────────────────"
+  for mod in "${ALL_MODULES[@]}"; do
+    dir="${SERVICES_DIR}/${mod}"
+    if [ ! -f "${dir}/go.mod" ]; then
+      printf "  vet  %-32s SKIP\n" "${mod}"
+      VET_RESULTS[$mod]="SKIP"
+      continue
+    fi
+    printf "  vet  %-32s" "${mod}"
+    if output=$(cd "$dir" && go vet ./... 2>&1); then
+      echo " OK"
+      VET_RESULTS[$mod]="OK"
+    else
+      echo " FAIL"
+      echo "$output" | sed 's/^/         /'
+      VET_RESULTS[$mod]="FAIL"
+    fi
+  done
+
+  # go test — modules with test files
+  echo ""
+  echo "── go test ─────────────────────────────────────────────"
+  for mod in "${MODULES_WITH_TESTS[@]}"; do
+    dir="${SERVICES_DIR}/${mod}"
+    printf "  test %-32s" "${mod}"
+    if output=$(cd "$dir" && go test ./... 2>&1); then
+      echo " OK"
+      TEST_RESULTS[$mod]="OK"
+    else
+      echo " FAIL"
+      echo "$output" | sed 's/^/         /'
+      TEST_RESULTS[$mod]="FAIL"
+      if $FAIL_FAST; then
+        echo ""
+        echo "[FAIL-FAST] Stopping after first test failure."
+        return 1
+      fi
+    fi
+  done
+
+  # Summary
+  echo ""
+  echo "── Summary ─────────────────────────────────────────────"
+  local unit_failures=0
+
+  echo "  Vet:"
+  for mod in "${ALL_MODULES[@]}"; do
+    r="${VET_RESULTS[$mod]:-SKIP}"
+    printf "    %-32s %s\n" "${mod}" "$r"
+    [[ "$r" == "FAIL" ]] && unit_failures=$((unit_failures + 1))
+  done
+
+  echo "  Test:"
+  for mod in "${MODULES_WITH_TESTS[@]}"; do
+    r="${TEST_RESULTS[$mod]:-SKIP}"
+    printf "    %-32s %s\n" "${mod}" "$r"
+    [[ "$r" == "FAIL" ]] && unit_failures=$((unit_failures + 1))
+  done
+
+  if [ "$unit_failures" -eq 0 ]; then
+    echo ""
+    echo "  [OK] All unit tests passed."
+    return 0
+  else
+    echo ""
+    echo "  [FAILURE] ${unit_failures} module(s) failed."
+    return 1
+  fi
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Entry point
+# ──────────────────────────────────────────────────────────────────────────────
+
+UNIT_EXIT=0
+E2E_EXIT=0
+
+if ! $E2E_ONLY; then
+  run_unit_tests || UNIT_EXIT=$?
 fi
-echo "Using rag-test-runner version: ${VERSION}"
 
-echo "--- Preparing RAG Integration Tests ---"
-
-# 1. Recreate the tests ConfigMap
-echo "Updating tests ConfigMap..."
-$KUBECTL delete configmap rag-integration-tests -n $NAMESPACE --ignore-not-found
-$KUBECTL create configmap rag-integration-tests -n $NAMESPACE \
-    --from-file="${TEST_DIR}/cleanup_test_sessions.py" \
-    --from-file="${TEST_DIR}/e2e_session_state.py" \
-    --from-file="${TEST_DIR}/integration_test.py" \
-    --from-file="${TEST_DIR}/e2e_tag_state.py" \
-    --from-file="${TEST_DIR}/model_matrix.py" \
-    --from-file="${TEST_DIR}/api_health_test.py" \
-    --from-file="${TEST_DIR}/retrieval_path_test.py" \
-    --from-file="${TEST_DIR}/context_verification.py" \
-    --from-file="${TEST_DIR}/recursive_rag_test.py" \
-    --from-file="${TEST_DIR}/pulsar_crud_test.py" \
-    --from-file="${TEST_DIR}/aggregator_test.py" \
-    --from-file="${TEST_DIR}/aggregator_failure_test.py" \
-    --from-file="${TEST_DIR}/seed_qdrant_context.py" \
-    --from-file="${TEST_DIR}/sad_path_test.py" \
-    --from-file="${TEST_DIR}/cleanup_test_data.py" \
-    --from-file="${TEST_DIR}/test_contracts.py"
-
-# 2. Delete existing job
-echo "Removing old test job..."
-$KUBECTL delete job rag-integration-test -n $NAMESPACE --ignore-not-found
-
-# 3. Apply the job
-echo "Launching test job..."
-RENDERED_JOB="/tmp/rag-integration-test-${VERSION}.yaml"
-sed "s|:__VERSION__|:${VERSION}|g" "${TEST_DIR}/test-job.yaml" > "$RENDERED_JOB"
-$KUBECTL apply -f "$RENDERED_JOB"
-rm -f "$RENDERED_JOB"
-
-# 4. Wait for pod to be ready and follow logs
-echo "Waiting for pod to start (Running status)..."
-"$KUBECTL" -n "$NAMESPACE" wait --for=condition=Ready pod -l job-name=rag-integration-test --timeout=120s || true
-
-POD_NAME=$($KUBECTL get pods -n $NAMESPACE -l job-name=rag-integration-test --sort-by=.metadata.creationTimestamp -o name | tail -n 1 | cut -d/ -f2)
-
-if [ -z "$POD_NAME" ]; then
-    echo "Error: Could not find test pod."
-    exit 1
+if ! $UNIT_ONLY; then
+  echo ""
+  echo "════════════════════════════════════════════════════════"
+  echo "  E2E Tests"
+  echo "════════════════════════════════════════════════════════"
+  echo ""
+  bash "${SCRIPT_DIR}/run-e2e-on-hierophant.sh" || E2E_EXIT=$?
 fi
 
-LOG_DIR="/tmp/rag-logs/integration-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$LOG_DIR"
-LOG_FILE="${LOG_DIR}/integration-tests.log"
-echo "Following logs for $POD_NAME (saving to $LOG_FILE)..."
-$KUBECTL logs -n $NAMESPACE $POD_NAME -f | tee "$LOG_FILE"
-
-# 5. Scan for failures and summary
 echo ""
-echo "--- Test Result Summary ---"
-# We check case-insensitively and look for common error patterns
-ERROR_COUNT=$(grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError" "$LOG_FILE" | grep -v "expected" | wc -l)
-SUCCESS_COUNT=$(grep -Ei "\[SUCCESS\]|\[PASS\]|\[OK\]" "$LOG_FILE" | wc -l)
+echo "════════════════════════════════════════════════════════"
+echo "  Final Result"
+echo "════════════════════════════════════════════════════════"
 
-if [ "$ERROR_COUNT" -gt 0 ]; then
-    echo "POSSIBLE FAILURES OR MONITORING ISSUES DETECTED: $ERROR_COUNT"
-    grep -Ei "\[ERROR\]|\[FAIL\]|\[FAILURE\]|ERROR:|FAIL:|FAILURE:|Exception:|Failed to export|can't open file|SyntaxError" "$LOG_FILE" | grep -v "expected" | head -n 30
-    # We still exit 0 if there were successes, but we want the user to see the warning.
-    # Actually, the user wants to see "possible failure" messages.
-    if [ "$SUCCESS_COUNT" -eq 0 ]; then
-        exit 1
-    fi
-else
-    if [ "$SUCCESS_COUNT" -eq 0 ]; then
-        echo "No success markers found. Check logs for details."
-        exit 1
-    fi
-    echo "All tests appeared to pass based on log scanning ($SUCCESS_COUNT success markers)."
+if ! $E2E_ONLY; then
+  [ "$UNIT_EXIT" -eq 0 ] && echo "  Unit tests : PASS" || echo "  Unit tests : FAIL"
+fi
+if ! $UNIT_ONLY; then
+  [ "$E2E_EXIT" -eq 0 ] && echo "  E2E tests  : PASS" || echo "  E2E tests  : FAIL"
 fi
 
-# No cleanup here to allow log inspection
-echo "Test logs preserved at: $LOG_FILE"
+[ "$((UNIT_EXIT + E2E_EXIT))" -eq 0 ] && exit 0 || exit 1

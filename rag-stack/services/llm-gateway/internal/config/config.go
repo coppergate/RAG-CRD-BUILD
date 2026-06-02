@@ -10,7 +10,6 @@ import (
 type Config struct {
 	PulsarURL       string
 	RequestTopic    string
-	ResponseTopic   string
 	ListenAddr      string
 	PulsarNamespace string
 	DBConnString    string
@@ -18,6 +17,7 @@ type Config struct {
 
 	// Configurable values (previously hardcoded)
 	RequestTimeout time.Duration
+	StreamTimeout  time.Duration
 }
 
 func Load() *Config {
@@ -33,12 +33,12 @@ func Load() *Config {
 	return &Config{
 		PulsarURL:       envutil.GetEnv("PULSAR_URL", pulsarDefault),
 		RequestTopic:    envutil.GetEnv("PULSAR_REQUEST_TOPIC", "persistent://rag-pipeline/stage/ingress"),
-		ResponseTopic:   envutil.GetEnv("PULSAR_RESPONSE_TOPIC", "persistent://rag-pipeline/stage/results"),
 		ListenAddr:      envutil.GetEnv("LISTEN_ADDR", ":8080"),
 		PulsarNamespace: envutil.GetEnv("PULSAR_NAMESPACE", "apache-pulsar"),
 		DBConnString:    envutil.GetEnv("DB_CONN_STRING", dbDefault),
 		PromptTopic:     envutil.GetEnv("PULSAR_PROMPT_TOPIC", "persistent://rag-pipeline/data/chat-prompts"),
 
 		RequestTimeout: envutil.GetEnvDuration("REQUEST_TIMEOUT", 120*time.Second),
+		StreamTimeout:  envutil.GetEnvDuration("STREAM_TIMEOUT", 120*time.Second),
 	}
 }

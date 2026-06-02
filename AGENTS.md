@@ -1,1 +1,1 @@
-At the start of every session, read documentation/guidelines.md and documentation/OPERATIONS.md before doing any work.
+At the start of every session, to initialize the environment, read documentation/guidelines.md and documentation/OPERATIONS.md before doing any work.
