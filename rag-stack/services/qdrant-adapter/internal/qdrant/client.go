@@ -624,24 +624,11 @@ func (q *QdrantClient) MergeTags(collection string, embeddingModel string, vecto
 	}
 
 	effectiveColl := resolveCollection(q, collection, embeddingModel, vs)
-
 	scheme := tlsutil.URLScheme(q.cfg.QdrantUseTLS)
-	// Qdrant doesn't have a direct "update payload for all matching" with arbitrary logic,
-	// but it has a "set payload" for a filter.
-	url := fmt.Sprintf("%s://%s:%s/collections/%s/points/payload?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
+	scrollURL := fmt.Sprintf("%s://%s:%s/collections/%s/points/scroll", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
+	setPayloadURL := fmt.Sprintf("%s://%s:%s/collections/%s/points/payload?wait=true", scheme, q.cfg.QdrantHost, q.cfg.QdrantPort, effectiveColl)
 
-	// Step 1: Add targetTag to all points that have sourceTag
-	// We use the "overwrite" (or just set) payload with a filter.
-	// Since tags is usually an array, this is slightly tricky with "set_payload".
-	// If we want to properly merge (append to array), we'd need to fetch and update or use a more advanced Qdrant feature if available.
-	// For now, we'll implement a simple "add to tags array" using Qdrant's payload update features.
-	// Note: Qdrant's /points/payload (POST) adds/updates keys. If 'tags' is a list, it might overwrite the whole list.
-
-	// Better approach for true merge in Qdrant:
-	// Use a filter to find all points with sourceTag, then use a script or multi-step update.
-	// Simpler approach: Set the targetTag as a value in the tags array.
-
-	filter := map[string]interface{}{
+	sourceFilter := map[string]interface{}{
 		"must": []map[string]interface{}{
 			{
 				"key": "tags",
@@ -652,33 +639,133 @@ func (q *QdrantClient) MergeTags(collection string, embeddingModel string, vecto
 		},
 	}
 
-	// We'll use a multi-step update if needed, but for now let's try the simplest:
-	// Replace sourceTag with targetTag in the array.
-	// Actually, Qdrant's payload update doesn't support "array remove/add" natively in a single atomic call across all points.
+	// Step 1: Scroll all points that carry sourceTag, grouped by their resulting new tag set.
+	// Grouping minimises the number of payload-update API calls.
+	type pointGroup struct {
+		newTags []int64
+		ids     []interface{}
+	}
+	groups := make(map[string]*pointGroup)
 
-	// Recommendation: For this iteration, we'll implement the "Overwrite with Target" for the session/tag field.
-	// If the user wants to merge tags, they likely want to unify them.
+	var nextOffset interface{}
+	const pageSize = 1000
+	for {
+		query := map[string]interface{}{
+			"limit":        pageSize,
+			"with_payload": true,
+			"filter":       sourceFilter,
+		}
+		if nextOffset != nil {
+			query["offset"] = nextOffset
+		}
 
-	payload := map[string]interface{}{
-		"tags": []int64{targetTag},
+		body, err := json.Marshal(query)
+		if err != nil {
+			return err
+		}
+		req, err := http.NewRequest("POST", scrollURL, bytes.NewBuffer(body))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := q.httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+
+		var scrollResp struct {
+			Result struct {
+				Points []struct {
+					Id      interface{}            `json:"id"`
+					Payload map[string]interface{} `json:"payload"`
+				} `json:"points"`
+				NextPageOffset interface{} `json:"next_page_offset"`
+			} `json:"result"`
+		}
+		decodeErr := json.NewDecoder(resp.Body).Decode(&scrollResp)
+		statusCode := resp.StatusCode
+		resp.Body.Close()
+
+		if statusCode != http.StatusOK {
+			return fmt.Errorf("qdrant scroll for merge failed: status %d", statusCode)
+		}
+		if decodeErr != nil {
+			return decodeErr
+		}
+
+		for _, p := range scrollResp.Result.Points {
+			// Parse the point's current tags.
+			var currentTags []int64
+			if rawTags, ok := p.Payload["tags"]; ok {
+				if tagSlice, ok := rawTags.([]interface{}); ok {
+					for _, v := range tagSlice {
+						switch n := v.(type) {
+						case float64:
+							currentTags = append(currentTags, int64(n))
+						case int64:
+							currentTags = append(currentTags, n)
+						}
+					}
+				}
+			}
+
+			// Build new tags: drop sourceTag, ensure targetTag is present.
+			hasTarget := false
+			var newTags []int64
+			for _, tag := range currentTags {
+				if tag == sourceTag {
+					continue
+				}
+				if tag == targetTag {
+					hasTarget = true
+				}
+				newTags = append(newTags, tag)
+			}
+			if !hasTarget {
+				newTags = append(newTags, targetTag)
+			}
+
+			// Sort for a stable grouping key.
+			sort.Slice(newTags, func(i, j int) bool { return newTags[i] < newTags[j] })
+			key := fmt.Sprintf("%v", newTags)
+
+			if g, exists := groups[key]; exists {
+				g.ids = append(g.ids, p.Id)
+			} else {
+				groups[key] = &pointGroup{newTags: newTags, ids: []interface{}{p.Id}}
+			}
+		}
+
+		nextOffset = scrollResp.Result.NextPageOffset
+		if nextOffset == nil {
+			break
+		}
 	}
 
-	body, err := json.Marshal(map[string]interface{}{
-		"payload": payload,
-		"filter":  filter,
-	})
-	if err != nil {
-		return err
+	if len(groups) == 0 {
+		return nil
 	}
 
-	resp, err := q.httpClient.Post(url, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("qdrant merge tags failed: status %d", resp.StatusCode)
+	// Step 2: Apply updated tag arrays — one request per distinct resulting tag set.
+	for _, group := range groups {
+		body, err := json.Marshal(map[string]interface{}{
+			"payload": map[string]interface{}{"tags": group.newTags},
+			"points":  group.ids,
+		})
+		if err != nil {
+			return err
+		}
+		resp, err := q.httpClient.Post(setPayloadURL, "application/json", bytes.NewBuffer(body))
+		if err != nil {
+			return err
+		}
+		statusCode := resp.StatusCode
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if statusCode != http.StatusOK {
+			return fmt.Errorf("qdrant set payload for merge failed: status %d", statusCode)
+		}
 	}
 
 	return nil
