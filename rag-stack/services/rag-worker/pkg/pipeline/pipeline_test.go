@@ -2,8 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"sort"
 	"strings"
 	"testing"
@@ -788,4 +791,255 @@ func TestBuildPlanStepContexts_OmitsUnknownActionFromStepPrompt(t *testing.T) {
 	if !strings.Contains(fmt.Sprintf("%v", contexts[0]), "water it lightly, trim dead petals, and place it where it gets soft morning sunlight") {
 		t.Fatalf("grouped context did not preserve answer text: %#v", contexts[0])
 	}
+}
+
+// ---------------------------------------------------------------------------
+// handleIngress tests
+// ---------------------------------------------------------------------------
+
+func TestHandleIngress_ForwardsToPlanner(t *testing.T) {
+	mockStatusProd := new(MockProducer)
+	mockPlanProd := new(MockProducer)
+
+	h := &Handler{
+		cfg: &config.Config{},
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status: mockStatusProd,
+				Plan:   mockPlanProd,
+			},
+		},
+	}
+
+	req := &contracts.InternalRequest{
+		Id:        "ingress-1",
+		SessionId: 1,
+		Prompt:    "test prompt",
+	}
+
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockPlanProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	result, err := h.handleIngress(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+	mockPlanProd.AssertExpectations(t)
+}
+
+func TestHandleIngress_PlanSendFails_IsTransientFailure(t *testing.T) {
+	mockStatusProd := new(MockProducer)
+	mockPlanProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+
+	h := &Handler{
+		cfg: &config.Config{},
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:  mockStatusProd,
+				Plan:    mockPlanProd,
+				Results: mockResultsProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("ingress-2"), mockResultsProd)
+
+	req := &contracts.InternalRequest{
+		Id:        "ingress-2",
+		SessionId: 1,
+		Prompt:    "test prompt",
+	}
+
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockPlanProd.On("Send", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("broker unavailable"))
+	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	result, err := h.handleIngress(context.Background(), req)
+
+	assert.Error(t, err)
+	assert.Equal(t, dlq.TransientFailure, result)
+}
+
+// ---------------------------------------------------------------------------
+// fetchContextFiles tests
+// ---------------------------------------------------------------------------
+
+func TestFetchContextFiles_Non200_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	h := &Handler{
+		cfg:        &config.Config{DBAdapterURL: srv.URL},
+		httpClient: srv.Client(),
+	}
+
+	req := &contracts.InternalRequest{SessionId: 1}
+	_, err := h.fetchContextFiles(context.Background(), req, "model")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "404")
+}
+
+func TestFetchContextFiles_EmptyDBAdapterURL_ReturnsNil(t *testing.T) {
+	h := &Handler{
+		cfg:        &config.Config{DBAdapterURL: ""},
+		httpClient: &http.Client{},
+	}
+
+	req := &contracts.InternalRequest{SessionId: 1}
+	files, err := h.fetchContextFiles(context.Background(), req, "model")
+	assert.NoError(t, err)
+	assert.Nil(t, files)
+}
+
+// ---------------------------------------------------------------------------
+// hydrateContextFiles tests
+// ---------------------------------------------------------------------------
+
+func TestHydrateContextFiles_EmptyFiles_ReturnsNil(t *testing.T) {
+	h := &Handler{
+		cfg:             &config.Config{IngestionURL: "http://fake"},
+		hydrationClient: &http.Client{},
+	}
+
+	req := &contracts.InternalRequest{}
+	result, err := h.hydrateContextFiles(context.Background(), req, "model", nil)
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestHydrateContextFiles_MissingIngestionURL_ReturnsError(t *testing.T) {
+	h := &Handler{
+		cfg:             &config.Config{IngestionURL: ""},
+		hydrationClient: &http.Client{},
+	}
+
+	files := []contextFileRecord{{Bucket: "b", Path: "p"}}
+	req := &contracts.InternalRequest{}
+	_, err := h.hydrateContextFiles(context.Background(), req, "model", files)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ingestion URL is not configured")
+}
+
+func TestHydrateContextFiles_Non200_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	h := &Handler{
+		cfg:             &config.Config{IngestionURL: srv.URL},
+		hydrationClient: srv.Client(),
+	}
+
+	files := []contextFileRecord{{Bucket: "bucket", Path: "some/path.txt"}}
+	req := &contracts.InternalRequest{}
+	_, err := h.hydrateContextFiles(context.Background(), req, "model", files)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "503")
+}
+
+// ---------------------------------------------------------------------------
+// handleExec streaming path test
+// ---------------------------------------------------------------------------
+
+func TestHandleExec_StreamingPath(t *testing.T) {
+	mockRegistry := new(MockRegistry)
+	mockExecutor := new(MockExecutor)
+	mockStatusProd := new(MockProducer)
+	mockResultsProd := new(MockProducer)
+	mockSessionProd := new(MockProducer)
+	mockCompletionProd := new(MockProducer)
+
+	cfg := &config.Config{
+		ExecutorModel:          "exec-model",
+		PlannerModel:           "planner-model",
+		MaxRecursionCount:      3,
+		MaxTotalChunks:         100,
+		StreamAccumulationCount: 1,
+	}
+
+	h := &Handler{
+		cfg:      cfg,
+		registry: mockRegistry,
+		msg: &messaging.Client{
+			Producers: messaging.Producers{
+				Status:     mockStatusProd,
+				Results:    mockResultsProd,
+				Completion: mockCompletionProd,
+			},
+		},
+	}
+	h.msg.SetSessionProducer(h.msg.SessionTopic("stream-1"), mockSessionProd)
+
+	req := &contracts.InternalRequest{
+		Id:            "stream-1",
+		SessionId:     1,
+		Prompt:        "stream me",
+		ExecutorModel: "exec-model",
+		Stream:        true,
+		Metadata:      contracts.ToStruct(map[string]interface{}{"recursion_budget": float64(1)}),
+	}
+
+	mockRegistry.On("GetExecutor", "exec-model").Return(mockExecutor, nil)
+	mockRegistry.On("GetPlanner", "planner-model").Return(nil, fmt.Errorf("not needed"))
+
+	tokenCh := make(chan string, 2)
+	tokenCh <- "hello "
+	tokenCh <- "world"
+	close(tokenCh)
+	metaCh := make(chan interface{}, 1)
+	close(metaCh)
+	errCh := make(chan error, 1)
+	close(errCh)
+
+	mockExecutor.On("ExecuteStream", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return((<-chan string)(tokenCh), (<-chan interface{})(metaCh), (<-chan error)(errCh))
+	mockExecutor.On("IsInsufficientContext", mock.Anything).Return(false)
+
+	// Accept any sends on all producers
+	mockStatusProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockSessionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockResultsProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+	mockCompletionProd.On("Send", mock.Anything, mock.Anything).Return(nil, nil)
+
+	result, err := h.handleExec(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, dlq.Success, result)
+
+	// Verify ExecuteStream was called (streaming path exercised)
+	mockExecutor.AssertCalled(t, "ExecuteStream", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	// Verify completion was sent
+	mockCompletionProd.AssertCalled(t, "Send", mock.Anything, mock.Anything)
+}
+
+// ---------------------------------------------------------------------------
+// fetchContextFiles JSON decode path
+// ---------------------------------------------------------------------------
+
+func TestFetchContextFiles_ValidResponse_ReturnsRecords(t *testing.T) {
+	records := []map[string]interface{}{
+		{"path": "file1.go", "bucket": "mybucket", "embedding_model": "llama3.1:latest"},
+	}
+	body, _ := json.Marshal(records)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+	}))
+	defer srv.Close()
+
+	h := &Handler{
+		cfg:        &config.Config{DBAdapterURL: srv.URL},
+		httpClient: srv.Client(),
+	}
+
+	req := &contracts.InternalRequest{SessionId: 5, Tags: []int64{10}}
+	files, err := h.fetchContextFiles(context.Background(), req, "llama3.1:latest")
+	assert.NoError(t, err)
+	assert.Len(t, files, 1)
+	assert.Equal(t, "file1.go", files[0].Path)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"app-builds/qdrant-adapter/internal/config"
@@ -256,4 +257,121 @@ func TestRetrieveByPaths(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, results, 1)
+}
+
+func TestMergeTags_PreservesOtherTags(t *testing.T) {
+	cfg := &config.Config{
+		QdrantHost: "localhost",
+		QdrantPort: "6333",
+	}
+
+	var capturedSetPayload map[string]interface{}
+
+	mockRT := &MockRoundTripper{
+		roundTrip: func(req *http.Request) (*http.Response, error) {
+			switch {
+			case req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/points/scroll"):
+				// Point has tags [10, 20]; sourceTag=10 targetTag=30 → result should be [20, 30]
+				resp := map[string]interface{}{
+					"result": map[string]interface{}{
+						"points": []interface{}{
+							map[string]interface{}{
+								"id": "pt-1",
+								"payload": map[string]interface{}{
+									"tags": []interface{}{float64(10), float64(20)},
+								},
+							},
+						},
+						"next_page_offset": nil,
+					},
+				}
+				b, _ := json.Marshal(resp)
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(b))}, nil
+
+			case req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/points/payload"):
+				body, _ := io.ReadAll(req.Body)
+				json.Unmarshal(body, &capturedSetPayload)
+				b, _ := json.Marshal(map[string]interface{}{"result": "ok"})
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(b))}, nil
+
+			default:
+				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+				return nil, nil
+			}
+		},
+	}
+
+	client := &QdrantClient{
+		cfg:        cfg,
+		httpClient: &http.Client{Transport: mockRT},
+	}
+
+	err := client.MergeTags("vectors", "embed-model", 128, 10, 30)
+	assert.NoError(t, err)
+
+	payloadField, _ := capturedSetPayload["payload"].(map[string]interface{})
+	rawTags, _ := payloadField["tags"].([]interface{})
+	var gotTags []int64
+	for _, v := range rawTags {
+		gotTags = append(gotTags, int64(v.(float64)))
+	}
+	assert.ElementsMatch(t, []int64{20, 30}, gotTags)
+}
+
+func TestMergeTags_SingleTag_Replaced(t *testing.T) {
+	cfg := &config.Config{
+		QdrantHost: "localhost",
+		QdrantPort: "6333",
+	}
+
+	var capturedSetPayload map[string]interface{}
+
+	mockRT := &MockRoundTripper{
+		roundTrip: func(req *http.Request) (*http.Response, error) {
+			switch {
+			case req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/points/scroll"):
+				resp := map[string]interface{}{
+					"result": map[string]interface{}{
+						"points": []interface{}{
+							map[string]interface{}{
+								"id": "pt-2",
+								"payload": map[string]interface{}{
+									"tags": []interface{}{float64(10)},
+								},
+							},
+						},
+						"next_page_offset": nil,
+					},
+				}
+				b, _ := json.Marshal(resp)
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(b))}, nil
+
+			case req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/points/payload"):
+				body, _ := io.ReadAll(req.Body)
+				json.Unmarshal(body, &capturedSetPayload)
+				b, _ := json.Marshal(map[string]interface{}{"result": "ok"})
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBuffer(b))}, nil
+
+			default:
+				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
+				return nil, nil
+			}
+		},
+	}
+
+	client := &QdrantClient{
+		cfg:        cfg,
+		httpClient: &http.Client{Transport: mockRT},
+	}
+
+	err := client.MergeTags("vectors", "embed-model", 128, 10, 30)
+	assert.NoError(t, err)
+
+	payloadField, _ := capturedSetPayload["payload"].(map[string]interface{})
+	rawTags, _ := payloadField["tags"].([]interface{})
+	var gotTags []int64
+	for _, v := range rawTags {
+		gotTags = append(gotTags, int64(v.(float64)))
+	}
+	assert.ElementsMatch(t, []int64{30}, gotTags)
 }

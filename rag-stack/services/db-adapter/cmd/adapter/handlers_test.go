@@ -732,3 +732,21 @@ func TestDeleteSession(t *testing.T) {
 	exists, _ := client.Session.Query().Where(session.ID(sessID)).Exist(ctx)
 	assert.False(t, exists)
 }
+
+func TestHandleCompletion_InvalidUUID_IsPermanentFailure(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:ent_invalid_uuid?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+
+	payload := contracts.ResponseCompletion{
+		Id:      "not-a-valid-uuid",
+		Model:   "test-model",
+		Metrics: &contracts.ExecutionMetrics{},
+	}
+	data, _ := json.Marshal(&payload)
+	msg := &mockMessage{payload: data}
+
+	processor := service.NewPulsarProcessor(client, nil, nil, nil)
+	res, err := processor.HandleCompletion(context.Background(), msg)
+	assert.Error(t, err)
+	assert.Equal(t, dlq.PermanentFailure, res)
+}

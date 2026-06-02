@@ -104,14 +104,14 @@ func TestAggregateChunks_Success(t *testing.T) {
 func TestAggregateChunks_Timeout(t *testing.T) {
 	mockClient := new(MockPulsarClient)
 	mockReader := new(MockPulsarReader)
-	
+
 	comp := &contracts.ResponseCompletion{
 		Id: "req-1",
 	}
-	
+
 	mockClient.On("CreateReader", mock.Anything).Return(mockReader, nil)
 	mockReader.On("HasNext").Return(true)
-	
+
 	// Simulate reader hanging or taking too long
 	mockReader.On("Next", mock.Anything).Run(func(args mock.Arguments) {
 		ctx := args.Get(0).(context.Context)
@@ -120,15 +120,49 @@ func TestAggregateChunks_Timeout(t *testing.T) {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}).Return(nil, context.DeadlineExceeded)
-	
+
 	mockReader.On("Close").Return()
-	
+
 	// Use a short context to trigger timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	
+
 	_, _, err := aggregateChunks(ctx, mockClient, "topic", comp, 30*time.Second)
-	
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
+}
+
+func TestAggregateChunks_TimeoutWithPartialData(t *testing.T) {
+	mockClient := new(MockPulsarClient)
+	mockReader := new(MockPulsarReader)
+
+	comp := &contracts.ResponseCompletion{Id: "req-partial"}
+
+	mockClient.On("CreateReader", mock.Anything).Return(mockReader, nil)
+
+	// First call returns a real chunk
+	c0 := &contracts.StreamChunk{Id: "req-partial", SequenceNumber: 1, Result: "partial"}
+	b0, _ := json.Marshal(c0)
+	mockReader.On("Next", mock.Anything).Return(&MockMessage{payload: b0}, nil).Once()
+
+	// Second call blocks until the context times out
+	mockReader.On("Next", mock.Anything).Run(func(args mock.Arguments) {
+		ctx := args.Get(0).(context.Context)
+		select {
+		case <-ctx.Done():
+		case <-time.After(200 * time.Millisecond):
+		}
+	}).Return(nil, context.DeadlineExceeded)
+
+	mockReader.On("Close").Return()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	result, _, err := aggregateChunks(ctx, mockClient, "topic", comp, 30*time.Second)
+
+	// Partial data path: no error, partial result returned
+	assert.NoError(t, err)
+	assert.Equal(t, "partial", result)
 }
