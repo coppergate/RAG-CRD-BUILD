@@ -436,9 +436,12 @@ func extractJSONSnippet(raw string) string {
 		return ""
 	}
 
-	if strings.HasPrefix(trimmed, "```") {
-		if end := strings.LastIndex(trimmed, "```"); end > 3 {
-			trimmed = strings.TrimSpace(trimmed[3:end])
+	// Find a markdown code fence anywhere in the string (not just at the start)
+	// so that prose before the fence does not prevent correct extraction.
+	if fenceStart := strings.Index(trimmed, "```"); fenceStart >= 0 {
+		rest := trimmed[fenceStart+3:]
+		if end := strings.Index(rest, "```"); end >= 0 {
+			trimmed = strings.TrimSpace(rest[:end])
 			if nl := strings.Index(trimmed, "\n"); nl >= 0 {
 				head := strings.TrimSpace(trimmed[:nl])
 				if !strings.HasPrefix(head, "{") && !strings.HasPrefix(head, "[") {
