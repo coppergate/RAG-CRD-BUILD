@@ -10,6 +10,7 @@ import json
 import uuid
 import logging
 import time
+import threading
 import requests
 import pulsar
 import rag_stack_pb2
@@ -176,9 +177,23 @@ def _effective_embedding_model(requested_model: Optional[str]) -> str:
 
 
 def _normalize_model_name(model: str) -> str:
-    model = model.strip().lower()
-    model = re.sub(r"[^a-z0-9]+", "-", model)
-    return model.strip("-")
+    """Normalize a model name to a safe identifier segment.
+
+    Matches the behaviour of Go's contracts.NormalizeEmbeddingModelName:
+    lowercase, collapse runs of non-alphanumeric chars to a single '-',
+    strip leading/trailing dashes.  Uses str.isalnum() so Unicode
+    letters/digits are treated identically to Go's unicode.IsLetter/IsDigit.
+    """
+    normalized = []
+    last_dash = False
+    for ch in model.strip().lower():
+        if ch.isalnum():
+            normalized.append(ch)
+            last_dash = False
+        elif not last_dash:
+            normalized.append("-")
+            last_dash = True
+    return "".join(normalized).strip("-")
 
 
 def _build_collection_name(prefix: str, embedding_model: str, vector_size: int) -> str:
@@ -230,16 +245,32 @@ def get_model_dimensions(model_name: str) -> int:
         logger.warning(f"Could not probe model dimensions for {model_name}: {e}")
     return 0
 
-def _create_pulsar_client():
-    """Create a Pulsar client with proper TLS configuration."""
-    kwargs = {}
-    if PULSAR_URL.startswith("pulsar+ssl://"):
-        if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
-            kwargs["tls_trust_certs_file_path"] = SSL_CERT_FILE
-            logger.info(f"Pulsar client using TLS with CA from: {SSL_CERT_FILE}")
-        else:
-            logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
-    return pulsar.Client(PULSAR_URL, **kwargs)
+_pulsar_client: "pulsar.Client | None" = None
+_pulsar_client_lock = threading.Lock()
+
+
+def get_pulsar_client() -> "pulsar.Client":
+    """Return the module-level Pulsar client, creating it on first call.
+
+    Creating a TLS connection per ingest job is expensive; sharing one client
+    across all background tasks avoids repeated TLS handshakes.
+    """
+    global _pulsar_client
+    if _pulsar_client is not None:
+        return _pulsar_client
+    with _pulsar_client_lock:
+        if _pulsar_client is not None:
+            return _pulsar_client
+        kwargs = {}
+        if PULSAR_URL.startswith("pulsar+ssl://"):
+            if SSL_CERT_FILE and os.path.isfile(SSL_CERT_FILE):
+                kwargs["tls_trust_certs_file_path"] = SSL_CERT_FILE
+                logger.info(f"Pulsar client using TLS with CA from: {SSL_CERT_FILE}")
+            else:
+                logger.warning("Pulsar URL uses TLS but SSL_CERT_FILE is not set or not found")
+        _pulsar_client = pulsar.Client(PULSAR_URL, **kwargs)
+        logger.info("Pulsar client singleton initialised")
+        return _pulsar_client
 
 def _source_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -304,7 +335,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                   embedding_model: Optional[str] = None):
     pool = get_db_pool()
     conn = None
-    pulsar_client = None
     failed_chunks = []
     current_model = _effective_embedding_model(embedding_model)
 
@@ -332,8 +362,7 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
             file_names,
         )
 
-        pulsar_client = _create_pulsar_client()
-        q_prod = pulsar_client.create_producer(PULSAR_QDRANT_OPS_TOPIC)
+        q_prod = get_pulsar_client().create_producer(PULSAR_QDRANT_OPS_TOPIC)
 
         s3_client = get_s3_client()
         collection_name = _build_collection_name(COLLECTION_NAME, current_model, current_vs)
@@ -609,8 +638,6 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
     finally:
         if conn and pool:
             pool.putconn(conn)
-        if pulsar_client:
-            pulsar_client.close()
 
 @app.get("/extensions")
 async def get_extensions():
@@ -693,10 +720,9 @@ async def readyz():
     except Exception as e:
         errors["database"] = str(e)
 
-    # Check Pulsar
+    # Check Pulsar (uses shared singleton — no create/close per probe)
     try:
-        client = _create_pulsar_client()
-        client.close()
+        get_pulsar_client()
     except Exception as e:
         errors["pulsar"] = str(e)
 
