@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-worker-model-defaults
+  namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
+data:
+  defaults.yaml: |
+    system_instruction: "You are a strict extraction assistant. This is a benign retrieval task. Do not refuse, do not apologize, and do not add commentary. Use the retrieved context below as the only source of truth. If the answer appears in the context, return the exact literal phrase from the context and nothing else. Extract the shortest exact phrase that answers the question. If the answer is a code or token, preserve its exact characters including hyphens and digits. If the context does not contain the answer, say only: I don't know."
+    execution_header: "Retrieved context:\n"
+    execution_footer: "\n\nUser Query: "
+    execution_prompt_formatter: numbered
+    insufficient_context_phrases:
+      - "insufficient context"
+      - "i don't have enough information"
+      - "not mentioned in the context"
+      - "i cannot provide"
+      - "i can not provide"
+      - "i can't provide"
+      - "i'm sorry"
+      - "i don't know"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-worker-model-planner
+  namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
+data:
+  model.yaml: |
+    planning_prompt_template: |
+      You are a RAG Planner. Return ONLY a JSON object with this shape:
+      {
+        "objective": "string",
+        "action_type": "FILE_SEARCH|FILE_EDIT|FILE_VCS|REMOTE_EXEC|K8S_ORCHESTRATE|DB_ACCESS|BUILD_DEPLOY|DOC_PROCESS|JOB_RESUME|WEB_FETCH|UNKNOWN",
+        "inputs": ["string"],
+        "outputs": ["string"],
+        "dependencies": ["string"],
+        "context_budget": 1,
+        "confidence": 0.0,
+        "blocking": true,
+        "risk": "read_only|mutating|infra|unknown",
+        "evidence_requirements": ["string"],
+        "search_queries": ["string"],
+        "steps": [
+          {
+            "order": 1,
+            "objective": "string",
+            "action_type": "string",
+            "inputs": ["string"],
+            "outputs": ["string"],
+            "dependencies": ["string"],
+            "context_budget": 1,
+            "confidence": 0.0,
+            "blocking": true,
+            "risk": "string",
+            "evidence_requirements": ["string"],
+            "search_queries": ["string"]
+          }
+        ]
+      }
+      If the request is ambiguous, use action_type UNKNOWN and put the exact prompt in search_queries.
+      Query: %s
+    execution_suffix: "\n\nAnswer: "
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-worker-model-executor
+  namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
+data:
+  model.yaml: |
+    planning_prompt_template: "You are a RAG Planner. Return ONLY a JSON object with the keys objective, action_type, inputs, outputs, dependencies, context_budget, confidence, blocking, risk, evidence_requirements, search_queries, and steps. Use action_type UNKNOWN when uncertain and keep search_queries narrow. Query: %s"
+    execution_suffix: "\n\nExact Answer (no quotes, exact text only):  "

@@ -98,6 +98,12 @@ spec:
           value: "/etc/ssl/certs/tls.crt"
         - name: TLS_KEY
           value: "/etc/ssl/certs/tls.key"
+        - name: MODEL_DEFAULTS_CONFIG_PATH
+          value: "/etc/rag-worker/model-defaults.yaml"
+        - name: PLANNER_MODEL_CONFIG_PATH
+          value: "/etc/rag-worker/planner-model.yaml"
+        - name: EXECUTOR_MODEL_CONFIG_PATH
+          value: "/etc/rag-worker/executor-model.yaml"
         volumeMounts:
         - name: registry-ca
           mountPath: /etc/ssl/certs/ca-certificates.crt
@@ -108,6 +114,15 @@ spec:
         - name: service-tls
           mountPath: /etc/ssl/certs/tls.key
           subPath: tls.key
+        - name: model-defaults
+          mountPath: /etc/rag-worker/model-defaults.yaml
+          subPath: defaults.yaml
+        - name: model-planner
+          mountPath: /etc/rag-worker/planner-model.yaml
+          subPath: model.yaml
+        - name: model-executor
+          mountPath: /etc/rag-worker/executor-model.yaml
+          subPath: model.yaml
       volumes:
       - name: app-dir
         emptyDir: {}
@@ -118,6 +133,15 @@ spec:
         secret:
           secretName: rag-worker-tls
           optional: true
+      - name: model-defaults
+        configMap:
+          name: rag-worker-model-defaults
+      - name: model-planner
+        configMap:
+          name: rag-worker-model-planner
+      - name: model-executor
+        configMap:
+          name: rag-worker-model-executor
 ---
 apiVersion: v1
 kind: Service

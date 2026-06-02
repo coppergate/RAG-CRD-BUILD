@@ -57,6 +57,7 @@
 - **Commit Policy**:
   - Commit all changes to the local branch in git any time changes are made.
   - **Commit message**: A simple timestamp (e.g., `2026-03-02 08:30`).
+  - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies"`.
   - **File Size Limit**: Do not commit any files larger than 1MB without asking first.
   - **Clean History (Rebase & Squash)**:
     - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.

@@ -594,13 +594,13 @@ func (q *QdrantClient) upsertWithRetry(collection string, embeddingModel string,
 
 	resp, err := q.httpClient.Do(req)
 	if err != nil {
-		fmt.Printf("ERROR: Qdrant PUT request failed: %v\n", err)
+		logging.Error("Qdrant PUT request failed", "error", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound && retry && vs > 0 {
-		fmt.Printf("Collection '%s' not found. Creating it with size %d...\n", effectiveColl, vs)
+		logging.Info("collection not found, auto-creating", "collection", effectiveColl, "size", vs)
 		if err := q.CreateCollection(collection, embeddingModel, vs); err != nil {
 			return fmt.Errorf("failed to auto-create collection %s: %v", effectiveColl, err)
 		}
@@ -609,11 +609,11 @@ func (q *QdrantClient) upsertWithRetry(collection string, embeddingModel string,
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		fmt.Printf("ERROR: Qdrant (coll: %s) returned %d: %s\n", effectiveColl, resp.StatusCode, string(bodyBytes))
+		logging.Error("qdrant returned non-OK status", "collection", effectiveColl, "status", resp.StatusCode, "body", string(bodyBytes))
 		return fmt.Errorf("qdrant (coll: %s) returned status %d", effectiveColl, resp.StatusCode)
 	}
 
-	fmt.Printf("DEBUG: Successfully upserted %d points into %s\n", len(points), effectiveColl)
+	logging.Debug("upserted points into collection", "count", len(points), "collection", effectiveColl)
 	return nil
 }
 

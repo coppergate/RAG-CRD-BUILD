@@ -226,7 +226,7 @@ Every new session for the **Junie** agent MUST establish the operational context
         - Create a merge request (if applicable) and ensure it's ready for merge.
     - Create a new session branch named `work-YYYY-MM-DD` (e.g., `work-2026-03-02`).
     - During the session, commit with timestamp messages (e.g., `2026-03-02 08:30`).
-    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies:"`.
+    - **Co-authorship**: Add the following trailer to all commits: `--trailer "Accomplished with a little help from my AI buddies"`.
 2. **File Size Limit**: Do not commit any files larger than 1MB without asking first.
    - **Clean History (Rebase & Squash)**:
    - Mark fixup commits with `git commit --fixup <commit-hash>` when making small changes.
@@ -235,11 +235,8 @@ Every new session for the **Junie** agent MUST establish the operational context
    - **Daily Push & Merge**: Every day, make a new push to GIT with the current committed code, create a pull request/merge request, and then merge it into the main branch.
    - **Merge Policy**: When merging, create an appropriate summary of the work contained in the commits.
    - **Pull Requests**: Create a pull request for each day's branch.
-3. **Versioning**: The single source of truth for the project version is the `CURRENT_VERSION` JSON file at the root of the project.
-    - Verify the current project version in `CURRENT_VERSION`.
-    - Scripts like `build.sh` and `setup-all.sh` will read from this file by default.
-    - `build.sh` performs automatic version incrementing when code changes are detected via hashing.
-    - `CURRENT_VERSION` is generated build metadata; do not commit it to git unless the build workflow explicitly requires a source-side version change.
+3. **Versioning**: The source of truth for all service versions is the **build processor API backed by the database**. `build.sh` resolves and increments versions automatically by querying the API — do not read or write `CURRENT_VERSION` manually.
+    - `CURRENT_VERSION` at the project root is a **synced backup cache** only. It is written by `build.sh` after a successful build+deploy via `sync_current_version_file()`. Do not treat it as authoritative, do not commit it to git.
 4. **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
@@ -290,7 +287,7 @@ All RAG service image builds MUST go through the in-cluster Kaniko build pipelin
 
 #### Triggering a Build
 1.  **Access Hierophant**: Use `./run-on-hierophant.sh` or SSH.
-2.  **Versioning**: The version is read from `CURRENT_VERSION` at the project root.
+2.  **Versioning**: Resolved automatically by `build.sh` from the build processor API. No manual version management required.
 3.  **Command**: Run `rag-stack/build.sh` (defaults to cluster-mode).
 4.  **Wait Mode**: Use the `--wait` flag to wait for build completion.
 
@@ -371,11 +368,11 @@ As of version `2.11.x`, the build system supports hardened parallel execution to
 
 #### Build Script Locking (build.sh)
 1.  **Global Atomic Lock**: `build.sh` uses a global lock directory `/tmp/rag-stack-build.lock`. This lock is shared across ALL users on **hierophant**, preventing concurrent script executions from interfering with each other's versioning and hashing.
-2.  **Version File Lock**: `update_svc_info` uses `flock` on `/tmp/rag-stack-version-shared.lock` to ensure atomic updates to `CURRENT_VERSION`.
+2.  **Version File Lock**: `update_svc_info` uses `flock` on `/tmp/rag-stack-version-shared.lock` to ensure atomic updates to the version DB via the build processor API.
 3.  **Permissions and Multi-User Support**:
     - Lock files in `/tmp` are created with `666` permissions where possible to allow both `wjones` and `junie` to manage them.
     - If a lock is held by a dead process (checked via PID), it is automatically cleared.
-    - The `CURRENT_VERSION` file must have group-write permissions (`chmod 666`) for the `super-user` group.
+    - The `CURRENT_VERSION` backup file is written with `chmod 664` by `sync_current_version_file()` after each successful build.
 4.  **Parallel Loops**:
     -   **Skip-and-Deploy**: Services that are already built but need a deployment update are processed in parallel (default 4).
     -   **Service Builds**: New builds are processed in parallel (default 4) using background subshells and `set -m` for job control.
@@ -651,22 +648,15 @@ The Chat Panel in RAG Explorer supports associating multiple existing tags with 
 
 ## 9. Cluster Build System
 
-### 9.1 Shared Build State (CURRENT_VERSION & Locks)
-The `CURRENT_VERSION` file and build lock files track state across multiple users and environments.
-- **Location**:
-    - Version: `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`
+### 9.1 Shared Build State (Locks & Version Cache)
+Build lock files and the `CURRENT_VERSION` backup cache track state across multiple users and environments.
+- **Version source of truth**: Build processor API + database. `build.sh` queries and updates this automatically.
+- **`CURRENT_VERSION` file**: A synced backup written by `build.sh` after each successful build (`chmod 664`). Do not read it as authoritative; do not edit it manually; do not commit it to git.
+- **Lock locations**:
     - Locks: `/tmp/rag-stack-build.*`
     - Journals: `/tmp/.build_journal_junie/`
-- **Permissions (Pinning)**: To avoid recurrent permission issues when files are recreated, we use a combination of SELinux `fcontext` and Default ACLs on **hierophant**.
-- **Setup**: Run the following script as **root** on hierophant to 'pin' these permissions:
-    ```bash
-    sudo /mnt/hegemon-share/share/code/complete-build/scripts/setup-selinux-permissions.sh
-    ```
-- **DANGER**: DO NOT use `mv` to update `CURRENT_VERSION`. ALWAYS use redirection to preserve the 'pinned' permissions and contexts.
-- **Workaround**: If `Permission denied` occurs and the setup script cannot be run, update the file from the local VM at `/mnt/hegemon-share/share/code/complete-build/CURRENT_VERSION`.
-- **Git Note**: Leave `CURRENT_VERSION` uncommitted after build/deploy runs unless you are intentionally changing version tracking behavior in the repository.
 - **Parallel Builds**: `build.sh` supports multiple `--service` arguments to trigger parallel Kaniko builds on the cluster.
-- **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666, but should be managed by the pinning script for maximum reliability.
+- **Locking Hardening**: `build.sh` uses FD 200 for the global build lock and FD 201 for the version shared lock. Background jobs are tracked by PID to prevent hanging on the heartbeat process. Lock files in `/tmp` are set to 666.
 ### 9.2 Protobuf Generation
 To regenerate Go bindings for the `rag_stack.proto` contract:
 ```bash

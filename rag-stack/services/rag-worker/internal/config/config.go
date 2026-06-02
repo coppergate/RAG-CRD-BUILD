@@ -54,6 +54,12 @@ type Config struct {
 
 	TLSCert string
 	TLSKey  string
+
+	// Model shape config paths — each is a YAML file mounted from a ConfigMap.
+	// Leave empty to fall back to the hardcoded per-PromptType config.
+	ModelDefaultsConfigPath  string
+	PlannerModelConfigPath   string
+	ExecutorModelConfigPath  string
 }
 
 func LoadConfig() *Config {
@@ -113,5 +119,9 @@ func LoadConfig() *Config {
 
 		TLSCert: envutil.GetEnv("TLS_CERT", ""),
 		TLSKey:  envutil.GetEnv("TLS_KEY", ""),
+
+		ModelDefaultsConfigPath: envutil.GetEnv("MODEL_DEFAULTS_CONFIG_PATH", ""),
+		PlannerModelConfigPath:  envutil.GetEnv("PLANNER_MODEL_CONFIG_PATH", ""),
+		ExecutorModelConfigPath: envutil.GetEnv("EXECUTOR_MODEL_CONFIG_PATH", ""),
 	}
 }

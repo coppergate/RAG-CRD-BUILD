@@ -611,7 +611,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 	res, err := p.client.Response.Query().
 		Where(response.ResponseID(respID)).
 		Order(ent.Desc(response.FieldID)).
-		First(ctx)
+		First(msgCtx)
 	if err == nil {
 		dbResponseID = &res.ID
 	}
@@ -623,7 +623,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 			sql.ConflictColumns(modeldefinition.FieldModelName),
 		).
 		UpdateNewValues().
-		ID(ctx)
+		ID(msgCtx)
 	if err != nil {
 		logging.Printf("Failed to upsert model definition: %v", err)
 	}
@@ -638,7 +638,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 			sql.ConflictColumns(inferencenode.FieldHostname),
 		).
 		UpdateNewValues().
-		ID(ctx)
+		ID(msgCtx)
 	if err != nil {
 		logging.Printf("Failed to upsert inference node: %v", err)
 	}
@@ -655,7 +655,7 @@ func (p *PulsarProcessor) HandleCompletion(ctx context.Context, msg pulsar.Messa
 		SetPromptEvalDurationUsec(m.PromptEvalDurationUsec).
 		SetEvalDurationUsec(m.EvalDurationUsec).
 		SetTokensPerSecond(float32(m.TokensPerSecond)).
-		Save(ctx)
+		Save(msgCtx)
 
 	if err != nil {
 		logging.Printf("Failed to insert execution metrics: %v", err)

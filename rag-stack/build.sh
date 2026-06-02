@@ -154,6 +154,7 @@ sync_current_version_file() {
         | jq 'sort_by(.service_name) | map({key: .service_name, value: {version: .version, last_build: .last_build}}) | from_entries' \
         > "$tmp_file"; then
         mv "$tmp_file" "$CURRENT_VERSION_FILE"
+        chmod 664 "$CURRENT_VERSION_FILE"
     else
         rm -f "$tmp_file"
         log "WARN: Could not sync CURRENT_VERSION from build metadata."
@@ -475,27 +476,78 @@ main() {
 
     if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
         log "Waiting for cluster builds to complete (timeout: 1800s)..."
-        # Wait for all jobs with the app=kaniko-build label
-        if ! "$KUBECTL" wait --for=condition=complete job -n build-pipeline -l app=kaniko-build --timeout=1800s; then
-            log "WARN: Some build jobs did not complete successfully or timed out."
-        fi
-        # After wait, we update timestamps and DEPLOY all services that were successfully built
+        local deadline=$((SECONDS + 1800))
+
+        # Identify which services had a Kaniko build triggered this run.
+        # build_service marks them with "(triggered)" in last_build.
+        local triggered_svcs=()
         for svc in "${SERVICES[@]}" "${INFRA_SERVICES[@]}"; do
-             local ver=$(get_svc_version "$svc")
-             local last=$(get_svc_last_build "$svc")
-             if [[ "$last" == "null" || "$last" == *"(triggered)"* ]]; then
-                  local ver_safe="${ver//./-}"
-                  if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep 1 >/dev/null; then
-                       deploy_update "$svc" "$ver"
-                       update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
-                  else
-                       # Only log error if a job actually exists (it might have been skipped if hash matched)
-                       if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" 2>/dev/null | grep "$svc" >/dev/null; then
-                           log "ERROR: Build for $svc version $ver did not succeed. Skipping deploy update."
-                       fi
-                 fi
-             fi
+            local last=$(get_svc_last_build "$svc")
+            if [[ "$last" == *"(triggered)"* ]]; then
+                triggered_svcs+=("$svc")
+            fi
         done
+
+        if [[ ${#triggered_svcs[@]} -eq 0 ]]; then
+            log "No cluster builds were triggered this run; nothing to wait for."
+        else
+            log "Triggered Kaniko builds: ${triggered_svcs[*]}"
+
+            # Phase 1: Poll until each triggered service's Kaniko job EXISTS in k8s.
+            # The build-orchestrator creates jobs asynchronously after receiving Pulsar
+            # messages, so jobs may not yet exist when this wait block runs.
+            # Without this polling step, kubectl wait only selects currently-existing
+            # jobs and silently misses late-created ones.
+            local JOB_APPEAR_TIMEOUT=300
+            for svc in "${triggered_svcs[@]}"; do
+                local ver=$(get_svc_version "$svc")
+                local ver_safe="${ver//./-}"
+                local job_label="app=kaniko-build,service=$svc,version=$ver_safe"
+                log "Waiting for Kaniko job to be created: $svc $ver..."
+                local job_start=$SECONDS
+                while ! "$KUBECTL" get job -n build-pipeline \
+                    -l "$job_label" --no-headers 2>/dev/null | grep -q .; do
+                    if [[ $((SECONDS - job_start)) -ge $JOB_APPEAR_TIMEOUT ]]; then
+                        log "TIMEOUT (${JOB_APPEAR_TIMEOUT}s): Kaniko job for $svc $ver never appeared in cluster."
+                        break
+                    fi
+                    if [[ $SECONDS -ge $deadline ]]; then
+                        log "DEADLINE REACHED waiting for Kaniko job to appear: $svc $ver"
+                        break
+                    fi
+                    sleep 5
+                done
+                log "Kaniko job present: $svc $ver"
+            done
+
+            # Phase 2: All triggered jobs now exist; wait for them all to complete.
+            local remaining=$(( deadline - SECONDS ))
+            if [[ $remaining -le 0 ]]; then
+                log "WARN: Overall deadline exhausted during job-appearance polling."
+            else
+                if ! "$KUBECTL" wait --for=condition=complete job \
+                    -n build-pipeline -l app=kaniko-build \
+                    --timeout="${remaining}s"; then
+                    log "WARN: Some build jobs did not complete successfully or timed out."
+                fi
+            fi
+
+            # Phase 3: Deploy all services whose Kaniko job succeeded.
+            for svc in "${triggered_svcs[@]}"; do
+                local ver=$(get_svc_version "$svc")
+                local ver_safe="${ver//./-}"
+                local job_label="app=kaniko-build,service=$svc,version=$ver_safe"
+                if "$KUBECTL" get job -n build-pipeline \
+                    -l "$job_label" \
+                    -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep -q 1; then
+                    deploy_update "$svc" "$ver"
+                    update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
+                else
+                    log "ERROR: Build for $svc version $ver did not succeed. Skipping deploy update."
+                fi
+            done
+        fi
+
         sync_current_version_file
     fi
 

@@ -22,6 +22,19 @@ type ModelConfig struct {
 	ExecutionSuffix            string
 	ExecutionPromptFormatter   func(ModelConfig, string, []interface{}) string
 	InsufficientContextPhrases []string
+	// FormatterName is the string key used when loading config from YAML
+	// ("default" | "numbered" | "tagged"). It mirrors ExecutionPromptFormatter.
+	FormatterName string
+}
+
+// NewPlannerWithConfig wraps a ChatClient with the given ModelConfig as a Planner.
+func NewPlannerWithConfig(client ChatClient, cfg ModelConfig) Planner {
+	return &GenericModel{BaseModel: BaseModel{Client: client}, Config: cfg}
+}
+
+// NewExecutorWithConfig wraps a ChatClient with the given ModelConfig as an Executor.
+func NewExecutorWithConfig(client ChatClient, cfg ModelConfig) Executor {
+	return &GenericModel{BaseModel: BaseModel{Client: client}, Config: cfg}
 }
 
 // GenericModel implements both Planner and Executor using a ModelConfig

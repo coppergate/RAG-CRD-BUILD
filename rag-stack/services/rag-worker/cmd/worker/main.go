@@ -128,8 +128,18 @@ func initModelRegistry(cfg *config.Config) *models.ModelRegistry {
 	registry.RegisterBackend("ollama", func(endpoint, modelName string) models.ChatClient {
 		return ollama.NewClient(endpoint, modelName, cfg.OllamaMaxConcurrency)
 	})
-	registry.RegisterPromptType("llama3", llama3.NewPlanner, llama3.NewExecutor)
-	registry.RegisterPromptType("granite31", granite31.NewPlanner, granite31.NewExecutor)
+
+	plannerShape := loadModelShape(cfg.ModelDefaultsConfigPath, cfg.PlannerModelConfigPath, cfg.PlannerPromptType)
+	executorShape := loadModelShape(cfg.ModelDefaultsConfigPath, cfg.ExecutorModelConfigPath, cfg.ExecutorPromptType)
+
+	registry.RegisterPromptType("llama3",
+		func(c models.ChatClient) models.Planner  { return models.NewPlannerWithConfig(c, plannerShape) },
+		func(c models.ChatClient) models.Executor { return models.NewExecutorWithConfig(c, plannerShape) },
+	)
+	registry.RegisterPromptType("granite31",
+		func(c models.ChatClient) models.Planner  { return models.NewPlannerWithConfig(c, executorShape) },
+		func(c models.ChatClient) models.Executor { return models.NewExecutorWithConfig(c, executorShape) },
+	)
 
 	registry.RegisterModel(models.ModelSpec{
 		Id:         cfg.PlannerModel,
@@ -147,6 +157,30 @@ func initModelRegistry(cfg *config.Config) *models.ModelRegistry {
 	})
 
 	return registry
+}
+
+// loadModelShape loads a ModelConfig from the given YAML paths, falling back
+// to the compiled-in config for the named prompt type when no paths are set.
+func loadModelShape(defaultsPath, overridePath, promptType string) models.ModelConfig {
+	if defaultsPath != "" || overridePath != "" {
+		shape, err := models.LoadModelConfig(defaultsPath, overridePath)
+		if err != nil {
+			logging.Fatalf("failed to load model shape config (type=%s): %v", promptType, err)
+		}
+		logging.Info("loaded model shape from config files", "prompt_type", promptType,
+			"defaults", defaultsPath, "override", overridePath)
+		return shape
+	}
+	// No config paths set — use compiled-in defaults for backward compatibility.
+	switch promptType {
+	case "granite31":
+		return granite31.Config
+	case "llama3":
+		return llama3.Config
+	default:
+		logging.Fatalf("unknown prompt type %q and no model config paths configured", promptType)
+		return models.ModelConfig{}
+	}
 }
 
 // initDLQHandler creates the dead-letter-queue handler for poison message routing.

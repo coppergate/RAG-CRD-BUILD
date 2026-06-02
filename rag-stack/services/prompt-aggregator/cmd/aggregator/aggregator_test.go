@@ -95,7 +95,7 @@ func TestAggregateChunks_Success(t *testing.T) {
 	mockReader.On("Next", mock.Anything).Return(msg1, nil).Once()
 	mockReader.On("Close").Return()
 	
-	content, _, err := aggregateChunks(context.Background(), mockClient, "topic", comp)
+	content, _, err := aggregateChunks(context.Background(), mockClient, "topic", comp, 30*time.Second)
 	
 	assert.NoError(t, err)
 	assert.Equal(t, "Part 1 Part 2", content)
@@ -127,7 +127,7 @@ func TestAggregateChunks_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	
-	_, _, err := aggregateChunks(ctx, mockClient, "topic", comp)
+	_, _, err := aggregateChunks(ctx, mockClient, "topic", comp, 30*time.Second)
 	
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
