@@ -3,6 +3,7 @@ package ollama
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 
 	"app-builds/common/contracts"
 	"app-builds/common/logging"
@@ -21,6 +24,7 @@ type OllamaClient struct {
 	url        string
 	model      string
 	httpClient *http.Client
+	sem        *semaphore.Weighted
 }
 
 // APIStatusError captures a non-200 Ollama response.
@@ -74,16 +78,20 @@ func IsUnsupportedEmbeddingModelError(err error) bool {
 		strings.Contains(body, "not support embeddings")
 }
 
-func NewClient(url, model string) *OllamaClient {
+func NewClient(url, model string, maxConcurrency int) *OllamaClient {
 	useTLS := strings.HasPrefix(url, "https://")
 	httpClient, err := tlsutil.NewHTTPClient(useTLS, 60*time.Second)
 	if err != nil {
 		logging.Fatalf("Failed to create Ollama HTTP client with TLS: %v", err)
 	}
+	if maxConcurrency <= 0 {
+		maxConcurrency = 5
+	}
 	return &OllamaClient{
 		url:        url,
 		model:      model,
 		httpClient: httpClient,
+		sem:        semaphore.NewWeighted(int64(maxConcurrency)),
 	}
 }
 
@@ -104,6 +112,11 @@ type ChatResponse struct {
 }
 
 func (o *OllamaClient) Chat(messages []map[string]string) (string, interface{}, error) {
+	if err := o.sem.Acquire(context.Background(), 1); err != nil {
+		return "", nil, fmt.Errorf("ollama semaphore acquire: %w", err)
+	}
+	defer o.sem.Release(1)
+
 	url := fmt.Sprintf("%s/api/chat", o.url)
 
 	payload := map[string]interface{}{
@@ -144,6 +157,12 @@ func (o *OllamaClient) ChatStream(messages []map[string]string) (<-chan string, 
 		defer close(out)
 		defer close(errCh)
 		defer close(resCh)
+
+		if err := o.sem.Acquire(context.Background(), 1); err != nil {
+			errCh <- fmt.Errorf("ollama semaphore acquire: %w", err)
+			return
+		}
+		defer o.sem.Release(1)
 
 		url := fmt.Sprintf("%s/api/chat", o.url)
 		payload := map[string]interface{}{
@@ -227,6 +246,10 @@ func (r *ChatResponse) GetMetrics() *contracts.ExecutionMetrics {
 }
 
 func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
+	if err := o.sem.Acquire(context.Background(), 1); err != nil {
+		return nil, fmt.Errorf("ollama semaphore acquire: %w", err)
+	}
+	defer o.sem.Release(1)
 
 	payload := map[string]interface{}{
 		"model":      o.model,

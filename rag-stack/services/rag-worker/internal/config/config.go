@@ -44,6 +44,7 @@ type Config struct {
 
 	StreamAccumulationCount int
 	HydrationTimeout        time.Duration
+	OllamaMaxConcurrency    int
 
 	MemoryControllerURL string
 	QdrantAdapterURL    string
@@ -102,6 +103,7 @@ func LoadConfig() *Config {
 		StreamAccumulationCount: envutil.GetEnvInt("STREAM_ACCUMULATION_COUNT", 10),
 		StreamIntermediate:      envutil.GetEnvBool("STREAM_INTERMEDIATE", true),
 		HydrationTimeout:        envutil.GetEnvDuration("HYDRATION_TIMEOUT", 5*time.Minute),
+		OllamaMaxConcurrency:    envutil.GetEnvInt("OLLAMA_MAX_CONCURRENCY", 5),
 
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "https://memory-controller.rag-system.svc.cluster.local"),
 		QdrantAdapterURL:    envutil.GetEnv("QDRANT_ADAPTER_URL", "https://qdrant-adapter.rag-system.svc.cluster.local:8082"),

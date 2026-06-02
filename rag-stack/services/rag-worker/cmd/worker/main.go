@@ -126,7 +126,7 @@ func initMessaging(cfg *config.Config) *messaging.Client {
 func initModelRegistry(cfg *config.Config) *models.ModelRegistry {
 	registry := models.NewModelRegistry()
 	registry.RegisterBackend("ollama", func(endpoint, modelName string) models.ChatClient {
-		return ollama.NewClient(endpoint, modelName)
+		return ollama.NewClient(endpoint, modelName, cfg.OllamaMaxConcurrency)
 	})
 	registry.RegisterPromptType("llama3", llama3.NewPlanner, llama3.NewExecutor)
 	registry.RegisterPromptType("granite31", granite31.NewPlanner, granite31.NewExecutor)
