@@ -80,7 +80,7 @@ func IsUnsupportedEmbeddingModelError(err error) bool {
 
 func NewClient(url, model string, maxConcurrency int) *OllamaClient {
 	useTLS := strings.HasPrefix(url, "https://")
-	httpClient, err := tlsutil.NewHTTPClient(useTLS, 60*time.Second)
+	httpClient, err := tlsutil.NewHTTPClient(useTLS, 600*time.Second)
 	if err != nil {
 		logging.Fatalf("Failed to create Ollama HTTP client with TLS: %v", err)
 	}
