@@ -515,6 +515,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 		history = hist
 	}
 
+	h.msg.SendStatus(ctx, req.Id, req.SessionId, "REFINING_PLAN", fmt.Sprintf("Refining plan with %d context chunks", len(allChunks)))
 	refinedPlan, _, err := planner.Plan(ctx, req.Prompt, flattenChunkContexts(allChunks), history)
 	if err != nil {
 		logging.Printf("[%s][SID:%d] Refined planning with chunk context failed: %v", req.Id, req.SessionId, err)

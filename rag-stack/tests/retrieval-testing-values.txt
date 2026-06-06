@@ -1,0 +1,2 @@
+flowers: [Rose, Tulip, Sunflower, Lily, Daisy, Marigold, Petunia, Begonia, Zinnia, Peony, Hydrangea, Lavender, Coneflower, Orchid, Carnation, Daffodil]
+colors: [Red, Blue, Yellow, Green, Orange, Purple, Pink, Brown, Black, White, Gray]

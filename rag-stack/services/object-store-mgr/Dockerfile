@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 go mod download
 # Copy sources and build
 COPY common/ /common/
 COPY object-store-mgr/ .
-RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o manager cmd/manager/main.go
+RUN CGO_ENABLED=0 GOFLAGS="-mod=readonly" go build -v -o manager ./cmd/manager/
 
 FROM registry.hierocracy.home:5000/alpine:3.23.3
 

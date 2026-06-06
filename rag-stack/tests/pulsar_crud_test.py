@@ -62,14 +62,28 @@ TAG_STATE_FILE = os.getenv(
 )
 
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def test_gateway_session_upsert():
     print(f"[{datetime.utcnow().isoformat()}] [TEST] LLM Gateway Session Upsert Side-Effect")
     
     # 1. Setup Test Session ID
     session_id = int(time.time() * 1000)
-    print(f"  - Using new session ID: {session_id}")
-    
+    session_name = f"Test-{session_id}"
+    print(f"  - Using new session ID: {session_id} (name: {session_name})")
+
+    # Pre-insert named session so gateway upsert can be tracked and cleaned up
+    conn_pre = psycopg2.connect(DB_CONN_STRING)
+    conn_pre.autocommit = True
+    with conn_pre.cursor() as cur_pre:
+        cur_pre.execute(
+            "INSERT INTO sessions (session_id, name, description, created_at, last_active_at) "
+            "VALUES (%s, %s, %s, NOW(), NOW()) ON CONFLICT (session_id) DO NOTHING",
+            (session_id, session_name, "Gateway Session Upsert Test"),
+        )
+    conn_pre.close()
+
     # 2. Call LLM Gateway
     print(f"  - Calling LLM Gateway at {GATEWAY_URL}")
     payload = {
@@ -221,8 +235,8 @@ def test_pulsar_db_crud():
     final_response = None
     
     start_time = time.time()
-    timeout = 180
-    
+    timeout = 900  # 15 minutes — llama3.1 makes 2 serial planning calls before execution
+
     try:
         while time.time() - start_time < timeout:
             try:

@@ -155,6 +155,30 @@ func initModelRegistry(cfg *config.Config) *models.ModelRegistry {
 		Backend:    "ollama",
 		PromptType: cfg.ExecutorPromptType,
 	})
+	// Dedicated CPU embedding model — only GetEmbeddings() is called on this entry.
+	// PromptType reuses PlannerPromptType so the registry can construct the wrapper;
+	// Plan() and Execute() are never invoked on this model.
+	if cfg.EmbeddingModel != "" && cfg.EmbeddingModel != cfg.PlannerModel && cfg.EmbeddingModel != cfg.ExecutorModel {
+		registry.RegisterModel(models.ModelSpec{
+			Id:         cfg.EmbeddingModel,
+			Name:       cfg.EmbeddingModel,
+			Endpoint:   cfg.EmbeddingURL,
+			Backend:    "ollama",
+			PromptType: cfg.PlannerPromptType,
+		})
+	}
+
+	// Alternate CPU planner — same llama3 PromptType as the GPU planner, different endpoint.
+	// Selectable per request via the planner_model field in the Pulsar payload.
+	if cfg.AltPlannerModel != "" && cfg.AltPlannerModel != cfg.PlannerModel && cfg.AltPlannerModel != cfg.ExecutorModel {
+		registry.RegisterModel(models.ModelSpec{
+			Id:         cfg.AltPlannerModel,
+			Name:       cfg.AltPlannerModel,
+			Endpoint:   cfg.AltPlannerURL,
+			Backend:    "ollama",
+			PromptType: cfg.PlannerPromptType,
+		})
+	}
 
 	return registry
 }

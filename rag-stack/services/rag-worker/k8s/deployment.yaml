@@ -76,6 +76,14 @@ spec:
           value: "http://ollama-code.llms-ollama.svc.cluster.local:11434"
         - name: EXECUTOR_MODEL
           value: "granite3.1-dense:8b"
+        - name: EMBEDDING_URL
+          value: "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
+        - name: EMBEDDING_MODEL
+          value: "all-minilm:l6-v2"
+        - name: ALT_PLANNER_URL
+          value: "http://ollama-planner-cpu.llms-ollama.svc.cluster.local:11434"
+        - name: ALT_PLANNER_MODEL
+          value: "llama3.2:3b"
         - name: QDRANT_COLLECTION
           value: "vectors"
         - name: QDRANT_SEARCH_LIMIT

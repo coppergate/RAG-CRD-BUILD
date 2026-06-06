@@ -2,6 +2,8 @@ import os
 import sys
 import psycopg2
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import boto3
 from qdrant_client import QdrantClient
 from qdrant_client.http import models

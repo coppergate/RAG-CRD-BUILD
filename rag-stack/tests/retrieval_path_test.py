@@ -1,10 +1,13 @@
 import json
 import os
+import random
 import time
 from datetime import datetime
 
 import boto3
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
@@ -25,6 +28,19 @@ QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 QDRANT_USE_TLS = os.getenv("QDRANT_USE_TLS", "false").lower() == "true"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.llms-ollama.svc.cluster.local:11434").rstrip("/")
 QDRANT_BYPASS_ONLY = os.getenv("RAG_E2E_QDRANT_BYPASS_ONLY", "false").lower() == "true"
+
+
+def _load_test_values():
+    values_file = os.path.join(os.path.dirname(__file__), "retrieval-testing-values.txt")
+    flowers, colors = [], []
+    with open(values_file) as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith("flowers:"):
+                flowers = [x.strip() for x in line.split("[", 1)[1].rstrip("]").split(",")]
+            elif line.startswith("colors:"):
+                colors = [x.strip() for x in line.split("[", 1)[1].rstrip("]").split(",")]
+    return flowers, colors
 
 
 def _s3_client():
@@ -210,18 +226,67 @@ def _submit_query(session_id: int, session_name: str, tag_id: int, question: str
             {"role": "user", "content": question},
         ],
     }
+    t0 = time.time()
     resp = requests.post(CHAT_URL, json=payload, timeout=GATEWAY_TIMEOUT_SECONDS, verify=False)
-    print(f"  - Chat submission status: {resp.status_code}")
+    wall_s = time.time() - t0
+    print(f"  - Chat submission status: {resp.status_code} (wall: {wall_s:.1f}s)")
     resp.raise_for_status()
     data = resp.json()
     result = data.get("result", "")
     planning = data.get("planning_response", "")
+    metrics = data.get("metrics", {}) or {}
+
+    # Print whatever timing the pipeline returned so we can see where time was spent
+    print(f"  - Pipeline timing breakdown:")
+    if metrics:
+        for k, v in sorted(metrics.items()):
+            print(f"      {k}: {v}")
+    else:
+        print(f"      (no metrics in response)")
+    print(f"      planning_response_len: {len(planning)} chars")
+    print(f"      result_len:            {len(result)} chars")
+    print(f"      total_wall_seconds:    {wall_s:.1f}s")
+
     if expected.lower() not in result.lower():
         raise RuntimeError(f"expected {expected!r} in result, got {result!r}")
     if not planning:
         raise RuntimeError(f"missing planning_response in gateway response: {json.dumps(data)[:500]}")
     print(f"  - Retrieval result verified: {result}")
     return data
+
+
+def _probe_qdrant_negative(tag_id: int, question: str, embedding_model: str) -> int:
+    """Search Qdrant for a question that has no matching document under tag_id.
+
+    Returns the number of high-score hits (score > 0.85). Isolation passes
+    if this is 0 — the tag contains no document relevant to the other plant.
+    """
+    collection_name = _collection_name("vectors", embedding_model, VECTOR_SIZE)
+    client = _qdrant_client()
+    tag_filter = models.Filter(
+        must=[
+            models.FieldCondition(
+                key="tags",
+                match=models.MatchAny(any=[tag_id]),
+            )
+        ]
+    )
+    query_vector = _ollama_embeddings(question, embedding_model)
+    search_points = client.search(
+        collection_name=collection_name,
+        query_vector=query_vector,
+        query_filter=tag_filter,
+        limit=5,
+        with_payload=True,
+        score_threshold=0.85,
+    )
+    for point in search_points:
+        payload = point.payload or {}
+        print(
+            f"    - [WARN] unexpected high-score hit: point_id={point.id} "
+            f"score={point.score:.4f} path={payload.get('path')}"
+        )
+    return len(search_points)
 
 
 def _verify_replay(session_id: int):
@@ -253,10 +318,23 @@ def main():
     query_session_id = unique_session_id()
     query_session_name = unique_session_name("retrieval-path-query")
     file_name = f"e2eTestBucket/retrieval-path-{ingest_session_id}.txt"
-    answer = "water it lightly, trim dead petals, and place it where it gets soft morning sunlight"
-    question = "What is the best way to tend a flower? Return the exact answer from the document."
+    flowers, colors = _load_test_values()
+    flower = random.choice(flowers)
+    color = random.choice(colors)
+    print(f"  - Test combination: {color} {flower}")
+    # Pick a different flower+color for the negative test (must differ from the uploaded pair)
+    other_flowers = [f for f in flowers if f != flower]
+    other_colors = [c for c in colors if c != color]
+    other_flower = random.choice(other_flowers)
+    other_color = random.choice(other_colors)
+    print(f"  - Negative test combination: {other_color} {other_flower}")
+    care_instructions = "water it lightly, trim dead petals, and place it where it gets soft morning sunlight"
+    question = f"What is the best way to tend a {color} {flower}? Return the exact answer from the document."
+    # Verify that the model retrieved and used the correct document by checking for the
+    # care instructions — the unique content that only exists in the uploaded test file.
+    expected = care_instructions
     content = (
-        f"Retrieval path test document. The best way to tend a flower is to {answer}. "
+        f"Retrieval path test document. The best way to tend a {color} {flower} is to {care_instructions}. "
         f"This text is used to verify ingestion, retrieval, submission, and response."
     )
     failures = []
@@ -269,15 +347,18 @@ def main():
     print(f"  - Uploading file: {file_name}")
     _upload_file(file_name, content)
 
+    t_ingest_start = time.time()
     print("  - Triggering ingestion...")
     _trigger_ingest(ingest_session_id, ingest_session_name, tag_id, file_name)
     _associate_session_tags(ingest_session_id, tag_id)
     if not _wait_for_synced_file(ingest_session_id, file_name):
         failures.append("file did not reach SYNCED state within the wait window")
+    print(f"  - [TIMING] Ingest + sync: {time.time() - t_ingest_start:.1f}s")
 
     _associate_session_tags(query_session_id, tag_id)
+    t_probe_start = time.time()
     qdrant_probe = _probe_qdrant_storage(tag_id, question, EMBEDDING_MODEL)
-    print(f"  - Qdrant direct probe summary: {qdrant_probe}")
+    print(f"  - Qdrant direct probe summary: {qdrant_probe} ({time.time() - t_probe_start:.1f}s)")
     if QDRANT_BYPASS_ONLY:
         print("  - QDRANT bypass-only mode enabled; skipping gateway submission.")
         if qdrant_probe["scroll_count"] == 0 and qdrant_probe["search_count"] == 0:
@@ -289,7 +370,7 @@ def main():
 
     print("  - Submitting retrieval query...")
     try:
-        _submit_query(query_session_id, query_session_name, tag_id, question, answer)
+        _submit_query(query_session_id, query_session_name, tag_id, question, expected)
     except Exception as exc:
         failures.append(f"retrieval query failed: {exc}")
     else:
@@ -302,6 +383,21 @@ def main():
             _verify_audit(query_session_id)
         except Exception as exc:
             failures.append(f"retrieval audit verification failed: {exc}")
+
+    # Negative isolation test: verify the tag returns no high-confidence results for a
+    # different plant. Checked at the Qdrant layer to avoid a redundant LLM call.
+    print(f"  - Negative isolation probe ({other_color} {other_flower})...")
+    neg_question = f"What is the best way to tend a {other_color} {other_flower}?"
+    try:
+        neg_hits = _probe_qdrant_negative(tag_id, neg_question, EMBEDDING_MODEL)
+        if neg_hits > 0:
+            failures.append(
+                f"negative isolation FAILED: {neg_hits} high-score Qdrant hit(s) for '{other_color} {other_flower}' under tag {tag_id}"
+            )
+        else:
+            print(f"  - Negative isolation verified: no high-score hits for {other_color} {other_flower}")
+    except Exception as exc:
+        failures.append(f"negative isolation probe failed: {exc}")
 
     if failures:
         raise RuntimeError("; ".join(failures))

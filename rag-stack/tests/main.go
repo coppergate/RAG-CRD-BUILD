@@ -19,11 +19,21 @@ var (
 	sessionName = ""
 	bucketName  = ""
 	s3Index     = "e2eTestBucket"
-	client      = &http.Client{
+	// client is used for fast admin API calls (tags, sessions, S3 ops).
+	client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},
 		Timeout: 30 * time.Second,
+	}
+	// ragClient is used for RAG chat requests that invoke the LLM pipeline.
+	// llama3.1 makes two serial planning calls (~120s each) before execution,
+	// so a much longer timeout is required.
+	ragClient = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+		Timeout: 1800 * time.Second,
 	}
 )
 
@@ -346,7 +356,7 @@ func askRAG(query string, tags []int64) (string, error) {
 		"session_name": sessionName,
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := client.Post(baseURL+"/api/chat/v1/rag/chat", "application/json", bytes.NewBuffer(body))
+	resp, err := ragClient.Post(baseURL+"/api/chat/v1/rag/chat", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
 	}

@@ -3,6 +3,8 @@ import json
 import time
 import uuid
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import logging
 from datetime import datetime
 from pulsar import Client

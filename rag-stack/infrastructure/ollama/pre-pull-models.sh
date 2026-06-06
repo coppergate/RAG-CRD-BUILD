@@ -37,7 +37,7 @@ if [ -f "$LOCAL_CA" ]; then
 fi
 
 # Models to pre-pull (add/remove as needed)
-MODELS=("llama3.1" "granite3.1-dense:8b")
+MODELS=("llama3.1" "granite3.1-dense:8b" "all-minilm:l6-v2" "llama3.2:3b")
 
 echo "=== Ollama Model Pre-Pull ==="
 echo "Storage:  $STORAGE_DIR"
@@ -49,7 +49,8 @@ mkdir -p "$STORAGE_DIR"
 
 # Ensure the base Ollama image is in the local registry
 echo "[0/4] Checking for base Ollama image in local registry..."
-if ! podman pull "$OLLAMA_IMAGE_LOCAL" 2>/dev/null; then
+echo "podman pull '$OLLAMA_IMAGE_LOCAL'"
+if ! podman pull --tls-verify=false "$OLLAMA_IMAGE_LOCAL"; then
   echo "  Base image $OLLAMA_IMAGE_LOCAL not found in local registry."
   echo "  Attempting to pull from upstream $OLLAMA_IMAGE_UPSTREAM..."
   podman pull "$OLLAMA_IMAGE_UPSTREAM"

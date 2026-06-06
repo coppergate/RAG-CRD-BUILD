@@ -48,6 +48,7 @@ def test_recursive_rag_flow():
         payload = {
             "id": correlation_id,
             "session_id": session_id,
+            "session_name": f"Test-{session_id}",
             "prompt": user_query,
             "planner_model": case["planner"],
             "executor_model": case["executor"],
@@ -63,11 +64,11 @@ def test_recursive_rag_flow():
 
         # 3. Monitor Status Topic for "Thinking Trace"
         print("  - Monitoring Status messages (Thinking Trace)...")
-        expected_states = ["INGRESS_RECEIVED", "PLANNING_TASK", "RETRIEVING_CONTEXT", "EXECUTING_TASK", "COMPLETED"]
+        expected_states = ["INGRESS_RECEIVED", "PLANNING_TASK", "RETRIEVING_CONTEXT", "REFINING_PLAN", "EXECUTING_TASK", "COMPLETED"]
         received_states = []
 
         start_time = time.time()
-        timeout = 120 # 2 minutes
+        timeout = 900 # 15 minutes — llama3.1 makes 2 serial planning calls before EXECUTING_TASK
 
         while time.time() - start_time < timeout:
             try:
@@ -91,7 +92,7 @@ def test_recursive_rag_flow():
         planning_received = False
 
         start_time = time.time()
-        timeout = 60 # 60 seconds to collect all chunks
+        timeout = 300 # 5 minutes to collect all chunks
 
         try:
             while time.time() - start_time < timeout:
@@ -124,7 +125,7 @@ def test_recursive_rag_flow():
 
         # 5. Assertions
         print("\n  - Verifying Thinking Trace states:")
-        for state in ["INGRESS_RECEIVED", "PLANNING_TASK", "RETRIEVING_CONTEXT", "EXECUTING_TASK"]:
+        for state in ["INGRESS_RECEIVED", "PLANNING_TASK", "RETRIEVING_CONTEXT", "REFINING_PLAN", "EXECUTING_TASK"]:
             if state in received_states:
                 print(f"    [PASS] State '{state}' observed for {case['name']}.")
             else:

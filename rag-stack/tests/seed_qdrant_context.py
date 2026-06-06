@@ -1,6 +1,8 @@
 import os
 import time
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import json
 import sys
 from datetime import datetime
