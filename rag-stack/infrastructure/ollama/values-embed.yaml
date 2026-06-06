@@ -1,0 +1,101 @@
+# values-embed.yaml — CPU-only Ollama for embedding models
+# Deployed on each inference node alongside the GPU chat pod.
+# No GPU resources; runs all-minilm:l6-v2 (384-dim, ~46MB).
+# Override nodeSelector.llm-model at deploy time to pin to a specific node.
+
+replicaCount: 1
+
+image:
+  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  pullPolicy: IfNotPresent
+  tag: ""
+
+namespaceOverride: "llms-ollama"
+
+service:
+  enabled: false
+
+ollama:
+  port: 11434
+
+  gpu:
+    # CPU-only — no GPU allocation
+    enabled: false
+
+  models:
+    pull: []
+    run: []
+    create: []
+    clean: false
+
+  insecure: false
+
+# Label pods so a unified service can select across both embed pods.
+podLabels:
+  ollama-role: embed
+
+volumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+
+volumeMounts:
+  - name: registry-ca
+    mountPath: /etc/ssl/certs/ca-certificates.crt
+    subPath: ca.crt
+
+extraEnv:
+  - name: OLLAMA_HOST
+    value: "0.0.0.0:11434"
+  - name: OLLAMA_REGISTRY_INSECURE
+    value: "0"
+  - name: SSL_CERT_FILE
+    value: "/etc/ssl/certs/ca-certificates.crt"
+  - name: OLLAMA_KEEP_ALIVE
+    value: "-1"
+  - name: OLLAMA_NUM_PARALLEL
+    value: "2"
+  - name: OLLAMA_MAX_LOADED_MODELS
+    value: "1"
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "256Mi"
+  limits:
+    cpu: "2000m"
+    memory: "1Gi"
+
+persistentVolume:
+  enabled: true
+  accessModes:
+    - ReadWriteMany
+  size: 5Gi
+  storageClass: "rook-cephfs"
+  volumeMode: "Filesystem"
+
+nodeSelector:
+  role: inference-node
+
+updateStrategy:
+  type: "Recreate"
+
+terminationGracePeriodSeconds: 30
+
+livenessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
+  successThreshold: 1

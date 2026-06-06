@@ -7,6 +7,8 @@ import psycopg2
 
 DEFAULT_SESSION_PREFIXES = (
     "CRUD-Test-",
+    "Session ",
+    "Test-",
     "context-",
     "e2e-session-",
     "retrieval-path-",

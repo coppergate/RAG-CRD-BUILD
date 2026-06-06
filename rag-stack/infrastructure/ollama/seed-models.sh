@@ -11,10 +11,24 @@ export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="llms-ollama"
 REGISTRY="registry.container-registry.svc.cluster.local:5000"
 
-# Model-to-PVC mapping (model_name:pvc_name)
-declare -A MODEL_PVC_MAP=(
-  ["llama3.1"]="ollama-llama3"
-  ["granite3.1-dense:8b"]="ollama-granite31-8b"
+# Set FORCE_RESEED=true to bypass the "already present" check and re-download all models.
+# Use this when updating a model to a new version:
+#   FORCE_RESEED=true bash seed-models.sh
+FORCE_RESEED="${FORCE_RESEED:-false}"
+
+# Model-to-PVC pairs ("model_name pvc_name").
+# Using an array instead of an associative map so the same model can be seeded
+# into multiple PVCs (e.g. all-minilm:l6-v2 into both embed-0 and embed-1).
+declare -a SEED_PAIRS=(
+  # GPU chat models — one model per node PVC
+  "llama3.1 ollama-llama3"
+  "granite3.1-dense:8b ollama-granite31-8b"
+  # CPU embedding models — same model seeded into both node PVCs
+  "all-minilm:l6-v2 ollama-embed-0"
+  "all-minilm:l6-v2 ollama-embed-1"
+  # CPU alternate planner models — same model seeded into both node PVCs
+  "llama3.2:3b ollama-planner-cpu-0"
+  "llama3.2:3b ollama-planner-cpu-1"
 )
 
 echo "=== Ollama Model Seeding ==="
@@ -22,8 +36,9 @@ echo "Namespace: $NAMESPACE"
 echo "Registry:  $REGISTRY"
 echo ""
 
-for MODEL in "${!MODEL_PVC_MAP[@]}"; do
-  PVC_NAME="${MODEL_PVC_MAP[$MODEL]}"
+for PAIR in "${SEED_PAIRS[@]}"; do
+  MODEL="${PAIR%% *}"
+  PVC_NAME="${PAIR#* }"
   SEEDER_NAME="model-seeder-$(echo "$PVC_NAME" | tr '.' '-')"
 
   echo "--- Seeding $MODEL into PVC $PVC_NAME ---"
@@ -86,8 +101,12 @@ EOF
   $KUBECTL delete pod "${SEEDER_NAME}-check" -n "$NAMESPACE" --ignore-not-found 2>/dev/null || true
 
   if [ -n "$EXISTING" ] && [ "$EXISTING" != "EMPTY" ]; then
-    echo "  Model already present in PVC $PVC_NAME. Skipping."
-    continue
+    if [ "$FORCE_RESEED" = "true" ]; then
+      echo "  Model already present but FORCE_RESEED=true — re-seeding $MODEL into $PVC_NAME."
+    else
+      echo "  Model already present in PVC $PVC_NAME. Skipping. (Set FORCE_RESEED=true to override.)"
+      continue
+    fi
   fi
 
   echo "  Pulling $MODEL from registry into PVC..."
@@ -216,8 +235,10 @@ EOF
   if [ "$PHASE" = "Succeeded" ]; then
     echo "  ✓ $MODEL seeded into $PVC_NAME"
   else
-    echo "  ✗ Seeding failed for $MODEL. Pod logs:"
-    $KUBECTL logs "$SEEDER_NAME" -n "$NAMESPACE" --tail=20 2>/dev/null || true
+    echo "  ✗ Seeding failed for $MODEL. Init container logs:"
+    $KUBECTL logs "$SEEDER_NAME" -n "$NAMESPACE" -c seed-model --tail=50 || true
+    echo "  Pod events:"
+    $KUBECTL describe pod "$SEEDER_NAME" -n "$NAMESPACE" | grep -A20 "^Events:" || true
     exit 1
   fi
 

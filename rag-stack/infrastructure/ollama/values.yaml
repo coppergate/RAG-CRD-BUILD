@@ -314,6 +314,20 @@ extraEnv:
     value: "0"
   - name: SSL_CERT_FILE
     value: "/etc/ssl/certs/ca-certificates.crt"
+  - name: OLLAMA_FLASH_ATTENTION
+    value: "true"
+  - name: OLLAMA_KV_CACHE_TYPE
+    value: "f16"
+  - name: OLLAMA_NUM_CTX
+    value: "4096"
+  - name: OLLAMA_KEEP_ALIVE
+    value: "-1"
+  - name: OLLAMA_NUM_PARALLEL
+    value: "1"
+  - name: OLLAMA_MAX_LOADED_MODELS
+    value: "2"
+  - name: OLLAMA_GPU_OVERHEAD
+    value: "2147483648"
 #  - name: OLLAMA_DEBUG
 #    value: "1"
 

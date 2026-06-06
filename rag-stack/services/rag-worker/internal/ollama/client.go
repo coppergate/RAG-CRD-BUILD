@@ -145,6 +145,13 @@ func (o *OllamaClient) Chat(messages []map[string]string) (string, interface{}, 
 		return "", nil, err
 	}
 
+	logging.Printf("[OLLAMA] url=%s model=%s load_ms=%d eval_ms=%d total_ms=%d tokens=%d",
+		url, o.model,
+		result.LoadDuration/1e6,
+		result.EvalDuration/1e6,
+		result.TotalDuration/1e6,
+		result.EvalCount)
+
 	return result.Message.Content, &result, nil
 }
 
@@ -262,6 +269,7 @@ func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
 		return nil, fmt.Errorf("failed to marshal embeddings payload: %w", err)
 	}
 	embeddingUrl := fmt.Sprintf("%s/api/embeddings", o.url)
+	start := time.Now()
 	resp, err := o.httpClient.Post(embeddingUrl, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
@@ -269,7 +277,9 @@ func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
 	defer resp.Body.Close()
 
 	var result struct {
-		Embedding []float32 `json:"embedding"`
+		Embedding     []float32 `json:"embedding"`
+		LoadDuration  int64     `json:"load_duration"`
+		TotalDuration int64     `json:"total_duration"`
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -279,6 +289,14 @@ func (o *OllamaClient) GetEmbeddings(text string) ([]float32, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
+
+	elapsed := time.Since(start).Milliseconds()
+	logging.Printf("[OLLAMA] url=%s model=%s load_ms=%d total_ms=%d wall_ms=%d dims=%d",
+		embeddingUrl, o.model,
+		result.LoadDuration/1e6,
+		result.TotalDuration/1e6,
+		elapsed,
+		len(result.Embedding))
 
 	return result.Embedding, nil
 }

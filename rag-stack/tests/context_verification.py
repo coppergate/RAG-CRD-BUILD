@@ -2,6 +2,8 @@ import boto3
 import os
 import time
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import json
 from datetime import datetime
 from qdrant_client import QdrantClient

@@ -2,6 +2,7 @@ import os
 
 MODEL_A = os.getenv("MODEL_A", os.getenv("OLLAMA_MODEL", "llama3.1:latest"))
 MODEL_B = os.getenv("MODEL_B", "granite3.1-dense:8b")
+MODEL_C = os.getenv("MODEL_C", "llama3.2:3b")  # CPU alternate planner
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", MODEL_A)
 
 
@@ -19,7 +20,8 @@ def _slug(model: str) -> str:
 
 
 def model_cases():
-    return [
+    cases = [
+        # GPU planner × GPU executor combinations
         {
             "name": f"{MODEL_A}__{MODEL_A}",
             "label": f"{_slug(MODEL_A)}__{_slug(MODEL_A)}",
@@ -45,3 +47,22 @@ def model_cases():
             "executor": MODEL_B,
         },
     ]
+
+    # CPU alternate planner cases — only added when MODEL_C differs from GPU models
+    if MODEL_C and MODEL_C not in (MODEL_A, MODEL_B):
+        cases += [
+            {
+                "name": f"{MODEL_C}__{MODEL_A}",
+                "label": f"{_slug(MODEL_C)}__{_slug(MODEL_A)}",
+                "planner": MODEL_C,
+                "executor": MODEL_A,
+            },
+            {
+                "name": f"{MODEL_C}__{MODEL_B}",
+                "label": f"{_slug(MODEL_C)}__{_slug(MODEL_B)}",
+                "planner": MODEL_C,
+                "executor": MODEL_B,
+            },
+        ]
+
+    return cases

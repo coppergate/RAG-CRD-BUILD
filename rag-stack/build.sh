@@ -134,7 +134,7 @@ get_svc_last_build() {
 }
 
 update_svc_info() {
-    local svc="$1"; local ver="$2"; local build_time="$3"
+    local svc="$1"; local ver="$2"
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
     curl -s "${h_args[@]}" -X POST "$BUILD_METADATA_URL/versions/$svc" -d "{\"version\": \"$ver\"}" >/dev/null
@@ -274,7 +274,7 @@ build_service() {
         log "CHANGE DETECTED: $svc (hashing context updated)"
         ver=$(increment_version "$ver")
         # Mark as needing build by setting last_build=null
-        update_svc_info "$svc" "$ver" "null"
+        update_svc_info "$svc" "$ver"
         mark_unchanged "$svc" "$current_hash"
         needs_build=true
     # 3. Previous build failed or not completed
@@ -301,7 +301,7 @@ build_service() {
         # 4. Registry check (only skip if image is already there and we are not forcing)
         if [[ "$FORCE_BUILD" != "true" ]] && image_exists "$svc" "$ver"; then
             log "SKIP: $svc:$ver already exists in registry"
-            update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
+            update_svc_info "$svc" "$ver"
             deploy_update "$svc" "$ver"
             return 0
         fi
@@ -309,6 +309,10 @@ build_service() {
         log "BUILD: $svc version $ver (Mode: $MODE)"
         if [[ "$MODE" == "cluster" ]]; then
             bash "$REPO_DIR/infrastructure/build-pipeline/trigger-build.sh" "$svc" "$ver"
+            # Record this service as triggered so --wait can find it reliably.
+            # The API cannot store a custom last_build sentinel (it always writes time.Now()),
+            # so we use a temp file owned by the main process instead.
+            echo "$svc $ver" >> "${TRIGGERED_FILE:-/dev/null}"
         else
             # Local build logic
             local context_dir="$REPO_DIR/services"
@@ -330,14 +334,12 @@ build_service() {
         # However, for now, we'll follow the flow.
         
         if [[ "$MODE" == "local" ]]; then
-            update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
+            update_svc_info "$svc" "$ver"
             deploy_update "$svc" "$ver"
             sync_current_version_file
-        else
-             # In cluster mode, we defer the update until the build is complete
-             # to avoid ImagePullBackOff on pods.
-             update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ') (triggered)\""
         fi
+        # In cluster mode, deploy is deferred to the --wait phase after the Kaniko
+        # job completes, to avoid ImagePullBackOff on pods.
     else
         log "SKIP: $svc unchanged and already built"
     fi
@@ -357,6 +359,13 @@ main() {
         esac
         shift
     done
+
+    # Temp file for tracking which services had Kaniko builds triggered this run.
+    # Subshells write "svc ver" lines here; the --wait section reads it.
+    # Exported so parallel build_service subshells can append to it.
+    TRIGGERED_FILE=$(mktemp /tmp/build-triggered.XXXXXX)
+    export TRIGGERED_FILE
+    trap "rm -f '$TRIGGERED_FILE'" EXIT
 
 	cleanup_old_jobs
 
@@ -425,7 +434,7 @@ main() {
 				# Verify success before deploying
 				if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep 1 >/dev/null; then
 					deploy_update "build-orchestrator" "$bver"
-					update_svc_info "build-orchestrator" "$bver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
+					update_svc_info "build-orchestrator" "$bver"
 				else
 					log "ERROR: build-orchestrator build failed. Cannot update deployment."
                     exit 1
@@ -478,15 +487,16 @@ main() {
         log "Waiting for cluster builds to complete (timeout: 1800s)..."
         local deadline=$((SECONDS + 1800))
 
-        # Identify which services had a Kaniko build triggered this run.
-        # build_service marks them with "(triggered)" in last_build.
+        # Read the list of "svc ver" pairs written by build_service() subshells.
+        # This is reliable because the API cannot store a custom last_build value
+        # (it always writes time.Now()), so a temp file is the only safe IPC channel.
         local triggered_svcs=()
-        for svc in "${SERVICES[@]}" "${INFRA_SERVICES[@]}"; do
-            local last=$(get_svc_last_build "$svc")
-            if [[ "$last" == *"(triggered)"* ]]; then
-                triggered_svcs+=("$svc")
-            fi
-        done
+        local triggered_vers=()
+        if [[ -s "${TRIGGERED_FILE:-}" ]]; then
+            while IFS=" " read -r t_svc t_ver; do
+                [[ -n "$t_svc" ]] && triggered_svcs+=("$t_svc") && triggered_vers+=("$t_ver")
+            done < "$TRIGGERED_FILE"
+        fi
 
         if [[ ${#triggered_svcs[@]} -eq 0 ]]; then
             log "No cluster builds were triggered this run; nothing to wait for."
@@ -496,11 +506,10 @@ main() {
             # Phase 1: Poll until each triggered service's Kaniko job EXISTS in k8s.
             # The build-orchestrator creates jobs asynchronously after receiving Pulsar
             # messages, so jobs may not yet exist when this wait block runs.
-            # Without this polling step, kubectl wait only selects currently-existing
-            # jobs and silently misses late-created ones.
             local JOB_APPEAR_TIMEOUT=300
-            for svc in "${triggered_svcs[@]}"; do
-                local ver=$(get_svc_version "$svc")
+            for i in "${!triggered_svcs[@]}"; do
+                local svc="${triggered_svcs[$i]}"
+                local ver="${triggered_vers[$i]}"
                 local ver_safe="${ver//./-}"
                 local job_label="app=kaniko-build,service=$svc,version=$ver_safe"
                 log "Waiting for Kaniko job to be created: $svc $ver..."
@@ -533,15 +542,16 @@ main() {
             fi
 
             # Phase 3: Deploy all services whose Kaniko job succeeded.
-            for svc in "${triggered_svcs[@]}"; do
-                local ver=$(get_svc_version "$svc")
+            for i in "${!triggered_svcs[@]}"; do
+                local svc="${triggered_svcs[$i]}"
+                local ver="${triggered_vers[$i]}"
                 local ver_safe="${ver//./-}"
                 local job_label="app=kaniko-build,service=$svc,version=$ver_safe"
                 if "$KUBECTL" get job -n build-pipeline \
                     -l "$job_label" \
                     -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep -q 1; then
                     deploy_update "$svc" "$ver"
-                    update_svc_info "$svc" "$ver" "\"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\""
+                    update_svc_info "$svc" "$ver"
                 else
                     log "ERROR: Build for $svc version $ver did not succeed. Skipping deploy update."
                 fi

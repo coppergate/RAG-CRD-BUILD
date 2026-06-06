@@ -26,6 +26,9 @@ type Config struct {
 	ExecutorModel         string
 	ExecutorPromptType    string
 	EmbeddingModel        string
+	EmbeddingURL          string
+	AltPlannerModel       string
+	AltPlannerURL         string
 	QdrantOpsTopic        string
 	QdrantResultsTopic    string
 
@@ -68,10 +71,14 @@ func LoadConfig() *Config {
 	pulsarDefault := "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
 	plannerDefault := "https://ollama.llms-ollama.svc.cluster.local:11434"
 	executorDefault := "https://ollama-code.llms-ollama.svc.cluster.local:11434"
+	embeddingDefault := "https://ollama-embed.llms-ollama.svc.cluster.local:11434"
+	altPlannerDefault := "https://ollama-planner-cpu.llms-ollama.svc.cluster.local:11434"
 	if insecure {
 		pulsarDefault = "pulsar://pulsar-proxy.apache-pulsar.svc.cluster.local:6650"
 		plannerDefault = "http://ollama.llms-ollama.svc.cluster.local:11434"
 		executorDefault = "http://ollama-code.llms-ollama.svc.cluster.local:11434"
+		embeddingDefault = "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
+		altPlannerDefault = "http://ollama-planner-cpu.llms-ollama.svc.cluster.local:11434"
 	}
 
 	return &Config{
@@ -92,7 +99,10 @@ func LoadConfig() *Config {
 		ExecutorURL:           envutil.GetEnv("EXECUTOR_URL", executorDefault),
 		ExecutorModel:         envutil.GetEnv("EXECUTOR_MODEL", "granite3.1-dense:8b"),
 		ExecutorPromptType:    envutil.GetEnv("EXECUTOR_PROMPT_TYPE", "granite31"),
-		EmbeddingModel:        envutil.GetEnv("EMBEDDING_MODEL", "llama3.1:latest"),
+		EmbeddingModel:        envutil.GetEnv("EMBEDDING_MODEL", "all-minilm:l6-v2"),
+		EmbeddingURL:          envutil.GetEnv("EMBEDDING_URL", embeddingDefault),
+		AltPlannerModel:       envutil.GetEnv("ALT_PLANNER_MODEL", "llama3.2:3b"),
+		AltPlannerURL:         envutil.GetEnv("ALT_PLANNER_URL", altPlannerDefault),
 		QdrantOpsTopic:        envutil.GetEnv("PULSAR_QDRANT_OPS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops"),
 		QdrantResultsTopic:    envutil.GetEnv("PULSAR_QDRANT_RESULTS_TOPIC", "persistent://rag-pipeline/operations/qdrant-ops-results"),
 

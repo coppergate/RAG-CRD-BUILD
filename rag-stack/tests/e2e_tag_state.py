@@ -4,6 +4,8 @@ import time
 import uuid
 
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 ADMIN_API_URL = os.getenv(

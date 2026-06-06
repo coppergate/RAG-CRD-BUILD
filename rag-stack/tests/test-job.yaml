@@ -41,6 +41,7 @@ spec:
             
             export SSL_CERT_FILE="$COMBINED_CA"
             export REQUESTS_CA_BUNDLE="$COMBINED_CA"
+            export PYTHONUNBUFFERED=1
             
             # Update DB_CONN_STRING to use combined bundle
             export DB_CONN_STRING=$(echo "$DB_CONN_STRING" | sed "s|/etc/ssl/certs/ca-certificates.crt|$COMBINED_CA|g")
@@ -98,8 +99,14 @@ spec:
           value: "llama3.1:latest"
         - name: MODEL_B
           value: "granite3.1-dense:8b"
+        - name: MODEL_C
+          value: "llama3.2:3b"
         - name: EMBEDDING_MODEL
-          value: "llama3.1:latest"
+          value: "all-minilm:l6-v2"
+        - name: OLLAMA_URL
+          value: "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
+        - name: VECTOR_SIZE
+          value: "384"
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:

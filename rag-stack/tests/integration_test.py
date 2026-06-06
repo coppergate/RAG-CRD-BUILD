@@ -4,6 +4,8 @@ import time
 import sys
 import json
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
@@ -69,7 +71,7 @@ S3_INDEX = "/e2eTestBucket"
 TAG_STATE_FILE = os.getenv(
     "RAG_E2E_TAG_STATE_FILE", "/tmp/rag-e2e-context-tag-state.json"
 )
-GATEWAY_TIMEOUT_SECONDS = int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "600"))
+GATEWAY_TIMEOUT_SECONDS = int(os.getenv("GATEWAY_TIMEOUT_SECONDS", "1800"))
 VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "4096"))
 QDRANT_BYPASS_ONLY = os.getenv("RAG_E2E_QDRANT_BYPASS_ONLY", "false").lower() == "true"
 

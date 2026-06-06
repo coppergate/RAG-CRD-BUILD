@@ -2,15 +2,16 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ollama-deployment
+  namespace: llms-ollama
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ollama
+      app.kubernetes.io/name: ollama
   template:
     metadata:
       labels:
-        app: ollama
+        app.kubernetes.io/name: ollama
     spec:
       nodeSelector:
         role: inference-node
@@ -25,9 +26,9 @@ spec:
             - name: OLLAMA_KV_CACHE_TYPE
               value: "f16"
             - name: OLLAMA_NUM_CTX
-              value: "1024"
+              value: "4096"
             - name: OLLAMA_KEEP_ALIVE
-              value: "0"
+              value: "-1"
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
             - name: OLLAMA_MAX_LOADED_MODELS
