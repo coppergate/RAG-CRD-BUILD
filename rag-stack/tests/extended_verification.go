@@ -1,13 +1,59 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
+	"unicode"
 )
 
-func testExtendedVerification(sessionID int64, tagID int64, tagName string, fileName string, vectorSize int) {
+// buildEmbeddingCollection mirrors contracts.BuildEmbeddingCollection.
+// Collection identity = prefix + embedding model slug + vector size.
+func buildEmbeddingCollection(prefix, embeddingModel string, vectorSize int) string {
+	base := strings.TrimSpace(prefix)
+	if base == "" {
+		base = "vectors"
+	}
+	normalized := normalizeEmbeddingModel(embeddingModel)
+	switch {
+	case normalized != "" && vectorSize > 0:
+		return fmt.Sprintf("%s-%s-%d", base, normalized, vectorSize)
+	case normalized != "":
+		return fmt.Sprintf("%s-%s", base, normalized)
+	case vectorSize > 0:
+		return fmt.Sprintf("%s-%d", base, vectorSize)
+	default:
+		return base
+	}
+}
+
+// normalizeEmbeddingModel mirrors contracts.NormalizeEmbeddingModelName.
+func normalizeEmbeddingModel(model string) string {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if model == "" {
+		return ""
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, r := range model {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r):
+			b.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func testExtendedVerification(sessionID int64, tagID int64, tagName string, fileName string, vectorSize int, embeddingModel string) {
 	fmt.Println("\n--- Starting Iteration 6b Extended Tests ---")
 
 	// 1. Verify Virtual FS Listing
@@ -42,16 +88,30 @@ func testExtendedVerification(sessionID int64, tagID int64, tagName string, file
 		fmt.Println("SUCCESS: Model Metrics verification passed.")
 	}
 
-	// 5. Verify Qdrant Stats
+	// 5. Verify Qdrant Stats (model-aware collection name)
 	fmt.Println("[STEP 6B.5] Verifying Qdrant Stats...")
-	collectionName := "test-collection"
-	if vectorSize > 0 {
-		collectionName = fmt.Sprintf("%s-%d", collectionName, vectorSize)
-	}
+	collectionName := buildEmbeddingCollection("vectors", embeddingModel, vectorSize)
+	fmt.Printf(" [INFO] Expected collection: %s\n", collectionName)
 	if err := verifyQdrantStats(collectionName); err != nil {
 		fmt.Printf("FAILURE: Qdrant Stats verification failed: %v\n", err)
 	} else {
 		fmt.Println("SUCCESS: Qdrant Stats verification passed.")
+	}
+
+	// 6. Verify embedding_model is stored in db-adapter storage records
+	fmt.Println("[STEP 6B.6] Verifying embedding_model in DB storage records...")
+	if err := verifyEmbeddingModelInDB(tagID, embeddingModel); err != nil {
+		fmt.Printf("FAILURE: DB embedding_model verification failed: %v\n", err)
+	} else {
+		fmt.Println("SUCCESS: DB embedding_model verification passed.")
+	}
+
+	// 7. Verify memory-controller retrieve endpoint (in-memory planner query path)
+	fmt.Println("[STEP 6B.7] Verifying memory-controller retrieve endpoint...")
+	if err := verifyMemoryRetrieve(sessionID); err != nil {
+		fmt.Printf("FAILURE: Memory retrieve verification failed: %v\n", err)
+	} else {
+		fmt.Println("SUCCESS: Memory retrieve verification passed.")
 	}
 
 	fmt.Println("--- Iteration 6b Extended Tests Completed ---")
@@ -201,6 +261,79 @@ func verifyModelMetrics() error {
 		if _, ok := m[k]; !ok {
 			return fmt.Errorf("missing key %s in metrics response", k)
 		}
+	}
+
+	return nil
+}
+
+// verifyEmbeddingModelInDB queries the db-adapter storage endpoint filtered by
+// embedding_model and confirms at least one record was created with the correct
+// model provenance for the given tag.
+func verifyEmbeddingModelInDB(tagID int64, embeddingModel string) error {
+	url := fmt.Sprintf("%s/api/db/storage/files?tag_id=%d&embedding_model=%s",
+		baseURL, tagID, embeddingModel)
+
+	for i := 0; i < 5; i++ {
+		resp, err := client.Get(url)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		}
+
+		var files []struct {
+			Path           string `json:"path"`
+			EmbeddingModel string `json:"embedding_model"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
+			return err
+		}
+
+		if len(files) > 0 {
+			for _, f := range files {
+				if f.EmbeddingModel != embeddingModel {
+					return fmt.Errorf("file %s has embedding_model %q, expected %q",
+						f.Path, f.EmbeddingModel, embeddingModel)
+				}
+			}
+			return nil
+		}
+		fmt.Printf(" [WAIT] No storage records with embedding_model=%q yet, retrying (%d/5)...\n", embeddingModel, i+1)
+		time.Sleep(5 * time.Second)
+	}
+
+	return fmt.Errorf("no storage records found with embedding_model=%q for tag %d", embeddingModel, tagID)
+}
+
+// verifyMemoryRetrieve exercises the memory-controller /retrieve endpoint.
+// This is the in-memory planner query path used by rag-worker during retrieval.
+// After a successful RAG query the session should have memory items.
+func verifyMemoryRetrieve(sessionID int64) error {
+	payload := map[string]interface{}{
+		"scope":       map[string]interface{}{"session_id": sessionID},
+		"query":       "context",
+		"limit":       5,
+		"action_type": "RETRIEVE",
+	}
+	body, _ := json.Marshal(payload)
+
+	resp, err := client.Post(baseURL+"/api/memory/retrieve", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+
+	// Response is a MemoryPack — just verify it's valid JSON with no decode error.
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode memory retrieve response: %v", err)
 	}
 
 	return nil

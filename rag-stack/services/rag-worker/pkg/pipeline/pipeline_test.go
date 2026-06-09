@@ -314,6 +314,9 @@ func TestHandleSearch(t *testing.T) {
 	mockStatusProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
 		return strings.Contains(string(m.Payload), "RETRIEVING_CONTEXT")
 	})).Return(nil, nil)
+	mockStatusProd.On("Send", mock.Anything, mock.MatchedBy(func(m *pulsar.ProducerMessage) bool {
+		return strings.Contains(string(m.Payload), "REFINING_PLAN")
+	})).Return(nil, nil)
 
 	// Mock search
 	mockSearcher.On("Search", mock.Anything, "embed-model", []float32{0.1, 0.2}, []int64(nil), int64(1), false, mock.Anything).Return([]interface{}{

@@ -12,10 +12,10 @@ export REPO_DIR
 VERSION_FILE="$REPO_DIR/../CURRENT_VERSION"
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/version-utils.sh"
 # Global fallback version
-if [[ -z "${VERSION:-}" ]]; then
+if [[ -z "${VERSION:-}" ]] || ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     if [[ -f "$VERSION_FILE" ]]; then
         VERSION="$(read_current_version "$VERSION_FILE" "build-orchestrator" 2>/dev/null || true)"
-        [[ -z "$VERSION" ]] && VERSION="1.0.0"
+        [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || VERSION="1.0.0"
     else
         VERSION="1.0.0"
     fi
@@ -66,7 +66,7 @@ apply_manifest() {
       if [[ -f "$VERSION_FILE" ]]; then
           local svc_ver
           svc_ver="$(read_current_version "$VERSION_FILE" "$svc" 2>/dev/null || true)"
-          if [[ -n "$svc_ver" ]]; then
+          if [[ "$svc_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               ver="$svc_ver"
           fi
       fi
@@ -75,7 +75,7 @@ apply_manifest() {
       if [[ -f "$VERSION_FILE" ]]; then
           local svc_ver
           svc_ver="$(read_current_version "$VERSION_FILE" "build-orchestrator" 2>/dev/null || true)"
-          if [[ -n "$svc_ver" ]]; then
+          if [[ "$svc_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               ver="$svc_ver"
           fi
       fi
@@ -87,7 +87,8 @@ apply_manifest() {
       fi
   fi
 
-  sed -e "s#__VERSION__#${ver}#g" -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" "$manifest" | "$KUBECTL" apply -f -
+  local safe_ver="${ver//$'\n'/}"
+  sed -e "s|__VERSION__|${safe_ver}|g" -e "s|registry.hierocracy.home:5000|${REGISTRY}|g" "$manifest" | "$KUBECTL" apply -f -
 }
 
 if ! is_step_done "namespace"; then
@@ -416,6 +417,7 @@ fi
 
 if ! is_step_done "rag-worker"; then
 echo "--- 7. Deploying RAG Worker (Go) ---"
+$KUBECTL apply -f "$REPO_DIR/services/rag-worker/k8s/configmap.yaml"
 apply_manifest "$REPO_DIR/services/rag-worker/k8s/deployment.yaml"
 mark_step_done "rag-worker"
 fi

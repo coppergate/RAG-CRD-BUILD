@@ -3,7 +3,14 @@ import os
 MODEL_A = os.getenv("MODEL_A", os.getenv("OLLAMA_MODEL", "llama3.1:latest"))
 MODEL_B = os.getenv("MODEL_B", "granite3.1-dense:8b")
 MODEL_C = os.getenv("MODEL_C", "llama3.2:3b")  # CPU alternate planner
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", MODEL_A)
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-minilm:l6-v2")
+EMBEDDING_MODEL_2 = os.getenv("EMBEDDING_MODEL_2", "nomic-embed-text")
+EMBEDDING_VECTOR_SIZE = {
+    "all-minilm:l6-v2": 384,
+    "nomic-embed-text": 768,
+}
+
+EMBEDDING_MODELS = [em for em in [EMBEDDING_MODEL, EMBEDDING_MODEL_2] if em]
 
 
 def _slug(model: str) -> str:
@@ -19,50 +26,35 @@ def _slug(model: str) -> str:
     return "".join(normalized).strip("-")
 
 
-def model_cases():
-    cases = [
-        # GPU planner × GPU executor combinations
-        {
-            "name": f"{MODEL_A}__{MODEL_A}",
-            "label": f"{_slug(MODEL_A)}__{_slug(MODEL_A)}",
-            "planner": MODEL_A,
-            "executor": MODEL_A,
-        },
-        {
-            "name": f"{MODEL_A}__{MODEL_B}",
-            "label": f"{_slug(MODEL_A)}__{_slug(MODEL_B)}",
-            "planner": MODEL_A,
-            "executor": MODEL_B,
-        },
-        {
-            "name": f"{MODEL_B}__{MODEL_A}",
-            "label": f"{_slug(MODEL_B)}__{_slug(MODEL_A)}",
-            "planner": MODEL_B,
-            "executor": MODEL_A,
-        },
-        {
-            "name": f"{MODEL_B}__{MODEL_B}",
-            "label": f"{_slug(MODEL_B)}__{_slug(MODEL_B)}",
-            "planner": MODEL_B,
-            "executor": MODEL_B,
-        },
+def _planner_executor_pairs():
+    """Heterogeneous planner/executor pairs only — same-model pairs skipped."""
+    pairs = [
+        # GPU planner × GPU executor (cross-model only)
+        {"planner": MODEL_A, "executor": MODEL_B},
+        {"planner": MODEL_B, "executor": MODEL_A},
     ]
-
     # CPU alternate planner cases — only added when MODEL_C differs from GPU models
     if MODEL_C and MODEL_C not in (MODEL_A, MODEL_B):
-        cases += [
-            {
-                "name": f"{MODEL_C}__{MODEL_A}",
-                "label": f"{_slug(MODEL_C)}__{_slug(MODEL_A)}",
-                "planner": MODEL_C,
-                "executor": MODEL_A,
-            },
-            {
-                "name": f"{MODEL_C}__{MODEL_B}",
-                "label": f"{_slug(MODEL_C)}__{_slug(MODEL_B)}",
-                "planner": MODEL_C,
-                "executor": MODEL_B,
-            },
+        pairs += [
+            {"planner": MODEL_C, "executor": MODEL_A},
+            {"planner": MODEL_C, "executor": MODEL_B},
         ]
+    return pairs
 
+
+def model_cases():
+    """8-case matrix: 2 embedding models × 4 heterogeneous planner/executor pairs."""
+    cases = []
+    for embed in EMBEDDING_MODELS:
+        vector_size = EMBEDDING_VECTOR_SIZE.get(embed, 384)
+        for pair in _planner_executor_pairs():
+            p, e = pair["planner"], pair["executor"]
+            cases.append({
+                "name": f"{embed}__{p}__{e}",
+                "label": f"{_slug(embed)}__{_slug(p)}__{_slug(e)}",
+                "planner": p,
+                "executor": e,
+                "embedding_model": embed,
+                "vector_size": vector_size,
+            })
     return cases

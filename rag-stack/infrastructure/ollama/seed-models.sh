@@ -23,9 +23,11 @@ declare -a SEED_PAIRS=(
   # GPU chat models — one model per node PVC
   "llama3.1 ollama-llama3"
   "granite3.1-dense:8b ollama-granite31-8b"
-  # CPU embedding models — same model seeded into both node PVCs
+  # CPU embedding models — both models seeded into both node PVCs
   "all-minilm:l6-v2 ollama-embed-0"
   "all-minilm:l6-v2 ollama-embed-1"
+  "nomic-embed-text ollama-embed-0"
+  "nomic-embed-text ollama-embed-1"
   # CPU alternate planner models — same model seeded into both node PVCs
   "llama3.2:3b ollama-planner-cpu-0"
   "llama3.2:3b ollama-planner-cpu-1"

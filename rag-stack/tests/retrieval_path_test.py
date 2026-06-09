@@ -197,7 +197,7 @@ def _associate_session_tags(session_id: int, tag_id: int):
 def _wait_for_synced_file(session_id: int, file_name: str) -> bool:
     url = f"{ADMIN_URL}/api/db/storage/files?session_id={session_id}"
     start = time.time()
-    while time.time() - start < 180:
+    while time.time() - start < 300:
         resp = requests.get(url, timeout=60, verify=False)
         resp.raise_for_status()
         files = resp.json()

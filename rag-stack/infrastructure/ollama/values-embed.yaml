@@ -1,6 +1,7 @@
 # values-embed.yaml — CPU-only Ollama for embedding models
 # Deployed on each inference node alongside the GPU chat pod.
-# No GPU resources; runs all-minilm:l6-v2 (384-dim, ~46MB).
+# No GPU resources; runs all-minilm:l6-v2 (384-dim, ~46MB) and
+# nomic-embed-text (768-dim, ~274MB). Both models stay resident in memory.
 # Override nodeSelector.llm-model at deploy time to pin to a specific node.
 
 replicaCount: 1
@@ -56,21 +57,21 @@ extraEnv:
   - name: OLLAMA_NUM_PARALLEL
     value: "2"
   - name: OLLAMA_MAX_LOADED_MODELS
-    value: "1"
+    value: "2"
 
 resources:
   requests:
     cpu: "500m"
-    memory: "256Mi"
+    memory: "512Mi"
   limits:
     cpu: "2000m"
-    memory: "1Gi"
+    memory: "2Gi"
 
 persistentVolume:
   enabled: true
   accessModes:
     - ReadWriteMany
-  size: 5Gi
+  size: 10Gi
   storageClass: "rook-cephfs"
   volumeMode: "Filesystem"
 
