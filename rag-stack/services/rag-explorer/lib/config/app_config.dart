@@ -13,7 +13,7 @@ abstract class AppConfig with _$AppConfig {
     String? caCertPath,
     @Default('rag-codebase-bucket') String defaultBucketName,
     @Default(true) bool darkMode,
-    @Default(['llama3.1:latest', 'granite3.1-dense:8b'])
+    @Default(['granite3.1-dense:8b', 'qwen3:32b', 'qwen2.5:32b', 'llama3.2:3b', 'llama3.1'])
     List<String> availableModels,
     @Default(true) bool memoryExplorerEnabled,
     @Default(true) bool modelComparisonEnabled,

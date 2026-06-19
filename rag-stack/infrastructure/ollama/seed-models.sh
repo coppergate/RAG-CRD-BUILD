@@ -20,17 +20,55 @@ FORCE_RESEED="${FORCE_RESEED:-false}"
 # Using an array instead of an associative map so the same model can be seeded
 # into multiple PVCs (e.g. all-minilm:l6-v2 into both embed-0 and embed-1).
 declare -a SEED_PAIRS=(
-  # GPU chat models — one model per node PVC
+  # GPU chat models — all GPU models seeded into both GPU PVCs for flexible routing.
+  # ollama-llama3  = planner endpoint (ollama service)
+  # ollama-qwen32b = executor endpoint (ollama-code service)
+  # Seeding all models into both PVCs allows any model to be called on either URL,
+  # enabling full cross-combination testing without re-seeding.
   "llama3.1 ollama-llama3"
-  "granite3.1-dense:8b ollama-granite31-8b"
-  # CPU embedding models — both models seeded into both node PVCs
+  "granite3.1-dense:8b ollama-llama3"
+  "qwen2.5:32b ollama-llama3"
+  "qwen3:32b ollama-llama3"
+  "llama3.1 ollama-qwen32b"
+  "granite3.1-dense:8b ollama-qwen32b"
+  "qwen2.5:32b ollama-qwen32b"
+  "qwen3:32b ollama-qwen32b"
+  # CPU embedding models — inference-node PVC (embed-0 on inference-0)
   "all-minilm:l6-v2 ollama-embed-0"
-  "all-minilm:l6-v2 ollama-embed-1"
   "nomic-embed-text ollama-embed-0"
-  "nomic-embed-text ollama-embed-1"
-  # CPU alternate planner models — same model seeded into both node PVCs
+  "mxbai-embed-large ollama-embed-0"
+  # CPU embedding models — worker-node PVCs (pods 2-9)
+  "all-minilm:l6-v2 ollama-embed-2"
+  "all-minilm:l6-v2 ollama-embed-3"
+  "all-minilm:l6-v2 ollama-embed-4"
+  "all-minilm:l6-v2 ollama-embed-5"
+  "all-minilm:l6-v2 ollama-embed-6"
+  "all-minilm:l6-v2 ollama-embed-7"
+  "all-minilm:l6-v2 ollama-embed-8"
+  "all-minilm:l6-v2 ollama-embed-9"
+  "nomic-embed-text ollama-embed-2"
+  "nomic-embed-text ollama-embed-3"
+  "nomic-embed-text ollama-embed-4"
+  "nomic-embed-text ollama-embed-5"
+  "nomic-embed-text ollama-embed-6"
+  "nomic-embed-text ollama-embed-7"
+  "nomic-embed-text ollama-embed-8"
+  "nomic-embed-text ollama-embed-9"
+  "mxbai-embed-large ollama-embed-2"
+  "mxbai-embed-large ollama-embed-3"
+  "mxbai-embed-large ollama-embed-4"
+  "mxbai-embed-large ollama-embed-5"
+  "mxbai-embed-large ollama-embed-6"
+  "mxbai-embed-large ollama-embed-7"
+  "mxbai-embed-large ollama-embed-8"
+  "mxbai-embed-large ollama-embed-9"
+  # CPU alternate planner — inference-node PVC (planner-cpu-0 on inference-0)
   "llama3.2:3b ollama-planner-cpu-0"
-  "llama3.2:3b ollama-planner-cpu-1"
+  # CPU alternate planner — worker-node PVCs (pods 2-5)
+  "llama3.2:3b ollama-planner-cpu-2"
+  "llama3.2:3b ollama-planner-cpu-3"
+  "llama3.2:3b ollama-planner-cpu-4"
+  "llama3.2:3b ollama-planner-cpu-5"
 )
 
 echo "=== Ollama Model Seeding ==="

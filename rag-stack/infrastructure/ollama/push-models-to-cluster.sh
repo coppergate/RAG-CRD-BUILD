@@ -43,7 +43,7 @@ if [ -f "$LOCAL_CA" ]; then
 fi
 
 # Models to pre-pull (add/remove as needed)
-MODELS=("llama3.1" "granite3.1-dense:8b" "all-minilm:l6-v2" "nomic-embed-text" "llama3.2:3b")
+MODELS=("llama3.1" "granite3.1-dense:8b" "qwen2.5:32b" "qwen3:32b" "all-minilm:l6-v2" "nomic-embed-text" "mxbai-embed-large" "llama3.2:3b")
 
 # 1. Sync Models as OCI artifacts to the in-cluster registry
 # We'll use a temporary ollama container to pull from library.ollama.com and push to our local registry.

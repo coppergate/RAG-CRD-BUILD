@@ -1,16 +1,18 @@
 import os
 
-MODEL_A = os.getenv("MODEL_A", os.getenv("OLLAMA_MODEL", "llama3.1:latest"))
-MODEL_B = os.getenv("MODEL_B", "granite3.1-dense:8b")
+MODEL_A = os.getenv("MODEL_A", os.getenv("OLLAMA_MODEL", "granite3.1-dense:8b"))
+MODEL_B = os.getenv("MODEL_B", "qwen3:32b")
 MODEL_C = os.getenv("MODEL_C", "llama3.2:3b")  # CPU alternate planner
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-minilm:l6-v2")
 EMBEDDING_MODEL_2 = os.getenv("EMBEDDING_MODEL_2", "nomic-embed-text")
+EMBEDDING_MODEL_3 = os.getenv("EMBEDDING_MODEL_3", "mxbai-embed-large")
 EMBEDDING_VECTOR_SIZE = {
     "all-minilm:l6-v2": 384,
     "nomic-embed-text": 768,
+    "mxbai-embed-large": 1024,
 }
 
-EMBEDDING_MODELS = [em for em in [EMBEDDING_MODEL, EMBEDDING_MODEL_2] if em]
+EMBEDDING_MODELS = [em for em in [EMBEDDING_MODEL, EMBEDDING_MODEL_2, EMBEDDING_MODEL_3] if em]
 
 
 def _slug(model: str) -> str:
@@ -43,7 +45,7 @@ def _planner_executor_pairs():
 
 
 def model_cases():
-    """8-case matrix: 2 embedding models × 4 heterogeneous planner/executor pairs."""
+    """12-case matrix: 3 embedding models × 4 heterogeneous planner/executor pairs."""
     cases = []
     for embed in EMBEDDING_MODELS:
         vector_size = EMBEDDING_VECTOR_SIZE.get(embed, 384)
