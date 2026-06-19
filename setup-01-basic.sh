@@ -207,7 +207,7 @@ WaitForServiceToStart "cert-manager" "cert-manager" 25
 echo "Check the cert-manager-webhook service deploy"
 WaitForServiceToStart "cert-manager" "cert-manager-webhook" 35
 mark_step_done "cert-manager"
-fi
+
 
 echo ""
 # for some reason this next step fails if it happens too soon after the deploy?
@@ -283,6 +283,7 @@ EOF
 echo "waiting for 1 minute"
 
 sleep 1m;
+fi
 
 if ! is_step_done "local-registry"; then
 echo "--- Bootstrapping Local Registry ---"

@@ -98,16 +98,17 @@ declare -A HB_PIDS
 # Actually, the trap in build_service will handle it better for parallel builds.
 
 SERVICES=(
-    "rag-worker" 
-    "rag-ingestion" 
-    "llm-gateway" 
-    "db-adapter" 
-    "qdrant-adapter" 
-    "object-store-mgr" 
+    "rag-worker"
+    "rag-ingestion"
+    "llm-gateway"
+    "db-adapter"
+    "qdrant-adapter"
+    "object-store-mgr"
     "rag-test-runner"
     "rag-admin-api"
     "memory-controller"
     "prompt-aggregator"
+    "embed-gateway"
 )
 
 # Infrastructure services are only built if explicitly requested or if they have changed.

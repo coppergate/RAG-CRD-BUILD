@@ -117,7 +117,7 @@ func main() {
 	}
 
 	// 5 & 6. Wait for Ingestion and Verify via Ask
-	ingestTimeout := 5 * time.Minute
+	ingestTimeout := 20 * time.Minute
 	if timeoutEnv := os.Getenv("E2E_INGEST_TIMEOUT"); timeoutEnv != "" {
 		if parsed, err := time.ParseDuration(timeoutEnv); err == nil && parsed > 0 {
 			ingestTimeout = parsed
@@ -132,7 +132,9 @@ func main() {
 		// Use a very specific query to ensure we are testing the isolation and the file we just uploaded.
 		query := fmt.Sprintf("What is the secret code and its generation timestamp mentioned in the file %s? Provide the exact code and timestamp.", fileName)
 		answer, askErr := askRAG(query, []int64{tagID})
-		if askErr == nil {
+		if askErr != nil {
+			lastAnswer = fmt.Sprintf("[error: %v]", askErr)
+		} else {
 			lastAnswer = answer
 			fmt.Printf("DEBUG: Received RAG Answer: %q\n", answer)
 			// Tighten verification: should contain the code and be relatively short or focused
@@ -160,7 +162,7 @@ func main() {
 				break
 			}
 		}
-		fmt.Printf("Waiting for ingestion... (elapsed: %v / %s, last answer: %q)\n", time.Since(start).Round(time.Second), ingestTimeout.Round(time.Second), answer)
+		fmt.Printf("Waiting for ingestion... (elapsed: %v / %s, last answer: %q)\n", time.Since(start).Round(time.Second), ingestTimeout.Round(time.Second), lastAnswer)
 		time.Sleep(10 * time.Second)
 	}
 

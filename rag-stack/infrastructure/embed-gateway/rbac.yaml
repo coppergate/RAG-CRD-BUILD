@@ -1,0 +1,37 @@
+# embed-gateway RBAC
+# The embed-gateway service runs in rag-system but needs to list pods in llms-ollama
+# to discover node-local embed pod IPs for direct HTTP routing.
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: embed-gateway
+  namespace: rag-system
+
+---
+# Role scoped to llms-ollama — allows pod list/get for node-local embed URL discovery.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: embed-gateway-pod-reader
+  namespace: llms-ollama
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: embed-gateway-pod-reader
+  namespace: llms-ollama
+subjects:
+  - kind: ServiceAccount
+    name: embed-gateway
+    namespace: rag-system
+roleRef:
+  kind: Role
+  name: embed-gateway-pod-reader
+  apiGroup: rbac.authorization.k8s.io

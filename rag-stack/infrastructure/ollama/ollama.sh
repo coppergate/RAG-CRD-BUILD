@@ -62,8 +62,15 @@ else
 fi
 rm -f "$COMBINED_CA"
   
-$KUBECTL label nodes inference-0 role=inference-node llm-model=llama3.1 --overwrite
-$KUBECTL label nodes inference-1 role=inference-node llm-model=granite3.1-dense-8b --overwrite
+# Single inference node — label inference-0 only.
+$KUBECTL label nodes inference-0 role=inference-node --overwrite
+
+# Label worker nodes with embed-instance index for pod pinning.
+# worker-0..3 already carry role=storage-node; embed-instance is additive.
+$KUBECTL label nodes worker-0 embed-instance=0 --overwrite
+$KUBECTL label nodes worker-1 embed-instance=1 --overwrite
+$KUBECTL label nodes worker-2 embed-instance=2 --overwrite
+$KUBECTL label nodes worker-3 embed-instance=3 --overwrite
 
 # Create services for CPU pods before installing them so they are ready when pods come up.
 # Each service selects pods by the ollama-role label set via podLabels in the values files.
@@ -101,50 +108,78 @@ REGISTRY="registry.container-registry.svc.cluster.local:5000"
 
 # Deploy Ollama WITHOUT model pulling — models are seeded separately via seed-models.sh
 # This avoids long postStart hangs during install.
+#
+# Two GPU deployments on inference-0:
+#   ollama-llama3  — planner endpoint (ollama service); llama3.1 + granite3.1-dense:8b seeded
+#   ollama-qwen32b — executor endpoint (ollama-code service); qwen2.5:32b + all GPU models seeded
+# Both use nodeSelector: role=inference-node (values.yaml default) — no --set override needed.
 $HELM upgrade --install ollama-llama3 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
-  --set nodeSelector."llm-model"=llama3.1 \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
-$HELM upgrade --install ollama-granite31-8b otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
-  --set nodeSelector."llm-model"=granite3.1-dense-8b \
+$HELM upgrade --install ollama-qwen32b otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-qwen32b.yaml" \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
 $KUBECTL expose deployment ollama-llama3 --name=ollama --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
-$KUBECTL expose deployment ollama-granite31-8b --name=ollama-code --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
+$KUBECTL expose deployment ollama-qwen32b --name=ollama-code --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
 
-# Deploy CPU-only embedding Ollama on each inference node.
-# Each node gets its own embed pod; both are selected by the ollama-embed service.
-# To run a different embedding model on a node in the future, change the values-embed.yaml
-# or add a per-node override at install time.
+# Deploy CPU-only embedding Ollama on inference-0.
+# Selected by the ollama-embed ClusterIP service alongside worker-node embed pods.
+# nodeSelector: role=inference-node comes from values-embed.yaml default.
 $HELM upgrade --install ollama-embed-0 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-embed.yaml" \
-  --set nodeSelector."llm-model"=llama3.1 \
-  --set image.repository="${REGISTRY}/ollama/ollama" \
-  --set image.tag="0.15.6"
-$HELM upgrade --install ollama-embed-1 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-embed.yaml" \
-  --set nodeSelector."llm-model"=granite3.1-dense-8b \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
 
-# Deploy CPU-only alternate planner Ollama on each inference node.
-# Both pods are selected by the ollama-planner-cpu service.
-# Uses the llama3 prompt format — compatible with the existing planner PromptType.
+# Deploy CPU-only alternate planner Ollama on inference-0.
+# Selected by the ollama-planner-cpu ClusterIP service alongside worker-node planner pods.
+# nodeSelector: role=inference-node comes from values-planner-cpu.yaml default.
 $HELM upgrade --install ollama-planner-cpu-0 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-planner-cpu.yaml" \
-  --set nodeSelector."llm-model"=llama3.1 \
-  --set image.repository="${REGISTRY}/ollama/ollama" \
-  --set image.tag="0.15.6"
-$HELM upgrade --install ollama-planner-cpu-1 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-planner-cpu.yaml" \
-  --set nodeSelector."llm-model"=granite3.1-dense-8b \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
 
-# Wait for pods to be ready before seeding models
-echo "Waiting for Ollama pods to be ready..."
+# Deploy CPU-only embedding Ollama on each worker node — 2 pods per node (embed-2..9).
+# All pods carry ollama-role=embed and are picked up by the ollama-embed ClusterIP service.
+# Each pair is pinned to its node via embed-instance label set above.
+for INSTANCE in 0 1 2 3; do
+  for OFFSET in 0 1; do
+    IDX=$(( INSTANCE * 2 + OFFSET + 2 ))
+    echo "Deploying ollama-embed-${IDX} on worker node embed-instance=${INSTANCE}..."
+    $HELM upgrade --install ollama-embed-${IDX} otwld/ollama \
+      --namespace llms-ollama \
+      -f "$SCRIPT_DIR/values-embed-worker.yaml" \
+      --set-string "nodeSelector.embed-instance=${INSTANCE}" \
+      --set image.repository="${REGISTRY}/ollama/ollama" \
+      --set image.tag="0.15.6"
+  done
+done
+
+# Deploy CPU-only planner Ollama on each worker node — 1 pod per node (planner-cpu-2..5).
+# All pods carry ollama-role=planner-cpu and are picked up by the ollama-planner-cpu service.
+for INSTANCE in 0 1 2 3; do
+  IDX=$(( INSTANCE + 2 ))
+  echo "Deploying ollama-planner-cpu-${IDX} on worker node embed-instance=${INSTANCE}..."
+  $HELM upgrade --install ollama-planner-cpu-${IDX} otwld/ollama \
+    --namespace llms-ollama \
+    -f "$SCRIPT_DIR/values-planner-cpu-worker.yaml" \
+    --set-string "nodeSelector.embed-instance=${INSTANCE}" \
+    --set image.repository="${REGISTRY}/ollama/ollama" \
+    --set image.tag="0.15.6"
+done
+
+# Wait for inference-node pods to be ready before seeding models
+echo "Waiting for inference-node Ollama pods to be ready..."
 $KUBECTL rollout status deploy/ollama-llama3 -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-granite31-8b -n llms-ollama --timeout=120s || true
+$KUBECTL rollout status deploy/ollama-qwen32b -n llms-ollama --timeout=120s || true
 $KUBECTL rollout status deploy/ollama-embed-0 -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-embed-1 -n llms-ollama --timeout=120s || true
 $KUBECTL rollout status deploy/ollama-planner-cpu-0 -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-planner-cpu-1 -n llms-ollama --timeout=120s || true
+
+# Wait for worker-node pods to be ready
+echo "Waiting for worker-node Ollama pods to be ready..."
+for IDX in 2 3 4 5 6 7 8 9; do
+  $KUBECTL rollout status deploy/ollama-embed-${IDX} -n llms-ollama --timeout=120s || true
+done
+for IDX in 2 3 4 5; do
+  $KUBECTL rollout status deploy/ollama-planner-cpu-${IDX} -n llms-ollama --timeout=120s || true
+done
 
 # Seed models from local registry into PVCs
 if [[ "${SKIP_SEEDING:-false}" != "true" ]]; then

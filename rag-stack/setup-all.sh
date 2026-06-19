@@ -121,6 +121,12 @@ $KUBECTL apply -f "$REPO_DIR/infrastructure/rag-system-rbac.yaml"
 mark_step_done "rag-system-rbac"
 fi
 
+if ! is_step_done "embed-gateway-rbac"; then
+echo "--- 1.3 Applying Embed Gateway RBAC ---"
+$KUBECTL apply -f "$REPO_DIR/infrastructure/embed-gateway/rbac.yaml"
+mark_step_done "embed-gateway-rbac"
+fi
+
 # Inject Registry & Pulsar CA ConfigMap into rag-system
 echo "--- Injecting Combined Registry & Pulsar CA into $NAMESPACE ---"
 mkdir -p "$SAFE_TMP_DIR"
@@ -301,12 +307,14 @@ $KUBECTL apply -f "$REPO_DIR/infrastructure/pulsar/topic-config.yaml"
 mark_step_done "pulsar-topic-config"
 fi
 
-# Ensure tenants/namespaces are initialized (idempotent — safe to re-run)
-# if ! is_step_done "pulsar-init"; then
-# echo "--- 3.1 Initializing Pulsar Tenants and Namespaces ---"
-# bash "$REPO_DIR/infrastructure/pulsar/init-rag-pulsar.sh"
-# mark_step_done "pulsar-init"
-# fi
+# Initialize Pulsar tenants, namespaces, and topics (idempotent — safe to re-run).
+# Creates rag-pipeline tenant, all stage/data/operations/embed namespaces, and
+# the embed/jobs partitioned topic required by the embed-gateway fan-out.
+if ! is_step_done "pulsar-init"; then
+echo "--- 3.2 Initializing Pulsar Tenants, Namespaces, and Topics ---"
+bash "$REPO_DIR/infrastructure/pulsar/init-rag-pulsar.sh"
+mark_step_done "pulsar-init"
+fi
 
 if ! is_step_done "qdrant"; then
 echo "--- 4. Deploying Vector Database: Qdrant ---"
@@ -420,6 +428,12 @@ echo "--- 7. Deploying RAG Worker (Go) ---"
 $KUBECTL apply -f "$REPO_DIR/services/rag-worker/k8s/configmap.yaml"
 apply_manifest "$REPO_DIR/services/rag-worker/k8s/deployment.yaml"
 mark_step_done "rag-worker"
+fi
+
+if ! is_step_done "embed-gateway"; then
+echo "--- 7.1 Deploying Embed Gateway (Go) ---"
+apply_manifest "$REPO_DIR/services/embed-gateway/k8s/deployment.yaml"
+mark_step_done "embed-gateway"
 fi
 
 if ! is_step_done "prompt-aggregator"; then
