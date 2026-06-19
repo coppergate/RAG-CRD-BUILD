@@ -15,9 +15,47 @@ $KUBECTL label --overwrite namespace $NAMESPACE \
 
 helm repo add traefik https://traefik.github.io/charts
 helm repo update
-helm upgrade --install traefik traefik/traefik -n $NAMESPACE \
-  --set nodeSelector.role=storage-node \
-  --set "additionalArguments={--tracing.otlp=true,--tracing.otlp.grpc.endpoint=otel-collector.monitoring.svc.cluster.local:4317,--tracing.otlp.grpc.insecure=true}" \
-  --set logs.general.format=json \
-  --set logs.access.enabled=true \
-  --set logs.access.format=json
+
+echo "running upgrade"
+
+helm upgrade --install traefik traefik/traefik -n $NAMESPACE -f - <<EOF
+nodeSelector:
+  role: storage-node
+
+experimental:
+  otlpLogs: true
+
+log:
+  level: INFO
+  format: json
+  otlp:
+    enabled: true
+    grpc:
+      enabled: true
+      endpoint: "otel-collector.monitoring.svc.cluster.local:4317"
+      insecure: true
+
+accessLog:
+  enabled: true
+  format: json
+  otlp:
+    enabled: true
+    grpc:
+      enabled: true
+      endpoint: "otel-collector.monitoring.svc.cluster.local:4317"
+      insecure: true
+
+tracing:
+  otlp:
+    grpc:
+      enabled: true
+      endpoint: "otel-collector.monitoring.svc.cluster.local:4317"
+      insecure: true
+EOF
+
+#helm upgrade --install traefik traefik/traefik -n $NAMESPACE \
+#  --set nodeSelector.role=storage-node \
+#  --set "additionalArguments={--tracing.otlp=true,--tracing.otlp.grpc.endpoint=otel-collector.monitoring.svc.cluster.local:4317,--tracing.otlp.grpc.insecure=true}" \
+#  --set logs.general.format=json \
+#  --set logs.access.enabled=true \
+#  --set logs.access.format=json
