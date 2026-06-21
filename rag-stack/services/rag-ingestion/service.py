@@ -328,6 +328,40 @@ def _log_qdrant_op(
     )
 
 
+_SQL_COVERAGE_UPSERT_BUILDING = """
+    INSERT INTO tag_embedding_coverage
+           (tag_id, embedding_model, vector_dims, status, updated_at)
+    VALUES (%s, %s, %s, 'building', NOW())
+    ON CONFLICT (tag_id, embedding_model)
+       DO UPDATE SET status = 'building', updated_at = NOW()
+"""
+
+_SQL_COVERAGE_UPSERT_COMPLETE = """
+    UPDATE tag_embedding_coverage
+       SET status = 'complete',
+           vector_count     = %s,
+           file_count       = %s,
+           last_embedded_at = NOW(),
+           updated_at       = NOW()
+     WHERE tag_id = %s AND embedding_model = %s
+"""
+
+_SQL_COVERAGE_MARK_OTHERS_STALE = """
+    UPDATE tag_embedding_coverage
+       SET status = 'stale', updated_at = NOW()
+     WHERE tag_id = %s
+       AND embedding_model != %s
+       AND status = 'complete'
+"""
+
+_SQL_COVERAGE_REVERT_ON_FAILURE = """
+    UPDATE tag_embedding_coverage
+       SET status = CASE WHEN vector_count > 0 THEN 'stale' ELSE 'pending' END,
+           updated_at = NOW()
+     WHERE tag_id = %s AND embedding_model = %s
+"""
+
+
 def _coverage_upsert_building(conn, tag_ids: List[int], embedding_model: str, vector_dims: int) -> None:
     """Mark coverage rows as 'building' at the start of an ingest job."""
     if not tag_ids:
@@ -335,16 +369,7 @@ def _coverage_upsert_building(conn, tag_ids: List[int], embedding_model: str, ve
     try:
         with conn.cursor() as cur:
             for tid in tag_ids:
-                cur.execute(
-                    """
-                    INSERT INTO tag_embedding_coverage
-                           (tag_id, embedding_model, vector_dims, status, updated_at)
-                    VALUES (%s, %s, %s, 'building', NOW())
-                    ON CONFLICT (tag_id, embedding_model)
-                       DO UPDATE SET status = 'building', updated_at = NOW()
-                    """,
-                    (tid, embedding_model, vector_dims),
-                )
+                cur.execute(_SQL_COVERAGE_UPSERT_BUILDING, (tid, embedding_model, vector_dims))
         conn.commit()
     except Exception as e:
         logger.warning("[coverage] failed to upsert building status: %s", e)
@@ -361,29 +386,9 @@ def _coverage_upsert_complete(conn, tag_ids: List[int], embedding_model: str, ve
     try:
         with conn.cursor() as cur:
             for tid in tag_ids:
-                cur.execute(
-                    """
-                    UPDATE tag_embedding_coverage
-                       SET status = 'complete',
-                           vector_count     = %s,
-                           file_count       = %s,
-                           last_embedded_at = NOW(),
-                           updated_at       = NOW()
-                     WHERE tag_id = %s AND embedding_model = %s
-                    """,
-                    (vector_count, file_count, tid, embedding_model),
-                )
+                cur.execute(_SQL_COVERAGE_UPSERT_COMPLETE, (vector_count, file_count, tid, embedding_model))
                 # Mark other models stale — new files may not be present in their collections.
-                cur.execute(
-                    """
-                    UPDATE tag_embedding_coverage
-                       SET status = 'stale', updated_at = NOW()
-                     WHERE tag_id = %s
-                       AND embedding_model != %s
-                       AND status = 'complete'
-                    """,
-                    (tid, embedding_model),
-                )
+                cur.execute(_SQL_COVERAGE_MARK_OTHERS_STALE, (tid, embedding_model))
         conn.commit()
     except Exception as e:
         logger.warning("[coverage] failed to upsert complete status: %s", e)
@@ -400,15 +405,7 @@ def _coverage_revert_on_failure(conn, tag_ids: List[int], embedding_model: str) 
     try:
         with conn.cursor() as cur:
             for tid in tag_ids:
-                cur.execute(
-                    """
-                    UPDATE tag_embedding_coverage
-                       SET status = CASE WHEN vector_count > 0 THEN 'stale' ELSE 'pending' END,
-                           updated_at = NOW()
-                     WHERE tag_id = %s AND embedding_model = %s
-                    """,
-                    (tid, embedding_model),
-                )
+                cur.execute(_SQL_COVERAGE_REVERT_ON_FAILURE, (tid, embedding_model))
         conn.commit()
     except Exception as e:
         logger.warning("[coverage] failed to revert status on failure: %s", e)

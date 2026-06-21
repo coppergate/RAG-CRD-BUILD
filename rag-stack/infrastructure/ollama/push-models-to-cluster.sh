@@ -11,6 +11,7 @@ SUDO_KEEPALIVE_PID=$!
 trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
 
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
+HIEROPHANT_REGISTRY="${HIEROPHANT_REGISTRY:-10.0.0.1:5000}"
 OLLAMA_IMAGE_LOCAL="${REGISTRY}/ollama/ollama:0.15.6"
 OLLAMA_IMAGE_UPSTREAM="docker.io/ollama/ollama:0.15.6"
 STORAGE_DIR="${OLLAMA_MODEL_STORE:-/mnt/storage/ollama-models}"
@@ -45,12 +46,53 @@ fi
 # Models to pre-pull (add/remove as needed)
 MODELS=("llama3.1" "granite3.1-dense:8b" "qwen2.5:32b" "qwen3:32b" "all-minilm:l6-v2" "nomic-embed-text" "mxbai-embed-large" "llama3.2:3b")
 
-# 1. Sync Models as OCI artifacts to the in-cluster registry
-# We'll use a temporary ollama container to pull from library.ollama.com and push to our local registry.
-# Using a local volume mount ensures we don't re-download from the internet if already cached.
-
 echo "--- Pushing Models to Cluster Registry ($REGISTRY) as OCI artifacts ---"
 
+# ── Pre-pass: serve from hierophant registry if available ─────────────────────
+# Models stored by a previous run of extract-registry-to-hierophant.sh are at
+# $HIEROPHANT_REGISTRY/ollama/<model>.  We can copy them directly to the cluster
+# registry with skopeo, skipping the internet pull entirely.
+SKOPEO_CERT_DIR="$(mktemp -d /tmp/skopeo-ollama-certs-XXXXXX)"
+trap 'rm -rf "$SKOPEO_CERT_DIR"' EXIT
+if [[ -f "$LOCAL_CA" ]]; then
+    cp "$LOCAL_CA" "$SKOPEO_CERT_DIR/ca.crt"
+fi
+
+needs_pull=()
+for MODEL in "${MODELS[@]}"; do
+    LOCAL_MODEL_PATH="${REGISTRY}/ollama/${MODEL}"
+    HIEROPHANT_PATH="${HIEROPHANT_REGISTRY}/ollama/${MODEL}"
+
+    echo "Checking hierophant for: $MODEL"
+    if skopeo inspect \
+            --src-cert-dir="$SKOPEO_CERT_DIR" \
+            "docker://$HIEROPHANT_PATH" >/dev/null 2>&1; then
+        echo "  Found in hierophant — copying directly to cluster registry..."
+        if skopeo copy --all \
+                --src-cert-dir="$SKOPEO_CERT_DIR" \
+                --dest-cert-dir="$SKOPEO_CERT_DIR" \
+                "docker://$HIEROPHANT_PATH" \
+                "docker://$LOCAL_MODEL_PATH"; then
+            echo "  OK: $MODEL (hierophant)"
+            continue
+        else
+            echo "  WARN: hierophant copy failed for $MODEL — will pull from internet"
+        fi
+    else
+        echo "  Not in hierophant"
+    fi
+    needs_pull+=("$MODEL")
+done
+
+if [[ ${#needs_pull[@]} -eq 0 ]]; then
+    echo "All models served from hierophant registry. No internet pull needed."
+    echo "Models have been pushed to ${REGISTRY}"
+    exit 0
+fi
+
+echo "${#needs_pull[@]} model(s) need internet pull: ${needs_pull[*]}"
+
+# ── Remaining models: pull from ollama.com via temporary container ─────────────
 # Ensure the base Ollama image is available (it might be missing from a fresh cluster registry)
 echo "Checking for base Ollama image..."
 if ! sudo podman pull "$OLLAMA_IMAGE_LOCAL" 2>/dev/null; then
@@ -97,7 +139,7 @@ if [ "$OLLAMA_STARTED" = false ]; then
   exit 1
 fi
 
-for MODEL in "${MODELS[@]}"; do
+for MODEL in "${needs_pull[@]}"; do
     # Ollama OCI reference: <registry>/<namespace>/<repository>:<tag>
 
     LOCAL_MODEL_PATH="${REGISTRY}/ollama/${MODEL}"

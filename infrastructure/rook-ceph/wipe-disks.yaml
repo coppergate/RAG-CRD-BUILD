@@ -13,10 +13,11 @@ spec:
           privileged: true
         command: ["/bin/sh", "-c"]
         args:
-        - |
-          wipefs -a /dev/vdb /dev/vdc
-          dd if=/dev/zero of=/dev/vdb bs=1M count=100
-          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+          - |
+            wipefs -a /dev/vdb /dev/vdc /dev/vdd
+            dd if=/dev/zero of=/dev/vdb bs=1M count=100
+            dd if=/dev/zero of=/dev/vdc bs=1M count=100
+            dd if=/dev/zero of=/dev/vdd bs=1M count=100
       nodeSelector:
         kubernetes.io/hostname: worker-0
       restartPolicy: Never
