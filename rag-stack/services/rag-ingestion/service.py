@@ -328,6 +328,92 @@ def _log_qdrant_op(
     )
 
 
+def _coverage_upsert_building(conn, tag_ids: List[int], embedding_model: str, vector_dims: int) -> None:
+    """Mark coverage rows as 'building' at the start of an ingest job."""
+    if not tag_ids:
+        return
+    try:
+        with conn.cursor() as cur:
+            for tid in tag_ids:
+                cur.execute(
+                    """
+                    INSERT INTO tag_embedding_coverage
+                           (tag_id, embedding_model, vector_dims, status, updated_at)
+                    VALUES (%s, %s, %s, 'building', NOW())
+                    ON CONFLICT (tag_id, embedding_model)
+                       DO UPDATE SET status = 'building', updated_at = NOW()
+                    """,
+                    (tid, embedding_model, vector_dims),
+                )
+        conn.commit()
+    except Exception as e:
+        logger.warning("[coverage] failed to upsert building status: %s", e)
+
+
+def _coverage_upsert_complete(conn, tag_ids: List[int], embedding_model: str, vector_dims: int,
+                               vector_count: int, file_count: int) -> None:
+    """
+    Mark coverage rows as 'complete' and mark OTHER complete models as 'stale'
+    (new files ingested for this model may not exist in other collections).
+    """
+    if not tag_ids:
+        return
+    try:
+        with conn.cursor() as cur:
+            for tid in tag_ids:
+                cur.execute(
+                    """
+                    UPDATE tag_embedding_coverage
+                       SET status = 'complete',
+                           vector_count     = %s,
+                           file_count       = %s,
+                           last_embedded_at = NOW(),
+                           updated_at       = NOW()
+                     WHERE tag_id = %s AND embedding_model = %s
+                    """,
+                    (vector_count, file_count, tid, embedding_model),
+                )
+                # Mark other models stale — new files may not be present in their collections.
+                cur.execute(
+                    """
+                    UPDATE tag_embedding_coverage
+                       SET status = 'stale', updated_at = NOW()
+                     WHERE tag_id = %s
+                       AND embedding_model != %s
+                       AND status = 'complete'
+                    """,
+                    (tid, embedding_model),
+                )
+        conn.commit()
+    except Exception as e:
+        logger.warning("[coverage] failed to upsert complete status: %s", e)
+
+
+def _coverage_revert_on_failure(conn, tag_ids: List[int], embedding_model: str) -> None:
+    """
+    On failure revert coverage status:
+    - If the row has accumulated vectors (vector_count > 0) → 'stale' (partial data exists)
+    - Otherwise → 'pending'
+    """
+    if not tag_ids:
+        return
+    try:
+        with conn.cursor() as cur:
+            for tid in tag_ids:
+                cur.execute(
+                    """
+                    UPDATE tag_embedding_coverage
+                       SET status = CASE WHEN vector_count > 0 THEN 'stale' ELSE 'pending' END,
+                           updated_at = NOW()
+                     WHERE tag_id = %s AND embedding_model = %s
+                    """,
+                    (tid, embedding_model),
+                )
+        conn.commit()
+    except Exception as e:
+        logger.warning("[coverage] failed to revert status on failure: %s", e)
+
+
 def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                   vector_size: Optional[int] = None, file_names: Optional[List[str]] = None,
                   session_id: Optional[int] = None, bucket_name: Optional[str] = None,
@@ -433,6 +519,9 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
 
         # Ensure tag_ids are unique integers
         tag_ids = list(set([int(tid) for tid in tag_ids if tid is not None]))
+
+        # Mark coverage rows as 'building' for this tag+model combination.
+        _coverage_upsert_building(conn, tag_ids, current_model, current_vs)
 
         # Ingestion entry is now created in trigger_ingest, but we ensure it here just in case
         with conn.cursor() as cur:
@@ -624,6 +713,9 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
             conn.commit()
             logger.info("[ingestion=%s] committed final batch; total processed chunks=%d", ingestion_id, idx)
 
+        # Update coverage to 'complete' and mark other models stale.
+        _coverage_upsert_complete(conn, tag_ids, current_model, current_vs, idx, len(files))
+
         if failed_chunks:
             logger.warning(
                 "[ingestion=%s] completed with %d failed chunks out of %d total; failures=%r",
@@ -637,6 +729,8 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
 
     except Exception as e:
         logger.error("[ingestion=%s] ingestion task failed: %s", ingestion_id, e)
+        if conn:
+            _coverage_revert_on_failure(conn, tag_ids, current_model)
     finally:
         if q_prod is not None:
             try:

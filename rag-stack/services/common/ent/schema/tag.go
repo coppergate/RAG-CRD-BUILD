@@ -45,5 +45,6 @@ func (Tag) Edges() []ent.Edge {
 			Ref("tags"),
 		edge.From("embeddings", CodeEmbedding.Type).
 			Ref("tags"),
+		edge.To("embedding_coverages", TagEmbeddingCoverage.Type),
 	}
 }

@@ -191,18 +191,45 @@ go run -mod=mod entgo.io/ent/cmd/ent generate --feature sql/upsert ./ent/schema
 
 ### 3.3 Stale Transition
 
-When rag-ingestion records a new file ingestion for a tag (writes to `code_ingestion`), it
-must also mark any `complete` coverage rows for that `tag_id` as `stale`:
+When rag-ingestion completes an ingest for `(tag_id, embedding_model)`, it must mark any
+**other** `complete` coverage rows for that `tag_id` as `stale`. This captures the case
+where new files have been embedded for one model but not others (e.g. all-minilm updated
+with new files → nomic-embed-text now incomplete):
 
 ```sql
 UPDATE tag_embedding_coverage
    SET status = 'stale', updated_at = NOW()
  WHERE tag_id = $1
+   AND embedding_model != $2   -- do NOT mark the model that just completed as stale
    AND status = 'complete';
 ```
 
-This is an upsert-adjacent operation in the rag-ingestion ingest handler, not a separate
-job.
+This fires at job **completion** (not at the start), after the `complete` upsert for
+`(tag_id, model)`. It is an upsert-adjacent operation in the rag-ingestion ingest
+handler, not a separate job.
+
+> **NOTE — Bootstrap (future reference):** If a production deployment already has ingested
+> vectors and needs to seed `tag_embedding_coverage` from existing data, use:
+> ```sql
+> INSERT INTO tag_embedding_coverage
+>        (tag_id, embedding_model, vector_dims, vector_count, file_count, status,
+>         last_embedded_at, created_at, updated_at)
+> SELECT DISTINCT
+>        ct.tag_id,
+>        ce.embedding_model,
+>        ce.vector_size,
+>        COUNT(ce.id)                         AS vector_count,
+>        COUNT(DISTINCT ci.s3_bucket_id)      AS file_count,
+>        'complete'                           AS status,
+>        MAX(ce.created_at)                   AS last_embedded_at,
+>        NOW(), NOW()
+>   FROM code_embedding_tag ct
+>   JOIN code_embedding ce ON ce.id = ct.code_embedding_id
+>   LEFT JOIN code_ingestion ci ON ci.ingestion_id = ce.ingestion_id
+>  GROUP BY ct.tag_id, ce.embedding_model, ce.vector_size
+>     ON CONFLICT (tag_id, embedding_model) DO NOTHING;
+> ```
+> Not needed for a fresh install — only if migrating an existing populated database.
 
 ---
 
@@ -328,11 +355,10 @@ Attach the advisory to the Seq 0 metadata chunk:
 ]
 ```
 
-**Important:** The ingest trigger from rag-worker uses the **same bucket** and **same tag**
-as the original chat request. The rag-worker must carry the bucket name in the session
-context or derive it from the db-adapter session record. If bucket is unavailable, skip
-the trigger and include `"trigger_failed": true` in the advisory entry so the UI can
-prompt the user to trigger manually.
+**Bucket name:** The async ingest trigger omits `bucket_name` — the rag-ingestion service
+will default to its `BUCKET_NAME` environment variable. This covers the common case. Tags
+that span multiple non-default buckets will ingest only from the default bucket; the
+advisory will still surface and the user can trigger a full ingest manually from the UI.
 
 ---
 

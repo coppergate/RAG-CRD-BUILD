@@ -493,6 +493,62 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	}
 	embeddingModels := h.resolveEmbeddingModelCandidates(req, plannerModelID)
 	logging.Printf("[%s][SID:%d] resolved embedding candidates=%v", req.Id, req.SessionId, embeddingModels)
+
+	// Coverage check: determine which tags have vectors for the primary embedding model.
+	// Tags without coverage are excluded from Qdrant search; pending ones trigger async ingest.
+	primaryEmbeddingModel := ""
+	if len(embeddingModels) > 0 {
+		primaryEmbeddingModel = embeddingModels[0]
+	}
+	if req.EmbeddingModel != "" {
+		primaryEmbeddingModel = req.EmbeddingModel
+	}
+
+	var missingEmbeddings []map[string]interface{}
+	searchableTags := tags // default: search all tags
+
+	if len(req.Tags) > 0 && primaryEmbeddingModel != "" {
+		coverage := h.checkEmbeddingCoverage(ctx, req.Tags, primaryEmbeddingModel)
+		if coverage != nil {
+			var filteredTagIDs []int64
+			for _, entry := range coverage {
+				switch entry.Status {
+				case "complete":
+					// Include in search — no advisory needed.
+					filteredTagIDs = append(filteredTagIDs, entry.TagID)
+				case "stale":
+					// Include in search (vectors exist) — add to advisory.
+					filteredTagIDs = append(filteredTagIDs, entry.TagID)
+					missingEmbeddings = append(missingEmbeddings, map[string]interface{}{
+						"tag_id": entry.TagID,
+						"tag":    entry.Tag,
+						"model":  primaryEmbeddingModel,
+						"status": "stale",
+					})
+				case "pending":
+					// No vectors — trigger async ingest and exclude from search.
+					h.triggerAsyncIngest(entry.TagID, entry.Tag, primaryEmbeddingModel)
+					missingEmbeddings = append(missingEmbeddings, map[string]interface{}{
+						"tag_id": entry.TagID,
+						"tag":    entry.Tag,
+						"model":  primaryEmbeddingModel,
+						"status": "pending",
+					})
+				case "building":
+					// Ingest already in progress — exclude from search and advise.
+					missingEmbeddings = append(missingEmbeddings, map[string]interface{}{
+						"tag_id": entry.TagID,
+						"tag":    entry.Tag,
+						"model":  primaryEmbeddingModel,
+						"status": "building",
+					})
+				}
+			}
+			searchableTags = filteredTagIDs
+			logging.Printf("[%s][SID:%d] coverage check: searchable=%v missing=%d", req.Id, req.SessionId, searchableTags, len(missingEmbeddings))
+		}
+	}
+
 	var allRawResults []interface{}
 	var retrievalProvenance []map[string]interface{}
 
@@ -503,13 +559,13 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 			continue
 		}
 
-		logging.Printf("[%s][SID:%d] retrieval pass model=%q tags=%v sub_queries=%d", req.Id, req.SessionId, embeddingModel, tags, len(subQueries))
+		logging.Printf("[%s][SID:%d] retrieval pass model=%q tags=%v sub_queries=%d", req.Id, req.SessionId, embeddingModel, searchableTags, len(subQueries))
 		contextFiles, err := h.fetchContextFiles(ctx, req, embeddingModel)
 		if err != nil {
 			logging.Printf("[%s][SID:%d] Context file discovery failed for %q: %v", req.Id, req.SessionId, embeddingModel, err)
 		}
 
-		modelResults, hydrated, hydrationNotes, err := h.searchWithEmbeddingModel(ctx, req, embeddingModel, embedder, subQueries, tags, contextFiles)
+		modelResults, hydrated, hydrationNotes, err := h.searchWithEmbeddingModel(ctx, req, embeddingModel, embedder, subQueries, searchableTags, contextFiles)
 		if err != nil {
 			if errors.Is(err, errUnsupportedEmbeddingModel) && idx+1 < len(embeddingModels) {
 				logging.Printf("[%s][SID:%d] Embedding model %q is not embedding-capable; falling back to carried override %q", req.Id, req.SessionId, embeddingModel, embeddingModels[idx+1])
@@ -542,6 +598,9 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	metadataMap["chunks"] = allChunks
 	metadataMap["chunk_groups"] = chunkGroupsToMetadata(chunkGroups)
 	metadataMap["contexts"] = flattenChunkContexts(allChunks)
+	if len(missingEmbeddings) > 0 {
+		metadataMap["missing_embeddings"] = missingEmbeddings
+	}
 	if len(embeddingModels) > 0 {
 		metadataMap["embedding_models"] = embeddingModels
 	}
@@ -615,6 +674,88 @@ type contextFileRecord struct {
 	EmbeddingModel string   `json:"embedding_model"`
 	VectorSize     int      `json:"vector_size"`
 	IngestionID    int64    `json:"ingestion_id"`
+}
+
+// coverageResult is a single entry from POST /embeddings/coverage on db-adapter.
+type coverageResult struct {
+	TagID          int64      `json:"tag_id"`
+	Tag            string     `json:"tag"`
+	Status         string     `json:"status"`
+	VectorCount    int64      `json:"vector_count"`
+	FileCount      int        `json:"file_count"`
+	LastEmbeddedAt *time.Time `json:"last_embedded_at"`
+}
+
+// checkEmbeddingCoverage queries the db-adapter for tag coverage status for the
+// given embedding model. Returns nil slice on error (non-fatal: caller falls back
+// to searching all tags).
+func (h *Handler) checkEmbeddingCoverage(ctx context.Context, tagIDs []int64, embeddingModel string) []coverageResult {
+	baseURL := strings.TrimRight(h.cfg.DBAdapterURL, "/")
+	if baseURL == "" || len(tagIDs) == 0 || embeddingModel == "" {
+		return nil
+	}
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"tag_ids":         tagIDs,
+		"embedding_model": embeddingModel,
+	})
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		baseURL+"/embeddings/coverage", bytes.NewReader(body))
+	if err != nil {
+		logging.Printf("checkEmbeddingCoverage: failed to build request: %v", err)
+		return nil
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := h.httpClient.Do(httpReq)
+	if err != nil {
+		logging.Printf("checkEmbeddingCoverage: HTTP error: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logging.Printf("checkEmbeddingCoverage: unexpected status %d", resp.StatusCode)
+		return nil
+	}
+
+	var results []coverageResult
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		logging.Printf("checkEmbeddingCoverage: decode error: %v", err)
+		return nil
+	}
+	return results
+}
+
+// triggerAsyncIngest fires a fire-and-forget ingest request for the given tag
+// and embedding model. The bucket is omitted; the ingest service will use its
+// default BUCKET_NAME environment variable.
+func (h *Handler) triggerAsyncIngest(tagID int64, tagName, embeddingModel string) {
+	baseURL := strings.TrimRight(h.cfg.IngestionURL, "/")
+	if baseURL == "" {
+		return
+	}
+	go func() {
+		body, _ := json.Marshal(map[string]interface{}{
+			"tag_ids":         []int64{tagID},
+			"tag_names":       []string{tagName},
+			"embedding_model": embeddingModel,
+		})
+		req, err := http.NewRequest(http.MethodPost, baseURL+"/ingest", bytes.NewReader(body))
+		if err != nil {
+			logging.Printf("triggerAsyncIngest: build request error: %v", err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := h.httpClient.Do(req)
+		if err != nil {
+			logging.Printf("triggerAsyncIngest tag_id=%d model=%q: HTTP error: %v", tagID, embeddingModel, err)
+			return
+		}
+		resp.Body.Close()
+		logging.Printf("triggerAsyncIngest tag_id=%d model=%q: status=%d", tagID, embeddingModel, resp.StatusCode)
+	}()
 }
 
 func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest, primaryModelID string) []string {

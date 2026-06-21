@@ -104,6 +104,7 @@ func main() {
 	metricsSvc := service.NewMetricsService(entClient)
 	storageSvc := service.NewStorageService(entClient)
 	maintSvc := service.NewMaintenanceService(entClient, qdrantProducer, cfg.IngestionURL)
+	coverageSvc := service.NewCoverageService(entClient)
 	processor := service.NewPulsarProcessor(entClient, queryCounter, errorCounter, queryLatency)
 
 	// Register readiness checks
@@ -243,6 +244,7 @@ func main() {
 	mux.HandleFunc("/metrics/summary", metricsSvc.GetMetricsSummary)
 	mux.HandleFunc("/storage/files", storageSvc.GetFiles)
 	mux.HandleFunc("/storage/vectors", storageSvc.GetFileVectors)
+	mux.HandleFunc("/embeddings/coverage", coverageSvc.GetCoverage)
 
 	otelHandler := otelhttp.NewHandler(loggingMux, "db-adapter")
 	server := &http.Server{

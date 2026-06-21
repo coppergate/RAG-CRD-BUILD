@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 
 	"app-builds/common/ent/migrate"
@@ -31,12 +32,12 @@ import (
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/tag"
+	"app-builds/common/ent/tagembeddingcoverage"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"app-builds/common/logging"
 )
 
 // Client is the client that holds all ent builders.
@@ -86,6 +87,8 @@ type Client struct {
 	SessionGovernance *SessionGovernanceClient
 	// Tag is the client for interacting with the Tag builders.
 	Tag *TagClient
+	// TagEmbeddingCoverage is the client for interacting with the TagEmbeddingCoverage builders.
+	TagEmbeddingCoverage *TagEmbeddingCoverageClient
 }
 
 // NewClient creates a new client configured with the given options.
@@ -118,6 +121,7 @@ func (c *Client) init() {
 	c.Session = NewSessionClient(c.config)
 	c.SessionGovernance = NewSessionGovernanceClient(c.config)
 	c.Tag = NewTagClient(c.config)
+	c.TagEmbeddingCoverage = NewTagEmbeddingCoverageClient(c.config)
 }
 
 type (
@@ -140,7 +144,7 @@ type (
 
 // newConfig creates a new config for the client.
 func newConfig(opts ...Option) config {
-	cfg := config{log: logging.Println, hooks: &hooks{}, inters: &inters{}}
+	cfg := config{log: log.Println, hooks: &hooks{}, inters: &inters{}}
 	cfg.options(opts...)
 	return cfg
 }
@@ -231,6 +235,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Session:              NewSessionClient(cfg),
 		SessionGovernance:    NewSessionGovernanceClient(cfg),
 		Tag:                  NewTagClient(cfg),
+		TagEmbeddingCoverage: NewTagEmbeddingCoverageClient(cfg),
 	}, nil
 }
 
@@ -271,6 +276,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Session:              NewSessionClient(cfg),
 		SessionGovernance:    NewSessionGovernanceClient(cfg),
 		Tag:                  NewTagClient(cfg),
+		TagEmbeddingCoverage: NewTagEmbeddingCoverageClient(cfg),
 	}, nil
 }
 
@@ -304,7 +310,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding, c.CodeIngestion,
 		c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.ModelDefinition,
 		c.ModelExecutionMetric, c.Prompt, c.Response, c.RetrievalLog, c.Session,
-		c.SessionGovernance, c.Tag,
+		c.SessionGovernance, c.Tag, c.TagEmbeddingCoverage,
 	} {
 		n.Use(hooks...)
 	}
@@ -318,7 +324,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding, c.CodeIngestion,
 		c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.ModelDefinition,
 		c.ModelExecutionMetric, c.Prompt, c.Response, c.RetrievalLog, c.Session,
-		c.SessionGovernance, c.Tag,
+		c.SessionGovernance, c.Tag, c.TagEmbeddingCoverage,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -369,6 +375,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SessionGovernance.mutate(ctx, m)
 	case *TagMutation:
 		return c.Tag.mutate(ctx, m)
+	case *TagEmbeddingCoverageMutation:
+		return c.TagEmbeddingCoverage.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
 	}
@@ -3558,6 +3566,22 @@ func (c *TagClient) QueryEmbeddings(_m *Tag) *CodeEmbeddingQuery {
 	return query
 }
 
+// QueryEmbeddingCoverages queries the embedding_coverages edge of a Tag.
+func (c *TagClient) QueryEmbeddingCoverages(_m *Tag) *TagEmbeddingCoverageQuery {
+	query := (&TagEmbeddingCoverageClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(tag.Table, tag.FieldID, id),
+			sqlgraph.To(tagembeddingcoverage.Table, tagembeddingcoverage.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, tag.EmbeddingCoveragesTable, tag.EmbeddingCoveragesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *TagClient) Hooks() []Hook {
 	return c.hooks.Tag
@@ -3583,19 +3607,169 @@ func (c *TagClient) mutate(ctx context.Context, m *TagMutation) (Value, error) {
 	}
 }
 
+// TagEmbeddingCoverageClient is a client for the TagEmbeddingCoverage schema.
+type TagEmbeddingCoverageClient struct {
+	config
+}
+
+// NewTagEmbeddingCoverageClient returns a client for the TagEmbeddingCoverage from the given config.
+func NewTagEmbeddingCoverageClient(c config) *TagEmbeddingCoverageClient {
+	return &TagEmbeddingCoverageClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `tagembeddingcoverage.Hooks(f(g(h())))`.
+func (c *TagEmbeddingCoverageClient) Use(hooks ...Hook) {
+	c.hooks.TagEmbeddingCoverage = append(c.hooks.TagEmbeddingCoverage, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `tagembeddingcoverage.Intercept(f(g(h())))`.
+func (c *TagEmbeddingCoverageClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TagEmbeddingCoverage = append(c.inters.TagEmbeddingCoverage, interceptors...)
+}
+
+// Create returns a builder for creating a TagEmbeddingCoverage entity.
+func (c *TagEmbeddingCoverageClient) Create() *TagEmbeddingCoverageCreate {
+	mutation := newTagEmbeddingCoverageMutation(c.config, OpCreate)
+	return &TagEmbeddingCoverageCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TagEmbeddingCoverage entities.
+func (c *TagEmbeddingCoverageClient) CreateBulk(builders ...*TagEmbeddingCoverageCreate) *TagEmbeddingCoverageCreateBulk {
+	return &TagEmbeddingCoverageCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TagEmbeddingCoverageClient) MapCreateBulk(slice any, setFunc func(*TagEmbeddingCoverageCreate, int)) *TagEmbeddingCoverageCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TagEmbeddingCoverageCreateBulk{err: fmt.Errorf("calling to TagEmbeddingCoverageClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TagEmbeddingCoverageCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TagEmbeddingCoverageCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TagEmbeddingCoverage.
+func (c *TagEmbeddingCoverageClient) Update() *TagEmbeddingCoverageUpdate {
+	mutation := newTagEmbeddingCoverageMutation(c.config, OpUpdate)
+	return &TagEmbeddingCoverageUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TagEmbeddingCoverageClient) UpdateOne(_m *TagEmbeddingCoverage) *TagEmbeddingCoverageUpdateOne {
+	mutation := newTagEmbeddingCoverageMutation(c.config, OpUpdateOne, withTagEmbeddingCoverage(_m))
+	return &TagEmbeddingCoverageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TagEmbeddingCoverageClient) UpdateOneID(id int) *TagEmbeddingCoverageUpdateOne {
+	mutation := newTagEmbeddingCoverageMutation(c.config, OpUpdateOne, withTagEmbeddingCoverageID(id))
+	return &TagEmbeddingCoverageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TagEmbeddingCoverage.
+func (c *TagEmbeddingCoverageClient) Delete() *TagEmbeddingCoverageDelete {
+	mutation := newTagEmbeddingCoverageMutation(c.config, OpDelete)
+	return &TagEmbeddingCoverageDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TagEmbeddingCoverageClient) DeleteOne(_m *TagEmbeddingCoverage) *TagEmbeddingCoverageDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TagEmbeddingCoverageClient) DeleteOneID(id int) *TagEmbeddingCoverageDeleteOne {
+	builder := c.Delete().Where(tagembeddingcoverage.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TagEmbeddingCoverageDeleteOne{builder}
+}
+
+// Query returns a query builder for TagEmbeddingCoverage.
+func (c *TagEmbeddingCoverageClient) Query() *TagEmbeddingCoverageQuery {
+	return &TagEmbeddingCoverageQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTagEmbeddingCoverage},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TagEmbeddingCoverage entity by its id.
+func (c *TagEmbeddingCoverageClient) Get(ctx context.Context, id int) (*TagEmbeddingCoverage, error) {
+	return c.Query().Where(tagembeddingcoverage.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TagEmbeddingCoverageClient) GetX(ctx context.Context, id int) *TagEmbeddingCoverage {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryTag queries the tag edge of a TagEmbeddingCoverage.
+func (c *TagEmbeddingCoverageClient) QueryTag(_m *TagEmbeddingCoverage) *TagQuery {
+	query := (&TagClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(tagembeddingcoverage.Table, tagembeddingcoverage.FieldID, id),
+			sqlgraph.To(tag.Table, tag.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, tagembeddingcoverage.TagTable, tagembeddingcoverage.TagColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *TagEmbeddingCoverageClient) Hooks() []Hook {
+	return c.hooks.TagEmbeddingCoverage
+}
+
+// Interceptors returns the client interceptors.
+func (c *TagEmbeddingCoverageClient) Interceptors() []Interceptor {
+	return c.inters.TagEmbeddingCoverage
+}
+
+func (c *TagEmbeddingCoverageClient) mutate(ctx context.Context, m *TagEmbeddingCoverageMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TagEmbeddingCoverageCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TagEmbeddingCoverageUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TagEmbeddingCoverageUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TagEmbeddingCoverageDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TagEmbeddingCoverage mutation op: %q", m.Op())
+	}
+}
+
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
 		ActionIdentifier, ActionType, BehavioralLog, BehavioralRule, BuildJournal,
 		BuildLock, BuildVersion, CodeEmbedding, CodeIngestion, InferenceNode,
 		MemoryEvent, MemoryItem, MemoryLink, ModelDefinition, ModelExecutionMetric,
-		Prompt, Response, RetrievalLog, Session, SessionGovernance, Tag []ent.Hook
+		Prompt, Response, RetrievalLog, Session, SessionGovernance, Tag,
+		TagEmbeddingCoverage []ent.Hook
 	}
 	inters struct {
 		ActionIdentifier, ActionType, BehavioralLog, BehavioralRule, BuildJournal,
 		BuildLock, BuildVersion, CodeEmbedding, CodeIngestion, InferenceNode,
 		MemoryEvent, MemoryItem, MemoryLink, ModelDefinition, ModelExecutionMetric,
-		Prompt, Response, RetrievalLog, Session, SessionGovernance,
-		Tag []ent.Interceptor
+		Prompt, Response, RetrievalLog, Session, SessionGovernance, Tag,
+		TagEmbeddingCoverage []ent.Interceptor
 	}
 )

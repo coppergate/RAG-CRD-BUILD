@@ -24,12 +24,16 @@ const (
 	EdgeIngestions = "ingestions"
 	// EdgeEmbeddings holds the string denoting the embeddings edge name in mutations.
 	EdgeEmbeddings = "embeddings"
+	// EdgeEmbeddingCoverages holds the string denoting the embedding_coverages edge name in mutations.
+	EdgeEmbeddingCoverages = "embedding_coverages"
 	// SessionFieldID holds the string denoting the ID field of the Session.
 	SessionFieldID = "session_id"
 	// CodeIngestionFieldID holds the string denoting the ID field of the CodeIngestion.
 	CodeIngestionFieldID = "ingestion_id"
 	// CodeEmbeddingFieldID holds the string denoting the ID field of the CodeEmbedding.
 	CodeEmbeddingFieldID = "embedding_id"
+	// TagEmbeddingCoverageFieldID holds the string denoting the ID field of the TagEmbeddingCoverage.
+	TagEmbeddingCoverageFieldID = "id"
 	// Table holds the table name of the tag in the database.
 	Table = "tag"
 	// SessionsTable is the table that holds the sessions relation/edge. The primary key declared below.
@@ -47,6 +51,13 @@ const (
 	// EmbeddingsInverseTable is the table name for the CodeEmbedding entity.
 	// It exists in this package in order to avoid circular dependency with the "codeembedding" package.
 	EmbeddingsInverseTable = "code_embedding"
+	// EmbeddingCoveragesTable is the table that holds the embedding_coverages relation/edge.
+	EmbeddingCoveragesTable = "tag_embedding_coverage"
+	// EmbeddingCoveragesInverseTable is the table name for the TagEmbeddingCoverage entity.
+	// It exists in this package in order to avoid circular dependency with the "tagembeddingcoverage" package.
+	EmbeddingCoveragesInverseTable = "tag_embedding_coverage"
+	// EmbeddingCoveragesColumn is the table column denoting the embedding_coverages relation/edge.
+	EmbeddingCoveragesColumn = "tag_id"
 )
 
 // Columns holds all SQL columns for tag fields.
@@ -142,6 +153,20 @@ func ByEmbeddings(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newEmbeddingsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByEmbeddingCoveragesCount orders the results by embedding_coverages count.
+func ByEmbeddingCoveragesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newEmbeddingCoveragesStep(), opts...)
+	}
+}
+
+// ByEmbeddingCoverages orders the results by embedding_coverages terms.
+func ByEmbeddingCoverages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newEmbeddingCoveragesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newSessionsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -161,5 +186,12 @@ func newEmbeddingsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(EmbeddingsInverseTable, CodeEmbeddingFieldID),
 		sqlgraph.Edge(sqlgraph.M2M, true, EmbeddingsTable, EmbeddingsPrimaryKey...),
+	)
+}
+func newEmbeddingCoveragesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(EmbeddingCoveragesInverseTable, TagEmbeddingCoverageFieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, EmbeddingCoveragesTable, EmbeddingCoveragesColumn),
 	)
 }

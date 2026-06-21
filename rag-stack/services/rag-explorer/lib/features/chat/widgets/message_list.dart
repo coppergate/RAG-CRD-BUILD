@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/models/response_message.dart';
 
 class MessageList extends StatelessWidget {
@@ -142,8 +143,81 @@ class MessageList extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
+            if (!isUser)
+              _buildEmbeddingAdvisory(context, msg),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmbeddingAdvisory(BuildContext context, ResponseMessage msg) {
+    final raw = msg.metadata?['missing_embeddings'];
+    if (raw is! List || raw.isEmpty) return const SizedBox.shrink();
+
+    final missing = raw.whereType<Map>().toList();
+    if (missing.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.amber.shade600, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: missing.map<Widget>((entry) {
+          final tag = (entry['tag'] ?? '').toString();
+          final status = (entry['status'] ?? '').toString();
+          final model = (entry['model'] ?? '').toString();
+          final tagId = entry['tag_id'];
+          final isPendingOrBuilding = status == 'pending' || status == 'building';
+
+          final message = isPendingOrBuilding
+              ? '⚠ "$tag" has no $model embeddings yet. '
+                'Ingestion has been triggered — results will improve once complete.'
+              : '⚠ "$tag" embeddings are stale (new files added since last run). '
+                'Results may be missing recent content.';
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.amber.shade800,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.go(
+                    '/ingestion',
+                    extra: {
+                      'model': model,
+                      'tag_id': tagId,
+                      'tag_name': tag,
+                    },
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text(
+                    'Go to Ingestion →',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }

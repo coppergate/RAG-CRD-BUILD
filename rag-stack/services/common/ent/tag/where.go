@@ -239,6 +239,29 @@ func HasEmbeddingsWith(preds ...predicate.CodeEmbedding) predicate.Tag {
 	})
 }
 
+// HasEmbeddingCoverages applies the HasEdge predicate on the "embedding_coverages" edge.
+func HasEmbeddingCoverages() predicate.Tag {
+	return predicate.Tag(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, EmbeddingCoveragesTable, EmbeddingCoveragesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasEmbeddingCoveragesWith applies the HasEdge predicate on the "embedding_coverages" edge with a given conditions (other predicates).
+func HasEmbeddingCoveragesWith(preds ...predicate.TagEmbeddingCoverage) predicate.Tag {
+	return predicate.Tag(func(s *sql.Selector) {
+		step := newEmbeddingCoveragesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Tag) predicate.Tag {
 	return predicate.Tag(sql.AndPredicates(predicates...))

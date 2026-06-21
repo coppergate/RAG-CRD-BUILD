@@ -484,6 +484,45 @@ var (
 		Columns:    TagColumns,
 		PrimaryKey: []*schema.Column{TagColumns[0]},
 	}
+	// TagEmbeddingCoverageColumns holds the columns for the "tag_embedding_coverage" table.
+	TagEmbeddingCoverageColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "embedding_model", Type: field.TypeString, Size: 100},
+		{Name: "vector_dims", Type: field.TypeInt},
+		{Name: "vector_count", Type: field.TypeInt64, Default: 0},
+		{Name: "file_count", Type: field.TypeInt, Default: 0},
+		{Name: "status", Type: field.TypeString, Default: "pending"},
+		{Name: "last_embedded_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "tag_id", Type: field.TypeInt64},
+	}
+	// TagEmbeddingCoverageTable holds the schema information for the "tag_embedding_coverage" table.
+	TagEmbeddingCoverageTable = &schema.Table{
+		Name:       "tag_embedding_coverage",
+		Columns:    TagEmbeddingCoverageColumns,
+		PrimaryKey: []*schema.Column{TagEmbeddingCoverageColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "tag_embedding_coverage_tag_embedding_coverages",
+				Columns:    []*schema.Column{TagEmbeddingCoverageColumns[9]},
+				RefColumns: []*schema.Column{TagColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "tagembeddingcoverage_tag_id_embedding_model",
+				Unique:  true,
+				Columns: []*schema.Column{TagEmbeddingCoverageColumns[9], TagEmbeddingCoverageColumns[1]},
+			},
+			{
+				Name:    "tagembeddingcoverage_status",
+				Unique:  false,
+				Columns: []*schema.Column{TagEmbeddingCoverageColumns[5]},
+			},
+		},
+	}
 	// CodeEmbeddingTagColumns holds the columns for the "code_embedding_tag" table.
 	CodeEmbeddingTagColumns = []*schema.Column{
 		{Name: "embedding_id", Type: field.TypeInt64},
@@ -582,6 +621,7 @@ var (
 		SessionsTable,
 		SessionGovernancesTable,
 		TagTable,
+		TagEmbeddingCoverageTable,
 		CodeEmbeddingTagTable,
 		CodeIngestionTagTable,
 		SessionTagTable,
@@ -615,6 +655,10 @@ func init() {
 	RetrievalLogsTable.ForeignKeys[0].RefTable = SessionsTable
 	TagTable.Annotation = &entsql.Annotation{
 		Table: "tag",
+	}
+	TagEmbeddingCoverageTable.ForeignKeys[0].RefTable = TagTable
+	TagEmbeddingCoverageTable.Annotation = &entsql.Annotation{
+		Table: "tag_embedding_coverage",
 	}
 	CodeEmbeddingTagTable.ForeignKeys[0].RefTable = CodeEmbeddingTable
 	CodeEmbeddingTagTable.ForeignKeys[1].RefTable = TagTable

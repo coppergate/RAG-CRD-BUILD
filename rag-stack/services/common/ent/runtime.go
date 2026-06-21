@@ -23,6 +23,7 @@ import (
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/tag"
+	"app-builds/common/ent/tagembeddingcoverage"
 	"time"
 
 	"github.com/google/uuid"
@@ -226,4 +227,30 @@ func init() {
 	tagDescCreatedAt := tagFields[2].Descriptor()
 	// tag.DefaultCreatedAt holds the default value on creation for the created_at field.
 	tag.DefaultCreatedAt = tagDescCreatedAt.Default.(func() time.Time)
+	tagembeddingcoverageFields := schema.TagEmbeddingCoverage{}.Fields()
+	_ = tagembeddingcoverageFields
+	// tagembeddingcoverageDescEmbeddingModel is the schema descriptor for embedding_model field.
+	tagembeddingcoverageDescEmbeddingModel := tagembeddingcoverageFields[1].Descriptor()
+	// tagembeddingcoverage.EmbeddingModelValidator is a validator for the "embedding_model" field. It is called by the builders before save.
+	tagembeddingcoverage.EmbeddingModelValidator = tagembeddingcoverageDescEmbeddingModel.Validators[0].(func(string) error)
+	// tagembeddingcoverageDescVectorCount is the schema descriptor for vector_count field.
+	tagembeddingcoverageDescVectorCount := tagembeddingcoverageFields[3].Descriptor()
+	// tagembeddingcoverage.DefaultVectorCount holds the default value on creation for the vector_count field.
+	tagembeddingcoverage.DefaultVectorCount = tagembeddingcoverageDescVectorCount.Default.(int64)
+	// tagembeddingcoverageDescFileCount is the schema descriptor for file_count field.
+	tagembeddingcoverageDescFileCount := tagembeddingcoverageFields[4].Descriptor()
+	// tagembeddingcoverage.DefaultFileCount holds the default value on creation for the file_count field.
+	tagembeddingcoverage.DefaultFileCount = tagembeddingcoverageDescFileCount.Default.(int)
+	// tagembeddingcoverageDescStatus is the schema descriptor for status field.
+	tagembeddingcoverageDescStatus := tagembeddingcoverageFields[5].Descriptor()
+	// tagembeddingcoverage.DefaultStatus holds the default value on creation for the status field.
+	tagembeddingcoverage.DefaultStatus = tagembeddingcoverageDescStatus.Default.(string)
+	// tagembeddingcoverageDescCreatedAt is the schema descriptor for created_at field.
+	tagembeddingcoverageDescCreatedAt := tagembeddingcoverageFields[7].Descriptor()
+	// tagembeddingcoverage.DefaultCreatedAt holds the default value on creation for the created_at field.
+	tagembeddingcoverage.DefaultCreatedAt = tagembeddingcoverageDescCreatedAt.Default.(func() time.Time)
+	// tagembeddingcoverageDescUpdatedAt is the schema descriptor for updated_at field.
+	tagembeddingcoverageDescUpdatedAt := tagembeddingcoverageFields[8].Descriptor()
+	// tagembeddingcoverage.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	tagembeddingcoverage.DefaultUpdatedAt = tagembeddingcoverageDescUpdatedAt.Default.(func() time.Time)
 }

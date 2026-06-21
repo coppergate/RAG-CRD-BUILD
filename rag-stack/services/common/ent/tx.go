@@ -54,6 +54,8 @@ type Tx struct {
 	SessionGovernance *SessionGovernanceClient
 	// Tag is the client for interacting with the Tag builders.
 	Tag *TagClient
+	// TagEmbeddingCoverage is the client for interacting with the TagEmbeddingCoverage builders.
+	TagEmbeddingCoverage *TagEmbeddingCoverageClient
 
 	// lazily loaded.
 	client     *Client
@@ -206,6 +208,7 @@ func (tx *Tx) init() {
 	tx.Session = NewSessionClient(tx.config)
 	tx.SessionGovernance = NewSessionGovernanceClient(tx.config)
 	tx.Tag = NewTagClient(tx.config)
+	tx.TagEmbeddingCoverage = NewTagEmbeddingCoverageClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

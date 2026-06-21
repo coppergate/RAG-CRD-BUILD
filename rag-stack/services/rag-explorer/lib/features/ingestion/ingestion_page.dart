@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/models/tag.dart';
 import '../../core/providers/embedding_model_provider.dart';
 import '../../core/services/ingestion_service.dart';
@@ -30,9 +31,31 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   final List<String> _uploadingFiles = [];
   final Set<String> _selectedObjects = {};
 
+  // Pre-population from deep-link (chat advisory "Go to Ingestion →")
+  int? _preselectedTagId;
+
   @override
   void initState() {
     super.initState();
+    // Check for deep-link extra params from the chat advisory banner.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final extra = GoRouterState.of(context).extra as Map<String, dynamic>?;
+      if (extra != null) {
+        final preselectedModel = extra['model'] as String?;
+        final preselectedTagId = extra['tag_id'];
+        if (preselectedModel != null && preselectedModel.isNotEmpty) {
+          ref.read(embeddingModelProvider.notifier).setModel(preselectedModel);
+        }
+        if (preselectedTagId != null) {
+          setState(() {
+            _preselectedTagId = preselectedTagId is int
+                ? preselectedTagId
+                : int.tryParse(preselectedTagId.toString());
+          });
+        }
+      }
+    });
     _loadInitialData();
   }
 
@@ -56,7 +79,15 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
       setState(() {
         _tags = tags;
         _allowedExtensions = extensions;
-        if (tags.isNotEmpty && _selectedTags.isEmpty) {
+        // If a tag was pre-selected via deep-link, honour it; otherwise default to first.
+        if (_preselectedTagId != null) {
+          final match = tags.where((t) => t.id == _preselectedTagId).toList();
+          if (match.isNotEmpty) {
+            _selectedTags.addAll(match);
+          } else if (tags.isNotEmpty && _selectedTags.isEmpty) {
+            _selectedTags.add(tags.first);
+          }
+        } else if (tags.isNotEmpty && _selectedTags.isEmpty) {
           _selectedTags.add(tags.first);
         }
         
