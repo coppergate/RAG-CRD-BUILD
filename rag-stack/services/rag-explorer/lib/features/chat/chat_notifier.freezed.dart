@@ -220,7 +220,7 @@ return $default(_that.sessions,_that.availableTags,_that.selectedTags,_that.curr
 
 
 class _ChatState implements ChatState {
-  const _ChatState({final  List<Session> sessions = const [], final  List<Tag> availableTags = const [], final  List<Tag> selectedTags = const [], this.currentSessionId, this.currentSessionName, final  List<ResponseMessage> messages = const [], this.isStreaming = false, this.inConversation = false, this.selectedMessageIndex, this.selectedPlanner = 'llama3.1:latest', this.selectedExecutor = 'llama3.1:latest', this.showMetadata = true, this.metadataPanelWidth = 350.0, final  Set<int> selectedSessionIds = const {}, this.memoryMode = 'off'}): _sessions = sessions,_availableTags = availableTags,_selectedTags = selectedTags,_messages = messages,_selectedSessionIds = selectedSessionIds;
+  const _ChatState({final  List<Session> sessions = const [], final  List<Tag> availableTags = const [], final  List<Tag> selectedTags = const [], this.currentSessionId, this.currentSessionName, final  List<ResponseMessage> messages = const [], this.isStreaming = false, this.inConversation = false, this.selectedMessageIndex, this.selectedPlanner = 'granite3.1-dense:8b', this.selectedExecutor = 'qwen3:32b', this.showMetadata = true, this.metadataPanelWidth = 350.0, final  Set<int> selectedSessionIds = const {}, this.memoryMode = 'off'}): _sessions = sessions,_availableTags = availableTags,_selectedTags = selectedTags,_messages = messages,_selectedSessionIds = selectedSessionIds;
   
 
  final  List<Session> _sessions;

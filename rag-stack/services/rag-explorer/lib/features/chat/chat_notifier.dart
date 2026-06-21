@@ -3,6 +3,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../core/models/response_message.dart';
 import '../../core/models/session.dart';
 import '../../core/models/tag.dart';
+import '../../core/providers/embedding_model_provider.dart';
 import '../../core/services/chat_service.dart';
 import '../../core/services/log_service.dart';
 
@@ -91,6 +92,25 @@ class ChatNotifier extends _$ChatNotifier {
       state = AsyncData(newState);
       await loadSessions();
     }
+  }
+
+  Future<void> deleteSessions(Set<int> ids) async {
+    if (ids.isEmpty) return;
+    final chatService = ref.read(chatServiceProvider);
+    await Future.wait(ids.map((id) => chatService.deleteSession(id)));
+    final currentState = state.value!;
+    var newState = currentState.copyWith(
+      selectedSessionIds: currentState.selectedSessionIds.difference(ids),
+    );
+    if (ids.contains(currentState.currentSessionId)) {
+      newState = newState.copyWith(
+        currentSessionId: null,
+        currentSessionName: null,
+        messages: [],
+      );
+    }
+    state = AsyncData(newState);
+    await loadSessions();
   }
 
   Future<void> selectSession(int sessionId) async {
@@ -271,6 +291,8 @@ class ChatNotifier extends _$ChatNotifier {
       timestamp: DateTime.now(),
     );
 
+    final embeddingModel = ref.read(embeddingModelProvider);
+
     // Add empty assistant message
     final assistantMessage = ResponseMessage(
       content: '',
@@ -280,6 +302,9 @@ class ChatNotifier extends _$ChatNotifier {
         'selected_tags': currentState.selectedTags.map((t) => t.name).toList(),
         'selected_tag_ids': currentState.selectedTags.map((t) => t.id).toList(),
         'session_tags': currentState.selectedTags.map((t) => t.name).toList(),
+        'planner_model': currentState.selectedPlanner,
+        'executor_model': currentState.selectedExecutor,
+        'embedding_model': embeddingModel,
         'source': 'chat-ui',
         'message_segments': <Map<String, dynamic>>[],
       },
@@ -300,6 +325,7 @@ class ChatNotifier extends _$ChatNotifier {
       sessionName: currentState.currentSessionName,
       planner: currentState.selectedPlanner,
       executor: currentState.selectedExecutor,
+      embeddingModel: embeddingModel,
       tags: currentState.selectedTags.map((t) => t.id).toList(),
     );
 

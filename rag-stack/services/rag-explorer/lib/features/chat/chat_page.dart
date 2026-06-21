@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app_config_provider.dart';
+import '../../core/providers/embedding_model_provider.dart';
 import 'chat_notifier.dart';
 import 'chat_dialogs.dart';
 import 'widgets/chat_input_bar.dart';
@@ -38,6 +39,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Widget build(BuildContext context) {
     final chatAsync = ref.watch(chatProvider);
     final config = ref.watch(appConfigProvider);
+    final embeddingModel = ref.watch(embeddingModelProvider);
 
     return chatAsync.when(
       data: (state) => Scaffold(
@@ -110,13 +112,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     onStop: () => ref.read(chatProvider.notifier).stopChat(),
                     planner: state.selectedPlanner,
                     executor: state.selectedExecutor,
+                    embeddingModel: embeddingModel,
                     availableModels: config.availableModels,
+                    availableEmbeddingModels: config.availableEmbeddingModels,
                     availableTags: state.availableTags,
                     selectedTags: state.selectedTags,
                     onPlannerChanged: (val) =>
                         ref.read(chatProvider.notifier).setPlanner(val),
                     onExecutorChanged: (val) =>
                         ref.read(chatProvider.notifier).setExecutor(val),
+                    onEmbeddingModelChanged: (val) =>
+                        ref.read(embeddingModelProvider.notifier).setModel(val),
                     onTagAdded: (tag) =>
                         ref.read(chatProvider.notifier).addTag(tag),
                     onTagRemoved: (tag) =>
@@ -140,7 +146,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 onWidthChanged: (val) =>
                     ref.read(chatProvider.notifier).setMetadataPanelWidth(val),
                 onClose: () =>
-                    ref.read(chatProvider.notifier).selectMessage(null),
+                    ref.read(chatProvider.notifier).toggleMetadata(),
                 isDarkMode: config.darkMode,
               ),
             ],
@@ -153,9 +159,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
-  void _deleteSelected(Set<int> ids) async {
-    for (final id in ids) {
-      await ref.read(chatProvider.notifier).deleteSession(id);
-    }
+  void _deleteSelected(Set<int> ids) {
+    ref.read(chatProvider.notifier).deleteSessions(ids);
   }
 }

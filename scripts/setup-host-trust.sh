@@ -69,28 +69,21 @@ for host in "${HOSTS[@]}"; do
   echo "  Configured $CERT_DIR/$host/ca.crt"
 done
 
-# --- Install to system-wide trust store (requires passwordless sudo) ---
+# --- Install to system-wide trust store ---
 echo ""
-if sudo -n true 2>/dev/null; then
-  echo "Installing to system-wide cert dirs and trust store..."
-  for host in "${HOSTS[@]}"; do
-    sudo mkdir -p "/etc/containers/certs.d/$host"
-    sudo cp "$CERT_DIR/$host/ca.crt" "/etc/containers/certs.d/$host/ca.crt"
-    echo "  Configured /etc/containers/certs.d/$host/ca.crt"
-  done
-  # Bundle both certs into the system anchor
-  {
-    [[ -n "$BOOTSTRAP_CERT" ]] && cat "$BOOTSTRAP_CERT"
-    [[ -n "$MKCERT_CERT" ]]    && cat "$MKCERT_CERT"
-  } | sudo tee /etc/pki/ca-trust/source/anchors/hierocracy-registry.crt
-  sudo update-ca-trust
-  echo "System trust store updated."
-else
-  echo "Skipping system-wide install (sudo requires password)."
-  echo "User-specific trust in $CERT_DIR is configured."
-  echo "To install system-wide, run as root:"
-  echo "  bash $0"
-fi
+echo "Installing to system-wide cert dirs and trust store..."
+for host in "${HOSTS[@]}"; do
+  sudo mkdir -p "/etc/containers/certs.d/$host"
+  sudo cp "$CERT_DIR/$host/ca.crt" "/etc/containers/certs.d/$host/ca.crt"
+  echo "  Configured /etc/containers/certs.d/$host/ca.crt"
+done
+# Bundle both certs into the system anchor
+{
+  [[ -n "$BOOTSTRAP_CERT" ]] && cat "$BOOTSTRAP_CERT"
+  [[ -n "$MKCERT_CERT" ]]    && cat "$MKCERT_CERT"
+} | sudo tee /etc/pki/ca-trust/source/anchors/hierocracy-registry.crt
+sudo update-ca-trust
+echo "System trust store updated."
 
 # Cleanup temp files
 rm -f /tmp/bootstrap-registry.crt /tmp/mkcert-ca.crt

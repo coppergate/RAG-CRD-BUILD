@@ -33,7 +33,7 @@ final class S3NotifierProvider
   S3Notifier create() => S3Notifier();
 }
 
-String _$s3NotifierHash() => r'64cd73a2e5db7b2149995bf3ecd17c89ee5387a6';
+String _$s3NotifierHash() => r'000a91c90c90a14f253ac5ee4896e21e06d48ecc';
 
 abstract class _$S3Notifier extends $AsyncNotifier<S3State> {
   FutureOr<S3State> build();

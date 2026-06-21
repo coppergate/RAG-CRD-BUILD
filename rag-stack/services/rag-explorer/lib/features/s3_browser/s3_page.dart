@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/widgets/status_banner.dart';
+import '../../app_config_provider.dart';
 import 's3_notifier.dart';
 import 'widgets/file_list.dart';
 import 'widgets/s3_filter_bar.dart';
@@ -11,6 +13,7 @@ class S3Page extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final s3Async = ref.watch(s3Provider);
     final notifier = ref.read(s3Provider.notifier);
+    final isDarkMode = ref.watch(appConfigProvider).darkMode;
 
     return Scaffold(
       appBar: AppBar(
@@ -48,17 +51,10 @@ class S3Page extends ConsumerWidget {
             ),
             const Divider(height: 1),
             if (state.error != null)
-              Container(
-                width: double.infinity,
-                color: Colors.red.withValues(alpha: 0.08),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Text(
-                  state.error!,
-                  style: const TextStyle(color: Colors.red),
-                ),
+              StatusBanner(
+                message: state.error!,
+                isError: true,
+                isDarkMode: isDarkMode,
               ),
             if (state.selectedFilePaths.isNotEmpty)
               _buildSelectionActions(state, notifier),

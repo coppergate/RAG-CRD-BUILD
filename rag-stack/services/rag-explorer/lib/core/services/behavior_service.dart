@@ -1,8 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../config/app_config.dart';
 import '../../app_config_provider.dart';
 import '../models/behavioral_rule.dart';
+import 'base_service.dart';
 import 'log_service.dart';
 
 final behaviorServiceProvider = Provider((ref) {
@@ -12,65 +11,42 @@ final behaviorServiceProvider = Provider((ref) {
   return BehaviorService(dio, config, logger);
 });
 
-class BehaviorService {
-  final Dio _dio;
-  final AppConfig _config;
-  final LogNotifier _logger;
+class BehaviorService extends BaseService {
+  BehaviorService(super.dio, super.config, super.logger);
 
-  BehaviorService(this._dio, this._config, this._logger);
-
-  Future<List<BehavioralRule>> getRules() async {
-    _logger.debug('Fetching behavioral rules');
-    try {
-      final response = await _dio.get('${_config.behaviorUrl}/rules');
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data;
-        return data.map((e) => BehavioralRule.fromJson(e)).toList();
-      }
-      return [];
-    } catch (e) {
-      _logger.error('Error fetching behavioral rules: $e');
-      return [];
-    }
+  Future<List<BehavioralRule>> getRules() {
+    logger.debug('Fetching behavioral rules');
+    return getList(
+      '${config.behaviorUrl}/rules',
+      (e) => BehavioralRule.fromJson(e),
+      logLabel: 'behavioral rules',
+    );
   }
 
-  Future<bool> updateRuleStatus(int ruleId, String status) async {
-    _logger.info('Updating rule $ruleId status to $status');
-    try {
-      final response = await _dio.post('${_config.behaviorUrl}/rules/$ruleId/status', data: {'status': status});
-      return response.statusCode == 200;
-    } catch (e) {
-      _logger.error('Error updating rule status: $e');
-      return false;
-    }
+  Future<bool> updateRuleStatus(int ruleId, String status) {
+    logger.info('Updating rule $ruleId status to $status');
+    return postVoid(
+      '${config.behaviorUrl}/rules/$ruleId/status',
+      {'status': status},
+      logLabel: 'rule $ruleId status',
+    );
   }
 
-  Future<bool> learnRule(String content, String actionType) async {
-    _logger.info('Learning new rule for action $actionType');
-    try {
-      final response = await _dio.post('${_config.behaviorUrl}/learn', data: {
-        'content': content,
-        'action_type': actionType,
-      });
-      return response.statusCode == 200 || response.statusCode == 201;
-    } catch (e) {
-      _logger.error('Error learning rule: $e');
-      return false;
-    }
+  Future<bool> learnRule(String content, String actionType) {
+    logger.info('Learning new rule for action $actionType');
+    return postVoid(
+      '${config.behaviorUrl}/learn',
+      {'content': content, 'action_type': actionType},
+      logLabel: 'learn rule',
+    );
   }
 
-  Future<List<ActionIdentifier>> getIdentifiers() async {
-    _logger.debug('Fetching action identifiers');
-    try {
-      final response = await _dio.get('${_config.behaviorUrl}/identifiers');
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data;
-        return data.map((e) => ActionIdentifier.fromJson(e)).toList();
-      }
-      return [];
-    } catch (e) {
-      _logger.error('Error fetching identifiers: $e');
-      return [];
-    }
+  Future<List<ActionIdentifier>> getIdentifiers() {
+    logger.debug('Fetching action identifiers');
+    return getList(
+      '${config.behaviorUrl}/identifiers',
+      (e) => ActionIdentifier.fromJson(e),
+      logLabel: 'action identifiers',
+    );
   }
 }

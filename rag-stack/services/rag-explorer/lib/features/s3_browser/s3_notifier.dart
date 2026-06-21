@@ -1,10 +1,11 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../core/models/metrics.dart';
 import '../../core/models/tag.dart';
 import '../../core/models/session.dart';
-import '../../core/api_client.dart';
+import '../../core/utils/http_utils.dart';
 import '../../app_config_provider.dart';
 import '../../core/services/log_service.dart';
 
@@ -31,6 +32,7 @@ abstract class S3State with _$S3State {
 @riverpod
 class S3Notifier extends _$S3Notifier {
   LogNotifier get _logger => ref.read(logProvider.notifier);
+  Dio get _dio => ref.read(dioProvider);
 
   @override
   FutureOr<S3State> build() async {
@@ -53,18 +55,8 @@ class S3Notifier extends _$S3Notifier {
     return const [];
   }
 
-  Map<String, dynamic> _asObjectMap(dynamic item) {
-    if (item is Map<String, dynamic>) {
-      return item;
-    }
-    if (item is Map) {
-      return Map<String, dynamic>.from(item);
-    }
-    return const {};
-  }
-
   VirtualFile? _parseVirtualFile(dynamic item, String fallbackBucket) {
-    final data = _asObjectMap(item);
+    final data = asStringMap(item);
     if (data.isEmpty) {
       return null;
     }
@@ -106,7 +98,7 @@ class S3Notifier extends _$S3Notifier {
   }
 
   Tag? _parseTag(dynamic item) {
-    final data = _asObjectMap(item);
+    final data = asStringMap(item);
     if (data.isEmpty) {
       return null;
     }
@@ -125,7 +117,7 @@ class S3Notifier extends _$S3Notifier {
   }
 
   Session? _parseSession(dynamic item) {
-    final data = _asObjectMap(item);
+    final data = asStringMap(item);
     if (data.isEmpty) {
       return null;
     }
@@ -149,15 +141,14 @@ class S3Notifier extends _$S3Notifier {
 
   Future<S3State> _fetchInitialState() async {
     final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
     try {
       _logger.debug('Loading S3 browser buckets');
-      final bucketsResp = await client.get(
+      final bucketsResp = await _dio.get(
         '${config.ragAdminApiUrl}/api/s3/buckets',
       );
       final buckets = _extractBucketNames(bucketsResp.data);
-      final tagsResp = await client.get('${config.dbUrl}/tags');
-      final sessResp = await client.get('${config.dbUrl}/sessions');
+      final tagsResp = await _dio.get('${config.dbUrl}/tags');
+      final sessResp = await _dio.get('${config.dbUrl}/sessions');
 
       final List<dynamic> tagsData = tagsResp.data ?? [];
       final List<dynamic> sessData = sessResp.data ?? [];
@@ -187,7 +178,6 @@ class S3Notifier extends _$S3Notifier {
 
   Future<S3State> _fetchFiles(S3State currentState) async {
     final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
 
     if (currentState.selectedBucket == null ||
         currentState.selectedBucket!.isEmpty) {
@@ -211,7 +201,7 @@ class S3Notifier extends _$S3Notifier {
     _logger.debug(
       'Loading S3 objects from bucket ${currentState.selectedBucket} with tag_ids=${currentState.selectedTags.map((t) => t.id).toList()} session=${currentState.selectedSession?.id ?? "all"}',
     );
-    final response = await client.get(
+    final response = await _dio.get(
       '${config.dbUrl}/storage/files',
       queryParameters: queryParams,
     );
@@ -345,12 +335,11 @@ class S3Notifier extends _$S3Notifier {
     state = AsyncData(currentState.copyWith(isDeleting: true));
 
     final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
 
     try {
       for (final path in currentState.selectedFilePaths) {
         final file = currentState.files.firstWhere((f) => f.path == path);
-        await client.delete(
+        await _dio.delete(
           '${config.ragAdminApiUrl}/api/s3/buckets/${file.bucket}/${file.path}',
         );
       }

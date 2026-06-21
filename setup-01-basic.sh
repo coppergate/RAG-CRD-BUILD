@@ -67,7 +67,7 @@ $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
 
 echo "Check the ceph-operator pod"
-WaitForPodsRunning "rook-ceph" "rook-ceph-operator" 240
+WaitForPodsRunning "rook-ceph" "rook-ceph-operator" 30
 mark_step_done "rook-ceph-operator"
 fi
 

@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/models/tag.dart';
+import '../../core/providers/embedding_model_provider.dart';
 import '../../core/services/ingestion_service.dart';
+import '../../core/widgets/status_banner.dart';
 import '../../app_config_provider.dart';
 import '../../core/widgets/tag_picker_dialog.dart';
 
@@ -36,8 +38,8 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
 
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
-    final service = ref.read(ingestionServiceProvider.notifier);
-    
+    final service = ref.read(ingestionServiceProvider);
+
     // Fetch tags, buckets, and extensions in parallel
     final results = await Future.wait([
       service.getTags(),
@@ -84,7 +86,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
 
   Future<void> _loadObjects() async {
     if (_selectedBucket == null) return;
-    final service = ref.read(ingestionServiceProvider.notifier);
+    final service = ref.read(ingestionServiceProvider);
     final objects = await service.getObjects(_selectedBucket!, prefix: _prefix);
     if (mounted) {
       setState(() {
@@ -112,7 +114,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
         _isError = false;
       });
 
-      final service = ref.read(ingestionServiceProvider.notifier);
+      final service = ref.read(ingestionServiceProvider);
       int successCount = 0;
       
       for (final file in result.files) {
@@ -184,7 +186,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
           _statusMessage = 'Uploading ${files.length} files...';
         });
 
-        final service = ref.read(ingestionServiceProvider.notifier);
+        final service = ref.read(ingestionServiceProvider);
         int successCount = 0;
         
         // We want to preserve the folder structure starting from the selected folder
@@ -247,7 +249,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
       _statusMessage = 'Fetching content...';
     });
 
-    final service = ref.read(ingestionServiceProvider.notifier);
+    final service = ref.read(ingestionServiceProvider);
     final content = await service.getObjectContent(_selectedBucket!, key);
 
     if (mounted) {
@@ -304,7 +306,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
         _statusMessage = 'Deleting $key...';
       });
 
-      final service = ref.read(ingestionServiceProvider.notifier);
+      final service = ref.read(ingestionServiceProvider);
       final success = await service.deleteObject(_selectedBucket!, key);
 
       if (mounted) {
@@ -348,7 +350,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
         _selectedObjects.clear();
       });
 
-      final service = ref.read(ingestionServiceProvider.notifier);
+      final service = ref.read(ingestionServiceProvider);
       int successCount = 0;
       for (final key in toDelete) {
         final success = await service.deleteObject(_selectedBucket!, key);
@@ -375,12 +377,14 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
     });
 
     try {
-      final service = ref.read(ingestionServiceProvider.notifier);
+      final service = ref.read(ingestionServiceProvider);
+      final embeddingModel = ref.read(embeddingModelProvider);
       final result = await service.triggerIngest(
         bucketName: _selectedBucket!,
         tagIds: _selectedTags.map((t) => t.id).toList(),
         prefix: _prefix,
         forceReingest: _forceReingest,
+        embeddingModel: embeddingModel,
       );
 
       if (mounted) {
@@ -439,7 +443,7 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   }
 
   Future<void> _createTag(String name, BuildContext dialogContext) async {
-    final service = ref.read(ingestionServiceProvider.notifier);
+    final service = ref.read(ingestionServiceProvider);
     
     // Create tag synchronously
     final newTag = await service.createTag(name);
@@ -651,13 +655,34 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   }
 
   Widget _buildOptions(bool darkMode) {
+    final embeddingModel = ref.watch(embeddingModelProvider);
+    final availableEmbeddingModels = ref.watch(appConfigProvider).availableEmbeddingModels;
     return Card(
-      child: SwitchListTile(
-        title: const Text('Force Re-ingest'),
-        subtitle: const Text('Re-process and re-embed all files even if they already exist in the vector store.'),
-        value: _forceReingest,
-        onChanged: (val) => setState(() => _forceReingest = val),
-        secondary: Icon(Icons.refresh, color: _forceReingest ? Colors.orange : Colors.grey),
+      child: Column(
+        children: [
+          SwitchListTile(
+            title: const Text('Force Re-ingest'),
+            subtitle: const Text('Re-process and re-embed all files even if they already exist in the vector store.'),
+            value: _forceReingest,
+            onChanged: (val) => setState(() => _forceReingest = val),
+            secondary: Icon(Icons.refresh, color: _forceReingest ? Colors.orange : Colors.grey),
+          ),
+          ListTile(
+            leading: const Icon(Icons.model_training),
+            title: const Text('Embedding Model'),
+            subtitle: const Text('Vectors will be written to the collection for this model.'),
+            trailing: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: embeddingModel,
+                onChanged: (val) =>
+                    ref.read(embeddingModelProvider.notifier).setModel(val!),
+                items: availableEmbeddingModels
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13))))
+                    .toList(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -785,28 +810,11 @@ class _IngestionPageState extends ConsumerState<IngestionPage> {
   }
 
   Widget _buildStatusBanner(bool darkMode) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _isError 
-            ? (darkMode ? Colors.red[900]!.withValues(alpha: 0.3) : Colors.red[50]) 
-            : (darkMode ? Colors.green[900]!.withValues(alpha: 0.3) : Colors.green[50]),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _isError ? Colors.red : Colors.green),
-      ),
-      child: Row(
-        children: [
-          Icon(_isError ? Icons.error : Icons.check_circle, color: _isError ? Colors.red : Colors.green),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(_statusMessage!, style: TextStyle(color: _isError ? Colors.red : Colors.green, fontWeight: FontWeight.bold)),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: () => setState(() => _statusMessage = null),
-          ),
-        ],
-      ),
+    return StatusBanner(
+      message: _statusMessage!,
+      isError: _isError,
+      isDarkMode: darkMode,
+      onDismiss: () => setState(() => _statusMessage = null),
     );
   }
 

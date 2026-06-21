@@ -19,10 +19,23 @@ _AppConfig _$AppConfigFromJson(Map<String, dynamic> json) => _AppConfig(
       (json['availableModels'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList() ??
-      const ['llama3.1:latest', 'granite3.1-dense:8b'],
+      const [
+        'granite3.1-dense:8b',
+        'qwen3:32b',
+        'qwen2.5:32b',
+        'llama3.2:3b',
+        'llama3.1',
+      ],
+  availableEmbeddingModels:
+      (json['availableEmbeddingModels'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ??
+      const ['all-minilm:l6-v2', 'mxbai-embed-large', 'nomic-embed-text'],
   memoryExplorerEnabled: json['memoryExplorerEnabled'] as bool? ?? true,
   modelComparisonEnabled: json['modelComparisonEnabled'] as bool? ?? true,
   promptTimeoutSeconds: (json['promptTimeoutSeconds'] as num?)?.toInt() ?? 120,
+  connectTimeoutSeconds: (json['connectTimeoutSeconds'] as num?)?.toInt() ?? 10,
+  receiveTimeoutSeconds: (json['receiveTimeoutSeconds'] as num?)?.toInt() ?? 30,
 );
 
 Map<String, dynamic> _$AppConfigToJson(_AppConfig instance) =>
@@ -33,7 +46,10 @@ Map<String, dynamic> _$AppConfigToJson(_AppConfig instance) =>
       'defaultBucketName': instance.defaultBucketName,
       'darkMode': instance.darkMode,
       'availableModels': instance.availableModels,
+      'availableEmbeddingModels': instance.availableEmbeddingModels,
       'memoryExplorerEnabled': instance.memoryExplorerEnabled,
       'modelComparisonEnabled': instance.modelComparisonEnabled,
       'promptTimeoutSeconds': instance.promptTimeoutSeconds,
+      'connectTimeoutSeconds': instance.connectTimeoutSeconds,
+      'receiveTimeoutSeconds': instance.receiveTimeoutSeconds,
     };

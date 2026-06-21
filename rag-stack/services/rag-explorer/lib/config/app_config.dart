@@ -15,9 +15,13 @@ abstract class AppConfig with _$AppConfig {
     @Default(true) bool darkMode,
     @Default(['granite3.1-dense:8b', 'qwen3:32b', 'qwen2.5:32b', 'llama3.2:3b', 'llama3.1'])
     List<String> availableModels,
+    @Default(['all-minilm:l6-v2', 'mxbai-embed-large', 'nomic-embed-text'])
+    List<String> availableEmbeddingModels,
     @Default(true) bool memoryExplorerEnabled,
     @Default(true) bool modelComparisonEnabled,
     @Default(120) int promptTimeoutSeconds,
+    @Default(10) int connectTimeoutSeconds,
+    @Default(30) int receiveTimeoutSeconds,
   }) = _AppConfig;
 
   factory AppConfig.fromJson(Map<String, dynamic> json) =>
