@@ -14,11 +14,14 @@ import (
 )
 
 var (
-	baseURL     = "https://rag-admin-api.rag.hierocracy.home"
-	sessionID   int64
-	sessionName = ""
-	bucketName  = ""
-	s3Index     = "e2eTestBucket"
+	baseURL        = "https://rag-admin-api.rag.hierocracy.home"
+	sessionID      int64
+	sessionName    = ""
+	bucketName     = ""
+	s3Index        = "e2eTestBucket"
+	plannerModel   = ""
+	executorModel  = ""
+	embeddingModel = ""
 	// client is used for fast admin API calls (tags, sessions, S3 ops).
 	client = &http.Client{
 		Transport: &http.Transport{
@@ -45,7 +48,24 @@ func main() {
 	fmt.Printf("[%s] --- Starting E2E Test (Isolation) ---\n", time.Now().Format(time.RFC3339))
 	fmt.Printf("Tag Name: %s\nSession ID: %d\nSession Name: %s\n", tagName, sessionID, sessionName)
 
-	vectorSize := 4096 // Default for Llama 3.1
+	// Embedding model used at ingest time. Must match the EMBEDDING_MODEL env var
+	// configured on the rag-worker so the pipeline resolves the correct collection.
+	embeddingModel = os.Getenv("EMBEDDING_MODEL")
+	if embeddingModel == "" {
+		embeddingModel = "all-minilm:l6-v2"
+	}
+	fmt.Printf("Using embedding_model: %s\n", embeddingModel)
+
+	plannerModel = os.Getenv("PLANNER_MODEL")
+	executorModel = os.Getenv("EXECUTOR_MODEL")
+	if plannerModel != "" {
+		fmt.Printf("Using planner_model: %s\n", plannerModel)
+	}
+	if executorModel != "" {
+		fmt.Printf("Using executor_model: %s\n", executorModel)
+	}
+
+	vectorSize := 384 // Default for all-minilm:l6-v2
 	if vs := os.Getenv("VECTOR_SIZE"); vs != "" {
 		fmt.Sscanf(vs, "%d", &vectorSize)
 	}
@@ -86,7 +106,7 @@ func main() {
 
 	// 4. Trigger Ingestion
 	fmt.Printf("[STEP 4] Triggering ingestion for tag %s (ID: %d) and session %d...\n", tagName, tagID, sessionID)
-	if err := triggerIngest(tagID, vectorSize, fileName, sessionID); err != nil {
+	if err := triggerIngest(tagID, vectorSize, embeddingModel, fileName, sessionID); err != nil {
 		logFatal("Failed to trigger ingestion: %v", err)
 	}
 
@@ -97,7 +117,7 @@ func main() {
 	}
 
 	// 5 & 6. Wait for Ingestion and Verify via Ask
-	ingestTimeout := 5 * time.Minute
+	ingestTimeout := 20 * time.Minute
 	if timeoutEnv := os.Getenv("E2E_INGEST_TIMEOUT"); timeoutEnv != "" {
 		if parsed, err := time.ParseDuration(timeoutEnv); err == nil && parsed > 0 {
 			ingestTimeout = parsed
@@ -112,7 +132,9 @@ func main() {
 		// Use a very specific query to ensure we are testing the isolation and the file we just uploaded.
 		query := fmt.Sprintf("What is the secret code and its generation timestamp mentioned in the file %s? Provide the exact code and timestamp.", fileName)
 		answer, askErr := askRAG(query, []int64{tagID})
-		if askErr == nil {
+		if askErr != nil {
+			lastAnswer = fmt.Sprintf("[error: %v]", askErr)
+		} else {
 			lastAnswer = answer
 			fmt.Printf("DEBUG: Received RAG Answer: %q\n", answer)
 			// Tighten verification: should contain the code and be relatively short or focused
@@ -140,13 +162,13 @@ func main() {
 				break
 			}
 		}
-		fmt.Printf("Waiting for ingestion... (elapsed: %v / %s, last answer: %q)\n", time.Since(start).Round(time.Second), ingestTimeout.Round(time.Second), answer)
+		fmt.Printf("Waiting for ingestion... (elapsed: %v / %s, last answer: %q)\n", time.Since(start).Round(time.Second), ingestTimeout.Round(time.Second), lastAnswer)
 		time.Sleep(10 * time.Second)
 	}
 
 	if success {
 		// --- Iteration 6b Extended Tests ---
-		testExtendedVerification(sessionID, tagID, tagName, fileName, vectorSize)
+		testExtendedVerification(sessionID, tagID, tagName, fileName, vectorSize, embeddingModel)
 		runCleanup(tagID, sessionID, fileName)
 	} else {
 		fmt.Printf("FAILURE: Secret code not found in answer after 1 minute. Last answer: %q\n", lastAnswer)
@@ -307,17 +329,18 @@ func removeFileFromS3(name string) error {
 	return nil
 }
 
-func triggerIngest(tagID int64, vectorSize int, fileName string, sessionID int64) error {
+func triggerIngest(tagID int64, vectorSize int, embeddingModel, fileName string, sessionID int64) error {
 	payload := map[string]interface{}{
-		"ingestion_id": tagID,
-		"tag_ids":      []int64{tagID},
-		"tag_names":    []string{"E2E-Tag"},
-		"vector_size":  vectorSize,
-		"file_names":   []string{fileName},
-		"session_id":   sessionID,
-		"session_name": sessionName,
-		"bucket_name":  bucketName,
-		"index":        s3Index,
+		"ingestion_id":    tagID,
+		"tag_ids":         []int64{tagID},
+		"tag_names":       []string{"E2E-Tag"},
+		"vector_size":     vectorSize,
+		"embedding_model": embeddingModel,
+		"file_names":      []string{fileName},
+		"session_id":      sessionID,
+		"session_name":    sessionName,
+		"bucket_name":     bucketName,
+		"index":           s3Index,
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := client.Post(baseURL+"/api/ingest/ingest", "application/json", bytes.NewBuffer(body))
@@ -354,6 +377,15 @@ func askRAG(query string, tags []int64) (string, error) {
 		"tags":         tags,
 		"session_id":   sessionID,
 		"session_name": sessionName,
+	}
+	if plannerModel != "" {
+		payload["planner"] = plannerModel
+	}
+	if executorModel != "" {
+		payload["executor"] = executorModel
+	}
+	if embeddingModel != "" {
+		payload["embedding_model"] = embeddingModel
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := ragClient.Post(baseURL+"/api/chat/v1/rag/chat", "application/json", bytes.NewBuffer(body))

@@ -59,6 +59,16 @@ fi
 
 init_journal
 
+# Pre-authenticate sudo upfront so system-wide cert/trust steps don't silently
+# skip due to missing credentials. Keeps the session alive for the full run.
+if ! sudo -n true 2>/dev/null; then
+    echo "This script requires sudo for system certificate installation."
+    echo "Please enter your sudo password:"
+    sudo -v
+fi
+# Keepalive: refresh sudo credentials every 50s in the background
+( while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done & )
+
 INSTALL_TIMING_LOG="${INSTALL_TIMING_LOG:-$JOURNAL_FILE_DIR/setup-complete-timing.log}"
 touch "$INSTALL_TIMING_LOG"
 chmod 600 "$INSTALL_TIMING_LOG" 2>/dev/null || true

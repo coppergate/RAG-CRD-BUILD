@@ -1,9 +1,10 @@
+import 'package:dio/dio.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../core/models/session.dart';
 import '../../core/models/tag.dart';
 import '../../core/models/metrics.dart';
-import '../../core/api_client.dart';
+import '../../core/utils/http_utils.dart';
 import '../../app_config_provider.dart';
 import '../../core/services/log_service.dart';
 
@@ -26,15 +27,12 @@ abstract class TimescaleState with _$TimescaleState {
 @riverpod
 class TimescaleNotifier extends _$TimescaleNotifier {
   LogNotifier get _logger => ref.read(logProvider.notifier);
+  Dio get _dio => ref.read(dioProvider);
 
   Session? _parseSession(dynamic item) {
     try {
-      if (item is Map<String, dynamic>) {
-        return Session.fromJson(item);
-      }
-      if (item is Map) {
-        return Session.fromJson(Map<String, dynamic>.from(item));
-      }
+      final data = asStringMap(item);
+      if (data.isNotEmpty) return Session.fromJson(data);
     } catch (e) {
       _logger.warn('Skipping malformed Timescale session payload: $e');
     }
@@ -43,12 +41,8 @@ class TimescaleNotifier extends _$TimescaleNotifier {
 
   Tag? _parseTag(dynamic item) {
     try {
-      if (item is Map<String, dynamic>) {
-        return Tag.fromJson(item);
-      }
-      if (item is Map) {
-        return Tag.fromJson(Map<String, dynamic>.from(item));
-      }
+      final data = asStringMap(item);
+      if (data.isNotEmpty) return Tag.fromJson(data);
     } catch (e) {
       _logger.warn('Skipping malformed Timescale tag payload: $e');
     }
@@ -57,12 +51,8 @@ class TimescaleNotifier extends _$TimescaleNotifier {
 
   AuditEntry? _parseAuditEntry(dynamic item) {
     try {
-      if (item is Map<String, dynamic>) {
-        return AuditEntry.fromJson(item);
-      }
-      if (item is Map) {
-        return AuditEntry.fromJson(Map<String, dynamic>.from(item));
-      }
+      final data = asStringMap(item);
+      if (data.isNotEmpty) return AuditEntry.fromJson(data);
     } catch (e) {
       _logger.warn('Skipping malformed Timescale audit payload: $e');
     }
@@ -76,11 +66,10 @@ class TimescaleNotifier extends _$TimescaleNotifier {
 
   Future<TimescaleState> _fetchInitialState() async {
     final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
     try {
       _logger.debug('Loading Timescale sessions and tags');
-      final sessResp = await client.get('${config.dbUrl}/sessions');
-      final tagResp = await client.get('${config.dbUrl}/tags');
+      final sessResp = await _dio.get('${config.dbUrl}/sessions');
+      final tagResp = await _dio.get('${config.dbUrl}/tags');
 
       final List<dynamic> sessData = sessResp.data ?? [];
       final List<dynamic> tagData = tagResp.data ?? [];
@@ -115,12 +104,11 @@ class TimescaleNotifier extends _$TimescaleNotifier {
 
     try {
       final config = ref.read(appConfigProvider);
-      final client = ApiClient(config);
 
-      final healthResp = await client.get(
+      final healthResp = await _dio.get(
         '${config.dbUrl}/sessions/${session.id}/health',
       );
-      final auditResp = await client.get(
+      final auditResp = await _dio.get(
         '${config.dbUrl}/audit/sessions/${session.id}',
       );
 
@@ -149,11 +137,10 @@ class TimescaleNotifier extends _$TimescaleNotifier {
 
   Future<void> mergeTags(List<int> sourceTagIds, int targetTagId) async {
     final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
     _logger.warn(
       'Merging Timescale tags source=${sourceTagIds.join(",")} target=$targetTagId',
     );
-    await client.post(
+    await _dio.post(
       '${config.dbUrl}/maintenance/tags/merge',
       data: {'source_tag_ids': sourceTagIds, 'target_tag_id': targetTagId},
     );

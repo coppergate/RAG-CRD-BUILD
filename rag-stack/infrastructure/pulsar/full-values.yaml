@@ -667,9 +667,11 @@ bookkeeper:
       name: journal
       size: 10Gi
       local_storage: false
-      ## If you already have an existent storage class and want to reuse it, you can specify its name with the option below
-      ##
-      storageClassName: rook-cephfs
+      ## NVMe-backed fast tier: BookKeeper journal is a write-ahead log that must
+      ## fsync before every write acknowledgment. NVMe latency (~0.1ms) vs CephFS
+      ## (~2-5ms) has direct impact on Pulsar producer end-to-end latency.
+      ## 4 bookkies × 10Gi = 40Gi from the 195Gi fast-tier OSD on worker-0.
+      storageClassName: rook-ceph-block-fast
         #
         ## Instead if you want to create a new storage class define it below
         ## If left undefined no storage class will be defined along with PVC

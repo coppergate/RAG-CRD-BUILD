@@ -74,8 +74,8 @@ class MetadataPanel extends StatelessWidget {
                 'Completion Tokens',
                 metadata['completion_tokens'].toString(),
               ),
-            if (metadata['model'] != null)
-              _buildMetadataItem('Model', metadata['model'].toString()),
+
+            _buildPipelineModelsSection(metadata),
 
             if (selectedTags.isNotEmpty) ...[
               const Divider(),
@@ -131,8 +131,13 @@ class MetadataPanel extends StatelessWidget {
               )
             else
               ...contexts.map((c) {
-                final text = c.toString();
-                return _buildContextSnippet('Source', text, isDarkMode);
+                String source = 'Source';
+                String text = c.toString();
+                if (c is Map) {
+                  source = c['source']?.toString() ?? c['key']?.toString() ?? 'Source';
+                  text = c['text']?.toString() ?? c['content']?.toString() ?? c.toString();
+                }
+                return _buildContextSnippet(source, text, isDarkMode);
               }),
           ],
         ],
@@ -161,6 +166,48 @@ class MetadataPanel extends StatelessWidget {
     }
 
     return contexts;
+  }
+
+  Widget _buildPipelineModelsSection(Map<String, dynamic> metadata) {
+    final fields = <MapEntry<String, String>>[];
+    void add(String label, String key) {
+      final val = metadata[key];
+      if (val != null && val.toString().isNotEmpty) {
+        fields.add(MapEntry(label, val.toString()));
+      }
+    }
+
+    add('Planner', 'planner_model');
+    add('Executor', 'executor_model');
+    add('Embedding', 'embedding_model');
+    add('Vector dims', 'vector_size');
+    add('Embed gateway', 'gateway_id');
+
+    if (fields.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(),
+        const Text(
+          'Pipeline Models',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        ...fields.map((e) => Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Row(children: [
+            SizedBox(
+              width: 90,
+              child: Text(e.key, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            ),
+            Expanded(
+              child: Text(e.value, style: const TextStyle(fontSize: 11)),
+            ),
+          ]),
+        )),
+      ],
+    );
   }
 
   Widget _buildMetadataItem(String label, String value) {

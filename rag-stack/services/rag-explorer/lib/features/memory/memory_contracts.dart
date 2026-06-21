@@ -461,12 +461,6 @@ class MemoryPack {
   };
 }
 
-String _makeRequestId(String prefix) {
-  return '$prefix-${DateTime.now().microsecondsSinceEpoch}';
-}
-
-String _makeCorrelationId(String prefix) => _makeRequestId(prefix);
-
 const Object _memoryScopeUnset = Object();
 
 int? _asInt(dynamic value) {

@@ -1,0 +1,105 @@
+# values-qwen32b.yaml — GPU Ollama for qwen3:32b executor (formerly qwen2.5:32b)
+# Deployed on inference-0 alongside ollama-llama3.
+# 32B model (Q4_K_M ~19GB VRAM) — keep MAX_LOADED_MODELS=1 to avoid VRAM
+# contention when the llama3 pod is also resident on the same GPU.
+# All GPU models are seeded into this PVC for flexible routing.
+
+replicaCount: 1
+
+image:
+  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  pullPolicy: IfNotPresent
+  tag: ""
+
+namespaceOverride: "llms-ollama"
+
+service:
+  enabled: false
+
+ollama:
+  port: 11434
+
+  gpu:
+    enabled: true
+    type: 'nvidia'
+    number: 1
+    nvidiaResource: "nvidia.com/gpu"
+
+  models:
+    pull: []
+    run: []
+    create: []
+    clean: false
+
+  insecure: false
+
+volumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+
+volumeMounts:
+  - name: registry-ca
+    mountPath: /etc/ssl/certs/ca-certificates.crt
+    subPath: ca.crt
+
+extraEnv:
+  - name: OLLAMA_HOST
+    value: "0.0.0.0:11434"
+  - name: OLLAMA_REGISTRY_INSECURE
+    value: "0"
+  - name: SSL_CERT_FILE
+    value: "/etc/ssl/certs/ca-certificates.crt"
+  - name: OLLAMA_FLASH_ATTENTION
+    value: "true"
+  - name: OLLAMA_KV_CACHE_TYPE
+    value: "f16"
+  # Larger context for qwen2.5:32b — it supports up to 128k but 8192 is a
+  # practical default that fits comfortably within 32GB VRAM alongside the
+  # llama3 pod's steady-state usage.
+  - name: OLLAMA_NUM_CTX
+    value: "8192"
+  - name: OLLAMA_KEEP_ALIVE
+    value: "-1"
+  - name: OLLAMA_NUM_PARALLEL
+    value: "1"
+  # Keep to 1: qwen2.5:32b (~20GB) + a second model would exceed 32GB when
+  # ollama-llama3 is also resident on the same GPU node.
+  - name: OLLAMA_MAX_LOADED_MODELS
+    value: "1"
+  - name: OLLAMA_GPU_OVERHEAD
+    value: "2147483648"
+
+persistentVolume:
+  enabled: true
+  accessModes:
+    - ReadWriteMany
+  size: 100Gi
+  storageClass: "rook-cephfs"
+  volumeMode: "Filesystem"
+
+nodeSelector:
+  role: inference-node
+
+updateStrategy:
+  type: "Recreate"
+
+terminationGracePeriodSeconds: 120
+
+livenessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
+  successThreshold: 1

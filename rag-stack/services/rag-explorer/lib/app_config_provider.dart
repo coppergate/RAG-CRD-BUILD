@@ -12,9 +12,10 @@ final appConfigProvider = NotifierProvider<AppConfigNotifier, AppConfig>(() => A
 final dioProvider = Provider<Dio>((ref) {
   final config = ref.watch(appConfigProvider);
   final dio = Dio();
-  
-  dio.options.connectTimeout = const Duration(seconds: 10);
-  dio.options.receiveTimeout = const Duration(seconds: 30);
+
+  dio.options.connectTimeout = Duration(seconds: config.connectTimeoutSeconds);
+  dio.options.receiveTimeout = Duration(seconds: config.receiveTimeoutSeconds);
+  dio.options.listFormat = ListFormat.multi;
 
   if (config.skipTlsVerification && !kIsWeb) {
     (dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () {

@@ -22,6 +22,7 @@ spec:
     rendering:
       server_url: http://localhost:8081/render
       callback_url: http://localhost:3000/api/grafana/
+      renderer_token: hierocracy-grafana-renderer
   service:
     spec:
       type: ClusterIP

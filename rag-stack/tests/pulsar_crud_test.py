@@ -228,43 +228,73 @@ def test_pulsar_db_crud():
     }
     
     print(f"  - Sending task to Pulsar topic {INGRESS_TOPIC}")
-    task_producer.send(json.dumps(task_payload).encode('utf-8'), properties=headers)
+    msg_id = task_producer.send(json.dumps(task_payload).encode('utf-8'), properties=headers)
+    print(f"  - Task message sent, message_id={msg_id}")
 
     # 7. Step D: Catch response in Pulsar
-    print(f"  - Waiting for response on Pulsar topic {RESPONSE_TOPIC}...")
+    print(f"  - Waiting for response on Pulsar topic {RESPONSE_TOPIC} (subscription: test-crud-sub-*)")
+    print(f"  - Expecting correlation_id={correlation_id}")
     final_response = None
-    
+
     start_time = time.time()
     timeout = 900  # 15 minutes — llama3.1 makes 2 serial planning calls before execution
+    msgs_received = 0
+    msgs_matched = 0
+    last_heartbeat = start_time
 
     try:
         while time.time() - start_time < timeout:
+            # Heartbeat every 30 seconds
+            now = time.time()
+            if now - last_heartbeat >= 30:
+                elapsed = now - start_time
+                print(f"    [HEARTBEAT] {elapsed:.0f}s elapsed, {msgs_received} msgs received, {msgs_matched} matched our id")
+                last_heartbeat = now
+
             try:
                 msg = consumer.receive(timeout_millis=5000)
                 if msg:
-                    res_data = json.loads(msg.data())
+                    msgs_received += 1
+                    raw = msg.data()
+                    try:
+                        res_data = json.loads(raw)
+                    except Exception as parse_err:
+                        print(f"    [WARN] Could not parse message #{msgs_received}: {parse_err} — raw={raw[:200]}")
+                        consumer.acknowledge(msg)
+                        continue
+
+                    msg_id_field = res_data.get('id', '<missing>')
+                    msg_session = res_data.get('session_id', '<missing>')
+                    msg_is_last = res_data.get('is_last', False)
+                    msg_keys = list(res_data.keys())
+                    print(f"    [MSG #{msgs_received}] id={msg_id_field!r} session_id={msg_session!r} is_last={msg_is_last} keys={msg_keys}")
+
                     if res_data.get('id') == correlation_id:
+                        msgs_matched += 1
+                        print(f"    [MATCH] Message #{msgs_received} matches our correlation_id")
+
                         # Collect planning data if present
                         if res_data.get('planning_response'):
                             print(f"    [PLAN] {res_data.get('planning_response')[:50]}...")
-                        
+
                         # Collect result chunk
                         chunk_result = res_data.get('result')
                         if chunk_result:
                             if final_response is None:
                                 final_response = ""
                             final_response += chunk_result
-                        
-                        is_last = res_data.get('is_last', False)
-                        if is_last:
+
+                        if msg_is_last:
                             # Verify session_id in response if present
                             received_sid = res_data.get('session_id')
                             if received_sid is not None:
                                 print(f"    [DEBUG] Received Session ID: {received_sid} (Type: {type(received_sid)})")
-                            
+
                             print(f"    [OK] Received final response from Pulsar. Total length: {len(final_response) if final_response else 0}")
                             consumer.acknowledge(msg)
                             break
+                    else:
+                        print(f"    [SKIP] id mismatch: got {msg_id_field!r}, want {correlation_id!r}")
                     consumer.acknowledge(msg)
             except Exception as e:
                 if "timeout" not in str(e).lower():
@@ -273,6 +303,9 @@ def test_pulsar_db_crud():
     except Exception as e:
         print(f"    [FAIL] Unexpected error in Pulsar results loop: {e}")
         raise e
+
+    elapsed_total = time.time() - start_time
+    print(f"  - Loop exited after {elapsed_total:.0f}s: {msgs_received} msgs received total, {msgs_matched} matched our correlation_id")
     
     if not final_response:
         raise Exception("Timed out waiting for final response content in Pulsar")

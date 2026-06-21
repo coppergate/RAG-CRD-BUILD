@@ -17,3 +17,6 @@ data:
   PULSAR_DB_OPS_TOPIC: "persistent://rag-pipeline/operations/db-ops"
   PULSAR_QDRANT_OPS_TOPIC: "persistent://rag-pipeline/operations/qdrant-ops"
   PULSAR_QDRANT_RESULTS_TOPIC: "persistent://rag-pipeline/operations/qdrant-ops-results"
+  # Embed fan-out topics (used by embed-gateway and rag-worker ResultDispatcher)
+  PULSAR_EMBED_JOBS_TOPIC: "persistent://rag-pipeline/embed/jobs"
+  PULSAR_EMBED_NAMESPACE: "persistent://rag-pipeline/embed/"

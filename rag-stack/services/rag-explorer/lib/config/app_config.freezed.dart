@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppConfig {
 
- String get ragAdminApiUrl; bool get skipTlsVerification; String? get caCertPath; String get defaultBucketName; bool get darkMode; List<String> get availableModels; bool get memoryExplorerEnabled; bool get modelComparisonEnabled; int get promptTimeoutSeconds;
+ String get ragAdminApiUrl; bool get skipTlsVerification; String? get caCertPath; String get defaultBucketName; bool get darkMode; List<String> get availableModels; List<String> get availableEmbeddingModels; bool get memoryExplorerEnabled; bool get modelComparisonEnabled; int get promptTimeoutSeconds; int get connectTimeoutSeconds; int get receiveTimeoutSeconds;
 /// Create a copy of AppConfig
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $AppConfigCopyWith<AppConfig> get copyWith => _$AppConfigCopyWithImpl<AppConfig>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppConfig&&(identical(other.ragAdminApiUrl, ragAdminApiUrl) || other.ragAdminApiUrl == ragAdminApiUrl)&&(identical(other.skipTlsVerification, skipTlsVerification) || other.skipTlsVerification == skipTlsVerification)&&(identical(other.caCertPath, caCertPath) || other.caCertPath == caCertPath)&&(identical(other.defaultBucketName, defaultBucketName) || other.defaultBucketName == defaultBucketName)&&(identical(other.darkMode, darkMode) || other.darkMode == darkMode)&&const DeepCollectionEquality().equals(other.availableModels, availableModels)&&(identical(other.memoryExplorerEnabled, memoryExplorerEnabled) || other.memoryExplorerEnabled == memoryExplorerEnabled)&&(identical(other.modelComparisonEnabled, modelComparisonEnabled) || other.modelComparisonEnabled == modelComparisonEnabled)&&(identical(other.promptTimeoutSeconds, promptTimeoutSeconds) || other.promptTimeoutSeconds == promptTimeoutSeconds));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppConfig&&(identical(other.ragAdminApiUrl, ragAdminApiUrl) || other.ragAdminApiUrl == ragAdminApiUrl)&&(identical(other.skipTlsVerification, skipTlsVerification) || other.skipTlsVerification == skipTlsVerification)&&(identical(other.caCertPath, caCertPath) || other.caCertPath == caCertPath)&&(identical(other.defaultBucketName, defaultBucketName) || other.defaultBucketName == defaultBucketName)&&(identical(other.darkMode, darkMode) || other.darkMode == darkMode)&&const DeepCollectionEquality().equals(other.availableModels, availableModels)&&const DeepCollectionEquality().equals(other.availableEmbeddingModels, availableEmbeddingModels)&&(identical(other.memoryExplorerEnabled, memoryExplorerEnabled) || other.memoryExplorerEnabled == memoryExplorerEnabled)&&(identical(other.modelComparisonEnabled, modelComparisonEnabled) || other.modelComparisonEnabled == modelComparisonEnabled)&&(identical(other.promptTimeoutSeconds, promptTimeoutSeconds) || other.promptTimeoutSeconds == promptTimeoutSeconds)&&(identical(other.connectTimeoutSeconds, connectTimeoutSeconds) || other.connectTimeoutSeconds == connectTimeoutSeconds)&&(identical(other.receiveTimeoutSeconds, receiveTimeoutSeconds) || other.receiveTimeoutSeconds == receiveTimeoutSeconds));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,ragAdminApiUrl,skipTlsVerification,caCertPath,defaultBucketName,darkMode,const DeepCollectionEquality().hash(availableModels),memoryExplorerEnabled,modelComparisonEnabled,promptTimeoutSeconds);
+int get hashCode => Object.hash(runtimeType,ragAdminApiUrl,skipTlsVerification,caCertPath,defaultBucketName,darkMode,const DeepCollectionEquality().hash(availableModels),const DeepCollectionEquality().hash(availableEmbeddingModels),memoryExplorerEnabled,modelComparisonEnabled,promptTimeoutSeconds,connectTimeoutSeconds,receiveTimeoutSeconds);
 
 @override
 String toString() {
-  return 'AppConfig(ragAdminApiUrl: $ragAdminApiUrl, skipTlsVerification: $skipTlsVerification, caCertPath: $caCertPath, defaultBucketName: $defaultBucketName, darkMode: $darkMode, availableModels: $availableModels, memoryExplorerEnabled: $memoryExplorerEnabled, modelComparisonEnabled: $modelComparisonEnabled, promptTimeoutSeconds: $promptTimeoutSeconds)';
+  return 'AppConfig(ragAdminApiUrl: $ragAdminApiUrl, skipTlsVerification: $skipTlsVerification, caCertPath: $caCertPath, defaultBucketName: $defaultBucketName, darkMode: $darkMode, availableModels: $availableModels, availableEmbeddingModels: $availableEmbeddingModels, memoryExplorerEnabled: $memoryExplorerEnabled, modelComparisonEnabled: $modelComparisonEnabled, promptTimeoutSeconds: $promptTimeoutSeconds, connectTimeoutSeconds: $connectTimeoutSeconds, receiveTimeoutSeconds: $receiveTimeoutSeconds)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $AppConfigCopyWith<$Res>  {
   factory $AppConfigCopyWith(AppConfig value, $Res Function(AppConfig) _then) = _$AppConfigCopyWithImpl;
 @useResult
 $Res call({
- String ragAdminApiUrl, bool skipTlsVerification, String? caCertPath, String defaultBucketName, bool darkMode, List<String> availableModels, bool memoryExplorerEnabled, bool modelComparisonEnabled, int promptTimeoutSeconds
+ String ragAdminApiUrl, bool skipTlsVerification, String? caCertPath, String defaultBucketName, bool darkMode, List<String> availableModels, List<String> availableEmbeddingModels, bool memoryExplorerEnabled, bool modelComparisonEnabled, int promptTimeoutSeconds, int connectTimeoutSeconds, int receiveTimeoutSeconds
 });
 
 
@@ -65,7 +65,7 @@ class _$AppConfigCopyWithImpl<$Res>
 
 /// Create a copy of AppConfig
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? ragAdminApiUrl = null,Object? skipTlsVerification = null,Object? caCertPath = freezed,Object? defaultBucketName = null,Object? darkMode = null,Object? availableModels = null,Object? memoryExplorerEnabled = null,Object? modelComparisonEnabled = null,Object? promptTimeoutSeconds = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? ragAdminApiUrl = null,Object? skipTlsVerification = null,Object? caCertPath = freezed,Object? defaultBucketName = null,Object? darkMode = null,Object? availableModels = null,Object? availableEmbeddingModels = null,Object? memoryExplorerEnabled = null,Object? modelComparisonEnabled = null,Object? promptTimeoutSeconds = null,Object? connectTimeoutSeconds = null,Object? receiveTimeoutSeconds = null,}) {
   return _then(_self.copyWith(
 ragAdminApiUrl: null == ragAdminApiUrl ? _self.ragAdminApiUrl : ragAdminApiUrl // ignore: cast_nullable_to_non_nullable
 as String,skipTlsVerification: null == skipTlsVerification ? _self.skipTlsVerification : skipTlsVerification // ignore: cast_nullable_to_non_nullable
@@ -73,9 +73,12 @@ as bool,caCertPath: freezed == caCertPath ? _self.caCertPath : caCertPath // ign
 as String?,defaultBucketName: null == defaultBucketName ? _self.defaultBucketName : defaultBucketName // ignore: cast_nullable_to_non_nullable
 as String,darkMode: null == darkMode ? _self.darkMode : darkMode // ignore: cast_nullable_to_non_nullable
 as bool,availableModels: null == availableModels ? _self.availableModels : availableModels // ignore: cast_nullable_to_non_nullable
+as List<String>,availableEmbeddingModels: null == availableEmbeddingModels ? _self.availableEmbeddingModels : availableEmbeddingModels // ignore: cast_nullable_to_non_nullable
 as List<String>,memoryExplorerEnabled: null == memoryExplorerEnabled ? _self.memoryExplorerEnabled : memoryExplorerEnabled // ignore: cast_nullable_to_non_nullable
 as bool,modelComparisonEnabled: null == modelComparisonEnabled ? _self.modelComparisonEnabled : modelComparisonEnabled // ignore: cast_nullable_to_non_nullable
 as bool,promptTimeoutSeconds: null == promptTimeoutSeconds ? _self.promptTimeoutSeconds : promptTimeoutSeconds // ignore: cast_nullable_to_non_nullable
+as int,connectTimeoutSeconds: null == connectTimeoutSeconds ? _self.connectTimeoutSeconds : connectTimeoutSeconds // ignore: cast_nullable_to_non_nullable
+as int,receiveTimeoutSeconds: null == receiveTimeoutSeconds ? _self.receiveTimeoutSeconds : receiveTimeoutSeconds // ignore: cast_nullable_to_non_nullable
 as int,
   ));
 }
@@ -161,10 +164,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  String defaultBucketName,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  String defaultBucketName,  bool darkMode,  List<String> availableModels,  List<String> availableEmbeddingModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds,  int connectTimeoutSeconds,  int receiveTimeoutSeconds)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppConfig() when $default != null:
-return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.defaultBucketName,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds);case _:
+return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.defaultBucketName,_that.darkMode,_that.availableModels,_that.availableEmbeddingModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds,_that.connectTimeoutSeconds,_that.receiveTimeoutSeconds);case _:
   return orElse();
 
 }
@@ -182,10 +185,10 @@ return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  String defaultBucketName,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  String defaultBucketName,  bool darkMode,  List<String> availableModels,  List<String> availableEmbeddingModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds,  int connectTimeoutSeconds,  int receiveTimeoutSeconds)  $default,) {final _that = this;
 switch (_that) {
 case _AppConfig():
-return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.defaultBucketName,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds);case _:
+return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.defaultBucketName,_that.darkMode,_that.availableModels,_that.availableEmbeddingModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds,_that.connectTimeoutSeconds,_that.receiveTimeoutSeconds);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -202,10 +205,10 @@ return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  String defaultBucketName,  bool darkMode,  List<String> availableModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String ragAdminApiUrl,  bool skipTlsVerification,  String? caCertPath,  String defaultBucketName,  bool darkMode,  List<String> availableModels,  List<String> availableEmbeddingModels,  bool memoryExplorerEnabled,  bool modelComparisonEnabled,  int promptTimeoutSeconds,  int connectTimeoutSeconds,  int receiveTimeoutSeconds)?  $default,) {final _that = this;
 switch (_that) {
 case _AppConfig() when $default != null:
-return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.defaultBucketName,_that.darkMode,_that.availableModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds);case _:
+return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,_that.defaultBucketName,_that.darkMode,_that.availableModels,_that.availableEmbeddingModels,_that.memoryExplorerEnabled,_that.modelComparisonEnabled,_that.promptTimeoutSeconds,_that.connectTimeoutSeconds,_that.receiveTimeoutSeconds);case _:
   return null;
 
 }
@@ -217,7 +220,7 @@ return $default(_that.ragAdminApiUrl,_that.skipTlsVerification,_that.caCertPath,
 @JsonSerializable()
 
 class _AppConfig extends AppConfig {
-  const _AppConfig({this.ragAdminApiUrl = 'https://rag-admin-api.rag.hierocracy.home', this.skipTlsVerification = true, this.caCertPath, this.defaultBucketName = 'rag-codebase-bucket', this.darkMode = true, final  List<String> availableModels = const ['llama3.1:latest', 'granite3.1-dense:8b'], this.memoryExplorerEnabled = true, this.modelComparisonEnabled = true, this.promptTimeoutSeconds = 120}): _availableModels = availableModels,super._();
+  const _AppConfig({this.ragAdminApiUrl = 'https://rag-admin-api.rag.hierocracy.home', this.skipTlsVerification = true, this.caCertPath, this.defaultBucketName = 'rag-codebase-bucket', this.darkMode = true, final  List<String> availableModels = const ['granite3.1-dense:8b', 'qwen3:32b', 'qwen2.5:32b', 'llama3.2:3b', 'llama3.1'], final  List<String> availableEmbeddingModels = const ['all-minilm:l6-v2', 'mxbai-embed-large', 'nomic-embed-text'], this.memoryExplorerEnabled = true, this.modelComparisonEnabled = true, this.promptTimeoutSeconds = 120, this.connectTimeoutSeconds = 10, this.receiveTimeoutSeconds = 30}): _availableModels = availableModels,_availableEmbeddingModels = availableEmbeddingModels,super._();
   factory _AppConfig.fromJson(Map<String, dynamic> json) => _$AppConfigFromJson(json);
 
 @override@JsonKey() final  String ragAdminApiUrl;
@@ -232,9 +235,18 @@ class _AppConfig extends AppConfig {
   return EqualUnmodifiableListView(_availableModels);
 }
 
+ final  List<String> _availableEmbeddingModels;
+@override@JsonKey() List<String> get availableEmbeddingModels {
+  if (_availableEmbeddingModels is EqualUnmodifiableListView) return _availableEmbeddingModels;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_availableEmbeddingModels);
+}
+
 @override@JsonKey() final  bool memoryExplorerEnabled;
 @override@JsonKey() final  bool modelComparisonEnabled;
 @override@JsonKey() final  int promptTimeoutSeconds;
+@override@JsonKey() final  int connectTimeoutSeconds;
+@override@JsonKey() final  int receiveTimeoutSeconds;
 
 /// Create a copy of AppConfig
 /// with the given fields replaced by the non-null parameter values.
@@ -249,16 +261,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppConfig&&(identical(other.ragAdminApiUrl, ragAdminApiUrl) || other.ragAdminApiUrl == ragAdminApiUrl)&&(identical(other.skipTlsVerification, skipTlsVerification) || other.skipTlsVerification == skipTlsVerification)&&(identical(other.caCertPath, caCertPath) || other.caCertPath == caCertPath)&&(identical(other.defaultBucketName, defaultBucketName) || other.defaultBucketName == defaultBucketName)&&(identical(other.darkMode, darkMode) || other.darkMode == darkMode)&&const DeepCollectionEquality().equals(other._availableModels, _availableModels)&&(identical(other.memoryExplorerEnabled, memoryExplorerEnabled) || other.memoryExplorerEnabled == memoryExplorerEnabled)&&(identical(other.modelComparisonEnabled, modelComparisonEnabled) || other.modelComparisonEnabled == modelComparisonEnabled)&&(identical(other.promptTimeoutSeconds, promptTimeoutSeconds) || other.promptTimeoutSeconds == promptTimeoutSeconds));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppConfig&&(identical(other.ragAdminApiUrl, ragAdminApiUrl) || other.ragAdminApiUrl == ragAdminApiUrl)&&(identical(other.skipTlsVerification, skipTlsVerification) || other.skipTlsVerification == skipTlsVerification)&&(identical(other.caCertPath, caCertPath) || other.caCertPath == caCertPath)&&(identical(other.defaultBucketName, defaultBucketName) || other.defaultBucketName == defaultBucketName)&&(identical(other.darkMode, darkMode) || other.darkMode == darkMode)&&const DeepCollectionEquality().equals(other._availableModels, _availableModels)&&const DeepCollectionEquality().equals(other._availableEmbeddingModels, _availableEmbeddingModels)&&(identical(other.memoryExplorerEnabled, memoryExplorerEnabled) || other.memoryExplorerEnabled == memoryExplorerEnabled)&&(identical(other.modelComparisonEnabled, modelComparisonEnabled) || other.modelComparisonEnabled == modelComparisonEnabled)&&(identical(other.promptTimeoutSeconds, promptTimeoutSeconds) || other.promptTimeoutSeconds == promptTimeoutSeconds)&&(identical(other.connectTimeoutSeconds, connectTimeoutSeconds) || other.connectTimeoutSeconds == connectTimeoutSeconds)&&(identical(other.receiveTimeoutSeconds, receiveTimeoutSeconds) || other.receiveTimeoutSeconds == receiveTimeoutSeconds));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,ragAdminApiUrl,skipTlsVerification,caCertPath,defaultBucketName,darkMode,const DeepCollectionEquality().hash(_availableModels),memoryExplorerEnabled,modelComparisonEnabled,promptTimeoutSeconds);
+int get hashCode => Object.hash(runtimeType,ragAdminApiUrl,skipTlsVerification,caCertPath,defaultBucketName,darkMode,const DeepCollectionEquality().hash(_availableModels),const DeepCollectionEquality().hash(_availableEmbeddingModels),memoryExplorerEnabled,modelComparisonEnabled,promptTimeoutSeconds,connectTimeoutSeconds,receiveTimeoutSeconds);
 
 @override
 String toString() {
-  return 'AppConfig(ragAdminApiUrl: $ragAdminApiUrl, skipTlsVerification: $skipTlsVerification, caCertPath: $caCertPath, defaultBucketName: $defaultBucketName, darkMode: $darkMode, availableModels: $availableModels, memoryExplorerEnabled: $memoryExplorerEnabled, modelComparisonEnabled: $modelComparisonEnabled, promptTimeoutSeconds: $promptTimeoutSeconds)';
+  return 'AppConfig(ragAdminApiUrl: $ragAdminApiUrl, skipTlsVerification: $skipTlsVerification, caCertPath: $caCertPath, defaultBucketName: $defaultBucketName, darkMode: $darkMode, availableModels: $availableModels, availableEmbeddingModels: $availableEmbeddingModels, memoryExplorerEnabled: $memoryExplorerEnabled, modelComparisonEnabled: $modelComparisonEnabled, promptTimeoutSeconds: $promptTimeoutSeconds, connectTimeoutSeconds: $connectTimeoutSeconds, receiveTimeoutSeconds: $receiveTimeoutSeconds)';
 }
 
 
@@ -269,7 +281,7 @@ abstract mixin class _$AppConfigCopyWith<$Res> implements $AppConfigCopyWith<$Re
   factory _$AppConfigCopyWith(_AppConfig value, $Res Function(_AppConfig) _then) = __$AppConfigCopyWithImpl;
 @override @useResult
 $Res call({
- String ragAdminApiUrl, bool skipTlsVerification, String? caCertPath, String defaultBucketName, bool darkMode, List<String> availableModels, bool memoryExplorerEnabled, bool modelComparisonEnabled, int promptTimeoutSeconds
+ String ragAdminApiUrl, bool skipTlsVerification, String? caCertPath, String defaultBucketName, bool darkMode, List<String> availableModels, List<String> availableEmbeddingModels, bool memoryExplorerEnabled, bool modelComparisonEnabled, int promptTimeoutSeconds, int connectTimeoutSeconds, int receiveTimeoutSeconds
 });
 
 
@@ -286,7 +298,7 @@ class __$AppConfigCopyWithImpl<$Res>
 
 /// Create a copy of AppConfig
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? ragAdminApiUrl = null,Object? skipTlsVerification = null,Object? caCertPath = freezed,Object? defaultBucketName = null,Object? darkMode = null,Object? availableModels = null,Object? memoryExplorerEnabled = null,Object? modelComparisonEnabled = null,Object? promptTimeoutSeconds = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? ragAdminApiUrl = null,Object? skipTlsVerification = null,Object? caCertPath = freezed,Object? defaultBucketName = null,Object? darkMode = null,Object? availableModels = null,Object? availableEmbeddingModels = null,Object? memoryExplorerEnabled = null,Object? modelComparisonEnabled = null,Object? promptTimeoutSeconds = null,Object? connectTimeoutSeconds = null,Object? receiveTimeoutSeconds = null,}) {
   return _then(_AppConfig(
 ragAdminApiUrl: null == ragAdminApiUrl ? _self.ragAdminApiUrl : ragAdminApiUrl // ignore: cast_nullable_to_non_nullable
 as String,skipTlsVerification: null == skipTlsVerification ? _self.skipTlsVerification : skipTlsVerification // ignore: cast_nullable_to_non_nullable
@@ -294,9 +306,12 @@ as bool,caCertPath: freezed == caCertPath ? _self.caCertPath : caCertPath // ign
 as String?,defaultBucketName: null == defaultBucketName ? _self.defaultBucketName : defaultBucketName // ignore: cast_nullable_to_non_nullable
 as String,darkMode: null == darkMode ? _self.darkMode : darkMode // ignore: cast_nullable_to_non_nullable
 as bool,availableModels: null == availableModels ? _self._availableModels : availableModels // ignore: cast_nullable_to_non_nullable
+as List<String>,availableEmbeddingModels: null == availableEmbeddingModels ? _self._availableEmbeddingModels : availableEmbeddingModels // ignore: cast_nullable_to_non_nullable
 as List<String>,memoryExplorerEnabled: null == memoryExplorerEnabled ? _self.memoryExplorerEnabled : memoryExplorerEnabled // ignore: cast_nullable_to_non_nullable
 as bool,modelComparisonEnabled: null == modelComparisonEnabled ? _self.modelComparisonEnabled : modelComparisonEnabled // ignore: cast_nullable_to_non_nullable
 as bool,promptTimeoutSeconds: null == promptTimeoutSeconds ? _self.promptTimeoutSeconds : promptTimeoutSeconds // ignore: cast_nullable_to_non_nullable
+as int,connectTimeoutSeconds: null == connectTimeoutSeconds ? _self.connectTimeoutSeconds : connectTimeoutSeconds // ignore: cast_nullable_to_non_nullable
+as int,receiveTimeoutSeconds: null == receiveTimeoutSeconds ? _self.receiveTimeoutSeconds : receiveTimeoutSeconds // ignore: cast_nullable_to_non_nullable
 as int,
   ));
 }

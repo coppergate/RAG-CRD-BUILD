@@ -1,0 +1,335 @@
+# embed-gateway Deployments — one per worker node (embed-instance=0..3)
+# Each pod is pinned to its worker node via nodeSelector and reads its node name
+# from the downward API to perform node-local Ollama pod discovery.
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embed-gateway-0
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embed-gateway
+      instance: "0"
+  template:
+    metadata:
+      labels:
+        app: embed-gateway
+        instance: "0"
+    spec:
+      serviceAccountName: embed-gateway
+      nodeSelector:
+        embed-instance: "0"
+      enableServiceLinks: false
+      containers:
+      - name: embed-gateway
+        image: registry.container-registry.svc.cluster.local:5000/embed-gateway:__VERSION__
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: EMBED_GATEWAY_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: EMBED_JOBS_TOPIC
+          value: "persistent://rag-pipeline/embed/jobs"
+        - name: EMBED_SUBSCRIPTION
+          value: "embed-gw-sub"
+        - name: EMBED_GATEWAY_WORKERS
+          value: "8"
+        - name: OLLAMA_EMBED_NAMESPACE
+          value: "llms-ollama"
+        - name: OLLAMA_EMBED_FALLBACK_URL
+          value: "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embed-gateway-1
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embed-gateway
+      instance: "1"
+  template:
+    metadata:
+      labels:
+        app: embed-gateway
+        instance: "1"
+    spec:
+      serviceAccountName: embed-gateway
+      nodeSelector:
+        embed-instance: "1"
+      enableServiceLinks: false
+      containers:
+      - name: embed-gateway
+        image: registry.container-registry.svc.cluster.local:5000/embed-gateway:__VERSION__
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: EMBED_GATEWAY_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: EMBED_JOBS_TOPIC
+          value: "persistent://rag-pipeline/embed/jobs"
+        - name: EMBED_SUBSCRIPTION
+          value: "embed-gw-sub"
+        - name: EMBED_GATEWAY_WORKERS
+          value: "8"
+        - name: OLLAMA_EMBED_NAMESPACE
+          value: "llms-ollama"
+        - name: OLLAMA_EMBED_FALLBACK_URL
+          value: "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embed-gateway-2
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embed-gateway
+      instance: "2"
+  template:
+    metadata:
+      labels:
+        app: embed-gateway
+        instance: "2"
+    spec:
+      serviceAccountName: embed-gateway
+      nodeSelector:
+        embed-instance: "2"
+      enableServiceLinks: false
+      containers:
+      - name: embed-gateway
+        image: registry.container-registry.svc.cluster.local:5000/embed-gateway:__VERSION__
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: EMBED_GATEWAY_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: EMBED_JOBS_TOPIC
+          value: "persistent://rag-pipeline/embed/jobs"
+        - name: EMBED_SUBSCRIPTION
+          value: "embed-gw-sub"
+        - name: EMBED_GATEWAY_WORKERS
+          value: "8"
+        - name: OLLAMA_EMBED_NAMESPACE
+          value: "llms-ollama"
+        - name: OLLAMA_EMBED_FALLBACK_URL
+          value: "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embed-gateway-3
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embed-gateway
+      instance: "3"
+  template:
+    metadata:
+      labels:
+        app: embed-gateway
+        instance: "3"
+    spec:
+      serviceAccountName: embed-gateway
+      nodeSelector:
+        embed-instance: "3"
+      enableServiceLinks: false
+      containers:
+      - name: embed-gateway
+        image: registry.container-registry.svc.cluster.local:5000/embed-gateway:__VERSION__
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: EMBED_GATEWAY_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: EMBED_JOBS_TOPIC
+          value: "persistent://rag-pipeline/embed/jobs"
+        - name: EMBED_SUBSCRIPTION
+          value: "embed-gw-sub"
+        - name: EMBED_GATEWAY_WORKERS
+          value: "8"
+        - name: OLLAMA_EMBED_NAMESPACE
+          value: "llms-ollama"
+        - name: OLLAMA_EMBED_FALLBACK_URL
+          value: "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm

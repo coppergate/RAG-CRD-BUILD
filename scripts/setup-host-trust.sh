@@ -1,46 +1,92 @@
 #!/bin/bash
 # setup-host-trust.sh - Configure host to trust the registry CA
 # To be executed on host: hierophant
+#
+# Trust source priority:
+#   1. Live cert fetched directly from the bootstrap registry (127.0.0.1:5000)
+#   2. CA extracted from the talos registry patch (mkcert CA, used for in-cluster registry)
+# Both are installed so the host trusts the bootstrap AND in-cluster registries.
 
-REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+set -uo pipefail
+
 PATCH_FILE="/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml"
-
-if [[ ! -f "$PATCH_FILE" ]]; then
-  echo "ERROR: Patch file not found at $PATCH_FILE" >&2
-  exit 1
-fi
+CERT_DIR="$HOME/.config/containers/certs.d"
+HOSTS=("10.0.0.1:5000" "hierophant:5000" "hierophant.hierocracy.home:5000" \
+       "registry.hierocracy.home:5000" "172.20.1.26:5000" "127.0.0.1:5000" "localhost:5000")
 
 echo "--- Configuring Host Trust for current user ---"
 
-# Extract CA from patch file (first occurrence of ca: field)
-# We use grep and head to find the base64 string
-CA_DATA=$(grep -oP 'ca: \K[A-Za-z0-9+/=]+' "$PATCH_FILE" | head -n 1)
+# --- Source 1: Live cert from the bootstrap registry ---
+echo ""
+echo "Fetching live cert from bootstrap registry (127.0.0.1:5000)..."
+BOOTSTRAP_CERT=""
+if openssl s_client -connect 127.0.0.1:5000 -showcerts </dev/null 2>/dev/null \
+     | openssl x509 -out /tmp/bootstrap-registry.crt 2>/dev/null; then
+  BOOTSTRAP_CERT=/tmp/bootstrap-registry.crt
+  echo "  Got: $(openssl x509 -noout -subject -issuer -in $BOOTSTRAP_CERT)"
+else
+  echo "  Bootstrap registry not reachable — skipping live cert fetch."
+fi
 
-if [[ -z "$CA_DATA" ]]; then
-  echo "ERROR: Could not find CA data in $PATCH_FILE" >&2
+# --- Source 2: mkcert CA from talos patch (for in-cluster registry) ---
+echo ""
+echo "Extracting mkcert CA from talos patch..."
+MKCERT_CERT=""
+if [[ -f "$PATCH_FILE" ]]; then
+  CA_DATA=$(grep -oP 'ca: \K[A-Za-z0-9+/=]+' "$PATCH_FILE" | head -n 1 || true)
+  if [[ -n "$CA_DATA" ]]; then
+    if echo "$CA_DATA" | base64 -d > /tmp/mkcert-ca.crt; then
+      MKCERT_CERT=/tmp/mkcert-ca.crt
+      CERT_INFO=$(openssl x509 -noout -subject -issuer -in "$MKCERT_CERT" 2>&1 || echo "  (could not parse cert)")
+      echo "  Got: $CERT_INFO"
+    else
+      echo "  base64 decode failed — skipping mkcert CA."
+    fi
+  else
+    echo "  No CA data found in patch file."
+  fi
+else
+  echo "  Patch file not found: $PATCH_FILE"
+fi
+
+if [[ -z "$BOOTSTRAP_CERT" && -z "$MKCERT_CERT" ]]; then
+  echo "ERROR: No certificates found from any source." >&2
   exit 1
 fi
 
-CERT_DIR="$HOME/.config/containers/certs.d"
-HOSTS=("10.0.0.1:5000" "hierophant:5000" "hierophant.hierocracy.home:5000" "registry.hierocracy.home:5000" "172.20.1.26:5000" "127.0.0.1:5000" "localhost:5000")
-
+# --- Install to per-user containers cert dirs ---
+echo ""
+echo "Installing to user cert dirs ($CERT_DIR)..."
 for host in "${HOSTS[@]}"; do
   mkdir -p "$CERT_DIR/$host"
-  echo "$CA_DATA" | base64 -d > "$CERT_DIR/$host/ca.crt"
-  echo "Configured $CERT_DIR/$host/ca.crt"
+  # Write bootstrap cert first (self-signed), then append mkcert CA if present
+  if [[ -n "$BOOTSTRAP_CERT" ]]; then
+    cp "$BOOTSTRAP_CERT" "$CERT_DIR/$host/ca.crt"
+  fi
+  if [[ -n "$MKCERT_CERT" ]]; then
+    cat "$MKCERT_CERT" >> "$CERT_DIR/$host/ca.crt"
+  fi
+  echo "  Configured $CERT_DIR/$host/ca.crt"
 done
 
-# Also try system trust store if sudo is available (non-interactive check)
-if sudo -n true 2>/dev/null; then
-  echo "--- Configuring system-wide trust store ---"
-  echo "$CA_DATA" | base64 -d > /tmp/hierocracy-root-ca.crt
-  sudo cp /tmp/hierocracy-root-ca.crt /etc/pki/ca-trust/source/anchors/
-  sudo update-ca-trust
-  rm /tmp/hierocracy-root-ca.crt
-  echo "System trust store updated."
-else
-  echo "Skipping system trust store (requires sudo password-less access)."
-  echo "User-specific trust in $CERT_DIR should suffice for skopeo and podman."
-fi
+# --- Install to system-wide trust store ---
+echo ""
+echo "Installing to system-wide cert dirs and trust store..."
+for host in "${HOSTS[@]}"; do
+  sudo mkdir -p "/etc/containers/certs.d/$host"
+  sudo cp "$CERT_DIR/$host/ca.crt" "/etc/containers/certs.d/$host/ca.crt"
+  echo "  Configured /etc/containers/certs.d/$host/ca.crt"
+done
+# Bundle both certs into the system anchor
+{
+  [[ -n "$BOOTSTRAP_CERT" ]] && cat "$BOOTSTRAP_CERT"
+  [[ -n "$MKCERT_CERT" ]]    && cat "$MKCERT_CERT"
+} | sudo tee /etc/pki/ca-trust/source/anchors/hierocracy-registry.crt
+sudo update-ca-trust
+echo "System trust store updated."
 
+# Cleanup temp files
+rm -f /tmp/bootstrap-registry.crt /tmp/mkcert-ca.crt
+
+echo ""
 echo "Host trust configuration complete."

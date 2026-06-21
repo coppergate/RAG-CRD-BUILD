@@ -98,16 +98,17 @@ declare -A HB_PIDS
 # Actually, the trap in build_service will handle it better for parallel builds.
 
 SERVICES=(
-    "rag-worker" 
-    "rag-ingestion" 
-    "llm-gateway" 
-    "db-adapter" 
-    "qdrant-adapter" 
-    "object-store-mgr" 
+    "rag-worker"
+    "rag-ingestion"
+    "llm-gateway"
+    "db-adapter"
+    "qdrant-adapter"
+    "object-store-mgr"
     "rag-test-runner"
     "rag-admin-api"
     "memory-controller"
     "prompt-aggregator"
+    "embed-gateway"
 )
 
 # Infrastructure services are only built if explicitly requested or if they have changed.
@@ -239,14 +240,35 @@ deploy_update() {
     esac
 
     if [[ -n "$manifest" && -f "$manifest" ]]; then
+        # Extract namespace from manifest and skip if it doesn't exist yet (fresh cluster).
+        # setup-all.sh will do the initial deployment; deploy_update only rolls running deployments.
+        local ns
+        ns=$(grep -m1 'namespace:' "$manifest" | awk '{print $2}' || true)
+        if [[ -n "$ns" ]] && ! "$KUBECTL" get namespace "$ns" >/dev/null 2>&1; then
+            log "SKIP deploy update for $svc: namespace $ns does not exist yet"
+            return 0
+        fi
         # Replace __VERSION__ and apply
         # We handle both the external and internal registry names for substitution
-        sed -e "s#__VERSION__#${ver}#g" \
-            -e "s#registry.hierocracy.home:5000#${REGISTRY}#g" \
-            -e "s#registry.container-registry.svc.cluster.local:5000#${REGISTRY}#g" \
+        sed -e "s|__VERSION__|${ver}|g" \
+            -e "s|registry.hierocracy.home:5000|${REGISTRY}|g" \
+            -e "s|registry.container-registry.svc.cluster.local:5000|${REGISTRY}|g" \
             "$manifest" | "$KUBECTL" apply -f -
     elif [[ -n "$manifest" ]]; then
         log "WARN: Manifest not found for $svc at $manifest"
+    fi
+
+    # Apply service manifest if one exists alongside the deployment (idempotent).
+    # Services are not versioned and can be lost during cluster recovery without
+    # being recreated by build.sh — this ensures they are always reconciled.
+    local svc_manifest=""
+    case "$svc" in
+        "object-store-mgr") svc_manifest="$REPO_DIR/services/object-store-mgr/mgr-service.yaml" ;;
+        "build-orchestrator"|"rag-test-runner") svc_manifest="" ;;
+        *) svc_manifest="$REPO_DIR/services/$svc/k8s/service.yaml" ;;
+    esac
+    if [[ -n "$svc_manifest" && -f "$svc_manifest" ]]; then
+        "$KUBECTL" apply -f "$svc_manifest"
     fi
 }
 

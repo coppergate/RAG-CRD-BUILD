@@ -19,7 +19,9 @@ spec:
     nodeSelector:
       rag.role.timescaledb-node: "true"
   storage:
-    storageClass: rook-ceph-block
+    # NVMe-backed fast tier: TimescaleDB WAL fsyncs and hot index pages benefit
+    # significantly from low-latency block storage.
+    storageClass: rook-ceph-block-fast
     size: 50Gi
   bootstrap:
     initdb:

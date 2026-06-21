@@ -33,7 +33,7 @@ final class QdrantNotifierProvider
   QdrantNotifier create() => QdrantNotifier();
 }
 
-String _$qdrantNotifierHash() => r'8d199716f7a23afa0146cf1c4dcba68bc386a162';
+String _$qdrantNotifierHash() => r'c1e5cfcebd9ded5d1b460fe42d6de067975db119';
 
 abstract class _$QdrantNotifier extends $AsyncNotifier<QdrantState> {
   FutureOr<QdrantState> build();

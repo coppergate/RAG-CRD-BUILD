@@ -1,7 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../core/models/metrics.dart';
-import '../../core/api_client.dart';
 import '../../app_config_provider.dart';
 import '../../core/services/log_service.dart';
 
@@ -19,6 +19,7 @@ abstract class QdrantState with _$QdrantState {
 @riverpod
 class QdrantNotifier extends _$QdrantNotifier {
   LogNotifier get _logger => ref.read(logProvider.notifier);
+  Dio get _dio => ref.read(dioProvider);
 
   @override
   FutureOr<QdrantState> build() async {
@@ -65,16 +66,15 @@ class QdrantNotifier extends _$QdrantNotifier {
   }
 
   Future<dynamic> _getWithFallback(
-    ApiClient client,
     String primaryUrl,
     String fallbackUrl,
   ) async {
     try {
-      return (await client.get(primaryUrl)).data;
+      return (await _dio.get(primaryUrl)).data;
     } catch (e) {
       _logger.warn('Primary Qdrant request failed for $primaryUrl: $e');
       try {
-        return (await client.get(fallbackUrl)).data;
+        return (await _dio.get(fallbackUrl)).data;
       } catch (fallbackError) {
         _logger.warn(
           'Fallback Qdrant request failed for $fallbackUrl: $fallbackError',
@@ -86,12 +86,10 @@ class QdrantNotifier extends _$QdrantNotifier {
 
   Future<QdrantState> _fetchInitialState() async {
     final config = ref.read(appConfigProvider);
-    final client = ApiClient(config);
 
     try {
       _logger.debug('Loading Qdrant collections');
       final collectionsData = await _getWithFallback(
-        client,
         '${config.qdrantUrl}/collections',
         '${config.qdrantDirectUrl}/collections',
       );
@@ -105,7 +103,6 @@ class QdrantNotifier extends _$QdrantNotifier {
         }
         try {
           final statsJson = await _getWithFallback(
-            client,
             '${config.qdrantUrl}/collections/$name',
             '${config.qdrantDirectUrl}/collections/$name',
           );

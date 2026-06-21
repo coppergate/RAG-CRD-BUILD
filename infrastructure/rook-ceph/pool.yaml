@@ -70,3 +70,28 @@ spec:
   # quotas:
   #   maxSize: "10Gi" # valid suffixes include k, M, G, T, P, E, Ki, Mi, Gi, Ti, Pi, Ei
   #   maxObjects: 1000000000 # 1 billion objects
+
+---
+
+#################################################################################################################
+# NVMe fast-tier pool: backed by the single NVMe-only OSD on worker-0 (vdd, 195GB).
+# size: 1 — no replication (single OSD). Use for latency-sensitive workloads where
+# data can be rebuilt: Qdrant vector indexes, TimescaleDB, Pulsar journal.
+# deviceClass: nvme ensures only the NVMe OSD is used for this pool.
+#################################################################################################################
+
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: ceph-nvme-pool
+  namespace: rook-ceph
+spec:
+  failureDomain: host
+  replicated:
+    size: 1
+    # Single NVMe OSD — no redundancy. Acceptable for rebuilable data (indexes, caches).
+    requireSafeReplicaSize: false
+  deviceClass: nvme
+  parameters:
+    pg_autoscale_mode: 'on'
+    compression_mode: none

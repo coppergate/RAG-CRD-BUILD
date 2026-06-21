@@ -1,162 +1,143 @@
 import 'package:dio/dio.dart';
 import 'dart:typed_data';
 import 'dart:convert';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/tag.dart';
-import '../../config/app_config.dart';
 import '../../app_config_provider.dart';
+import '../utils/http_utils.dart';
+import 'base_service.dart';
 import 'log_service.dart';
 
-part 'ingestion_service.g.dart';
+final ingestionServiceProvider = Provider((ref) {
+  final config = ref.watch(appConfigProvider);
+  final dio = ref.watch(dioProvider);
+  final logger = ref.watch(logProvider.notifier);
+  return IngestionService(dio, config, logger);
+});
 
-@riverpod
-class IngestionService extends _$IngestionService {
-  late Dio _dio;
-  late AppConfig _config;
-  late LogNotifier _logger;
-
-  @override
-  FutureOr<void> build() {
-    _dio = ref.watch(dioProvider);
-    _config = ref.watch(appConfigProvider);
-    _logger = ref.read(logProvider.notifier);
-  }
+class IngestionService extends BaseService {
+  IngestionService(super.dio, super.config, super.logger);
 
   Future<List<String>> getBuckets() async {
-    _logger.debug('Fetching S3 buckets');
+    logger.debug('Fetching S3 buckets');
     try {
-      final response = await _dio.get('${_config.ragAdminApiUrl}/api/s3/buckets');
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data is String ? [] : response.data;
-        return data.map((e) => e['Name'] as String).toList();
-      }
-      return [];
+      final r = await dio.get('${config.ragAdminApiUrl}/api/s3/buckets');
+      if (!r.isSuccess) return [];
+      final List<dynamic> data = r.data is List ? r.data : [];
+      return data
+          .whereType<Map>()
+          .map((e) => (e['Name'] ?? e['name'] ?? '').toString())
+          .where((s) => s.isNotEmpty)
+          .toList();
     } catch (e) {
-      _logger.error('Error fetching buckets: $e');
+      logger.error('Error fetching buckets: $e');
       return [];
     }
   }
 
-  Future<List<Map<String, dynamic>>> getObjects(String bucket, {String prefix = ''}) async {
-    _logger.debug('Fetching objects for bucket: $bucket, prefix: $prefix');
+  Future<List<Map<String, dynamic>>> getObjects(
+    String bucket, {
+    String prefix = '',
+  }) async {
+    logger.debug('Fetching objects for bucket: $bucket, prefix: $prefix');
     try {
-      final response = await _dio.get(
-        '${_config.ragAdminApiUrl}/api/s3/buckets/$bucket',
+      final r = await dio.get(
+        '${config.ragAdminApiUrl}/api/s3/buckets/$bucket',
         queryParameters: {'prefix': prefix},
       );
-      if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>.from(response.data);
-      }
-      return [];
+      if (!r.isSuccess) return [];
+      return List<Map<String, dynamic>>.from(r.data);
     } catch (e) {
-      _logger.error('Error fetching objects: $e');
+      logger.error('Error fetching objects: $e');
       return [];
     }
   }
 
   Future<List<Tag>> getTags() async {
-    _logger.debug('Fetching tags from database');
+    logger.debug('Fetching tags from database');
     try {
-      final response = await _dio.get('${_config.ragAdminApiUrl}/api/db/tags');
-      if (response.statusCode == 200) {
-        dynamic data = response.data;
-        if (data is String) {
-          _logger.warn('Backend returned string for tags, attempting to decode JSON. Content: $data');
-          try {
-            data = json.decode(data);
-          } catch (e) {
-            _logger.error('Failed to decode tags string: $e');
-            return [];
-          }
-        }
-        
-        if (data is List) {
-          return data.map((e) => Tag.fromJson(e as Map<String, dynamic>)).toList();
-        } else {
-          _logger.error('Tags data is not a list: ${data.runtimeType}');
+      final r = await dio.get('${config.ragAdminApiUrl}/api/db/tags');
+      if (!r.isSuccess) return [];
+      dynamic data = r.data;
+      if (data is String) {
+        logger.warn('Backend returned string for tags, attempting to decode JSON.');
+        try {
+          data = json.decode(data);
+        } catch (e) {
+          logger.error('Failed to decode tags string: $e');
           return [];
         }
       }
-      return [];
+      if (data is! List) {
+        logger.error('Tags data is not a list: ${data.runtimeType}');
+        return [];
+      }
+      return data.map((e) => Tag.fromJson(asStringMap(e))).toList();
     } catch (e) {
-      _logger.error('Error fetching tags: $e');
+      logger.error('Error fetching tags: $e');
       return [];
     }
   }
 
   Future<Tag?> createTag(String name) async {
-    _logger.info('Creating new tag: $name');
+    logger.info('Creating new tag: $name');
     try {
-      final response = await _dio.post(
-        '${_config.ragAdminApiUrl}/api/db/tags',
+      final r = await dio.post(
+        '${config.ragAdminApiUrl}/api/db/tags',
         data: {'name': name},
       );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        dynamic data = response.data;
-        if (data is String) {
-          _logger.warn('Backend returned string for createTag, attempting to decode JSON. Content: $data');
-          try {
-            data = json.decode(data);
-          } catch (e) {
-            _logger.error('Failed to decode created tag string: $e');
-            return null;
-          }
+      if (!r.isSuccess) return null;
+      dynamic data = r.data;
+      if (data is String) {
+        logger.warn('Backend returned string for createTag, attempting to decode JSON.');
+        try {
+          data = json.decode(data);
+        } catch (e) {
+          logger.error('Failed to decode created tag string: $e');
+          return null;
         }
-        return Tag.fromJson(data as Map<String, dynamic>);
       }
-      return null;
+      return Tag.fromJson(asStringMap(data));
     } catch (e) {
-      _logger.error('Error creating tag: $e');
+      logger.error('Error creating tag: $e');
       return null;
     }
   }
 
-  Future<bool> deleteTag(int id) async {
-    _logger.warn('Deleting tag: $id');
-    try {
-      final response = await _dio.delete('${_config.ragAdminApiUrl}/api/db/tags/$id');
-      return response.statusCode == 204 || response.statusCode == 200;
-    } catch (e) {
-      _logger.error('Error deleting tag: $e');
-      return false;
-    }
+  Future<bool> deleteTag(int id) {
+    logger.warn('Deleting tag: $id');
+    return deleteOne('${config.ragAdminApiUrl}/api/db/tags/$id', logLabel: 'tag $id');
   }
 
   Future<List<String>> getAllowedExtensions() async {
-    _logger.debug('Fetching allowed extensions from ingestion service');
+    logger.debug('Fetching allowed extensions from ingestion service');
     try {
-      final response = await _dio.get('${_config.ragAdminApiUrl}/api/ingest/extensions');
-      if (response.statusCode == 200) {
-        final List<dynamic> extensions = response.data['extensions'];
-        return extensions.cast<String>();
-      }
-      return [];
+      final r = await dio.get('${config.ragAdminApiUrl}/api/ingest/extensions');
+      if (!r.isSuccess) return [];
+      final List<dynamic> extensions = r.data['extensions'];
+      return extensions.cast<String>();
     } catch (e) {
-      _logger.error('Error fetching extensions: $e');
+      logger.error('Error fetching extensions: $e');
       return [];
     }
   }
 
   Future<bool> uploadFile(String bucket, String key, Uint8List bytes) async {
-    _logger.info('Uploading file to S3: $bucket/$key');
+    logger.info('Uploading file to S3: $bucket/$key');
     try {
-      final response = await _dio.put(
-        '${_config.ragAdminApiUrl}/api/s3/buckets/$bucket/$key',
+      final r = await dio.put(
+        '${config.ragAdminApiUrl}/api/s3/buckets/$bucket/$key',
         data: Stream.fromIterable([bytes]),
-        options: Options(
-          headers: {
-            Headers.contentLengthHeader: bytes.length,
-          },
-        ),
+        options: Options(headers: {Headers.contentLengthHeader: bytes.length}),
       );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        _logger.info('File uploaded successfully: $key');
+      if (r.isSuccess) {
+        logger.info('File uploaded successfully: $key');
         return true;
       }
-      _logger.error('Failed to upload file: ${response.statusCode}');
+      logger.error('Failed to upload file: ${r.statusCode}');
       return false;
     } catch (e) {
-      _logger.error('Error uploading file: $e');
+      logger.error('Error uploading file: $e');
       return false;
     }
   }
@@ -166,52 +147,48 @@ class IngestionService extends _$IngestionService {
     required List<int> tagIds,
     String prefix = '',
     bool forceReingest = false,
+    String embeddingModel = 'all-minilm:l6-v2',
   }) async {
-    _logger.info('Triggering ingestion for bucket: $bucketName, tags: $tagIds');
+    logger.info(
+      'Triggering ingestion for bucket: $bucketName, tags: $tagIds, model: $embeddingModel',
+    );
     try {
-      final response = await _dio.post(
-        '${_config.ragAdminApiUrl}/api/ingest/ingest',
+      final r = await dio.post(
+        '${config.ragAdminApiUrl}/api/ingest/ingest',
         data: {
           'bucket_name': bucketName,
           'prefix': prefix,
           'tag_ids': tagIds,
           'force_reingest': forceReingest,
+          'embedding_model': embeddingModel,
         },
       );
-      if (response.statusCode == 200 || response.statusCode == 202) {
-        _logger.info('Ingestion triggered successfully: ${response.data}');
-        return response.data;
+      if (r.isSuccess) {
+        logger.info('Ingestion triggered successfully: ${r.data}');
+        return r.data;
       }
-      _logger.error('Failed to trigger ingestion: ${response.statusCode}');
-      return {'error': 'Failed to trigger ingestion', 'status': response.statusCode};
+      logger.error('Failed to trigger ingestion: ${r.statusCode}');
+      return {'error': 'Failed to trigger ingestion', 'status': r.statusCode};
     } catch (e) {
-      _logger.error('Error triggering ingestion: $e');
+      logger.error('Error triggering ingestion: $e');
       return {'error': e.toString()};
     }
   }
 
-  Future<bool> deleteObject(String bucket, String key) async {
-    _logger.warn('Deleting object from S3: $bucket/$key');
-    try {
-      final response = await _dio.delete('${_config.ragAdminApiUrl}/api/s3/buckets/$bucket/$key');
-      return response.statusCode == 200 || response.statusCode == 204;
-    } catch (e) {
-      _logger.error('Error deleting object: $e');
-      return false;
-    }
+  Future<bool> deleteObject(String bucket, String key) {
+    logger.warn('Deleting object from S3: $bucket/$key');
+    return deleteOne(
+      '${config.ragAdminApiUrl}/api/s3/buckets/$bucket/$key',
+      logLabel: 'S3 $bucket/$key',
+    );
   }
 
-  Future<String?> getObjectContent(String bucket, String key) async {
-    _logger.debug('Fetching object content: $bucket/$key');
-    try {
-      final response = await _dio.get('${_config.ragAdminApiUrl}/api/s3/buckets/$bucket/$key');
-      if (response.statusCode == 200) {
-        return response.data.toString();
-      }
-      return null;
-    } catch (e) {
-      _logger.error('Error fetching object content: $e');
-      return null;
-    }
+  Future<String?> getObjectContent(String bucket, String key) {
+    logger.debug('Fetching object content: $bucket/$key');
+    return getOne(
+      '${config.ragAdminApiUrl}/api/s3/buckets/$bucket/$key',
+      (data) => data.toString(),
+      logLabel: '$bucket/$key',
+    );
   }
 }

@@ -63,6 +63,15 @@ type Config struct {
 	ModelDefaultsConfigPath  string
 	PlannerModelConfigPath   string
 	ExecutorModelConfigPath  string
+
+	// Embed fan-out (Iteration 10a) — distributes embedding calls across worker-node
+	// embed pods via the Pulsar embed/jobs topic and gathers results per-worker.
+	// Disabled by default; set EMBED_FANOUT_ENABLED=true to activate.
+	EmbedFanoutEnabled   bool
+	PulsarEmbedJobsTopic string
+	PulsarEmbedNamespace string
+	EmbedFanoutTimeout   time.Duration
+	WorkerInstanceID     string // pod name from POD_NAME (downward API)
 }
 
 func LoadConfig() *Config {
@@ -94,11 +103,11 @@ func LoadConfig() *Config {
 		QdrantHost:            envutil.GetEnv("QDRANT_HOST", "qdrant.rag-system.svc.cluster.local"),
 		QdrantPort:            envutil.GetEnv("QDRANT_PORT", "6333"),
 		PlannerURL:            envutil.GetEnv("PLANNER_URL", plannerDefault),
-		PlannerModel:          envutil.GetEnv("PLANNER_MODEL", "llama3.1:latest"),
-		PlannerPromptType:     envutil.GetEnv("PLANNER_PROMPT_TYPE", "llama3"),
+		PlannerModel:          envutil.GetEnv("PLANNER_MODEL", "granite3.1-dense:8b"),
+		PlannerPromptType:     envutil.GetEnv("PLANNER_PROMPT_TYPE", "granite31"),
 		ExecutorURL:           envutil.GetEnv("EXECUTOR_URL", executorDefault),
-		ExecutorModel:         envutil.GetEnv("EXECUTOR_MODEL", "granite3.1-dense:8b"),
-		ExecutorPromptType:    envutil.GetEnv("EXECUTOR_PROMPT_TYPE", "granite31"),
+		ExecutorModel:         envutil.GetEnv("EXECUTOR_MODEL", "qwen2.5:32b"),
+		ExecutorPromptType:    envutil.GetEnv("EXECUTOR_PROMPT_TYPE", "llama3"),
 		EmbeddingModel:        envutil.GetEnv("EMBEDDING_MODEL", "all-minilm:l6-v2"),
 		EmbeddingURL:          envutil.GetEnv("EMBEDDING_URL", embeddingDefault),
 		AltPlannerModel:       envutil.GetEnv("ALT_PLANNER_MODEL", "llama3.2:3b"),
@@ -133,5 +142,11 @@ func LoadConfig() *Config {
 		ModelDefaultsConfigPath: envutil.GetEnv("MODEL_DEFAULTS_CONFIG_PATH", ""),
 		PlannerModelConfigPath:  envutil.GetEnv("PLANNER_MODEL_CONFIG_PATH", ""),
 		ExecutorModelConfigPath: envutil.GetEnv("EXECUTOR_MODEL_CONFIG_PATH", ""),
+
+		EmbedFanoutEnabled:   envutil.GetEnvBool("EMBED_FANOUT_ENABLED", false),
+		PulsarEmbedJobsTopic: envutil.GetEnv("PULSAR_EMBED_JOBS_TOPIC", "persistent://rag-pipeline/embed/jobs"),
+		PulsarEmbedNamespace: envutil.GetEnv("PULSAR_EMBED_NAMESPACE", "persistent://rag-pipeline/embed/"),
+		EmbedFanoutTimeout:   envutil.GetEnvDuration("EMBED_FANOUT_TIMEOUT", 30*time.Second),
+		WorkerInstanceID:     envutil.GetEnv("POD_NAME", "rag-worker-unknown"),
 	}
 }

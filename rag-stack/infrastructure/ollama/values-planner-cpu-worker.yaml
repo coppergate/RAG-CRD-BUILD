@@ -1,0 +1,103 @@
+# values-planner-cpu-worker.yaml — CPU-only Ollama for planner on worker nodes
+# Worker nodes have role=storage-node and are not sharing with GPU pods.
+# NUM_PARALLEL=2 since worker nodes have more available CPU than inference nodes.
+# Runs llama3.2:3b (~2GB, ~3-6 tok/s on available CPUs).
+# Uses the llama3 PromptType — same prompt format as the GPU llama3.1 planner.
+# Pin to a specific worker node at deploy time via:
+#   --set "nodeSelector.embed-instance=N"
+
+replicaCount: 1
+
+image:
+  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  pullPolicy: IfNotPresent
+  tag: ""
+
+namespaceOverride: "llms-ollama"
+
+service:
+  enabled: false
+
+ollama:
+  port: 11434
+  gpu:
+    enabled: false
+  models:
+    pull: []
+    run: []
+    create: []
+    clean: false
+  insecure: false
+
+# Label pods so the unified ollama-planner-cpu ClusterIP service selects them.
+podLabels:
+  ollama-role: planner-cpu
+
+volumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+
+volumeMounts:
+  - name: registry-ca
+    mountPath: /etc/ssl/certs/ca-certificates.crt
+    subPath: ca.crt
+
+extraEnv:
+  - name: OLLAMA_HOST
+    value: "0.0.0.0:11434"
+  - name: OLLAMA_REGISTRY_INSECURE
+    value: "0"
+  - name: SSL_CERT_FILE
+    value: "/etc/ssl/certs/ca-certificates.crt"
+  - name: OLLAMA_KEEP_ALIVE
+    value: "-1"
+  - name: OLLAMA_NUM_PARALLEL
+    value: "2"
+  - name: OLLAMA_MAX_LOADED_MODELS
+    value: "1"
+  - name: OLLAMA_NUM_CTX
+    value: "4096"
+
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "3Gi"
+  limits:
+    cpu: "4000m"
+    memory: "6Gi"
+
+persistentVolume:
+  enabled: true
+  accessModes:
+    - ReadWriteMany
+  size: 10Gi
+  storageClass: "rook-cephfs"
+  volumeMode: "Filesystem"
+
+# Base nodeSelector — embed-instance=N added at deploy time via --set
+nodeSelector:
+  role: storage-node
+
+updateStrategy:
+  type: "Recreate"
+
+terminationGracePeriodSeconds: 60
+
+livenessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
+  successThreshold: 1

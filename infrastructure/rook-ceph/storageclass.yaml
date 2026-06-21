@@ -70,3 +70,32 @@ parameters:
   objectStoreNamespace: rook-ceph
   region: us-east-1
 reclaimPolicy: Delete
+
+---
+
+# Fast NVMe-backed StorageClass for latency-sensitive workloads.
+# Backed by ceph-nvme-pool (single NVMe OSD on worker-0, ~195GB).
+# Use for: Qdrant PVCs, TimescaleDB data, Pulsar journal.
+# NOTE: No replication — data can be rebuilt from source if the OSD is lost.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-ceph-block-fast
+  annotations:
+    # Not the default — workloads must explicitly request this class.
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: rook-ceph.rbd.csi.ceph.com
+parameters:
+  clusterID: rook-ceph
+  pool: ceph-nvme-pool
+  imageFormat: "2"
+  imageFeatures: layering
+  csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/provisioner-secret-namespace: rook-ceph
+  csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+  csi.storage.k8s.io/controller-expand-secret-namespace: rook-ceph
+  csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+  csi.storage.k8s.io/node-stage-secret-namespace: rook-ceph
+  csi.storage.k8s.io/fstype: ext4
+reclaimPolicy: Delete
+allowVolumeExpansion: true

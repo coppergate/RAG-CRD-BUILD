@@ -27,6 +27,7 @@ import (
 	"app-builds/rag-worker/internal/config"
 	"app-builds/rag-worker/internal/models"
 	"app-builds/rag-worker/internal/ollama"
+	"app-builds/rag-worker/pkg/embed"
 	"app-builds/rag-worker/pkg/messaging"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -117,11 +118,15 @@ type Handler struct {
 	tagSource        TagSource
 	httpClient       *http.Client
 	hydrationClient  *http.Client
+
+	// Embed fan-out (Iteration 10a). Non-nil only when cfg.EmbedFanoutEnabled is true.
+	embedProducer    pulsar.Producer
+	resultDispatcher *embed.ResultDispatcher
 }
 
 // NewHandler creates a new pipeline stage handler.
 func NewHandler(cfg *config.Config, msg *messaging.Client, registry ModelRegistry, searcher QdrantSearcher, mem MemoryClient, tagSource TagSource) *Handler {
-	return &Handler{
+	h := &Handler{
 		cfg:             cfg,
 		msg:             msg,
 		registry:        registry,
@@ -131,6 +136,40 @@ func NewHandler(cfg *config.Config, msg *messaging.Client, registry ModelRegistr
 		httpClient:      &http.Client{Timeout: 30 * time.Second},
 		hydrationClient: &http.Client{Timeout: cfg.HydrationTimeout},
 	}
+	if cfg.EmbedFanoutEnabled {
+		h.initEmbedFanout(msg.PulsarClient())
+	}
+	return h
+}
+
+// initEmbedFanout initialises the embed producer and result dispatcher.
+// Errors are logged but do not terminate the process; fanout will remain disabled.
+func (h *Handler) initEmbedFanout(pulsarClient pulsar.Client) {
+	prod, err := pulsarClient.CreateProducer(pulsar.ProducerOptions{
+		Topic:           h.cfg.PulsarEmbedJobsTopic,
+		CompressionType: pulsar.LZ4,
+	})
+	if err != nil {
+		logging.Printf("[handler] embed fanout: could not create jobs producer on %s: %v — fanout disabled",
+			h.cfg.PulsarEmbedJobsTopic, err)
+		return
+	}
+
+	disp, err := embed.NewResultDispatcher(pulsarClient, h.cfg.WorkerInstanceID)
+	if err != nil {
+		prod.Close()
+		logging.Printf("[handler] embed fanout: could not create result dispatcher for worker %s: %v — fanout disabled",
+			h.cfg.WorkerInstanceID, err)
+		return
+	}
+
+	h.embedProducer = prod
+	h.resultDispatcher = disp
+
+	// Run the dispatcher in the background for the process lifetime.
+	go disp.Run(context.Background())
+	logging.Printf("[handler] embed fanout enabled: worker=%s jobs_topic=%s",
+		h.cfg.WorkerInstanceID, h.cfg.PulsarEmbedJobsTopic)
 }
 
 var errUnsupportedEmbeddingModel = fmt.Errorf("unsupported embedding model")
@@ -741,6 +780,35 @@ func (h *Handler) searchEmbeddingModelOnce(ctx context.Context, req *contracts.I
 		}
 	}
 
+	if h.cfg.EmbedFanoutEnabled && h.embedProducer != nil && h.resultDispatcher != nil {
+		fanoutResults, err := h.embedFanout(ctx, req.Id, embeddingModel, subQueries)
+		if err != nil {
+			logging.Printf("[%s][SID:%d] embed fanout failed model=%q: %v — falling back to serial HTTP embedding",
+				req.Id, req.SessionId, embeddingModel, err)
+			// Fall through to serial path below.
+		} else {
+			for _, fr := range fanoutResults {
+				sq := subQueries[fr.index]
+				vs := len(fr.vector)
+				logging.Printf("[%s][SID:%d] qdrant search (fanout) model=%q vector_dims=%d tags=%v limit=%d query=%q",
+					req.Id, req.SessionId, embeddingModel, vs, tags, h.cfg.QdrantSearchLimit, sq)
+				results, err := h.searcher.Search(ctx, embeddingModel, fr.vector, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantSearchLimit)
+				if err != nil {
+					if isMissingCollectionError(err) {
+						missingCollection = true
+						continue
+					}
+					logging.Printf("[%s][SID:%d] Qdrant search failed (fanout) model=%s query=%q dims=%d: %v",
+						req.Id, req.SessionId, embeddingModel, sq, vs, err)
+					continue
+				}
+				logging.Printf("[%s][SID:%d] Retrieved %d items (fanout) model=%s query=%q", req.Id, req.SessionId, len(results), embeddingModel, sq)
+				allRawResults = append(allRawResults, results...)
+			}
+			return allRawResults, missingCollection, nil
+		}
+	}
+
 	for _, sq := range subQueries {
 		logging.Printf("[%s][SID:%d] embedding sub-query model=%q query=%q tag_count=%d", req.Id, req.SessionId, embeddingModel, sq, len(tags))
 		vector, err := embedder.GetEmbeddings(ctx, sq)
@@ -835,6 +903,90 @@ func (h *Handler) hydrateContextFiles(ctx context.Context, req *contracts.Intern
 	}
 
 	return notes, nil
+}
+
+// embedQueryResult pairs an embedding vector with its sub-query index.
+type embedQueryResult struct {
+	index  int
+	vector []float32
+}
+
+// embedFanout fans out embedding calls for all subQueries to the Pulsar embed/jobs
+// topic and gathers results via the per-worker ResultDispatcher.
+// Returns results in sub-query index order. On any error the caller falls back to
+// the serial HTTP path and logs the reason.
+//
+// Only callable when h.embedProducer and h.resultDispatcher are non-nil.
+func (h *Handler) embedFanout(
+	ctx context.Context,
+	reqID string,
+	embeddingModel string,
+	subQueries []string,
+) ([]embedQueryResult, error) {
+	n := len(subQueries)
+
+	// Register BEFORE publishing to avoid a race where a fast gateway publishes
+	// results before the dispatcher is ready to receive them.
+	resultCh := h.resultDispatcher.Register(reqID, n)
+	defer h.resultDispatcher.Deregister(reqID)
+
+	deadline := time.Now().Add(h.cfg.EmbedFanoutTimeout)
+
+	for i, sq := range subQueries {
+		job := embed.EmbedJob{
+			RequestID:        reqID,
+			SubQueryIndex:    i,
+			SubQuery:         sq,
+			EmbeddingModel:   embeddingModel,
+			WorkerInstanceID: h.cfg.WorkerInstanceID,
+			DeadlineUnix:     deadline.Unix(),
+		}
+		payload, _ := json.Marshal(job)
+		if _, err := h.embedProducer.Send(ctx, &pulsar.ProducerMessage{
+			Payload: payload,
+			Properties: map[string]string{
+				"request_id": reqID,
+				"worker_id":  h.cfg.WorkerInstanceID,
+				"model":      embeddingModel,
+			},
+		}); err != nil {
+			return nil, fmt.Errorf("embed fanout: publish sub-query %d: %w", i, err)
+		}
+	}
+	logging.Printf("[%s] embed fanout: published %d jobs model=%s timeout=%s",
+		reqID, n, embeddingModel, h.cfg.EmbedFanoutTimeout)
+
+	// Gather results with deadline.
+	results := make([]embedQueryResult, n)
+	gathered := 0
+	gatherCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+
+	for gathered < n {
+		select {
+		case r := <-resultCh:
+			if r.Error != "" {
+				return nil, fmt.Errorf("embed fanout: sub-query %d failed on gateway %s: %s",
+					r.SubQueryIndex, r.GatewayID, r.Error)
+			}
+			if r.SubQueryIndex < 0 || r.SubQueryIndex >= n {
+				logging.Printf("[%s] embed fanout: unexpected sub_query_index %d (expected 0-%d) — skipping",
+					reqID, r.SubQueryIndex, n-1)
+				continue
+			}
+			results[r.SubQueryIndex] = embedQueryResult{
+				index:  r.SubQueryIndex,
+				vector: r.Vector,
+			}
+			gathered++
+		case <-gatherCtx.Done():
+			return nil, fmt.Errorf("embed fanout: timeout waiting for results (%d/%d received) after %s",
+				gathered, n, h.cfg.EmbedFanoutTimeout)
+		}
+	}
+
+	logging.Printf("[%s] embed fanout: gathered %d/%d results model=%s", reqID, gathered, n, embeddingModel)
+	return results, nil
 }
 
 func isMissingCollectionError(err error) bool {

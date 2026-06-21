@@ -3,8 +3,9 @@ set -euo pipefail
 
 # E2E test runner for hierophant host
 # - Runs Kubernetes job-based integration tests
-# - Runs Go E2E driver via Podman
+# - Runs Go E2E driver via native go run
 # - Stores logs under /mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/logs
+
 
 LOG_ROOT="${LOG_ROOT:-/tmp/rag-logs}"
 TS=$(date +%Y%m%d-%H%M%S)
@@ -12,8 +13,11 @@ OUT_DIR="${LOG_ROOT}/e2e-${TS}"
 mkdir -p "$OUT_DIR"
 
 NAMESPACE="rag-system"
-KUBECTL="/home/k8s/kube/kubectl"
-export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
+KUBECTL="/mnt/hegemon-share/share/code/kubernetes-setup/remote-access-configuration/config/k8s/kube/kubectl"
+#export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
+export KUBECONFIG="/mnt/hegemon-share/share/code/kubernetes-setup/remote-access-configuration/config/k8s/kube/config/config-dev"
+
+
 # Try to resolve build-orchestrator.hierocracy.home, fallback to LoadBalancer IP if needed
 DEFAULT_METADATA_URL="http://build-orchestrator.hierocracy.home/api/build"
 CURL_H_HEADER=""
@@ -41,7 +45,10 @@ fi
 # 2. Check Kubernetes API with retries
 MAX_RETRIES=5
 RETRY_COUNT=0
-until "$KUBECTL" cluster-info >/dev/null 2>&1; do
+
+echo "$KUBECTL cluster-info"
+
+until "$KUBECTL" cluster-info 2>&1; do
   RETRY_COUNT=$((RETRY_COUNT + 1))
   if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
     echo "[ERROR] Kubernetes API is not reachable after $MAX_RETRIES attempts."
@@ -117,26 +124,27 @@ echo "[INFO] Test pod: ${POD}" | tee -a "${OUT_DIR}/job.log"
 echo "[STEP] Stream job logs" | tee -a "${OUT_DIR}/job.log"
 "$KUBECTL" -n "$NAMESPACE" logs -f "$POD" | tee "${OUT_DIR}/integration-tests.log"
 
-# 4) Run Go E2E driver via Podman (optional)
-echo "[STEP] Run Go E2E driver via Podman" | tee -a "${OUT_DIR}/go-e2e-driver.log"
-if command -v podman >/dev/null 2>&1; then
-  BUCKET_NAME=$("$KUBECTL" -n "$NAMESPACE" get configmap rag-codebase-bucket -o jsonpath='{.data.BUCKET_NAME}' 2>/dev/null || echo "e2eTestBucket")
-  echo "[INFO] Using bucket: ${BUCKET_NAME}" | tee -a "${OUT_DIR}/go-e2e-driver.log"
-  # Mount internal CA to podman container and set SSL_CERT_FILE
-  if podman run --rm \
-    -v /mnt/hegemon-share/share/code/complete-build/rag-stack/tests:/app:Z \
-    -v /mnt/hegemon-share/share/code/complete-build/combined-ca-inspect.crt:/etc/ssl/certs/internal-ca.crt:Z \
-    -e SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
-    -e BUCKET_NAME="$BUCKET_NAME" \
-    -w /app \
-    golang:1.25-alpine \
-    sh -c 'cat /etc/ssl/certs/internal-ca.crt >> /etc/ssl/certs/ca-certificates.crt && go run .' | tee -a "${OUT_DIR}/go-e2e-driver.log"; then
-    echo "[INFO] Go E2E driver completed." | tee -a "${OUT_DIR}/go-e2e-driver.log"
-  else
-    echo "[WARN] podman-based Go E2E driver failed; preserving the Python E2E result." | tee -a "${OUT_DIR}/go-e2e-driver.log"
-  fi
+# 4) Run Go E2E driver (native go run)
+echo "[STEP] Run Go E2E driver" | tee -a "${OUT_DIR}/go-e2e-driver.log"
+BUCKET_NAME=$("$KUBECTL" -n "$NAMESPACE" get configmap rag-codebase-bucket -o jsonpath='{.data.BUCKET_NAME}' 2>/dev/null || echo "e2eTestBucket")
+PLANNER_MODEL="${PLANNER_MODEL:-}"
+EXECUTOR_MODEL="${EXECUTOR_MODEL:-}"
+EMBEDDING_MODEL="${EMBEDDING_MODEL:-all-minilm:l6-v2}"
+VECTOR_SIZE="${VECTOR_SIZE:-384}"
+echo "[INFO] Using bucket: ${BUCKET_NAME}" | tee -a "${OUT_DIR}/go-e2e-driver.log"
+echo "[INFO] Models: planner=${PLANNER_MODEL:-<default>} executor=${EXECUTOR_MODEL:-<default>} embedding=${EMBEDDING_MODEL}" | tee -a "${OUT_DIR}/go-e2e-driver.log"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if BUCKET_NAME="$BUCKET_NAME" \
+   PLANNER_MODEL="$PLANNER_MODEL" \
+   EXECUTOR_MODEL="$EXECUTOR_MODEL" \
+   EMBEDDING_MODEL="$EMBEDDING_MODEL" \
+   VECTOR_SIZE="$VECTOR_SIZE" \
+   SSL_CERT_FILE=/mnt/hegemon-share/share/code/complete-build/combined-ca-inspect.crt \
+   go run "$SCRIPT_DIR" 2>&1 | tee -a "${OUT_DIR}/go-e2e-driver.log"; then
+  echo "[INFO] Go E2E driver completed." | tee -a "${OUT_DIR}/go-e2e-driver.log"
 else
-  echo "[WARN] podman not found; skipping Go E2E driver" | tee -a "${OUT_DIR}/go-e2e-driver.log"
+  echo "[WARN] Go E2E driver failed; preserving the Python E2E result." | tee -a "${OUT_DIR}/go-e2e-driver.log"
 fi
 
 # 5) Summary & Scan for failures

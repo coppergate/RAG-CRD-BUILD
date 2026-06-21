@@ -76,7 +76,7 @@ else
 fi
 
 echo "--- 3. Ensuring namespaces exist ---"
-namespaces=("stage" "data" "operations" "dlq" "sessions")
+namespaces=("stage" "data" "operations" "dlq" "sessions" "embed")
 for ns in "${namespaces[@]}"; do
     full_ns="rag-pipeline/$ns"
     if ! pulsar_admin namespaces list rag-pipeline | grep -q "^$full_ns$"; then
@@ -96,9 +96,37 @@ for ns in "${namespaces[@]}"; do
         # Set inactive topic policy to delete after 5 minutes of inactivity (300 seconds)
         pulsar_admin namespaces set-inactive-topic-policies "$full_ns" \
             --enable-delete-while-inactive \
-            --timeout 300s \
+            --max-inactive-duration 300s \
+            --delete-mode delete_when_no_subscriptions || true
+    fi
+
+    # Specialized policies for embed namespace:
+    #   - Short TTL (300s) — stale embed jobs and result messages are discarded quickly
+    #   - Auto-create non-partitioned topics for per-worker result topics
+    #   - Retention capped at 500 MB to prevent disk bloat from result churn
+    #   - Inactive topic cleanup after 10 min — per-worker result topics that linger are removed
+    if [[ "$ns" == "embed" ]]; then
+        echo "Applying specialized policies for $full_ns"
+        pulsar_admin namespaces set-message-ttl "$full_ns" --messageTTL 300 || true
+        pulsar_admin namespaces set-retention "$full_ns" \
+            --size 500M --time 10m || true
+        pulsar_admin namespaces set-auto-topic-creation "$full_ns" \
+            --enable --type non-partitioned || true
+        pulsar_admin namespaces set-inactive-topic-policies "$full_ns" \
+            --enable-delete-while-inactive \
+            --max-inactive-duration 600s \
             --delete-mode delete_when_no_subscriptions || true
     fi
 done
+
+echo "--- 4. Creating partitioned embed/jobs topic ---"
+EMBED_JOBS_TOPIC="persistent://rag-pipeline/embed/jobs"
+if pulsar_admin topics get-partitioned-topic-metadata "$EMBED_JOBS_TOPIC" 2>/dev/null | grep -q '"partitions"'; then
+    echo "Topic $EMBED_JOBS_TOPIC already exists"
+else
+    # 8 partitions — one per worker-node embed pod pair, allows parallel consumption
+    pulsar_admin topics create-partitioned-topic "$EMBED_JOBS_TOPIC" --partitions 8
+    echo "Created partitioned topic: $EMBED_JOBS_TOPIC (8 partitions)"
+fi
 
 echo "Pulsar initialization for RAG stack complete."

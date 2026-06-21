@@ -1,0 +1,100 @@
+# values-embed-worker.yaml — CPU-only Ollama for embedding on worker nodes
+# Worker nodes have role=storage-node and are not sharing with GPU pods,
+# so NUM_PARALLEL is higher than the inference-node embed pods.
+# Hosts all-minilm:l6-v2 (384-dim, ~46MB) and nomic-embed-text (768-dim, ~274MB).
+# Pin to a specific worker node at deploy time via:
+#   --set "nodeSelector.embed-instance=N"
+
+replicaCount: 1
+
+image:
+  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  pullPolicy: IfNotPresent
+  tag: ""
+
+namespaceOverride: "llms-ollama"
+
+service:
+  enabled: false
+
+ollama:
+  port: 11434
+  gpu:
+    enabled: false
+  models:
+    pull: []
+    run: []
+    create: []
+    clean: false
+  insecure: false
+
+# Label pods so the unified ollama-embed ClusterIP service selects them.
+podLabels:
+  ollama-role: embed
+
+volumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+
+volumeMounts:
+  - name: registry-ca
+    mountPath: /etc/ssl/certs/ca-certificates.crt
+    subPath: ca.crt
+
+extraEnv:
+  - name: OLLAMA_HOST
+    value: "0.0.0.0:11434"
+  - name: OLLAMA_REGISTRY_INSECURE
+    value: "0"
+  - name: SSL_CERT_FILE
+    value: "/etc/ssl/certs/ca-certificates.crt"
+  - name: OLLAMA_KEEP_ALIVE
+    value: "-1"
+  - name: OLLAMA_NUM_PARALLEL
+    value: "4"
+  - name: OLLAMA_MAX_LOADED_MODELS
+    value: "2"
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"
+
+persistentVolume:
+  enabled: true
+  accessModes:
+    - ReadWriteMany
+  size: 10Gi
+  storageClass: "rook-cephfs"
+  volumeMode: "Filesystem"
+
+# Base nodeSelector — embed-instance=N added at deploy time via --set
+nodeSelector:
+  role: storage-node
+
+updateStrategy:
+  type: "Recreate"
+
+terminationGracePeriodSeconds: 30
+
+livenessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
+  successThreshold: 1

@@ -10,11 +10,14 @@ class ChatInputBar extends StatelessWidget {
   final VoidCallback onStop;
   final String planner;
   final String executor;
+  final String embeddingModel;
   final List<String> availableModels;
+  final List<String> availableEmbeddingModels;
   final List<Tag> availableTags;
   final List<Tag> selectedTags;
   final Function(String) onPlannerChanged;
   final Function(String) onExecutorChanged;
+  final Function(String) onEmbeddingModelChanged;
   final Function(Tag) onTagAdded;
   final Function(Tag) onTagRemoved;
   final String memoryMode;
@@ -29,11 +32,14 @@ class ChatInputBar extends StatelessWidget {
     required this.onStop,
     required this.planner,
     required this.executor,
+    required this.embeddingModel,
     required this.availableModels,
+    required this.availableEmbeddingModels,
     required this.availableTags,
     required this.selectedTags,
     required this.onPlannerChanged,
     required this.onExecutorChanged,
+    required this.onEmbeddingModelChanged,
     required this.onTagAdded,
     required this.onTagRemoved,
     required this.memoryMode,
@@ -68,6 +74,7 @@ class ChatInputBar extends StatelessWidget {
       children: [
         _buildDropdown('Planner', planner, (val) => onPlannerChanged(val!), items: availableModels),
         _buildDropdown('Executor', executor, (val) => onExecutorChanged(val!), items: availableModels),
+        _buildDropdown('Embedding', embeddingModel, (val) => onEmbeddingModelChanged(val!), items: availableEmbeddingModels),
         _buildDropdown('Memory', memoryMode, (val) => onMemoryModeChanged(val!), items: ['off', 'session', 'full']),
       ],
     );
