@@ -9,4 +9,6 @@ spec:
   resources:
     requests:
       storage: 50Gi
-  storageClassName: rook-ceph-block
+  # NVMe-backed fast tier: Qdrant uses random small IO on HNSW segment files.
+  # rook-ceph-block-fast provides ~0.1ms latency vs ~8ms on HDD-backed rook-ceph-block.
+  storageClassName: rook-ceph-block-fast
