@@ -279,24 +279,34 @@ spec:
     nodes:
       - name: "worker-0"
         devices:
+          # HDD OSD (1.8TB) with NVMe bluestore DB acceleration
           - name: "vdb"
             config:
               metadataDevice: "vdc"
+              deviceClass: "hdd"
+          # NVMe-only fast-tier OSD (195GB, nvme-362996-part2)
+          # No separate metadataDevice — bluestore DB is on the same NVMe device
+          - name: "vdd"
+            config:
+              deviceClass: "nvme"
       - name: "worker-1"
         devices:
           - name: "vdb"
             config:
               metadataDevice: "vdc"
+              deviceClass: "hdd"
       - name: "worker-2"
         devices:
           - name: "vdb"
             config:
               metadataDevice: "vdc"
+              deviceClass: "hdd"
       - name: "worker-3"
         devices:
           - name: "vdb"
             config:
               metadataDevice: "vdc"
+              deviceClass: "hdd"
     # Whether to always schedule OSD pods on nodes declared explicitly in the "nodes" section, even if they are
     # temporarily not schedulable. If set to true, consider adding placement tolerations for unschedulable nodes.
     scheduleAlways: false
