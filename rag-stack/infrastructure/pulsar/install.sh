@@ -291,11 +291,11 @@ if ! is_done 45.bkMetaInit; then
     echo "ZK=$ZK  ROOT=$ROOT"
     # Note: BookKeeper 4.16.6 does NOT support -l/-r flags on whatisinstanceid/initnewcluster.
     # The CLI reads zkServers and zkLedgersRootPath from bookkeeper.conf automatically.
-    IID=$($BK shell whatisinstanceid 2>/dev/null | grep -v 'JAVA_HOME\|INFO\|WARN' | tail -1 || true)
+    IID=$($BK shell whatisinstanceid 2>/dev/null | grep -Ev "JAVA_HOME|INFO|WARN" | tail -1 || true)
     if [ -z "$IID" ]; then
       echo "No instance ID found — running initnewcluster..."
       $BK shell initnewcluster
-      IID=$($BK shell whatisinstanceid 2>/dev/null | grep -v 'JAVA_HOME\|INFO\|WARN' | tail -1 || true)
+      IID=$($BK shell whatisinstanceid 2>/dev/null | grep -Ev "JAVA_HOME|INFO|WARN" | tail -1 || true)
       echo "Instance ID after init: ${IID:-none}"
     else
       echo "Existing instance ID: $IID"
@@ -335,11 +335,11 @@ if ! is_done 60.bkMeta; then
     log "Verifying BookKeeper cluster metadata via $TOOLSET_POD..."
     $KUBECTL -n $NAMESPACE exec -i "$TOOLSET_POD" -- bash -lc '
     BK=/pulsar/bin/bookkeeper
-    IID=$($BK shell whatisinstanceid 2>/dev/null | grep -v "JAVA_HOME\|INFO\|WARN" | tail -1 || true)
+    IID=$($BK shell whatisinstanceid 2>/dev/null | grep -Ev "JAVA_HOME|INFO|WARN" | tail -1 || true)
     if [ -z "$IID" ]; then
       echo "No instance ID found — running initnewcluster..."
       $BK shell initnewcluster
-      IID=$($BK shell whatisinstanceid 2>/dev/null | grep -v "JAVA_HOME\|INFO\|WARN" | tail -1 || true)
+      IID=$($BK shell whatisinstanceid 2>/dev/null | grep -Ev "JAVA_HOME|INFO|WARN" | tail -1 || true)
       echo "Instance ID after init: ${IID:-none}"
     else
       echo "Existing instance ID: $IID"
