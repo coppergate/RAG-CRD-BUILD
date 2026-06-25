@@ -157,7 +157,11 @@ fi
 
 echo "--- 3. Installing Pulsar ---"
 if ! is_done 30.helmInstall; then
-  # Use upgrade --install to support resume/idempotency
+  # --wait is intentionally omitted: the chart creates a cert-manager selfsigning
+  # chain (SelfSigned Issuer -> CA cert -> CA Issuer -> component certs). With --wait,
+  # Helm blocks on pod readiness, but pods can't start until their cert secrets exist,
+  # and cert-manager can't finish issuing until the CA Issuer is reconciled. This race
+  # causes the context deadline to be hit. We gate on certs explicitly in step 35 instead.
   helm upgrade --install pulsar apache/pulsar \
       --version 3.6.0 \
       --namespace $NAMESPACE \
@@ -171,11 +175,41 @@ if ! is_done 30.helmInstall; then
       --set bookkeeper.volumes.ledgers.storageClassName=rook-ceph-block \
       --set pulsar_manager.volumes.persistence=true \
       --set pulsar_manager.volumes.data.storageClassName=rook-ceph-block \
-      --timeout 60m \
-      --wait
+      --timeout 10m
   mark_done 30.helmInstall
 else
   log "Helm install/upgrade already completed (journal 30.helmInstall)"
+fi
+
+echo "--- 3.5. Waiting for cert-manager certificates to be issued ---"
+if ! is_done 35.certWait; then
+  # The selfsigning chain takes time: SelfSigned Issuer -> CA cert -> CA Issuer -> component certs.
+  # All component secrets (broker-certs, bookie-certs, etc.) must exist before pods can start.
+  cert_timeout=300
+  cert_interval=15
+  cert_elapsed=0
+  log "Waiting for all Pulsar TLS certificates to reach Ready state (up to ${cert_timeout}s)..."
+  while (( cert_elapsed < cert_timeout )); do
+    total=$($KUBECTL get certificate -n $NAMESPACE --no-headers 2>/dev/null | wc -l)
+    ready=$($KUBECTL get certificate -n $NAMESPACE \
+        -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' \
+        2>/dev/null | grep "^True$" | wc -l)
+    if (( total > 0 && ready >= total )); then
+      log "All $total Pulsar certificates are Ready"
+      break
+    fi
+    log "Certificates: ${ready}/${total} Ready — waiting ${cert_interval}s... (${cert_elapsed}s/${cert_timeout}s)"
+    sleep "$cert_interval"
+    (( cert_elapsed += cert_interval )) || true
+    if (( cert_elapsed >= cert_timeout )); then
+      log "WARNING: Not all certificates became Ready within ${cert_timeout}s — current state:"
+      $KUBECTL get certificate -n $NAMESPACE 2>/dev/null || true
+      $KUBECTL describe certificate -n $NAMESPACE 2>/dev/null | grep -A5 "Message:\|Reason:\|Not After" || true
+    fi
+  done
+  mark_done 35.certWait
+else
+  log "Cert wait step already completed (journal 35.certWait)"
 fi
 
 # Update CA ConfigMap now that Pulsar CA might be newly created/rotated
@@ -214,16 +248,69 @@ else
   log "Expose PM step already completed (journal 40.exposePM)"
 fi
 
+echo "--- 4.5. Initializing BookKeeper cluster metadata ---"
+# MUST complete before step 50 waits on bookie StatefulSet readiness.
+# Bookie pods have a verify-clusterid init container that blocks until the BookKeeper
+# instance ID exists in ZooKeeper. initnewcluster writes this ID. If it hasn't run,
+# every bookie pod is stuck in Init:0/2 forever and the rollout wait never resolves.
+# We use the toolset pod (no bookie dependency) and wait for both ZK and toolset
+# to be accessible before running the command.
+if ! is_done 45.bkMetaInit; then
+  # 1. Wait for ZooKeeper StatefulSet — initnewcluster must be able to connect to ZK
+  log "Waiting for ZooKeeper StatefulSet to be Ready (up to 15m)..."
+  set +e
+  $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-zookeeper --timeout=15m \
+    || log "WARNING: ZK rollout wait timed out — attempting initnewcluster anyway"
+  set -e
+
+  # 2. Wait for toolset-0 to be Running
+  log "Waiting for pulsar-toolset-0 to be Running (up to 5m)..."
+  ts_elapsed=0
+  while (( ts_elapsed < 300 )); do
+    ts_phase=$($KUBECTL -n $NAMESPACE get pod pulsar-toolset-0 \
+        -o jsonpath='{.status.phase}' 2>/dev/null || true)
+    [[ "$ts_phase" == "Running" ]] && break
+    log "  toolset-0 phase=${ts_phase:-unknown} — waiting 10s... (${ts_elapsed}s/300s)"
+    sleep 10; (( ts_elapsed += 10 )) || true
+  done
+
+  # 3. Initialize cluster metadata
+  TOOLSET_POD=$($KUBECTL -n $NAMESPACE get pod pulsar-toolset-0 \
+      -o jsonpath='{.metadata.name}' 2>/dev/null || true)
+  if [ -n "$TOOLSET_POD" ]; then
+    log "Running BookKeeper cluster metadata check/init via $TOOLSET_POD..."
+    $KUBECTL -n $NAMESPACE exec -i "$TOOLSET_POD" -- bash -lc '
+    BK=/pulsar/bin/bookkeeper
+    CONF=/pulsar/conf/bookkeeper.conf
+    ZK=$(grep -E "^zkServers=" -m1 "$CONF" | cut -d= -f2 | xargs)
+    ROOT=$(grep -E "^(zkLedgersRootPath|ledgersRootPath)=" -m1 "$CONF" | cut -d= -f2 | xargs)
+    echo "ZK=$ZK  ROOT=$ROOT"
+    IID=$($BK shell whatisinstanceid -l "$ZK" -r "$ROOT" 2>/dev/null || true)
+    if [ -z "$IID" ]; then
+      echo "No instance ID found — running initnewcluster..."
+      $BK shell initnewcluster -l "$ZK" -r "$ROOT"
+      echo "Instance ID after init: $($BK shell whatisinstanceid -l "$ZK" -r "$ROOT" 2>/dev/null || echo none)"
+    else
+      echo "Existing instance ID: $IID"
+    fi
+    ' || log "WARNING: initnewcluster via toolset failed — bookie init containers may stall"
+  else
+    log "WARNING: pulsar-toolset-0 not found — bookie verify-clusterid init containers may stall"
+  fi
+  mark_done 45.bkMetaInit
+else
+  log "BookKeeper metadata init already completed (journal 45.bkMetaInit)"
+fi
+
 echo "--- 5. Validating BookKeeper Cluster Metadata (instance ID) ---"
 # Optional reset flow: if FORCE_REINIT=true is exported, we will clean local bookie data after ensuring metadata exists.
 # Non-interactive, uses service names and parses config from within a bookkeeper pod.
 
-# Wait for ZK and BK statefulsets to be ready (best-effort; ignore errors to avoid hard-fail)
+# ZK is already waited on in step 45. Wait only for bookie here.
 if ! is_done 50.waitCore; then
   set +e
-  $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-zookeeper --timeout=10m || true
   # Chart names its BK statefulset 'pulsar-bookie'
-  $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-bookie --timeout=10m || true
+  $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-bookie --timeout=20m || true
   set -e
   mark_done 50.waitCore
 else
@@ -283,8 +370,8 @@ fi
 echo "--- 6. Post-Install Verification ---"
 # Verify that critical Pulsar components are actually running before declaring success.
 # This catches cases where Helm --wait succeeded but pods subsequently crashed.
-VERIFY_TIMEOUT=120
-VERIFY_POLL=10
+VERIFY_TIMEOUT=600
+VERIFY_POLL=30
 VERIFY_ELAPSED=0
 VERIFY_OK=false
 

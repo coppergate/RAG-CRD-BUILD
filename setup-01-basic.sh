@@ -80,10 +80,29 @@ $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/object.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/pool.yaml
 
 
-echo "Check the ceph-rook-cephfs/rdb deploys"
-sleep 60
-$KUBECTL rollout status -n rook-ceph deployment.apps/rook-ceph.cephfs.csi.ceph.com-ctrlplugin --timeout=600s
-$KUBECTL rollout status -n rook-ceph deployment.apps/rook-ceph.rbd.csi.ceph.com-ctrlplugin --timeout=600s
+echo "Check the ceph-rook-cephfs/rbd deploys"
+# The Rook operator creates these CSI deployments asynchronously after reconciling
+# the CephCluster CR. Poll until each deployment exists before checking rollout.
+for csi_deploy in \
+    "rook-ceph.cephfs.csi.ceph.com-ctrlplugin" \
+    "rook-ceph.rbd.csi.ceph.com-ctrlplugin"; do
+    echo "  Waiting for deployment/$csi_deploy to be created by operator..."
+    csi_elapsed=0; csi_timeout=600; csi_interval=15
+    while (( csi_elapsed < csi_timeout )); do
+        if $KUBECTL get deployment -n rook-ceph "$csi_deploy" >/dev/null 2>&1; then
+            echo "  deployment/$csi_deploy found (${csi_elapsed}s) — checking rollout..."
+            $KUBECTL rollout status -n rook-ceph "deployment.apps/$csi_deploy" --timeout=600s
+            break
+        fi
+        echo "  deployment/$csi_deploy not yet created — waiting ${csi_interval}s... (${csi_elapsed}s/${csi_timeout}s)"
+        sleep "$csi_interval"
+        (( csi_elapsed += csi_interval )) || true
+        if (( csi_elapsed >= csi_timeout )); then
+            echo "ERROR: deployment/$csi_deploy was not created within ${csi_timeout}s"
+            exit 1
+        fi
+    done
+done
 mark_step_done "rook-ceph-cluster"
 fi
 
@@ -153,6 +172,16 @@ if ! is_step_done "olm"; then
 echo "installing crds"
 $KUBECTL apply -f \
 $config_source_dir/infrastructure/vendor/olm-crds.yaml
+
+echo "waiting for OLM CRDs to be established..."
+for crd in \
+  operatorgroups.operators.coreos.com \
+  clusterserviceversions.operators.coreos.com \
+  catalogsources.operators.coreos.com \
+  subscriptions.operators.coreos.com \
+  installplans.operators.coreos.com; do
+  $KUBECTL wait --for condition=established --timeout=60s "crd/$crd" 2>/dev/null || true
+done
 
 echo "installing olm"
 $KUBECTL apply -f \

@@ -240,6 +240,80 @@ if ! $KUBECTL get storageclass rook-ceph-block >/dev/null 2>&1; then
     exit 1
 fi
 echo "StorageClass rook-ceph-block found."
+
+# Gate: Wait for Ceph cluster health before deploying Pulsar.
+# Pulsar creates multiple StatefulSets with PVCs. If Ceph is still recovering
+# (OSDs restarting, PGs peering), the PVC provisioning storm will overload the
+# API server and cause a cascade failure (kubelet timeouts → OSD liveness probe
+# failures → Ceph degradation → more PVC stalls).
+echo "Waiting for Ceph cluster to reach healthy state before Pulsar deploy..."
+CEPH_HEALTH_TIMEOUT=1200
+CEPH_HEALTH_INTERVAL=30
+ceph_elapsed=0
+ceph_healthy=false
+
+# Query Ceph health via CephCluster CR (operator updates this; no pod exec needed).
+# Falls back to exec into a Running mgr/mon pod if CR status is unavailable.
+ceph_health_status() {
+    # Primary: CephCluster CR status (most reliable — no Running pod required)
+    local cr_health
+    cr_health=$($KUBECTL -n rook-ceph get cephcluster rook-ceph \
+        -o jsonpath='{.status.ceph.health}' 2>/dev/null || true)
+    if [[ -n "$cr_health" ]]; then
+        echo "$cr_health"
+        return
+    fi
+    # Fallback: exec into a Running+Ready mgr pod, then a Running+Ready mon pod
+    local pod
+    for selector in app=rook-ceph-mgr app=rook-ceph-mon; do
+        pod=$($KUBECTL -n rook-ceph get pods -l "$selector" \
+            --field-selector=status.phase=Running \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+        if [[ -n "$pod" ]]; then
+            # Confirm the pod is Ready before exec-ing
+            local ready
+            ready=$($KUBECTL -n rook-ceph get pod "$pod" \
+                -o jsonpath='{.status.containerStatuses[0].ready}' 2>/dev/null || true)
+            if [[ "$ready" == "true" ]]; then
+                $KUBECTL -n rook-ceph exec "$pod" -- \
+                    ceph health --connect-timeout 10 2>/dev/null || true
+                return
+            fi
+        fi
+    done
+    echo "UNKNOWN"
+}
+
+while (( ceph_elapsed < CEPH_HEALTH_TIMEOUT )); do
+    CEPH_STATUS=$(ceph_health_status)
+    # Accept HEALTH_OK or HEALTH_WARN (warn is normal during initial setup — e.g. clock skew, noout set)
+    if [[ "$CEPH_STATUS" == HEALTH_OK* ]] || [[ "$CEPH_STATUS" == HEALTH_WARN* ]]; then
+        echo "Ceph health: $CEPH_STATUS (${ceph_elapsed}s elapsed)"
+        ceph_healthy=true
+        break
+    fi
+    echo "  Ceph health: $CEPH_STATUS — waiting ${CEPH_HEALTH_INTERVAL}s... (${ceph_elapsed}s/${CEPH_HEALTH_TIMEOUT}s)"
+    sleep "$CEPH_HEALTH_INTERVAL"
+    (( ceph_elapsed += CEPH_HEALTH_INTERVAL )) || true
+done
+
+if [[ "$ceph_healthy" != "true" ]]; then
+    echo "WARNING: Ceph did not reach HEALTH_OK/HEALTH_WARN within ${CEPH_HEALTH_TIMEOUT}s."
+    echo "Proceeding anyway — Pulsar PVC provisioning may stall."
+fi
+
+# Additional check: verify all OSDs are running (use jsonpath — avoids fragile container-count string matching)
+OSD_TOTAL=$($KUBECTL -n rook-ceph get pods -l app=rook-ceph-osd \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep -c . || echo 0)
+OSD_READY=$($KUBECTL -n rook-ceph get pods -l app=rook-ceph-osd \
+    --field-selector=status.phase=Running \
+    -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{.ready}{"\n"}{end}{end}' 2>/dev/null \
+    | grep -c "^true$" || echo 0)
+echo "OSD status: ${OSD_READY} containers ready across ${OSD_TOTAL} OSD pods"
+if (( OSD_READY < OSD_TOTAL )); then
+    echo "WARNING: Not all OSDs are ready. Waiting 60s for stragglers..."
+    sleep 60
+fi
 # REPO_DIR is needed for pulsar scripts
 export REPO_DIR="$BASE_DIR/rag-stack"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/install.sh

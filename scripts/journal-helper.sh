@@ -57,11 +57,13 @@ function is_step_done() {
 
 function mark_step_done() {
     local step_name="$1"
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     # Ensure file exists with shared write perms to allow multiple users to continue
     touch "$JOURNAL_FILE"
     chmod 666 "$JOURNAL_FILE" 2>/dev/null || true
     echo "$step_name" >> "$JOURNAL_FILE"
-    echo "Completed step: $step_name"
+    echo "Completed step: $step_name [$ts]"
 }
 
 function clear_journal() {

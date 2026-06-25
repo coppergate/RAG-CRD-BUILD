@@ -68,7 +68,9 @@ fi
 
 if ! is_step_done "registry-wait"; then
 echo "--- 1.1 Waiting for Registry Pod to be Ready ---"
-$KUBECTL wait --for=condition=ready pod -l app=registry -n container-registry --timeout=120s
+# kubectl wait --for=condition=ready pod exits immediately if no pods exist yet.
+# Use rollout status instead — it blocks until the deployment's pods are up.
+$KUBECTL rollout status -n container-registry deployment/registry --timeout=240s
 mark_step_done "registry-wait"
 fi
 
