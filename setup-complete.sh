@@ -380,7 +380,7 @@ until $KUBECTL -n cnpg-system get deployment "$CNPG_DEPLOYMENT" >/dev/null 2>&1;
   sleep 5
 done
 echo "Waiting for CNPG deployment: $CNPG_DEPLOYMENT"
-$KUBECTL -n cnpg-system wait --for=condition=available deployment/"$CNPG_DEPLOYMENT" --timeout=300s
+$KUBECTL -n cnpg-system rollout status deployment/"$CNPG_DEPLOYMENT" --timeout=600s
 mark_step_done "cnpg-operator"
 STEP_TS_END=$(date +%s)
 log_step_timing "cnpg-operator" "$STEP_TS_START" "$STEP_TS_END" "ok"
