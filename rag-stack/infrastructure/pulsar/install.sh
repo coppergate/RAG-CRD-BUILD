@@ -285,11 +285,14 @@ if ! is_done 45.bkMetaInit; then
     ZK=$(grep -E "^zkServers=" -m1 "$CONF" | cut -d= -f2 | xargs)
     ROOT=$(grep -E "^(zkLedgersRootPath|ledgersRootPath)=" -m1 "$CONF" | cut -d= -f2 | xargs)
     echo "ZK=$ZK  ROOT=$ROOT"
-    IID=$($BK shell whatisinstanceid -l "$ZK" -r "$ROOT" 2>/dev/null || true)
+    # Note: BookKeeper 4.16.6 does NOT support -l/-r flags on whatisinstanceid/initnewcluster.
+    # The CLI reads zkServers and zkLedgersRootPath from bookkeeper.conf automatically.
+    IID=$($BK shell whatisinstanceid 2>/dev/null | grep -v 'JAVA_HOME\|INFO\|WARN' | tail -1 || true)
     if [ -z "$IID" ]; then
       echo "No instance ID found — running initnewcluster..."
-      $BK shell initnewcluster -l "$ZK" -r "$ROOT"
-      echo "Instance ID after init: $($BK shell whatisinstanceid -l "$ZK" -r "$ROOT" 2>/dev/null || echo none)"
+      $BK shell initnewcluster
+      IID=$($BK shell whatisinstanceid 2>/dev/null | grep -v 'JAVA_HOME\|INFO\|WARN' | tail -1 || true)
+      echo "Instance ID after init: ${IID:-none}"
     else
       echo "Existing instance ID: $IID"
     fi
@@ -318,49 +321,46 @@ else
 fi
 
 if ! is_done 60.bkMeta; then
-  # Pick a pod owned by the 'pulsar-bookie' StatefulSet (robust to label changes)
-  BK_POD=$($KUBECTL -n $NAMESPACE get pods -l app=pulsar,component=bookie --no-headers -o custom-columns=:metadata.name | head -n1 2>/dev/null || true)
-  if [ -n "$BK_POD" ]; then
-    echo "Using bookkeeper pod: $BK_POD to verify metadata"
-    $KUBECTL -n $NAMESPACE exec -i "$BK_POD" -- bash -lc '
-    set -e
-    BK=/pulsar/bin/bookkeeper; test -x "$BK" || BK=/opt/bookkeeper/bin/bookkeeper;
-    CONF=/pulsar/conf/bookkeeper.conf; test -f "$CONF" || CONF=/opt/bookkeeper/conf/bookkeeper.conf;
-    ZK=$(grep -E "^(zkServers)\s*=|^zkServers=" -m1 "$CONF" | awk -F= "{print \$2}" | xargs);
-    ROOT=$(grep -E "^(zkLedgersRootPath|ledgersRootPath)\s*=|^(zkLedgersRootPath|ledgersRootPath)=" -m1 "$CONF" | awk -F= "{print \$2}" | xargs);
-    echo "Detected ZK=$ZK ROOT=$ROOT";
-    IID=$($BK shell whatisinstanceid -l "$ZK" -r "$ROOT" 2>/dev/null || true);
+  # Verify metadata via the toolset pod — always Running, no Init-phase ambiguity.
+  # Bookie pods may still be in Init phase at this point; exec-ing into them targets
+  # the main container which doesn't exist yet, causing "container not found" errors.
+  # BookKeeper 4.16.6 does NOT support -l/-r flags; conf is read from bookkeeper.conf.
+  TOOLSET_POD=$($KUBECTL -n $NAMESPACE get pod pulsar-toolset-0 \
+      -o jsonpath='{.metadata.name}' 2>/dev/null || true)
+  if [ -n "$TOOLSET_POD" ]; then
+    log "Verifying BookKeeper cluster metadata via $TOOLSET_POD..."
+    $KUBECTL -n $NAMESPACE exec -i "$TOOLSET_POD" -- bash -lc '
+    BK=/pulsar/bin/bookkeeper
+    IID=$($BK shell whatisinstanceid 2>/dev/null | grep -v "JAVA_HOME\|INFO\|WARN" | tail -1 || true)
     if [ -z "$IID" ]; then
-      echo "No instance ID found in ZooKeeper. Initializing new cluster metadata...";
-      $BK shell initnewcluster -l "$ZK" -r "$ROOT";
-      IID=$($BK shell whatisinstanceid -l "$ZK" -r "$ROOT" 2>/dev/null || true);
-      echo "Instance ID after init: ${IID:-none}";
+      echo "No instance ID found — running initnewcluster..."
+      $BK shell initnewcluster
+      IID=$($BK shell whatisinstanceid 2>/dev/null | grep -v "JAVA_HOME\|INFO\|WARN" | tail -1 || true)
+      echo "Instance ID after init: ${IID:-none}"
     else
-      echo "Existing instance ID: $IID";
+      echo "Existing instance ID: $IID"
     fi
-    '
+    ' || log "WARNING: metadata verification via toolset failed"
 
     # Optional: clean local bookie data if FORCE_REINIT=true
     if [ "${FORCE_REINIT:-false}" = "true" ]; then
       echo "FORCE_REINIT=true detected. Cleaning local bookie data across pods..."
-      for POD in $($KUBECTL -n $NAMESPACE get pods -l app=pulsar,component=bookie --no-headers -o custom-columns=:metadata.name); do
+      for POD in $($KUBECTL -n $NAMESPACE get pods -l app=pulsar,component=bookie \
+          --field-selector=status.phase=Running --no-headers -o custom-columns=:metadata.name); do
         echo "Cleaning bookie on pod: $POD"
         $KUBECTL -n $NAMESPACE exec -i "$POD" -- bash -lc '
-        set -e
-        BK=/pulsar/bin/bookkeeper; test -x "$BK" || BK=/opt/bookkeeper/bin/bookkeeper;
-        echo "Running bookieformat -force -deleteCookie (non-interactive)";
+        BK=/pulsar/bin/bookkeeper
+        echo "Running bookieformat -nonInteractive -force -deleteCookie"
         $BK shell bookieformat -nonInteractive -force -deleteCookie || $BK shell bookieformat -force -deleteCookie
         '
-        # recycle pod to ensure fresh cookie
         $KUBECTL -n $NAMESPACE delete pod "$POD" --wait=false || true
       done
-      echo "Waiting for bookkeeper statefulset to become Ready after cleanup..."
       set +e
       $KUBECTL -n $NAMESPACE rollout status statefulset/pulsar-bookie --timeout=10m || true
       set -e
     fi
   else
-    echo "WARNING: No BookKeeper pod found to verify/initialize metadata. Skipping post-install check."
+    log "WARNING: pulsar-toolset-0 not found — skipping post-install metadata check"
   fi
   mark_done 60.bkMeta
 else
