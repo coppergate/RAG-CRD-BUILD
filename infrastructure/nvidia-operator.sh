@@ -153,11 +153,12 @@ operator:
   # Run the operator controller on a worker node, not control plane.
   nodeSelector:
     role: storage-node
-nodeFeatureDiscovery:
+node-feature-discovery:
   # NFD workers run on EVERY node by default, including control plane.
   # Restrict to inference nodes only — they are the only nodes with GPUs.
   # The 'role=inference-node' label is set by setup-node-labels.sh before
   # this script runs, so it is safe to use as a nodeSelector here.
+  # Key is the sub-chart name 'node-feature-discovery', NOT 'nodeFeatureDiscovery'.
   worker:
     nodeSelector:
       role: inference-node
