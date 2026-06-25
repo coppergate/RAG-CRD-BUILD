@@ -255,8 +255,12 @@ tls:
     enabled: true
     cert_name: tls-bookie
   # settings for generating certs for zookeeper
+  # Disabled: BookKeeper's TLSContextFactory fails the TLS handshake with ZK's
+  # TLS implementation silently (15s timeout, exit 124 after 600s). ZK TLS uses
+  # ClientCnxnSocketNetty+zookeeper.client.secure injected by keytool.sh which
+  # overrides any BOOKIE_EXTRA_OPTS we set. Plain-text port 2181 is used instead.
   zookeeper:
-    enabled: true
+    enabled: false
     cert_name: tls-zookeeper
   # settings for generating certs for recovery
   autorecovery:
@@ -734,16 +738,6 @@ bookkeeper:
   ## templates/bookkeeper-configmap.yaml
   ##
   configData:
-    # Use plain-text ZK port AND disable ZK client SSL.
-    # BookKeeper's ZK client has zookeeper.ssl.client.enable=true injected by the Pulsar
-    # chart when tls.zookeeper.enabled=true, causing it to attempt TLS even on port 2181.
-    # On port 2281 the TLS handshake silently times out (BookKeeper TLSContextFactory is
-    # incompatible with ZK's TLS impl). On port 2181 it connects then immediately drops
-    # (ZK sends plain text, TLS layer disconnects). Disable ZK client SSL explicitly.
-    zkServers: "pulsar-zookeeper:2181"
-    PULSAR_EXTRA_OPTS: >-
-      -Dzookeeper.ssl.client.enable=false
-      -Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNIO
     # we use `bin/pulsar` for starting bookie daemons
     PULSAR_MEM: >
       -Xms128m
