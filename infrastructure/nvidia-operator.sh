@@ -150,8 +150,20 @@ toolkit:
   enabled: false
 operator:
   defaultRuntime: nvidia
+  # Run the operator controller on a worker node, not control plane.
   nodeSelector:
-    nvidia.com/gpu.present: "true"
+    role: storage-node
+nodeFeatureDiscovery:
+  # NFD workers run on EVERY node by default, including control plane.
+  # Restrict to inference nodes only — they are the only nodes with GPUs.
+  # The 'role=inference-node' label is set by setup-node-labels.sh before
+  # this script runs, so it is safe to use as a nodeSelector here.
+  worker:
+    nodeSelector:
+      role: inference-node
+  master:
+    nodeSelector:
+      role: storage-node
 devicePlugin:
   enabled: true
   runtimeClassName: nvidia
