@@ -190,21 +190,24 @@ if ! is_done 35.certWait; then
   cert_elapsed=0
   log "Waiting for all Pulsar TLS certificates to reach Ready state (up to ${cert_timeout}s)..."
   while (( cert_elapsed < cert_timeout )); do
-    total=$($KUBECTL get certificate -n $NAMESPACE --no-headers 2>/dev/null | wc -l)
+    log "  Polling certificates... (${cert_elapsed}s/${cert_timeout}s)"
+    # Use --request-timeout to prevent hanging when API server is under load during install storm.
+    total=$($KUBECTL get certificate -n $NAMESPACE --no-headers \
+        --request-timeout=20s 2>/dev/null | wc -l)
     ready=$($KUBECTL get certificate -n $NAMESPACE \
+        --request-timeout=20s \
         -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' \
         2>/dev/null | grep "^True$" | wc -l)
     if (( total > 0 && ready >= total )); then
       log "All $total Pulsar certificates are Ready"
       break
     fi
-    log "Certificates: ${ready}/${total} Ready — waiting ${cert_interval}s... (${cert_elapsed}s/${cert_timeout}s)"
+    log "  Certificates: ${ready}/${total} Ready — waiting ${cert_interval}s..."
     sleep "$cert_interval"
     (( cert_elapsed += cert_interval )) || true
     if (( cert_elapsed >= cert_timeout )); then
       log "WARNING: Not all certificates became Ready within ${cert_timeout}s — current state:"
-      $KUBECTL get certificate -n $NAMESPACE 2>/dev/null || true
-      $KUBECTL describe certificate -n $NAMESPACE 2>/dev/null | grep -A5 "Message:\|Reason:\|Not After" || true
+      $KUBECTL get certificate -n $NAMESPACE --request-timeout=20s 2>/dev/null || true
     fi
   done
   mark_done 35.certWait
@@ -268,6 +271,7 @@ if ! is_done 45.bkMetaInit; then
   ts_elapsed=0
   while (( ts_elapsed < 300 )); do
     ts_phase=$($KUBECTL -n $NAMESPACE get pod pulsar-toolset-0 \
+        --request-timeout=15s \
         -o jsonpath='{.status.phase}' 2>/dev/null || true)
     [[ "$ts_phase" == "Running" ]] && break
     log "  toolset-0 phase=${ts_phase:-unknown} — waiting 10s... (${ts_elapsed}s/300s)"
