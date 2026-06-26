@@ -1,7 +1,7 @@
 # Horizontal Scale-Out: Embedding & Planner CPU Pods with Pulsar Fan-out
 
 **Status:** Design — decisions finalized, ready for implementation
-**Target nodes:** worker-0 through worker-3 (10.0.0.110–113, 7 vCPU, 36 GB RAM each)
+**Target nodes:** worker-0 through worker-2 (10.0.0.110–112, 8 vCPU, 28 GB RAM each)
 
 ---
 
@@ -77,15 +77,9 @@ worker-2 (10.0.0.112)  embed-instance=2
   ollama-planner-cpu-4   CPU  NUM_PARALLEL=2  MAX_LOADED=1
   embed-gateway-2
 
-worker-3 (10.0.0.113)  embed-instance=3
-  ollama-embed-8         CPU  NUM_PARALLEL=4  MAX_LOADED=2
-  ollama-embed-9         CPU  NUM_PARALLEL=4  MAX_LOADED=2
-  ollama-planner-cpu-5   CPU  NUM_PARALLEL=2  MAX_LOADED=1
-  embed-gateway-3
-
 Services (updated):
-  ollama-embed         ClusterIP  → 10 endpoints  (2 existing + 8 new)
-  ollama-planner-cpu   ClusterIP  → 6 endpoints   (2 existing + 4 new)
+  ollama-embed         ClusterIP  → 8 endpoints  (2 existing + 6 new)
+  ollama-planner-cpu   ClusterIP  → 5 endpoints   (2 existing + 3 new)
 ```
 
 Total concurrent embedding capacity:
@@ -104,9 +98,9 @@ Total concurrent planner-cpu capacity:
 | ollama-embed (×2) | 500m | 2000m | 512Mi | 2Gi | 320 MB each |
 | ollama-planner-cpu (×1) | 1000m | 4000m | 3Gi | 6Gi | ~2.2 GB |
 | embed-gateway (×1) | 100m | 500m | 128Mi | 256Mi | none |
-| **Node total (requests)** | **2100m / 7000m** | — | **~4.3Gi / 36Gi** | — | ~2.8 GB |
+| **Node total (requests)** | **2100m / 8000m** | — | **~4.3Gi / 28Gi** | — | ~2.8 GB |
 
-30% CPU, 12% RAM reserved at request baseline. Substantial burst headroom remains.
+26% CPU, 15% RAM reserved at request baseline. Substantial burst headroom remains.
 
 ---
 
@@ -118,7 +112,6 @@ Total concurrent planner-cpu capacity:
 kubectl label nodes worker-0 role=worker-node embed-instance=0 --overwrite
 kubectl label nodes worker-1 role=worker-node embed-instance=1 --overwrite
 kubectl label nodes worker-2 role=worker-node embed-instance=2 --overwrite
-kubectl label nodes worker-3 role=worker-node embed-instance=3 --overwrite
 ```
 
 ### 4.2 values-embed-worker.yaml (new file for worker-node embed pods)
@@ -330,9 +323,9 @@ readinessProbe:
 
 ```bash
 # 2 embed pods per worker node, pinned by embed-instance label
-for INSTANCE in 0 1 2 3; do
+for INSTANCE in 0 1 2; do
   for OFFSET in 0 1; do
-    IDX=$(( INSTANCE * 2 + OFFSET + 2 ))   # pods 2-9
+    IDX=$(( INSTANCE * 2 + OFFSET + 2 ))   # pods 2-7
     helm upgrade --install ollama-embed-${IDX} otwld/ollama \
       --namespace llms-ollama \
       -f "$SCRIPT_DIR/values-embed-worker.yaml" \
@@ -343,8 +336,8 @@ for INSTANCE in 0 1 2 3; do
 done
 
 # 1 planner-cpu pod per worker node
-for INSTANCE in 0 1 2 3; do
-  IDX=$(( INSTANCE + 2 ))   # pods 2-5
+for INSTANCE in 0 1 2; do
+  IDX=$(( INSTANCE + 2 ))   # pods 2-4
   helm upgrade --install ollama-planner-cpu-${IDX} otwld/ollama \
     --namespace llms-ollama \
     -f "$SCRIPT_DIR/values-planner-cpu-worker.yaml" \
@@ -470,7 +463,7 @@ spec:
           configMap:
             name: registry-ca-cm
 ---
-# Repeat for embed-gateway-1 (instance: "1"), embed-gateway-2, embed-gateway-3
+# Repeat for embed-gateway-1 (instance: "1"), embed-gateway-2
 ```
 
 ### 6.2 RBAC

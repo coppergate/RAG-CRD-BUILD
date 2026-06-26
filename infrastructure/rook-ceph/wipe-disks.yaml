@@ -14,10 +14,12 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            wipefs -a /dev/vdb /dev/vdc /dev/vdd
+            wipefs -a /dev/vdb /dev/vdc /dev/vdd /dev/vde /dev/vdf
             dd if=/dev/zero of=/dev/vdb bs=1M count=100
             dd if=/dev/zero of=/dev/vdc bs=1M count=100
             dd if=/dev/zero of=/dev/vdd bs=1M count=100
+            dd if=/dev/zero of=/dev/vde bs=1M count=100
+            dd if=/dev/zero of=/dev/vdf bs=1M count=100
       nodeSelector:
         kubernetes.io/hostname: worker-0
       restartPolicy: Never
@@ -66,27 +68,4 @@ spec:
           dd if=/dev/zero of=/dev/vdc bs=1M count=100
       nodeSelector:
         kubernetes.io/hostname: worker-2
-      restartPolicy: Never
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: wipe-disks-worker-3
-  namespace: rook-ceph
-spec:
-  template:
-    spec:
-      containers:
-      - name: wipe
-        image: 10.0.0.1:5000/busybox:1.36
-        securityContext:
-          privileged: true
-        command: ["/bin/sh", "-c"]
-        args:
-        - |
-          wipefs -a /dev/vdb /dev/vdc
-          dd if=/dev/zero of=/dev/vdb bs=1M count=100
-          dd if=/dev/zero of=/dev/vdc bs=1M count=100
-      nodeSelector:
-        kubernetes.io/hostname: worker-3
       restartPolicy: Never

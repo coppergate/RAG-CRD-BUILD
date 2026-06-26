@@ -66,11 +66,10 @@ rm -f "$COMBINED_CA"
 $KUBECTL label nodes inference-0 role=inference-node --overwrite
 
 # Label worker nodes with embed-instance index for pod pinning.
-# worker-0..3 already carry role=storage-node; embed-instance is additive.
+# worker-0..2 already carry role=storage-node; embed-instance is additive.
 $KUBECTL label nodes worker-0 embed-instance=0 --overwrite
 $KUBECTL label nodes worker-1 embed-instance=1 --overwrite
 $KUBECTL label nodes worker-2 embed-instance=2 --overwrite
-$KUBECTL label nodes worker-3 embed-instance=3 --overwrite
 
 # Create services for CPU pods before installing them so they are ready when pods come up.
 # Each service selects pods by the ollama-role label set via podLabels in the values files.

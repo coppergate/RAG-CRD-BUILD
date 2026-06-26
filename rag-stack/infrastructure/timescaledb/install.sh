@@ -43,7 +43,6 @@ if should_run_step "timescaledb-node-labels" "$KUBECTL get nodes -l rag.role.tim
   $KUBECTL label --overwrite nodes worker-0 rag.role.timescaledb-node=true || true
   $KUBECTL label --overwrite nodes worker-1 rag.role.timescaledb-node=true || true
   $KUBECTL label --overwrite nodes worker-2 rag.role.timescaledb-node=true || true
-  $KUBECTL label --overwrite nodes worker-3 rag.role.timescaledb-node=true || true
   mark_step_done "timescaledb-node-labels"
 fi
 
