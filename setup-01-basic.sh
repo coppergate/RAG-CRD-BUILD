@@ -61,9 +61,13 @@ fi
 
 helm repo add rook-release https://charts.rook.io/release
 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/crds.yaml 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml 
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/crds.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml
+# NOTE: csi-operator.yaml is intentionally NOT applied here.
+# It deploys ceph-csi-operator v0.4.1 (a separate CSI controller) which crash-loops
+# on K8s 1.35 and registers csi.ceph.io CRDs that cause 1-2s slow OpenAPI aggregation
+# entries per API server cycle, saturating the control plane. The standard Rook-Ceph
+# operator already manages all CSI provisioning without this additional controller.
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
 
 echo "Check the ceph-operator pod"

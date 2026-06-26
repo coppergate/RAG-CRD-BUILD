@@ -22,6 +22,14 @@ helm upgrade --install traefik traefik/traefik -n $NAMESPACE -f - <<EOF
 nodeSelector:
   role: storage-node
 
+# Disable Traefik Hub explicitly. The Helm chart installs Hub CRDs by default
+# (apiportals.hub.traefik.io, uplinks.hub.traefik.io, etc.) and registers API
+# extension handlers for them. Even when Hub is unused, these handlers generate
+# 1-2s slow OpenAPI aggregation entries per API server cycle, contributing to
+# control plane CPU saturation.
+hub:
+  enabled: false
+
 experimental:
   otlpLogs: true
 
