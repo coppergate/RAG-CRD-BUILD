@@ -145,7 +145,9 @@ echo "[8/8] Collecting memory/NUMA data..."
 MEM_TOTAL=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 MEM_FREE=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
 NUMA_NODES=$(numactl --hardware 2>/dev/null | grep "available:" | head -1 || echo "unavailable")
-GPU_NUMA=$(nvidia-smi topo -m 2>/dev/null | head -20 || echo "unavailable")
+GPU_NUMA=$(timeout 10 nvidia-smi topo -m 2>/dev/null | head -20 || echo "unavailable")
+# Export multi-line vars for Python to read via os.environ — avoids bash heredoc quoting issues
+export NUMA_NODES GPU_NUMA
 
 # ─────────────────────────────────────────────────────────────
 # Assemble JSON
@@ -199,8 +201,8 @@ data = {
     "memory": {
         "total_kb": $MEM_TOTAL,
         "available_kb": $MEM_FREE,
-        "numa_info": $(json.dumps("$NUMA_NODES")),
-        "gpu_numa_topology": $(json.dumps("$GPU_NUMA"))
+        "numa_info": os.environ.get("NUMA_NODES", ""),
+        "gpu_numa_topology": os.environ.get("GPU_NUMA", "")
     },
     "vms": {
         "cpu_stats": $VM_CPU_STATS
