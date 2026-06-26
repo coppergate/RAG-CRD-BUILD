@@ -152,9 +152,15 @@ STEP_TS_END=$(date +%s)
 log_step_timing "basic" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+# Re-run ceph-ready if: not journaled, OR StorageClass missing, OR no Running CSI provisioner pods.
+# Checking deployment object existence is insufficient — it survives cluster rebuilds but pods may be gone.
+_ceph_csi_running() {
+    $KUBECTL get pods -n rook-ceph -l "app=rook-ceph.rbd.csi.ceph.com" \
+        --field-selector=status.phase=Running --no-headers 2>/dev/null | grep -q .
+}
 if ! is_step_done "ceph-ready" \
     || ! $KUBECTL get storageclass rook-ceph-block >/dev/null 2>&1 \
-    || ! $KUBECTL get deployment -n rook-ceph rook-ceph.rbd.csi.ceph.com-ctrlplugin >/dev/null 2>&1; then
+    || ! _ceph_csi_running; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.0: Waiting for Rook-Ceph to be ready (blocks registry, APM, and Pulsar PVC provisioning)"
@@ -263,8 +269,8 @@ fi
 if ! is_step_done "registry" \
     || ! $KUBECTL get namespace container-registry >/dev/null 2>&1 \
     || ! $KUBECTL get deployment -n rook-ceph rook-ceph.rbd.csi.ceph.com-ctrlplugin >/dev/null 2>&1; then
-    if ! $KUBECTL get deployment -n rook-ceph rook-ceph.rbd.csi.ceph.com-ctrlplugin >/dev/null 2>&1; then
-        echo "ERROR: Rook-Ceph CSI provisioner is not running. Run the 'basic' step first or wait for ceph-ready."
+    if ! _ceph_csi_running; then
+        echo "ERROR: Rook-Ceph CSI provisioner pods are not running. ceph-ready gate must pass first."
         exit 1
     fi
 STEP_TS_START=$(date +%s)
