@@ -64,7 +64,7 @@ $KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=$INTERNAL_REGISTRY/amaz
 $KUBECTL wait --for=condition=Ready pod/s3-bootstrap-uploader -n $NAMESPACE --timeout=60s
 # Stream tarball directly to S3 via stdin to avoid 'tar' dependency in the container
 # Capture pre-signed URL to avoid AWS SDK credential issues in Kaniko
-PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n $NAMESPACE s3-bootstrap-uploader -- \
+PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n $NAMESPACE s3-bootstrap-uploader -c uploader -- \
   sh -c "aws --endpoint-url http://\$S3_ENDPOINT s3 cp - s3://\$BUCKET_NAME/$TARBALL > /dev/null && aws --endpoint-url http://\$S3_ENDPOINT s3 presign s3://\$BUCKET_NAME/$TARBALL --expires-in 3600")
 $KUBECTL delete pod s3-bootstrap-uploader -n $NAMESPACE --now
 
@@ -164,8 +164,11 @@ spec:
 EOF
 
 echo "--- 4. Waiting for Bootstrap Build to complete ---"
-until [[ "$($KUBECTL get job kaniko-bootstrap-orchestrator -n $NAMESPACE -o jsonpath='{.status.succeeded}')" == "1" ]]; do
-    if [[ "$($KUBECTL get job kaniko-bootstrap-orchestrator -n $NAMESPACE -o jsonpath='{.status.failed}')" == "1" ]]; then
+until [[ "$($KUBECTL get job kaniko-bootstrap-orchestrator -n $NAMESPACE \
+    --request-timeout=20s -o jsonpath='{.status.succeeded}' 2>/dev/null || echo '')" == "1" ]]; do
+    failed=$($KUBECTL get job kaniko-bootstrap-orchestrator -n $NAMESPACE \
+        --request-timeout=20s -o jsonpath='{.status.failed}' 2>/dev/null || echo '')
+    if [[ "$failed" == "1" ]]; then
         echo "ERROR: Bootstrap build failed. Check logs: kubectl logs -n $NAMESPACE -l job-name=kaniko-bootstrap-orchestrator"
         exit 1
     fi
