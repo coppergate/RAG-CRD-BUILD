@@ -215,17 +215,13 @@ STEP_TS_END=$(date +%s)
 log_step_timing "apm" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "nvidia"; then
-STEP_TS_START=$(date +%s)
-echo ""
-echo "Step 1.4: NVIDIA Infrastructure Setup"
-echo "----------------------------------------------------"
-# Deploy NVIDIA device plugin and runtime class
-bash $BASE_DIR/infrastructure/nvidia-operator.sh
-mark_step_done "nvidia"
-STEP_TS_END=$(date +%s)
-log_step_timing "nvidia" "$STEP_TS_START" "$STEP_TS_END" "ok"
-fi
+# NOTE: NVIDIA GPU operator is intentionally deferred to the end of the install.
+# The V100's PCIe initialization generates device resets and bus transactions that
+# cause hypervisor I/O latency spikes during KVM VM scheduling, which destabilizes
+# the Kubernetes control plane (etcd slow ops → controller lease timeouts → crash loops).
+# GPU resources are NOT needed until inference workloads start. Set SKIP_GPU=true to
+# skip GPU setup entirely (useful for cluster rebuilds and CI environments).
+# The step is journaled as "nvidia" so it can be resumed independently.
 
 if ! is_step_done "pulsar"; then
 STEP_TS_START=$(date +%s)
@@ -438,6 +434,21 @@ export REPO_DIR="$BASE_DIR/rag-stack"
 mark_step_done "rag-stack"
 STEP_TS_END=$(date +%s)
 log_step_timing "rag-stack" "$STEP_TS_START" "$STEP_TS_END" "ok"
+fi
+
+if [[ "${SKIP_GPU:-false}" != "true" ]]; then
+  if ! is_step_done "nvidia"; then
+    STEP_TS_START=$(date +%s)
+    echo ""
+    echo "Step 3: NVIDIA GPU Operator (deferred — runs after full RAG stack)"
+    echo "----------------------------------------------------"
+    bash $BASE_DIR/infrastructure/nvidia-operator.sh
+    mark_step_done "nvidia"
+    STEP_TS_END=$(date +%s)
+    log_step_timing "nvidia" "$STEP_TS_START" "$STEP_TS_END" "ok"
+  fi
+else
+  echo "SKIP_GPU=true — skipping GPU operator install (run nvidia-operator.sh manually when ready)"
 fi
 
 clear_journal
