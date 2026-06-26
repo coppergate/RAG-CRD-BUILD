@@ -146,83 +146,120 @@ MEM_TOTAL=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 MEM_FREE=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
 NUMA_NODES=$(numactl --hardware 2>/dev/null | grep "available:" | head -1 || echo "unavailable")
 GPU_NUMA=$(timeout 10 nvidia-smi topo -m 2>/dev/null | head -20 || echo "unavailable")
-# Export multi-line vars for Python to read via os.environ — avoids bash heredoc quoting issues
-export NUMA_NODES GPU_NUMA
+# Export ALL variables for Python to read via os.environ.get().
+# Inline bash $VAR expansion in Python heredocs breaks on empty, multi-line,
+# or quoted values (common when GPU PCIe is degraded). This approach is safe
+# for any content.
+export TIMESTAMP GPU_NAME GPU_TEMP GPU_POWER_DRAW GPU_POWER_LIMIT GPU_PSTATE
+export GPU_PERF_STATE GPU_THROTTLE GPU_MEM_USED GPU_MEM_TOTAL
+export GPU_ECC_SBE GPU_ECC_DBE GPU_PCIE_GEN GPU_PCIE_GEN_MAX
+export GPU_PCIE_WIDTH GPU_PCIE_WIDTH_MAX
+export AER_CORRECTED AER_UNCORRECTED AER_RESET AER_RECENT
+export GPU_SLOT NVME_SLOT NET_SLOT GPU_SHARES_ROOT_WITH_NVME GPU_ROOT NVME_ROOT
+export CPU_GOV CPU_FREQ_MAX CPU_FREQ_CUR CPU_THROTTLE_PCT CPU_TEMP
+export IPMI_POWER IPMI_TEMPS VM_CPU_STATS
+export K8S_NODE_CPU CTRL_RESTARTS ETCD_SLOW
+export MEM_TOTAL MEM_FREE NUMA_NODES GPU_NUMA OUTFILE
 
 # ─────────────────────────────────────────────────────────────
 # Assemble JSON
 # ─────────────────────────────────────────────────────────────
-python3 - <<PYEOF
+python3 - <<'PYEOF'
 import json, os
 
+def e(k, default=""):
+    return os.environ.get(k, default)
+
+def ei(k):
+    try: return int(e(k) or 0)
+    except: return 0
+
+def ef(k):
+    try: return float(e(k) or 0)
+    except: return 0.0
+
+def ej(k, default=None):
+    try: return json.loads(e(k) or "null")
+    except: return default if default is not None else e(k)
+
+gen     = e("GPU_PCIE_GEN")
+gen_max = e("GPU_PCIE_GEN_MAX")
+wid     = e("GPU_PCIE_WIDTH")
+wid_max = e("GPU_PCIE_WIDTH_MAX")
+throttle = e("GPU_THROTTLE")
+aer_corr = ei("AER_CORRECTED")
+aer_uncorr = ei("AER_UNCORRECTED")
+cpu_thr  = ef("CPU_THROTTLE_PCT")
+etcd_slow = ei("ETCD_SLOW")
+
 data = {
-    "timestamp": "$TIMESTAMP",
-    "host": "$(hostname)",
+    "timestamp": e("TIMESTAMP"),
+    "host": e("HOSTNAME", os.uname().nodename),
     "gpu": {
-        "name": "$GPU_NAME",
-        "temperature_c": "$GPU_TEMP",
-        "power_draw_w": "$GPU_POWER_DRAW",
-        "power_limit_w": "$GPU_POWER_LIMIT",
-        "performance_state": "$GPU_PSTATE",
-        "throttle_reasons_active": "$GPU_PERF_STATE",
-        "hw_thermal_slowdown": "$GPU_THROTTLE",
-        "memory_used_mib": "$GPU_MEM_USED",
-        "memory_total_mib": "$GPU_MEM_TOTAL",
-        "ecc_corrected": "$GPU_ECC_SBE",
-        "ecc_uncorrected": "$GPU_ECC_DBE",
-        "pcie_gen_current": "$GPU_PCIE_GEN",
-        "pcie_gen_max": "$GPU_PCIE_GEN_MAX",
-        "pcie_width_current": "$GPU_PCIE_WIDTH",
-        "pcie_width_max": "$GPU_PCIE_WIDTH_MAX"
+        "name":                  e("GPU_NAME"),
+        "temperature_c":         e("GPU_TEMP"),
+        "power_draw_w":          e("GPU_POWER_DRAW"),
+        "power_limit_w":         e("GPU_POWER_LIMIT"),
+        "performance_state":     e("GPU_PSTATE"),
+        "throttle_reasons_active": e("GPU_PERF_STATE"),
+        "hw_thermal_slowdown":   e("GPU_THROTTLE"),
+        "memory_used_mib":       e("GPU_MEM_USED"),
+        "memory_total_mib":      e("GPU_MEM_TOTAL"),
+        "ecc_corrected":         e("GPU_ECC_SBE"),
+        "ecc_uncorrected":       e("GPU_ECC_DBE"),
+        "pcie_gen_current":      gen,
+        "pcie_gen_max":          gen_max,
+        "pcie_width_current":    wid,
+        "pcie_width_max":        wid_max,
     },
     "pcie": {
-        "aer_corrected_total": $AER_CORRECTED,
-        "aer_uncorrected_total": $AER_UNCORRECTED,
-        "reset_events_total": $AER_RESET,
-        "recent_errors": $AER_RECENT,
-        "gpu_pcie_slot": $GPU_SLOT,
-        "nvme_pcie_slot": $NVME_SLOT,
-        "network_pcie_slot": $NET_SLOT,
-        "gpu_shares_root_complex_with_nvme": $GPU_SHARES_ROOT_WITH_NVME,
-        "gpu_root_bus": "$GPU_ROOT",
-        "nvme_root_bus": "$NVME_ROOT"
+        "aer_corrected_total":          aer_corr,
+        "aer_uncorrected_total":        aer_uncorr,
+        "reset_events_total":           ei("AER_RESET"),
+        "recent_errors":                ej("AER_RECENT", []),
+        "gpu_pcie_slot":                ej("GPU_SLOT", []),
+        "nvme_pcie_slot":               ej("NVME_SLOT", []),
+        "network_pcie_slot":            ej("NET_SLOT", []),
+        "gpu_shares_root_complex_with_nvme": e("GPU_SHARES_ROOT_WITH_NVME") == "true",
+        "gpu_root_bus":                 e("GPU_ROOT"),
+        "nvme_root_bus":                e("NVME_ROOT"),
     },
     "cpu": {
-        "governor": "$CPU_GOV",
-        "freq_max_khz": $CPU_FREQ_MAX,
-        "freq_current_khz": $CPU_FREQ_CUR,
-        "throttle_pct": $CPU_THROTTLE_PCT,
-        "thermal_sensors": $CPU_TEMP
+        "governor":        e("CPU_GOV"),
+        "freq_max_khz":    ei("CPU_FREQ_MAX"),
+        "freq_current_khz": ei("CPU_FREQ_CUR"),
+        "throttle_pct":    cpu_thr,
+        "thermal_sensors": ej("CPU_TEMP", []),
     },
     "power": {
-        "ipmi_instantaneous_watts": "$IPMI_POWER",
-        "ipmi_temps": $IPMI_TEMPS
+        "ipmi_instantaneous_watts": e("IPMI_POWER"),
+        "ipmi_temps":               ej("IPMI_TEMPS", []),
     },
     "memory": {
-        "total_kb": $MEM_TOTAL,
-        "available_kb": $MEM_FREE,
-        "numa_info": os.environ.get("NUMA_NODES", ""),
-        "gpu_numa_topology": os.environ.get("GPU_NUMA", "")
+        "total_kb":          ei("MEM_TOTAL"),
+        "available_kb":      ei("MEM_FREE"),
+        "numa_info":         e("NUMA_NODES"),
+        "gpu_numa_topology": e("GPU_NUMA"),
     },
     "vms": {
-        "cpu_stats": $VM_CPU_STATS
+        "cpu_stats": ej("VM_CPU_STATS", []),
     },
     "kubernetes": {
-        "node_cpu": $K8S_NODE_CPU,
-        "high_restart_containers": $CTRL_RESTARTS,
-        "etcd_slow_ops_last_10m": $ETCD_SLOW
+        "node_cpu":                 ej("K8S_NODE_CPU", []),
+        "high_restart_containers":  ej("CTRL_RESTARTS", []),
+        "etcd_slow_ops_last_10m":   etcd_slow,
     },
     "diagnosis": {
-        "pcie_gen_downgraded": ("$GPU_PCIE_GEN" != "$GPU_PCIE_GEN_MAX" and "$GPU_PCIE_GEN" != "" and "$GPU_PCIE_GEN_MAX" != ""),
-        "pcie_width_downgraded": ("$GPU_PCIE_WIDTH" != "$GPU_PCIE_WIDTH_MAX" and "$GPU_PCIE_WIDTH" != "" and "$GPU_PCIE_WIDTH_MAX" != ""),
-        "gpu_thermal_throttling": ("$GPU_THROTTLE" not in ("", "Not Active", "0x0000000000000000")),
-        "aer_errors_present": ($AER_CORRECTED + $AER_UNCORRECTED > 0),
-        "cpu_freq_throttled": ($CPU_THROTTLE_PCT > 5),
-        "etcd_slow": ($ETCD_SLOW > 0)
+        "pcie_gen_downgraded":   bool(gen and gen_max and gen != gen_max),
+        "pcie_width_downgraded": bool(wid and wid_max and wid != wid_max),
+        "gpu_thermal_throttling": bool(throttle and throttle not in ("", "Not Active", "0x0000000000000000")),
+        "aer_errors_present":    (aer_corr + aer_uncorr) > 0,
+        "cpu_freq_throttled":    cpu_thr > 5,
+        "etcd_slow":             etcd_slow > 0,
     }
 }
 
-outfile = "$OUTFILE"
+outfile = e("OUTFILE", "/tmp/pci-diag.json")
 with open(outfile, "w") as f:
     json.dump(data, f, indent=2)
 
@@ -231,22 +268,22 @@ print("\n=== SUMMARY ===")
 d = data["diagnosis"]
 gpu = data["gpu"]
 pcie = data["pcie"]
-print(f"  GPU: {data['gpu']['name']}")
+print(f"  GPU: {gpu['name']}")
 print(f"  GPU temp: {gpu['temperature_c']}°C  power: {gpu['power_draw_w']}W / {gpu['power_limit_w']}W")
-print(f"  PCIe: Gen{gpu['pcie_gen_current']} x{gpu['pcie_width_current']} (max: Gen{gpu['pcie_gen_max']} x{gpu['pcie_width_max']})")
-print(f"  AER errors: {pcie['aer_corrected_total']} corrected, {pcie['aer_uncorrected_total']} uncorrected, {pcie['reset_events_total']} resets")
+print(f"  PCIe: Gen{gpu['pcie_gen_current']} x{gpu['pcie_width_current']} (max: Gen{gen_max} x{wid_max})")
+print(f"  AER errors: {aer_corr} corrected, {aer_uncorr} uncorrected, {ei('AER_RESET')} resets")
 print(f"  GPU shares PCIe root complex with NVMe: {pcie['gpu_shares_root_complex_with_nvme']}")
-print(f"  CPU throttle: {data['cpu']['throttle_pct']}%   governor: {data['cpu']['governor']}")
-print(f"  IPMI power: {data['power']['ipmi_instantaneous_watts']}")
+print(f"  CPU throttle: {cpu_thr}%   governor: {e('CPU_GOV')}")
+print(f"  IPMI power: {e('IPMI_POWER')}")
 print()
 if any(d.values()):
     print("⚠  FLAGS RAISED:")
-    if d["pcie_gen_downgraded"]:   print("   ✗ PCIe link degraded to Gen" + gpu["pcie_gen_current"] + " (max Gen" + gpu["pcie_gen_max"] + ") — slot/cable issue")
-    if d["pcie_width_downgraded"]: print("   ✗ PCIe width degraded to x" + gpu["pcie_width_current"] + " (max x" + gpu["pcie_width_max"] + ") — slot/bifurcation issue")
-    if d["gpu_thermal_throttling"]: print("   ✗ GPU thermal throttling ACTIVE — inadequate cooling in workstation chassis")
-    if d["aer_errors_present"]:    print("   ✗ PCIe AER errors present — device resets affecting hypervisor I/O latency")
-    if d["cpu_freq_throttled"]:    print("   ✗ CPU frequency throttled " + str(data["cpu"]["throttle_pct"]) + "% — thermal or power limit")
-    if d["etcd_slow"]:             print("   ✗ etcd slow operations detected — control plane I/O latency")
+    if d["pcie_gen_downgraded"]:    print(f"   ✗ PCIe link degraded to Gen{gen} (max Gen{gen_max}) — slot/cable issue")
+    if d["pcie_width_downgraded"]:  print(f"   ✗ PCIe width degraded to x{wid} (max x{wid_max}) — slot/bifurcation issue")
+    if d["gpu_thermal_throttling"]: print(f"   ✗ GPU thermal throttling ACTIVE — inadequate cooling in workstation chassis")
+    if d["aer_errors_present"]:     print(f"   ✗ PCIe AER errors present — device resets affecting hypervisor I/O latency")
+    if d["cpu_freq_throttled"]:     print(f"   ✗ CPU frequency throttled {cpu_thr}% — thermal or power limit")
+    if d["etcd_slow"]:              print(f"   ✗ etcd slow operations detected — control plane I/O latency")
 else:
     print("✓  No hardware flags raised")
 PYEOF
