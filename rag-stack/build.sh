@@ -124,14 +124,23 @@ get_svc_version() {
     local svc="$1"
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
-    curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" | jq -r ".version // \"1.0.0\""
+    # Use -f so curl exits non-zero on HTTP 4xx/5xx (DB unavailable → build-orchestrator
+    # returns error JSON that jq can't parse as a version, causing "Invalid numeric literal").
+    # --max-time prevents hanging; jq 2>/dev/null||echo suppresses parse errors from bad bodies.
+    local raw
+    raw=$(curl -sf --max-time 10 "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" 2>/dev/null) \
+        || { echo "1.0.0"; return 0; }
+    echo "$raw" | jq -r ".version // \"1.0.0\"" 2>/dev/null || echo "1.0.0"
 }
 
 get_svc_last_build() {
     local svc="$1"
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
-    curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" | jq -r ".last_build // empty"
+    local raw
+    raw=$(curl -sf --max-time 10 "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" 2>/dev/null) \
+        || { echo ""; return 0; }
+    echo "$raw" | jq -r ".last_build // empty" 2>/dev/null || echo ""
 }
 
 update_svc_info() {
@@ -151,9 +160,11 @@ sync_current_version_file() {
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
 
-    if curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions" \
+    local raw_versions
+    raw_versions=$(curl -sf --max-time 10 "${h_args[@]}" "$BUILD_METADATA_URL/versions" 2>/dev/null) || raw_versions=""
+    if echo "$raw_versions" \
         | jq 'sort_by(.service_name) | map({key: .service_name, value: {version: .version, last_build: .last_build}}) | from_entries' \
-        > "$tmp_file"; then
+        2>/dev/null > "$tmp_file" && [[ -s "$tmp_file" ]]; then
         mv "$tmp_file" "$CURRENT_VERSION_FILE"
         chmod 664 "$CURRENT_VERSION_FILE"
     else
@@ -219,7 +230,10 @@ is_unchanged() {
     local svc="$1"; local hash="$2"
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
-    local last_hash=$(curl -s "${h_args[@]}" "$BUILD_METADATA_URL/journals/$svc" | jq -r ".last_hash // empty")
+    local raw
+    raw=$(curl -sf --max-time 10 "${h_args[@]}" "$BUILD_METADATA_URL/journals/$svc" 2>/dev/null) || raw=""
+    local last_hash
+    last_hash=$(echo "$raw" | jq -r ".last_hash // empty" 2>/dev/null || echo "")
     [[ -n "$last_hash" ]] && [[ "$last_hash" == "$hash" ]]
 }
 
