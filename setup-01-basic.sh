@@ -85,27 +85,30 @@ $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/pool.yaml
 
 
 echo "Check the ceph-rook-cephfs/rbd deploys"
-# The Rook operator creates these CSI deployments asynchronously after reconciling
-# the CephCluster CR. Poll until each deployment exists before checking rollout.
+# NOTE: The Rook operator creates these CSI deployments only AFTER full Ceph
+# initialization (MONs → MGR → OSDs → CephFilesystem provisioned → MDS running).
+# On a fresh cluster this takes 15-30 minutes. We do a short opportunistic check
+# and move on — the Ceph health gate in setup-complete.sh is the right blocking
+# point. The StorageClass can be registered before the CSI controllers are ready.
 for csi_deploy in \
     "rook-ceph.cephfs.csi.ceph.com-ctrlplugin" \
     "rook-ceph.rbd.csi.ceph.com-ctrlplugin"; do
-    echo "  Waiting for deployment/$csi_deploy to be created by operator..."
-    csi_elapsed=0; csi_timeout=600; csi_interval=15
+    echo "  Checking for deployment/$csi_deploy (non-blocking)..."
+    csi_elapsed=0; csi_timeout=60; csi_interval=15
     while (( csi_elapsed < csi_timeout )); do
         if $KUBECTL get deployment -n rook-ceph "$csi_deploy" >/dev/null 2>&1; then
-            echo "  deployment/$csi_deploy found (${csi_elapsed}s) — checking rollout..."
-            $KUBECTL rollout status -n rook-ceph "deployment.apps/$csi_deploy" --timeout=600s
+            echo "  deployment/$csi_deploy already present — checking rollout..."
+            $KUBECTL rollout status -n rook-ceph "deployment.apps/$csi_deploy" --timeout=120s || true
             break
         fi
         echo "  deployment/$csi_deploy not yet created — waiting ${csi_interval}s... (${csi_elapsed}s/${csi_timeout}s)"
         sleep "$csi_interval"
         (( csi_elapsed += csi_interval )) || true
-        if (( csi_elapsed >= csi_timeout )); then
-            echo "ERROR: deployment/$csi_deploy was not created within ${csi_timeout}s"
-            exit 1
-        fi
     done
+    if (( csi_elapsed >= csi_timeout )); then
+        echo "  NOTE: $csi_deploy not yet created — Ceph still initializing. Continuing."
+        echo "  The setup-complete.sh Ceph health gate will ensure readiness before PVC provisioning."
+    fi
 done
 mark_step_done "rook-ceph-cluster"
 fi
