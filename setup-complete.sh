@@ -208,6 +208,33 @@ if [[ "$ceph_healthy" != "true" ]]; then
     echo "Proceeding — PVC provisioning may fail if Ceph is not ready."
 fi
 
+# Wait for the CSI provisioner deployments (ctrlplugin).
+# The StorageClass object exists immediately after storageclass.yaml is applied,
+# but PVCs can only be provisioned once the CSI controller pods are Running and
+# Ready. The operator creates these after OSDs are up and CephFilesystem is
+# provisioned — which can take 15-30 min on a fresh cluster.
+echo "Waiting for CSI provisioner pods to be ready..."
+for csi_deploy in \
+    "rook-ceph.rbd.csi.ceph.com-ctrlplugin" \
+    "rook-ceph.cephfs.csi.ceph.com-ctrlplugin"; do
+    csi_elapsed=0; csi_timeout=1800; csi_interval=30
+    while (( csi_elapsed < csi_timeout )); do
+        if $KUBECTL get deployment -n rook-ceph "$csi_deploy" >/dev/null 2>&1; then
+            echo "  $csi_deploy found — waiting for rollout..."
+            $KUBECTL rollout status -n rook-ceph "deployment.apps/$csi_deploy" --timeout=300s && break || true
+            break
+        fi
+        echo "  $csi_deploy not yet created — waiting ${csi_interval}s... (${csi_elapsed}s/${csi_timeout}s)"
+        sleep "$csi_interval"
+        (( csi_elapsed += csi_interval )) || true
+    done
+    if (( csi_elapsed >= csi_timeout )); then
+        echo "ERROR: $csi_deploy was not created within ${csi_timeout}s. Rook-Ceph may not be healthy."
+        exit 1
+    fi
+done
+echo "CSI provisioners are ready — PVC provisioning is available."
+
 mark_step_done "ceph-ready"
 STEP_TS_END=$(date +%s)
 log_step_timing "ceph-ready" "$STEP_TS_START" "$STEP_TS_END" "ok"
