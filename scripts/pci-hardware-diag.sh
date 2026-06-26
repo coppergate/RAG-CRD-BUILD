@@ -28,6 +28,8 @@ echo ""
 # 1. GPU info (nvidia-smi)
 # ─────────────────────────────────────────────────────────────
 echo "[1/8] Collecting GPU state..."
+# Wrap nvidia-smi in timeout — hangs if GPU PCIe is unresponsive
+cmd_out() { timeout 10 "$@" 2>/dev/null || echo ""; }
 GPU_NAME=$(cmd_out nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
 GPU_TEMP=$(cmd_out nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader | head -1)
 GPU_POWER_DRAW=$(cmd_out nvidia-smi --query-gpu=power.draw --format=csv,noheader | head -1 | tr -d ' W')
@@ -58,14 +60,20 @@ AER_RECENT=$(dmesg --since="1 hour ago" 2>/dev/null | grep -E "AER|PCIe Bus Erro
 # 3. PCIe topology — identify which devices share root complexes
 # ─────────────────────────────────────────────────────────────
 echo "[3/8] Collecting PCIe topology..."
-PCIE_TREE=$(lspci -tv 2>/dev/null | head -60)
-GPU_SLOT=$(lspci 2>/dev/null | grep -i "nvidia\|tesla\|v100" | head -5 | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin]))" 2>/dev/null || echo "[]")
-NVME_SLOT=$(lspci 2>/dev/null | grep -i "nvme\|non-volatile" | head -5 | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin]))" 2>/dev/null || echo "[]")
-NET_SLOT=$(lspci 2>/dev/null | grep -i "ethernet\|network" | head -5 | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin]))" 2>/dev/null || echo "[]")
+# NOTE: lspci -tv probes every device config space — hangs if a PCIe device (e.g. V100)
+# is not responding. Use a 10-second timeout; a hang IS diagnostic evidence of PCIe issues.
+PCIE_TREE=$(timeout 10 lspci -tv 2>/dev/null | head -60 || echo "TIMEOUT — lspci -tv hung (possible PCIe device not responding)")
+if echo "$PCIE_TREE" | grep -q TIMEOUT; then
+    echo "  WARNING: lspci -tv timed out — this indicates a PCIe device is not responding to config reads"
+fi
+# Use plain 'lspci' (no tree walk) for slot identification — much faster
+GPU_SLOT=$(timeout 5 lspci 2>/dev/null | grep -i "nvidia\|tesla\|v100" | head -5 | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin]))" 2>/dev/null || echo "[]")
+NVME_SLOT=$(timeout 5 lspci 2>/dev/null | grep -i "nvme\|non-volatile" | head -5 | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin]))" 2>/dev/null || echo "[]")
+NET_SLOT=$(timeout 5 lspci 2>/dev/null | grep -i "ethernet\|network" | head -5 | python3 -c "import sys,json; print(json.dumps([l.strip() for l in sys.stdin]))" 2>/dev/null || echo "[]")
 
 # Check if GPU and NVMe/Net are on same root port (PCIe root complex = first 2 hex digits)
-GPU_ROOT=$(lspci 2>/dev/null | grep -i "nvidia\|tesla\|v100" | head -1 | cut -d: -f1 | cut -c1-2)
-NVME_ROOT=$(lspci 2>/dev/null | grep -i "nvme" | head -1 | cut -d: -f1 | cut -c1-2)
+GPU_ROOT=$(timeout 5 lspci 2>/dev/null | grep -i "nvidia\|tesla\|v100" | head -1 | cut -d: -f1 | cut -c1-2)
+NVME_ROOT=$(timeout 5 lspci 2>/dev/null | grep -i "nvme" | head -1 | cut -d: -f1 | cut -c1-2)
 GPU_SHARES_ROOT_WITH_NVME="false"
 [[ "$GPU_ROOT" == "$NVME_ROOT" && -n "$GPU_ROOT" ]] && GPU_SHARES_ROOT_WITH_NVME="true"
 
