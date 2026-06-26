@@ -57,6 +57,12 @@ if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
     mark_step_done "build-pipeline-ns"
 fi
 
+echo "--- Ensuring Go module cache PVC ---"
+# Shared CephFS RWX PVC mounted into every Kaniko job at /go-module-cache.
+# Kaniko maps it into the build chroot at /go/pkg/mod via --volume flag so
+# go mod download finds cached modules and skips re-downloading them.
+$KUBECTL apply -f "$REPO_DIR/go-module-cache-pvc.yaml"
+
 echo "--- Applying Combined Registry & Pulsar CA ---"
 
 if [[ -f "$REPO_DIR/../../../CURRENT_VERSION" ]]; then
