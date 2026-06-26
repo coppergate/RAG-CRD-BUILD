@@ -152,7 +152,9 @@ STEP_TS_END=$(date +%s)
 log_step_timing "basic" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "ceph-ready"; then
+if ! is_step_done "ceph-ready" \
+    || ! $KUBECTL get storageclass rook-ceph-block >/dev/null 2>&1 \
+    || ! $KUBECTL get deployment -n rook-ceph rook-ceph.rbd.csi.ceph.com-ctrlplugin >/dev/null 2>&1; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.0: Waiting for Rook-Ceph to be ready (blocks registry, APM, and Pulsar PVC provisioning)"
@@ -257,7 +259,14 @@ log_step_timing "headlamp" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
 # Step 1.5 moved to setup-01-basic.sh
-if ! is_step_done "registry" || ! $KUBECTL get namespace container-registry >/dev/null 2>&1; then
+# Guard: never run registry if Ceph CSI isn't ready — the PVC will stay Pending
+if ! is_step_done "registry" \
+    || ! $KUBECTL get namespace container-registry >/dev/null 2>&1 \
+    || ! $KUBECTL get deployment -n rook-ceph rook-ceph.rbd.csi.ceph.com-ctrlplugin >/dev/null 2>&1; then
+    if ! $KUBECTL get deployment -n rook-ceph rook-ceph.rbd.csi.ceph.com-ctrlplugin >/dev/null 2>&1; then
+        echo "ERROR: Rook-Ceph CSI provisioner is not running. Run the 'basic' step first or wait for ceph-ready."
+        exit 1
+    fi
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.1.1: Local Registry Setup (Ensuring Ready)"
