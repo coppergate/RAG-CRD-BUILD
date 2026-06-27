@@ -64,11 +64,10 @@ helm repo add rook-release https://charts.rook.io/release
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/crds.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml
 # csi-operator.yaml registers CRDs (CephConnection, OperatorConfig) that Rook v1.18+
-# REQUIRES to start MONs — without them the cluster controller fails every reconcile.
-# We apply the CRDs+RBAC but immediately scale the ceph-csi-controller-manager
-# Deployment to 0 replicas so the crash-looping controller doesn't hammer the API server.
+# REQUIRES. Rook creates CephConnection/OperatorConfig CRs; ceph-csi-operator reconciles
+# those CRs into the actual CSI provisioner deployments (ctrlplugin, nodeplugin).
+# Both must run — scaling ceph-csi-controller-manager to 0 prevents CSI from ever deploying.
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml
-$KUBECTL scale deployment -n rook-ceph ceph-csi-controller-manager --replicas=0 2>/dev/null || true
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
 
 echo "Check the ceph-operator pod"
