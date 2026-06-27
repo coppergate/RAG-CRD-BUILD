@@ -85,33 +85,66 @@ $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/object.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/pool.yaml
 
 
-echo "Check the ceph-rook-cephfs/rbd deploys"
-# NOTE: The Rook operator creates these CSI deployments only AFTER full Ceph
-# initialization (MONs → MGR → OSDs → CephFilesystem provisioned → MDS running).
-# On a fresh cluster this takes 15-30 minutes. We do a short opportunistic check
-# and move on — the Ceph health gate in setup-complete.sh is the right blocking
-# point. The StorageClass can be registered before the CSI controllers are ready.
+# ── Wait for Ceph to fully initialize before marking this step done ──────────
+# The rook-ceph-cluster step must NOT complete until Ceph is actually ready.
+# Everything downstream (registry, APM, Pulsar) needs PVC provisioning to work.
+# Sequence: MONs start → MGR starts → OSDs start → Ceph health OK → MDS →
+#           StorageClass applied → CSI ctrlplugin deployed → PVC provisioning works.
+
+echo "Waiting for Ceph cluster health (up to 1800s)..."
+ceph_elapsed=0
+while (( ceph_elapsed < 1800 )); do
+    ceph_status=$($KUBECTL -n rook-ceph get cephcluster rook-ceph \
+        -o jsonpath='{.status.ceph.health}' 2>/dev/null || echo "UNKNOWN")
+    if [[ "$ceph_status" == HEALTH_OK* ]] || [[ "$ceph_status" == HEALTH_WARN* ]]; then
+        echo "  Ceph health: $ceph_status (${ceph_elapsed}s)"
+        break
+    fi
+    echo "  Ceph health: ${ceph_status:-UNKNOWN} — waiting 30s... (${ceph_elapsed}s/1800s)"
+    sleep 30
+    (( ceph_elapsed += 30 )) || true
+done
+if [[ "$ceph_status" != HEALTH_OK* ]] && [[ "$ceph_status" != HEALTH_WARN* ]]; then
+    echo "ERROR: Ceph did not reach healthy state within 1800s. Aborting."
+    exit 1
+fi
+
+echo "Applying StorageClass..."
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
+
+echo "Waiting for CSI provisioner pods (up to 900s)..."
 for csi_deploy in \
-    "rook-ceph.cephfs.csi.ceph.com-ctrlplugin" \
-    "rook-ceph.rbd.csi.ceph.com-ctrlplugin"; do
-    echo "  Checking for deployment/$csi_deploy (non-blocking)..."
-    csi_elapsed=0; csi_timeout=60; csi_interval=15
-    while (( csi_elapsed < csi_timeout )); do
-        if $KUBECTL get deployment -n rook-ceph "$csi_deploy" >/dev/null 2>&1; then
-            echo "  deployment/$csi_deploy already present — checking rollout..."
-            $KUBECTL rollout status -n rook-ceph "deployment.apps/$csi_deploy" --timeout=120s || true
+    "rook-ceph.rbd.csi.ceph.com-ctrlplugin" \
+    "rook-ceph.cephfs.csi.ceph.com-ctrlplugin"; do
+    csi_elapsed=0
+    while (( csi_elapsed < 900 )); do
+        running=$($KUBECTL get pods -n rook-ceph \
+            -l "app=${csi_deploy}" \
+            --field-selector=status.phase=Running --no-headers 2>/dev/null | grep -c . || echo 0)
+        if (( running > 0 )); then
+            echo "  $csi_deploy: $running Running pods (${csi_elapsed}s)"
             break
         fi
-        echo "  deployment/$csi_deploy not yet created — waiting ${csi_interval}s... (${csi_elapsed}s/${csi_timeout}s)"
-        sleep "$csi_interval"
-        (( csi_elapsed += csi_interval )) || true
+        # Also accept if the deployment exists and has available replicas
+        avail=$($KUBECTL get deployment -n rook-ceph "$csi_deploy" \
+            -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo 0)
+        if [[ "$avail" =~ ^[1-9] ]]; then
+            echo "  $csi_deploy: $avail available replicas (${csi_elapsed}s)"
+            break
+        fi
+        echo "  $csi_deploy not ready — waiting 15s... (${csi_elapsed}s/900s)"
+        sleep 15
+        (( csi_elapsed += 15 )) || true
     done
-    if (( csi_elapsed >= csi_timeout )); then
-        echo "  NOTE: $csi_deploy not yet created — Ceph still initializing. Continuing."
-        echo "  The setup-complete.sh Ceph health gate will ensure readiness before PVC provisioning."
+    if (( csi_elapsed >= 900 )); then
+        echo "ERROR: $csi_deploy did not become ready within 900s."
+        exit 1
     fi
 done
+echo "Rook-Ceph is fully operational — PVC provisioning available."
 mark_step_done "rook-ceph-cluster"
+# rook-ceph-storageclass is applied above; mark done so the old separate step is skipped
+mark_step_done "rook-ceph-storageclass"
 fi
 
 if ! is_step_done "rook-ceph-storageclass"; then

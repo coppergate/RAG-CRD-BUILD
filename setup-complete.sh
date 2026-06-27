@@ -152,101 +152,9 @@ STEP_TS_END=$(date +%s)
 log_step_timing "basic" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-# Re-run ceph-ready if: not journaled, OR StorageClass missing, OR no Running CSI provisioner pods.
-# Checking deployment object existence is insufficient — it survives cluster rebuilds but pods may be gone.
-_ceph_csi_running() {
-    $KUBECTL get pods -n rook-ceph -l "app=rook-ceph.rbd.csi.ceph.com" \
-        --field-selector=status.phase=Running --no-headers 2>/dev/null | grep -q .
-}
-if ! is_step_done "ceph-ready" \
-    || ! $KUBECTL get storageclass rook-ceph-block >/dev/null 2>&1 \
-    || ! _ceph_csi_running; then
-STEP_TS_START=$(date +%s)
-echo ""
-echo "Step 1.0: Waiting for Rook-Ceph to be ready (blocks registry, APM, and Pulsar PVC provisioning)"
-echo "----------------------------------------------------"
-# The registry, APM stack, and Pulsar all need PVCs backed by rook-ceph-block.
-# Rook-Ceph is applied in setup-01-basic.sh but OSDs take 10-30 min to initialize
-# on a fresh cluster before the StorageClass can provision volumes.
-
-echo "Waiting for rook-ceph-block StorageClass to exist..."
-sc_elapsed=0
-while (( sc_elapsed < 1800 )); do
-    if $KUBECTL get storageclass rook-ceph-block >/dev/null 2>&1; then
-        echo "  StorageClass rook-ceph-block found (${sc_elapsed}s)"
-        break
-    fi
-    echo "  rook-ceph-block not yet available — waiting 30s... (${sc_elapsed}s/1800s)"
-    sleep 30
-    (( sc_elapsed += 30 )) || true
-done
-if ! $KUBECTL get storageclass rook-ceph-block >/dev/null 2>&1; then
-    echo "ERROR: rook-ceph-block StorageClass did not appear within 1800s. Check Rook-Ceph operator logs."
-    exit 1
-fi
-
-echo "Waiting for Ceph cluster to reach healthy state..."
-CEPH_HEALTH_TIMEOUT=1200
-CEPH_HEALTH_INTERVAL=30
-ceph_elapsed=0
-ceph_healthy=false
-
-# Query Ceph health via CephCluster CR (operator updates this; no pod exec needed).
-ceph_health_status_early() {
-    local cr_health
-    cr_health=$($KUBECTL -n rook-ceph get cephcluster rook-ceph \
-        -o jsonpath='{.status.ceph.health}' 2>/dev/null || true)
-    echo "${cr_health:-UNKNOWN}"
-}
-
-while (( ceph_elapsed < CEPH_HEALTH_TIMEOUT )); do
-    CEPH_STATUS=$(ceph_health_status_early)
-    if [[ "$CEPH_STATUS" == HEALTH_OK* ]] || [[ "$CEPH_STATUS" == HEALTH_WARN* ]]; then
-        echo "Ceph health: $CEPH_STATUS (${ceph_elapsed}s elapsed)"
-        ceph_healthy=true
-        break
-    fi
-    echo "  Ceph health: $CEPH_STATUS — waiting ${CEPH_HEALTH_INTERVAL}s... (${ceph_elapsed}s/${CEPH_HEALTH_TIMEOUT}s)"
-    sleep "$CEPH_HEALTH_INTERVAL"
-    (( ceph_elapsed += CEPH_HEALTH_INTERVAL )) || true
-done
-
-if [[ "$ceph_healthy" != "true" ]]; then
-    echo "WARNING: Ceph did not reach HEALTH_OK/HEALTH_WARN within ${CEPH_HEALTH_TIMEOUT}s."
-    echo "Proceeding — PVC provisioning may fail if Ceph is not ready."
-fi
-
-# Wait for the CSI provisioner deployments (ctrlplugin).
-# The StorageClass object exists immediately after storageclass.yaml is applied,
-# but PVCs can only be provisioned once the CSI controller pods are Running and
-# Ready. The operator creates these after OSDs are up and CephFilesystem is
-# provisioned — which can take 15-30 min on a fresh cluster.
-echo "Waiting for CSI provisioner pods to be ready..."
-for csi_deploy in \
-    "rook-ceph.rbd.csi.ceph.com-ctrlplugin" \
-    "rook-ceph.cephfs.csi.ceph.com-ctrlplugin"; do
-    csi_elapsed=0; csi_timeout=1800; csi_interval=30
-    while (( csi_elapsed < csi_timeout )); do
-        if $KUBECTL get deployment -n rook-ceph "$csi_deploy" >/dev/null 2>&1; then
-            echo "  $csi_deploy found — waiting for rollout..."
-            $KUBECTL rollout status -n rook-ceph "deployment.apps/$csi_deploy" --timeout=300s && break || true
-            break
-        fi
-        echo "  $csi_deploy not yet created — waiting ${csi_interval}s... (${csi_elapsed}s/${csi_timeout}s)"
-        sleep "$csi_interval"
-        (( csi_elapsed += csi_interval )) || true
-    done
-    if (( csi_elapsed >= csi_timeout )); then
-        echo "ERROR: $csi_deploy was not created within ${csi_timeout}s. Rook-Ceph may not be healthy."
-        exit 1
-    fi
-done
-echo "CSI provisioners are ready — PVC provisioning is available."
-
-mark_step_done "ceph-ready"
-STEP_TS_END=$(date +%s)
-log_step_timing "ceph-ready" "$STEP_TS_START" "$STEP_TS_END" "ok"
-fi
+# Ceph readiness is now guaranteed inside the 'rook-ceph-cluster' step in
+# setup-01-basic.sh — it blocks until HEALTH_OK/WARN and CSI pods are running
+# before marking the step done. No separate gate needed here.
 
 if ! is_step_done "headlamp"; then
 STEP_TS_START=$(date +%s)
@@ -264,15 +172,7 @@ STEP_TS_END=$(date +%s)
 log_step_timing "headlamp" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-# Step 1.5 moved to setup-01-basic.sh
-# Guard: never run registry if Ceph CSI isn't ready — the PVC will stay Pending
-if ! is_step_done "registry" \
-    || ! $KUBECTL get namespace container-registry >/dev/null 2>&1 \
-    || ! $KUBECTL get deployment -n rook-ceph rook-ceph.rbd.csi.ceph.com-ctrlplugin >/dev/null 2>&1; then
-    if ! _ceph_csi_running; then
-        echo "ERROR: Rook-Ceph CSI provisioner pods are not running. ceph-ready gate must pass first."
-        exit 1
-    fi
+if ! is_step_done "registry" || ! $KUBECTL get namespace container-registry >/dev/null 2>&1; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.1.1: Local Registry Setup (Ensuring Ready)"
@@ -331,7 +231,7 @@ STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.8: Apache Pulsar Infrastructure"
 echo "----------------------------------------------------"
-# Ceph health was already gated in step 1.0 (ceph-ready). Just verify OSDs are still stable.
+# Ceph health was already gated in setup-01-basic.sh (rook-ceph-cluster step). Verify OSDs still stable.
 # Additional check: verify all OSDs are running (use jsonpath — avoids fragile container-count string matching)
 OSD_TOTAL=$($KUBECTL -n rook-ceph get pods -l app=rook-ceph-osd \
     -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep -c . || echo 0)
