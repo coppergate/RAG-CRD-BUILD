@@ -193,11 +193,11 @@ if ! is_done 35.certWait; then
     log "  Polling certificates... (${cert_elapsed}s/${cert_timeout}s)"
     # Use --request-timeout to prevent hanging when API server is under load during install storm.
     total=$($KUBECTL get certificate -n $NAMESPACE --no-headers \
-        --request-timeout=20s 2>/dev/null | wc -l)
+        --request-timeout=20s 2>/dev/null | wc -l || echo 0)
     ready=$($KUBECTL get certificate -n $NAMESPACE \
         --request-timeout=20s \
         -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' \
-        2>/dev/null | grep "^True$" | wc -l)
+        2>/dev/null | grep -c "^True$" || echo 0)
     if (( total > 0 && ready >= total )); then
       log "All $total Pulsar certificates are Ready"
       break
