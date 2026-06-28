@@ -139,6 +139,33 @@ roleRef:
   kind: Role
   name: nodes-serviceaccount-token-creator
   apiGroup: rbac.authorization.k8s.io
+---
+# The pulsar-bookkeeper-verify-clusterid init container runs a Kubernetes
+# client that watches ConfigMaps for service discovery. Without this Role
+# the informer cache sync times out and the bookie pods never start.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pulsar-bookie-configmap-reader
+  namespace: apache-pulsar
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "endpoints", "services", "pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pulsar-bookie-configmap-reader-binding
+  namespace: apache-pulsar
+subjects:
+- kind: ServiceAccount
+  name: pulsar
+  namespace: apache-pulsar
+roleRef:
+  kind: Role
+  name: pulsar-bookie-configmap-reader
+  apiGroup: rbac.authorization.k8s.io
 YAML
   mark_done 16.rbac
 else
