@@ -83,7 +83,7 @@ spec:
         name: nvidia-talos-validation-fix
     spec:
       nodeSelector:
-        nvidia.com/gpu.present: "true"
+        gpu: "true"
       hostPID: true
       tolerations:
       - operator: Exists
@@ -169,7 +169,7 @@ devicePlugin:
   enabled: true
   runtimeClassName: nvidia
   nodeSelector:
-    nvidia.com/gpu.present: "true"
+    gpu: "true"
   config:
     name: nvidia-device-plugin-config
   env:
@@ -180,11 +180,11 @@ devicePlugin:
 gfd:
   enabled: true
   nodeSelector:
-    nvidia.com/gpu.present: "true"
+    gpu: "true"
 dcgmExporter:
   enabled: true
   nodeSelector:
-    nvidia.com/gpu.present: "true"
+    gpu: "true"
 EOF
 
   helm upgrade --install "$RELEASE_NAME" nvidia/gpu-operator \
