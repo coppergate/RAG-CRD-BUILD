@@ -88,6 +88,39 @@ log_step_timing() {
     echo "$line" >> "$JOURNAL_FILE"
 }
 
+# wait_namespace_stable <namespace> <timeout_seconds>
+# Polls until every non-Job pod in the namespace is Running or Succeeded/Completed.
+# Exits 0 once stable; warns and exits 0 on timeout (non-fatal — some pods may be optional).
+wait_namespace_stable() {
+    local ns="$1"
+    local timeout="${2:-300}"
+    local interval=15
+    local elapsed=0
+    echo "Waiting for namespace '$ns' to stabilize (timeout: ${timeout}s)..."
+    while (( elapsed < timeout )); do
+        local not_ready
+        # Count pods that are not yet Running, Completed, or Succeeded.
+        # Exclude Jobs (they have owner references we can't easily filter here, but
+        # phase=Succeeded covers completed job pods). CrashLoopBackOff is counted as
+        # not-ready so we don't advance until the pod either recovers or the operator restarts it.
+        not_ready=$($KUBECTL get pods -n "$ns" --no-headers \
+            --request-timeout=15s 2>/dev/null \
+            | grep -cvE '^\S+\s+\S+\s+(Running|Completed|Succeeded)' || echo 0)
+        local total
+        total=$($KUBECTL get pods -n "$ns" --no-headers \
+            --request-timeout=15s 2>/dev/null | wc -l || echo 0)
+        if (( total > 0 && not_ready == 0 )); then
+            echo "  Namespace '$ns' stable: $total pods Running/Completed (${elapsed}s)."
+            return 0
+        fi
+        echo "  Namespace '$ns': ${not_ready}/${total} pods not yet ready — waiting ${interval}s... (${elapsed}s/${timeout}s)"
+        sleep "$interval"
+        (( elapsed += interval )) || true
+    done
+    echo "WARNING: Namespace '$ns' did not fully stabilize after ${timeout}s — proceeding anyway."
+    $KUBECTL get pods -n "$ns" --no-headers --request-timeout=15s 2>/dev/null || true
+}
+
 echo "--- 0. Verifying Cluster Registry Trust ---"
 # Check if registry mirrors are configured on nodes. If not, patch and reboot.
 # This ensures that Step 1.6 (Cluster-Native Builds) and Step 2 (Deployment) can pull images.
@@ -220,13 +253,9 @@ fi
 
 if ! is_step_done "apm-stabilize"; then
 echo ""
-echo "Step 1.2.1: APM stabilization wait (60s)"
+echo "Step 1.2.1: Wait for APM namespace to stabilize"
 echo "----------------------------------------------------"
-# APM launches Mimir, Loki, Tempo, Grafana, and Alloy DaemonSet pods simultaneously.
-# Each creates CRDs, Secrets, ConfigMaps, leader-election Leases, and readiness probes
-# — all hitting the API server at once. Wait for the monitoring namespace to settle
-# before starting Pulsar (which brings its own ZK/bookie/broker/proxy startup storm).
-sleep 60
+wait_namespace_stable "monitoring" 300
 mark_step_done "apm-stabilize"
 fi
 
@@ -354,13 +383,16 @@ fi
 
 if ! is_step_done "pre-build-stabilize"; then
 echo ""
-echo "Step 1.5.9: Pre-build stabilization wait (90s)"
+echo "Step 1.5.9: Wait for all infrastructure namespaces to stabilize"
 echo "----------------------------------------------------"
-# Pulsar, TimescaleDB, Qdrant, and the build-pipeline pods all start in the preceding
-# steps. Give the API server, etcd, and the newly-started pods 90s to settle before
-# launching Kaniko builds. Kaniko jobs + kubectl exec S3 uploads are the heaviest
-# API server load in the whole install — starting them too early causes i/o timeouts.
-sleep 90
+# Ensure Pulsar, APM, TimescaleDB, and the build-pipeline controller are all healthy
+# before launching Kaniko builds. Kaniko jobs + kubectl exec S3 uploads generate the
+# heaviest API server load in the install; starting them against an unsettled cluster
+# causes i/o timeouts and leader election failures across unrelated components.
+wait_namespace_stable "apache-pulsar"    600
+wait_namespace_stable "monitoring"       300
+wait_namespace_stable "build-pipeline"   180
+wait_namespace_stable "timescaledb"      300
 mark_step_done "pre-build-stabilize"
 fi
 
@@ -372,10 +404,7 @@ echo "----------------------------------------------------"
 # Use the new cluster-native build pipeline (Kaniko + S3 + Pulsar)
 # This prevents host resource exhaustion during builds
 # We wait for completion here to ensure Step 2 has the images it needs.
-# PARALLELISM=2: limit concurrent Kaniko builds to reduce API server load.
-# Default of 4 concurrent builds + kubectl exec streams overwhelms the API server
-# when Pulsar/APM are still settling. Two at a time is sufficient for 11 services.
-    PARALLELISM=2 bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
+    bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
 mark_step_done "rag-images"
 STEP_TS_END=$(date +%s)
 log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"
