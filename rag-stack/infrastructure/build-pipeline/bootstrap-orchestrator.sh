@@ -64,7 +64,7 @@ $KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=$INTERNAL_REGISTRY/amaz
 $KUBECTL wait --for=condition=Ready pod/s3-bootstrap-uploader -n $NAMESPACE --timeout=60s
 # Stream tarball directly to S3 via stdin to avoid 'tar' dependency in the container
 # Capture pre-signed URL to avoid AWS SDK credential issues in Kaniko
-PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n $NAMESPACE s3-bootstrap-uploader -c uploader -- \
+PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | timeout 180 $KUBECTL exec -i -n $NAMESPACE s3-bootstrap-uploader -c uploader -- \
   sh -c "aws --endpoint-url http://\$S3_ENDPOINT s3 cp - s3://\$BUCKET_NAME/$TARBALL > /dev/null && aws --endpoint-url http://\$S3_ENDPOINT s3 presign s3://\$BUCKET_NAME/$TARBALL --expires-in 3600")
 $KUBECTL delete pod s3-bootstrap-uploader -n $NAMESPACE --now
 
@@ -159,11 +159,15 @@ spec:
       - name: registry-ca
         configMap:
           name: registry-ca-cm
+      nodeSelector:
+        role: storage-node
       restartPolicy: Never
   backoffLimit: 0
 EOF
 
 echo "--- 4. Waiting for Bootstrap Build to complete ---"
+BUILD_TIMEOUT=1800  # 30 minutes max for a cold Go build
+BUILD_ELAPSED=0
 until [[ "$($KUBECTL get job kaniko-bootstrap-orchestrator -n $NAMESPACE \
     --request-timeout=20s -o jsonpath='{.status.succeeded}' 2>/dev/null || echo '')" == "1" ]]; do
     failed=$($KUBECTL get job kaniko-bootstrap-orchestrator -n $NAMESPACE \
@@ -172,8 +176,14 @@ until [[ "$($KUBECTL get job kaniko-bootstrap-orchestrator -n $NAMESPACE \
         echo "ERROR: Bootstrap build failed. Check logs: kubectl logs -n $NAMESPACE -l job-name=kaniko-bootstrap-orchestrator"
         exit 1
     fi
-    echo "Building... (polling in 10s)"
+    if (( BUILD_ELAPSED >= BUILD_TIMEOUT )); then
+        echo "ERROR: Bootstrap build timed out after ${BUILD_TIMEOUT}s."
+        echo "  Check logs: kubectl logs -n $NAMESPACE -l job-name=kaniko-bootstrap-orchestrator"
+        exit 1
+    fi
+    echo "Building... (${BUILD_ELAPSED}s/${BUILD_TIMEOUT}s — polling in 10s)"
     sleep 10
+    (( BUILD_ELAPSED += 10 )) || true
 done
 
 echo "Bootstrap complete. Build Orchestrator image is in the registry (tag=$ORCHESTRATOR_TAG)."
