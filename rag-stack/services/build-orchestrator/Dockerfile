@@ -1,6 +1,6 @@
 FROM registry.hierocracy.home:5000/golang:1.25-alpine AS builder
 WORKDIR /app
-RUN apk add --no-cache gcc musl-dev git
+RUN apk add --no-cache git
 
 # Cache modules layer
 COPY common/go.mod common/go.sum /common/
