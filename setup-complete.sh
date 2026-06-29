@@ -218,6 +218,18 @@ STEP_TS_END=$(date +%s)
 log_step_timing "apm" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+if ! is_step_done "apm-stabilize"; then
+echo ""
+echo "Step 1.2.1: APM stabilization wait (60s)"
+echo "----------------------------------------------------"
+# APM launches Mimir, Loki, Tempo, Grafana, and Alloy DaemonSet pods simultaneously.
+# Each creates CRDs, Secrets, ConfigMaps, leader-election Leases, and readiness probes
+# — all hitting the API server at once. Wait for the monitoring namespace to settle
+# before starting Pulsar (which brings its own ZK/bookie/broker/proxy startup storm).
+sleep 60
+mark_step_done "apm-stabilize"
+fi
+
 # NOTE: NVIDIA GPU operator is intentionally deferred to the end of the install.
 # The V100's PCIe initialization generates device resets and bus transactions that
 # cause hypervisor I/O latency spikes during KVM VM scheduling, which destabilizes
@@ -340,6 +352,18 @@ STEP_TS_END=$(date +%s)
 log_step_timing "build-pipeline-infra" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+if ! is_step_done "pre-build-stabilize"; then
+echo ""
+echo "Step 1.5.9: Pre-build stabilization wait (90s)"
+echo "----------------------------------------------------"
+# Pulsar, TimescaleDB, Qdrant, and the build-pipeline pods all start in the preceding
+# steps. Give the API server, etcd, and the newly-started pods 90s to settle before
+# launching Kaniko builds. Kaniko jobs + kubectl exec S3 uploads are the heaviest
+# API server load in the whole install — starting them too early causes i/o timeouts.
+sleep 90
+mark_step_done "pre-build-stabilize"
+fi
+
 if ! is_step_done "rag-images"; then
 STEP_TS_START=$(date +%s)
 echo ""
@@ -348,7 +372,10 @@ echo "----------------------------------------------------"
 # Use the new cluster-native build pipeline (Kaniko + S3 + Pulsar)
 # This prevents host resource exhaustion during builds
 # We wait for completion here to ensure Step 2 has the images it needs.
-    bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
+# PARALLELISM=2: limit concurrent Kaniko builds to reduce API server load.
+# Default of 4 concurrent builds + kubectl exec streams overwhelms the API server
+# when Pulsar/APM are still settling. Two at a time is sufficient for 11 services.
+    PARALLELISM=2 bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
 mark_step_done "rag-images"
 STEP_TS_END=$(date +%s)
 log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"
