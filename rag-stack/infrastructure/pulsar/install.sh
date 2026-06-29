@@ -150,7 +150,7 @@ metadata:
   namespace: apache-pulsar
 rules:
 - apiGroups: [""]
-  resources: ["configmaps", "endpoints", "services", "pods"]
+  resources: ["configmaps", "secrets", "endpoints", "services", "pods"]
   verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
