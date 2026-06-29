@@ -122,7 +122,10 @@ if [[ -z "$PRESIGNED_URL" || -z "$TARBALL" ]]; then
 
     # Stream tarball directly to S3 via stdin to avoid 'tar' dependency in the container
     # Capture pre-signed URL to avoid AWS SDK credential issues in Kaniko
-    PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | $KUBECTL exec -i -n "$NAMESPACE" "$UPLOADER_POD" -- \
+    # timeout 180: kubectl exec uses a websocket; if the API server drops the connection
+    # the exec process blocks indefinitely (i/o timeout on TCP doesn't self-resolve).
+    # A hard timeout ensures the build fails fast rather than hanging forever.
+    PRESIGNED_URL=$(cat "$SAFE_TMP_DIR/$TARBALL" | timeout 180 $KUBECTL exec -i -n "$NAMESPACE" "$UPLOADER_POD" -- \
       sh -c "aws --endpoint-url http://\$S3_ENDPOINT s3 cp - s3://\$BUCKET_NAME/$TARBALL > /dev/null && aws --endpoint-url http://\$S3_ENDPOINT s3 presign s3://\$BUCKET_NAME/$TARBALL --expires-in 3600")
 
     if [[ "$UPLOAD_ONLY" == "true" ]]; then
@@ -194,7 +197,7 @@ fi
 $KUBECTL wait --for=condition=Ready "pod/$PULSAR_POD" -n "$PULSAR_NAMESPACE" --timeout=120s
 
 TASK_B64="$(printf '%s' "$TASK_JSON" | base64 -w0)"
-$KUBECTL exec -n "$PULSAR_NAMESPACE" "$PULSAR_POD" -- sh -lc "
+timeout 60 $KUBECTL exec -n "$PULSAR_NAMESPACE" "$PULSAR_POD" -- sh -lc "
 set -eu
 TMP_MSG=\$(mktemp)
 PULSAR_LOG_CONF=\$(mktemp /tmp/pulsar-log4j2-XXXXXX.yaml)
