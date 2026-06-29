@@ -40,7 +40,7 @@ export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 
 source "$REPO_DIR/../scripts/journal-helper.sh"
 
-if [[ -z "$SERVICE" ]]; then
+if [[ -z "$SERVICE" && "$UPLOAD_ONLY" != "true" ]]; then
     echo "Usage: $0 <service-name> [version]"
     exit 1
 fi
