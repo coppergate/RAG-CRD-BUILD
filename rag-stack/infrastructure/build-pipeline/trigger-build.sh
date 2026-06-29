@@ -197,7 +197,7 @@ fi
 $KUBECTL wait --for=condition=Ready "pod/$PULSAR_POD" -n "$PULSAR_NAMESPACE" --timeout=120s
 
 TASK_B64="$(printf '%s' "$TASK_JSON" | base64 -w0)"
-timeout 60 $KUBECTL exec -n "$PULSAR_NAMESPACE" "$PULSAR_POD" -- sh -lc "
+$KUBECTL exec -n "$PULSAR_NAMESPACE" "$PULSAR_POD" -- sh -lc "
 set -eu
 TMP_MSG=\$(mktemp)
 PULSAR_LOG_CONF=\$(mktemp /tmp/pulsar-log4j2-XXXXXX.yaml)

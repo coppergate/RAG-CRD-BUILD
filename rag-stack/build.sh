@@ -503,9 +503,17 @@ main() {
 		if [[ ${#SERVICES_TO_BUILD[@]} -gt 0 ]]; then
 			if [[ "$MODE" == "cluster" ]]; then
 				log "Preparing shared source context for ${#SERVICES_TO_BUILD[@]} services..."
-				local UPLOAD_OUT=$(bash "$REPO_DIR/infrastructure/build-pipeline/trigger-build.sh" --upload-only 2>&1)
+				local UPLOAD_OUT
+				local UPLOAD_EXIT=0
+				UPLOAD_OUT=$(bash "$REPO_DIR/infrastructure/build-pipeline/trigger-build.sh" --upload-only 2>&1) || UPLOAD_EXIT=$?
 				export SOURCE_URL=$(echo "$UPLOAD_OUT" | grep "SOURCE_URL=" | cut -d= -f2-)
 				export SOURCE_TARBALL=$(echo "$UPLOAD_OUT" | grep "SOURCE_TARBALL=" | cut -d= -f2-)
+				if [[ -z "$SOURCE_URL" || $UPLOAD_EXIT -ne 0 ]]; then
+					log "ERROR: Shared source upload failed (exit=$UPLOAD_EXIT). Output:"
+					echo "$UPLOAD_OUT" >&2
+					log "Aborting build — fix the S3 upload issue and retry."
+					return 1
+				fi
 				log "Shared Context: $SOURCE_TARBALL"
 			fi
 
