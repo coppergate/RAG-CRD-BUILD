@@ -851,15 +851,10 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 								"--cache=true",
 								"--cache-repo=" + pushRegistry + "/kaniko-cache",
 								"--registry-certificate=" + pushRegistry + "=/kaniko/ssl/certs/ca-certificates.crt",
-								// Bind the shared Go module cache PVC into the build chroot.
-								// PVC mounted at /go-module-cache in the pod; --volume maps it to
-								// /go/pkg/mod inside the build so go mod download reuses cached modules.
-								"--volume=/go-module-cache:/go/pkg/mod",
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "workspace", MountPath: "/workspace"},
 								{Name: "registry-ca", MountPath: "/kaniko/ssl/certs/ca-certificates.crt", SubPath: "ca.crt"},
-								{Name: "go-module-cache", MountPath: "/go-module-cache"},
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
@@ -876,7 +871,6 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 					Volumes: []corev1.Volume{
 						{Name: "workspace", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 						{Name: "registry-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "registry-ca-cm"}}}},
-						{Name: "go-module-cache", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: "go-module-cache"}}},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
 					NodeSelector: map[string]string{
