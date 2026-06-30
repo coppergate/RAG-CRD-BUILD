@@ -16728,6 +16728,9 @@ spec:
       containers:
         - args:
             - --leader-elect
+            - --leader-elect-lease-duration=60s
+            - --leader-elect-renew-deadline=40s
+            - --leader-elect-retry-period=10s
           command:
             - /manager
           env:

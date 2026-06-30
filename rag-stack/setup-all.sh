@@ -403,20 +403,25 @@ if [[ -f "$VERSION_FILE" ]]; then
     ORCH_URL="http://${LB_IP}/api/build"
     H_HEADER="Host: build-orchestrator.hierocracy.home"
     
-    # Check if we can reach it
-    if curl -s -I -H "$H_HEADER" "$ORCH_URL/versions" >/dev/null; then
+    # Check if we can reach it (10s connect timeout, 15s max-time)
+    if curl -s -I -H "$H_HEADER" "$ORCH_URL/versions" \
+        --connect-timeout 5 --max-time 15 >/dev/null 2>&1; then
         jq -r 'to_entries[] | "\(.key) \(.value.version)"' "$VERSION_FILE" | while read -r svc ver; do
             echo "  Seeding $svc: $ver"
-            curl -s -X POST -H "$H_HEADER" "$ORCH_URL/versions/$svc" -d "{\"version\": \"$ver\"}" >/dev/null
+            curl -s -X POST -H "$H_HEADER" "$ORCH_URL/versions/$svc" \
+                --connect-timeout 5 --max-time 15 \
+                -d "{\"version\": \"$ver\"}" >/dev/null
         done
-        
+
         # Seed journals if available
         if [[ -d "/tmp/.build_journal_junie" ]]; then
             find "/tmp/.build_journal_junie" -name "*.last_hash" | while read -r jf; do
                 svc=$(basename "$jf" .last_hash)
                 hash=$(cat "$jf")
                 echo "  Seeding journal for $svc"
-                curl -s -X POST -H "$H_HEADER" "$ORCH_URL/journals/$svc" -d "{\"last_hash\": \"$hash\"}" >/dev/null
+                curl -s -X POST -H "$H_HEADER" "$ORCH_URL/journals/$svc" \
+                    --connect-timeout 5 --max-time 15 \
+                    -d "{\"last_hash\": \"$hash\"}" >/dev/null
             done
         fi
         mark_step_done "migrate-build-metadata"

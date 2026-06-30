@@ -220,7 +220,7 @@ for crd in \
   catalogsources.operators.coreos.com \
   subscriptions.operators.coreos.com \
   installplans.operators.coreos.com; do
-  $KUBECTL wait --for condition=established --timeout=60s "crd/$crd" 2>/dev/null || true
+  $KUBECTL wait --for condition=established --timeout=180s "crd/$crd" 2>/dev/null || true
 done
 
 echo "installing olm"
@@ -279,9 +279,14 @@ mark_step_done "cert-manager"
 
 
 echo ""
-# for some reason this next step fails if it happens too soon after the deploy?
-echo "Waiting for 120s to let the cert-manager catch its breath before we ask for the test cert"
-sleep 120;
+# Wait for cert-manager webhook to be ready before requesting test cert.
+echo "Waiting for cert-manager webhook to be Ready before creating test cert..."
+$KUBECTL wait --for=condition=Ready pods \
+    -l app.kubernetes.io/component=webhook \
+    -n cert-manager \
+    --timeout=300s \
+    --request-timeout=20s 2>/dev/null || \
+  echo "WARNING: cert-manager webhook pods not yet Ready — proceeding anyway"
 
 echo ""
 echo "test cert-manager deploy. this should create a self-signed certificate without error. see: cert-manager/test-resources.yaml"
@@ -313,8 +318,11 @@ spec:
 EOF
 
 echo ""
-echo "Waiting for 25s to let the cert-manager make the test cert available"
-sleep 25
+echo "Waiting for test cert to be Ready (timeout: 120s)..."
+$KUBECTL wait --for=condition=Ready certificate/selfsigned-cert \
+    -n cert-manager-test \
+    --timeout=120s \
+    --request-timeout=20s 2>/dev/null || true
 
 echo "checking cert.  review this and ensure it looks like a valid cert"
 $KUBECTL describe certificate -n cert-manager-test
@@ -349,9 +357,10 @@ spec:
     name: test-selfsigned
 EOF
 
-echo "waiting for 1 minute"
-
-sleep 1m;
+echo "waiting for cert-manager test namespace termination..."
+$KUBECTL wait --for=delete namespace/cert-manager-test \
+    --timeout=120s \
+    --request-timeout=20s 2>/dev/null || true
 fi
 
 if ! is_step_done "local-registry"; then

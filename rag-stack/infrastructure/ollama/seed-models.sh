@@ -133,7 +133,7 @@ EOF
   $KUBECTL delete pod "${SEEDER_NAME}-check" -n "$NAMESPACE" --ignore-not-found --wait=true >/dev/null 2>&1 || true
   printf '%s\n' "$CHECK_MANIFEST" | $KUBECTL apply -f - >/dev/null
   CHECK_OUTPUT="$(
-    $KUBECTL wait --for=condition=Ready pod/"${SEEDER_NAME}-check" -n "$NAMESPACE" --timeout=30s >/dev/null 2>&1 || true
+    $KUBECTL wait --for=condition=Ready pod/"${SEEDER_NAME}-check" -n "$NAMESPACE" --timeout=300s >/dev/null 2>&1 || true
     $KUBECTL wait --for=jsonpath='{.status.phase}'=Succeeded pod/"${SEEDER_NAME}-check" -n "$NAMESPACE" --timeout=300s >/dev/null 2>&1 || true
     $KUBECTL logs "${SEEDER_NAME}-check" -n "$NAMESPACE" --tail=20 2>/dev/null || true
   )"
@@ -266,7 +266,7 @@ EOF
   printf '%s\n' "$SEEDER_MANIFEST" | $KUBECTL apply -f -
 
   echo "  Waiting for seeder pod $SEEDER_NAME to complete (timeout 1800s)..."
-  if $KUBECTL wait --for=condition=Ready pod/"$SEEDER_NAME" -n "$NAMESPACE" --timeout=30s 2>/dev/null; then
+  if $KUBECTL wait --for=condition=Ready pod/"$SEEDER_NAME" -n "$NAMESPACE" --timeout=300s 2>/dev/null; then
     true  # pod is running
   fi
   $KUBECTL wait --for=jsonpath='{.status.phase}'=Succeeded pod/"$SEEDER_NAME" -n "$NAMESPACE" --timeout=1800s 2>/dev/null || true

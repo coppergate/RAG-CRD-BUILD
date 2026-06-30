@@ -202,7 +202,7 @@ if ! is_done 30.helmInstall; then
       --set bookkeeper.volumes.ledgers.storageClassName=rook-ceph-block \
       --set pulsar_manager.volumes.persistence=true \
       --set pulsar_manager.volumes.data.storageClassName=rook-ceph-block \
-      --timeout 10m
+      --timeout 20m
   mark_done 30.helmInstall
 else
   log "Helm install/upgrade already completed (journal 30.helmInstall)"

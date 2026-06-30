@@ -166,18 +166,18 @@ done
 
 # Wait for inference-node pods to be ready before seeding models
 echo "Waiting for inference-node Ollama pods to be ready..."
-$KUBECTL rollout status deploy/ollama-llama3 -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-qwen32b -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-embed-0 -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-planner-cpu-0 -n llms-ollama --timeout=120s || true
+$KUBECTL rollout status deploy/ollama-llama3 -n llms-ollama --timeout=600s || true
+$KUBECTL rollout status deploy/ollama-qwen32b -n llms-ollama --timeout=600s || true
+$KUBECTL rollout status deploy/ollama-embed-0 -n llms-ollama --timeout=600s || true
+$KUBECTL rollout status deploy/ollama-planner-cpu-0 -n llms-ollama --timeout=600s || true
 
 # Wait for worker-node pods to be ready
 echo "Waiting for worker-node Ollama pods to be ready..."
 for IDX in 2 3 4 5 6 7 8 9; do
-  $KUBECTL rollout status deploy/ollama-embed-${IDX} -n llms-ollama --timeout=120s || true
+  $KUBECTL rollout status deploy/ollama-embed-${IDX} -n llms-ollama --timeout=600s || true
 done
 for IDX in 2 3 4 5; do
-  $KUBECTL rollout status deploy/ollama-planner-cpu-${IDX} -n llms-ollama --timeout=120s || true
+  $KUBECTL rollout status deploy/ollama-planner-cpu-${IDX} -n llms-ollama --timeout=600s || true
 done
 
 # Seed models from local registry into PVCs

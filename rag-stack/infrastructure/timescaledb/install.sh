@@ -68,7 +68,7 @@ if should_run_step "timescaledb-tls" "$KUBECTL get certificate timescaledb-serve
   $KUBECTL apply -f $TIMESCALEDB_INSTALL/timescaledb-tls.yaml
   # Wait for the certificate to be ready
   echo "Waiting for TimescaleDB server certificate to be ready..."
-  $KUBECTL wait --for=condition=Ready certificate/timescaledb-server-cert -n $NAMESPACE --timeout=60s
+  $KUBECTL wait --for=condition=Ready certificate/timescaledb-server-cert -n $NAMESPACE --timeout=300s
   mark_step_done "timescaledb-tls"
 fi
 
@@ -94,7 +94,18 @@ fi
 
 echo "Waiting for TimescaleDB instances to be ready (this can take several minutes)..."
 echo "Check status with: $KUBECTL get cluster -n $NAMESPACE && $KUBECTL -n $NAMESPACE get pods -l cnpg.io/cluster=timescaledb"
+# Wait for at least one pod to be Running before returning. Subsequent steps
+# (db-adapter schema migrations) exec into these pods and fail if none are ready.
+echo "Waiting for TimescaleDB pods to be Ready (timeout: 1200s)..."
+if ! $KUBECTL wait --for=condition=Ready pods \
+    -l cnpg.io/cluster=timescaledb \
+    -n "$NAMESPACE" \
+    --timeout=1200s \
+    --request-timeout=20s 2>/dev/null; then
+  echo "WARNING: TimescaleDB pods did not reach Ready within 1200s. Check cluster status before proceeding."
+  $KUBECTL get pods -n "$NAMESPACE" -l cnpg.io/cluster=timescaledb 2>/dev/null || true
+fi
 
 clear_journal
 
-echo "TimescaleDB Installation Triggered."
+echo "TimescaleDB Installation Complete."

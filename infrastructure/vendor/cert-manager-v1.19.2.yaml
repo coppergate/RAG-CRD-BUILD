@@ -13273,6 +13273,9 @@ spec:
           args:
           - --v=2
           - --leader-election-namespace=kube-system
+          - --leader-elect-lease-duration=60s
+          - --leader-elect-renew-deadline=40s
+          - --leader-elect-retry-period=10s
           ports:
           - containerPort: 9402
             name: http-metrics
@@ -13337,6 +13340,9 @@ spec:
           - --v=2
           - --cluster-resource-namespace=$(POD_NAMESPACE)
           - --leader-election-namespace=kube-system
+          - --leader-elect-lease-duration=60s
+          - --leader-elect-renew-deadline=40s
+          - --leader-elect-retry-period=10s
           - --acme-http01-solver-image=10.0.0.1:5000/quay.io/jetstack/cert-manager-acmesolver:v1.19.2
           - --max-concurrent-challenges=60
           ports:

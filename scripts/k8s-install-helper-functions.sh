@@ -29,7 +29,7 @@ advanceConsole(){
 # WaitForPodsRunning namespace grepString sleepTime
 function WaitForPodsRunning() {
 
-	ABORT_COUNT=20
+	ABORT_COUNT=${WAIT_ABORT_COUNT:-60}
 	currentCount=0
 	
 	notRunning=1
@@ -103,7 +103,7 @@ function WaitForPodsRunning() {
 # WaitForDeploymentToComplete namespace grepString sleepTime
 function WaitForDeploymentToComplete() {
 
-	ABORT_COUNT=20
+	ABORT_COUNT=${WAIT_ABORT_COUNT:-60}
 	currentCount=0
 	
 	notRunning=1
@@ -176,7 +176,7 @@ function WaitForDeploymentToComplete() {
 # WaitForDeploymentToComplete namespace grepString sleepTime
 function WaitForServiceToStart() {
 
-	ABORT_COUNT=20
+	ABORT_COUNT=${WAIT_ABORT_COUNT:-60}
 	currentCount=0
 	
 	notRunning=1
