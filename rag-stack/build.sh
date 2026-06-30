@@ -530,8 +530,8 @@ main() {
 	fi
 
     if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
-        log "Waiting for cluster builds to complete (timeout: 1800s)..."
-        local deadline=$((SECONDS + 1800))
+        log "Waiting for cluster builds to complete (timeout: 3600s)..."
+        local deadline=$((SECONDS + 3600))
 
         # Read the list of "svc ver" pairs written by build_service() subshells.
         # This is reliable because the API cannot store a custom last_build value
