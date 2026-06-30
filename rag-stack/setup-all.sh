@@ -123,6 +123,9 @@ fi
 
 if ! is_step_done "embed-gateway-rbac"; then
 echo "--- 1.3 Applying Embed Gateway RBAC ---"
+# The embed-gateway Role/RoleBinding live in llms-ollama (Ollama's namespace).
+# Ollama is installed later, so ensure the namespace exists before applying RBAC.
+$KUBECTL get namespace llms-ollama >/dev/null 2>&1 || $KUBECTL create namespace llms-ollama
 $KUBECTL apply -f "$REPO_DIR/infrastructure/embed-gateway/rbac.yaml"
 mark_step_done "embed-gateway-rbac"
 fi
