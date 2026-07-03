@@ -1,21 +1,26 @@
 #!/bin/bash
-## setup-complete.sh - Master Orchestration Script
+## setup-complete-no-gpu.sh - Master Orchestration Script (No GPU)
 ## To be executed on host: hierophant
-## Usage: FRESH_INSTALL=true [FORCE_REINIT=true] [REPO_DIR=<path>] ./setup-complete.sh [--gpu]
+## Usage: FRESH_INSTALL=true [FORCE_REINIT=true] [REPO_DIR=<path>] ./setup-complete-no-gpu.sh
 ## Purpose:
-#     End-to-end bootstrap:
+#     End-to-end bootstrap WITHOUT GPU/inference components:
 #       basic infra (Rook-Ceph/Traefik),
 #       APM (LGTM+Alloy),
-#       NVIDIA stack (skipped with --no-gpu),
 #       local registry,
 #       build+push RAG images,
-#       deploy RAG stack;
+#       deploy RAG stack (no Ollama);
 #       resumable via scripts/journal-helper.sh.
+#
+# Omitted vs setup-complete.sh:
+#   - llm-models-pre-populate (no inference PVCs to seed)
+#   - ollama image group excluded from image prefetch
+#   - NVIDIA GPU operator step
+#   - setup-all.sh replaced with setup-all-no-gpu.sh
+#
 ## Config (optional):
 # FRESH_INSTALL=true -> clean from-scratch where supported;
 # FORCE_REINIT=true -> force Pulsar BookKeeper rejoin;
 # REPO_DIR -> override RAG stack path;
-# --gpu -> install NVIDIA GPU operator (default: skipped);
 # set NO_PROXY to include cluster CIDRs and .hierocracy.home;
 # child scripts default to KUBECTL=/home/k8s/kube/kubectl and KUBECONFIG=/home/k8s/kube/config/kubeconfig.
 #
@@ -24,14 +29,6 @@ set -Eeuo pipefail
 #
 BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
-
-# --- Argument parsing ---
-for arg in "$@"; do
-  case "$arg" in
-    --gpu) export WITH_GPU=true ;;
-    *) echo "Unknown argument: $arg"; exit 1 ;;
-  esac
-done
 
 # Source of truth for versioning
 VERSION_FILE="$BASE_DIR/CURRENT_VERSION"
@@ -49,7 +46,8 @@ if [[ -z "${VERSION:-}" ]]; then
 fi
 export VERSION
 IMAGE_PREFETCH_ON_START="${IMAGE_PREFETCH_ON_START:-true}"
-IMAGE_PREFETCH_GROUPS="${IMAGE_PREFETCH_GROUPS:-bootstrap,storage,apm-core,pulsar-core,registry,data-services,ollama,helm-runtime}"
+# Exclude 'ollama' — inference nodes are not present in no-gpu installs
+IMAGE_PREFETCH_GROUPS="${IMAGE_PREFETCH_GROUPS:-bootstrap,storage,apm-core,pulsar-core,registry,data-services,helm-runtime}"
 IMAGE_PREFETCH_PARALLELISM="${IMAGE_PREFETCH_PARALLELISM:-3}"
 
 # Tools & context (explicit paths per guidelines)
@@ -78,7 +76,7 @@ fi
 # Keepalive: refresh sudo credentials every 50s in the background
 ( while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done & )
 
-INSTALL_TIMING_LOG="${INSTALL_TIMING_LOG:-$JOURNAL_FILE_DIR/setup-complete-timing.log}"
+INSTALL_TIMING_LOG="${INSTALL_TIMING_LOG:-$JOURNAL_FILE_DIR/setup-complete-no-gpu-timing.log}"
 touch "$INSTALL_TIMING_LOG"
 chmod 600 "$INSTALL_TIMING_LOG" 2>/dev/null || true
 
@@ -93,7 +91,6 @@ log_step_timing() {
     end_iso="$(date -u -d "@$end_epoch" +'%Y-%m-%dT%H:%M:%SZ')"
     line="timing|step=${step_name}|status=${status}|start=${start_iso}|end=${end_iso}|duration_seconds=${duration}"
     echo "$line" | tee -a "$INSTALL_TIMING_LOG" >/dev/null
-    # Append timing marker to the journal file as requested, while keeping is_step_done matching intact.
     echo "$line" >> "$JOURNAL_FILE"
 }
 
@@ -108,10 +105,6 @@ wait_namespace_stable() {
     echo "Waiting for namespace '$ns' to stabilize (timeout: ${timeout}s)..."
     while (( elapsed < timeout )); do
         local not_ready
-        # Count pods that are not yet Running, Completed, or Succeeded.
-        # Exclude Jobs (they have owner references we can't easily filter here, but
-        # phase=Succeeded covers completed job pods). CrashLoopBackOff is counted as
-        # not-ready so we don't advance until the pod either recovers or the operator restarts it.
         not_ready=$($KUBECTL get pods -n "$ns" --no-headers \
             --request-timeout=15s 2>/dev/null \
             | grep -cvE '^\S+\s+\S+\s+(Running|Completed|Succeeded)' || true)
@@ -131,20 +124,16 @@ wait_namespace_stable() {
 }
 
 echo "--- 0. Verifying Cluster Registry Trust ---"
-# Check if registry mirrors are configured on nodes. If not, patch and reboot.
-# This ensures that Step 1.6 (Cluster-Native Builds) and Step 2 (Deployment) can pull images.
 if ! is_step_done "registry-trust-verified"; then
     STEP_TS_START=$(date +%s)
     if [[ "${FRESH_INSTALL:-false}" == "true" ]]; then
         echo "FRESH_INSTALL detected. Skipping pre-check; registry trust will be applied in Step 1.5."
     else
         echo "Checking registry configuration on nodes..."
-        # Heuristic: Check if 'registry.hierocracy.home:5000' is in the mirrors of the first node
         FIRST_NODE=$($KUBECTL get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' --request-timeout=5s 2>/dev/null || echo "")
-        
+
         NEEDS_PATCH=false
         if [[ -n "$FIRST_NODE" ]]; then
-            # Check mirrors using talosctl. We use the LB IP as the primary indicator.
             if ! $TALOSCTL -n "$FIRST_NODE" get machineconfig -o yaml 2>/dev/null | grep -q "registry.hierocracy.home:5000"; then
                 NEEDS_PATCH=true
             fi
@@ -154,12 +143,8 @@ if ! is_step_done "registry-trust-verified"; then
 
         if [[ "$NEEDS_PATCH" == "true" ]]; then
             echo "Registry trust missing or outdated on nodes. Applying fast-track patch and reboot..."
-            # Apply the YAML patch to all nodes (uses infrastructure/registry/apply-patch.sh)
-            # This is safe to run before resources are deployed.
             bash "$BASE_DIR/infrastructure/registry/apply-patch.sh"
-            
-            # Perform a simple serial reboot of all nodes
-            # We skip drain/ceph checks here for simplicity at the start of setup
+
             IPS=$($TALOSCTL config info --output jsonpath='{.nodes[*]}' 2>/dev/null || echo "")
             for ip in $IPS; do
                 echo "  - Rebooting node $ip..."
@@ -179,7 +164,7 @@ echo "--- 0.5. Node Labeling (Idempotent) ---"
 bash "$BASE_DIR/scripts/setup-node-labels.sh"
 
 echo "===================================================="
-echo "Starting Complete Kubernetes Build and RAG Stack"
+echo "Starting Complete Kubernetes Build and RAG Stack (No GPU)"
 echo "Target service image version: $VERSION"
 echo "===================================================="
 
@@ -188,15 +173,15 @@ STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1: Basic Infrastructure Setup (includes Rook-Ceph)"
 echo "----------------------------------------------------"
+# Point wipe-disks.sh at the no-GPU disk layout (worker-0/3: vdb/vdc/vdd; worker-1/2: vdb/vdc).
+# The full setup uses vdb-vdf on worker-0 which don't exist in the no-GPU VM layout.
+export WIPE_DISKS_YAML="$BASE_DIR/infrastructure/rook-ceph/wipe-disks-no-gpu.yaml"
+export WIPE_DISKS_JOB_SELECTOR="app=wipe-disks-no-gpu"
 $BASE_DIR/setup-01-basic.sh
 mark_step_done "basic"
 STEP_TS_END=$(date +%s)
 log_step_timing "basic" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
-
-# Ceph readiness is now guaranteed inside the 'rook-ceph-cluster' step in
-# setup-01-basic.sh — it blocks until HEALTH_OK/WARN and CSI pods are running
-# before marking the step done. No separate gate needed here.
 
 if ! is_step_done "headlamp"; then
 STEP_TS_START=$(date +%s)
@@ -204,7 +189,6 @@ echo ""
 echo "Step 1.1: Headlamp Setup (Replacing Kubernetes Dashboard)"
 echo "----------------------------------------------------"
 if [[ -d "$BASE_DIR/infrastructure/kubernetes-dashboard" ]]; then
-    # Try to uninstall if the directory still exists
     bash $BASE_DIR/infrastructure/headlamp/uninstall-old-dashboard.sh || true
 fi
 bash $BASE_DIR/infrastructure/headlamp/headlamp.sh
@@ -225,17 +209,8 @@ STEP_TS_END=$(date +%s)
 log_step_timing "registry" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "llm-models-pre-populate"; then
-STEP_TS_START=$(date +%s)
-echo ""
-echo "Step 1.1.2: LLM Model Pre-population into Local Registry"
-echo "----------------------------------------------------"
-# This ensures that Step 2 (Deployment) can seed models from the local registry
-bash "$BASE_DIR/rag-stack/infrastructure/ollama/push-models-to-cluster.sh"
-mark_step_done "llm-models-pre-populate"
-STEP_TS_END=$(date +%s)
-log_step_timing "llm-models-pre-populate" "$STEP_TS_START" "$STEP_TS_END" "ok"
-fi
+# Step 1.1.2 (llm-models-pre-populate) is intentionally omitted:
+# No inference nodes are present — there are no Ollama PVCs to seed models into.
 
 if [[ "$IMAGE_PREFETCH_ON_START" == "true" ]] && ! is_step_done "image-prefetch-initial"; then
 STEP_TS_START=$(date +%s)
@@ -268,21 +243,11 @@ wait_namespace_stable "monitoring" 300
 mark_step_done "apm-stabilize"
 fi
 
-# NOTE: NVIDIA GPU operator is intentionally deferred to the end of the install.
-# The V100's PCIe initialization generates device resets and bus transactions that
-# cause hypervisor I/O latency spikes during KVM VM scheduling, which destabilizes
-# the Kubernetes control plane (etcd slow ops → controller lease timeouts → crash loops).
-# GPU resources are NOT needed until inference workloads start. Set SKIP_GPU=true to
-# skip GPU setup entirely (useful for cluster rebuilds and CI environments).
-# The step is journaled as "nvidia" so it can be resumed independently.
-
 if ! is_step_done "pulsar"; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.8: Apache Pulsar Infrastructure"
 echo "----------------------------------------------------"
-# Ceph health was already gated in setup-01-basic.sh (rook-ceph-cluster step). Verify OSDs still stable.
-# Additional check: verify all OSDs are running (use jsonpath — avoids fragile container-count string matching)
 OSD_TOTAL=$($KUBECTL -n rook-ceph get pods -l app=rook-ceph-osd \
     -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep -c . || echo 0)
 OSD_READY=$($KUBECTL -n rook-ceph get pods -l app=rook-ceph-osd \
@@ -294,7 +259,6 @@ if (( OSD_READY < OSD_TOTAL )); then
     echo "WARNING: Not all OSDs are ready. Waiting 60s for stragglers..."
     sleep 60
 fi
-# REPO_DIR is needed for pulsar scripts
 export REPO_DIR="$BASE_DIR/rag-stack"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/install.sh
 mark_step_done "pulsar"
@@ -309,7 +273,6 @@ echo "Step 1.5.8.1: Pulsar Initialization"
 echo "----------------------------------------------------"
 bash $BASE_DIR/rag-stack/infrastructure/pulsar/init-rag-pulsar.sh
 
-# Verify tenant and namespaces were created
 echo "Verifying Pulsar tenants and namespaces..."
 TOOLSET_POD=$($KUBECTL get pods -n apache-pulsar -l component=toolset -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
 if [[ -n "$TOOLSET_POD" ]]; then
@@ -394,10 +357,6 @@ if ! is_step_done "pre-build-stabilize"; then
 echo ""
 echo "Step 1.5.9: Wait for all infrastructure namespaces to stabilize"
 echo "----------------------------------------------------"
-# Ensure Pulsar, APM, TimescaleDB, and the build-pipeline controller are all healthy
-# before launching Kaniko builds. Kaniko jobs + kubectl exec S3 uploads generate the
-# heaviest API server load in the install; starting them against an unsettled cluster
-# causes i/o timeouts and leader election failures across unrelated components.
 wait_namespace_stable "apache-pulsar"    600
 wait_namespace_stable "monitoring"       300
 wait_namespace_stable "build-pipeline"   180
@@ -410,10 +369,7 @@ STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.6: Build and Push RAG Images (Cluster-Native)"
 echo "----------------------------------------------------"
-# Use the new cluster-native build pipeline (Kaniko + S3 + Pulsar)
-# This prevents host resource exhaustion during builds
-# We wait for completion here to ensure Step 2 has the images it needs.
-    bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
+bash "$BASE_DIR/rag-stack/build.sh" --mode cluster --wait
 mark_step_done "rag-images"
 STEP_TS_END=$(date +%s)
 log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"
@@ -422,37 +378,20 @@ fi
 if ! is_step_done "rag-stack"; then
 STEP_TS_START=$(date +%s)
 echo ""
-echo "Step 2: RAG Stack Deployment"
+echo "Step 2: RAG Stack Deployment (no GPU)"
 echo "----------------------------------------------------"
-# We can either call setup-all.sh or we can un-comment the infra parts in it if needed.
-# Since setup-01-basic.sh already handles Rook/Traefik, we only need the RAG services.
-
-# Ensure REPO_DIR is set for the RAG stack
 export REPO_DIR="$BASE_DIR/rag-stack"
-    VERSION="$VERSION" $REPO_DIR/setup-all.sh
+    VERSION="$VERSION" $REPO_DIR/setup-all-no-gpu.sh
 mark_step_done "rag-stack"
 STEP_TS_END=$(date +%s)
 log_step_timing "rag-stack" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if [[ "${WITH_GPU:-false}" == "true" ]]; then
-  if ! is_step_done "nvidia"; then
-    STEP_TS_START=$(date +%s)
-    echo ""
-    echo "Step 3: NVIDIA GPU Operator (deferred — runs after full RAG stack)"
-    echo "----------------------------------------------------"
-    bash $BASE_DIR/infrastructure/nvidia-operator.sh
-    mark_step_done "nvidia"
-    STEP_TS_END=$(date +%s)
-    log_step_timing "nvidia" "$STEP_TS_START" "$STEP_TS_END" "ok"
-  fi
-else
-  echo "GPU skipped (pass --gpu to enable) — run nvidia-operator.sh manually when ready"
-fi
+# NVIDIA GPU operator step intentionally omitted — no inference nodes present.
 
 clear_journal
 
 echo ""
 echo "===================================================="
-echo "Complete Build Finished Successfully"
+echo "Complete Build (No GPU) Finished Successfully"
 echo "===================================================="
