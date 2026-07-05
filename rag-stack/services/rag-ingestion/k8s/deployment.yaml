@@ -57,6 +57,8 @@ spec:
           value: "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
         - name: OLLAMA_MODEL
           value: "all-minilm:l6-v2"
+        - name: OLLAMA_REQUIRED
+          value: "true"
         - name: TLS_CERT
           value: "/etc/ssl/certs/tls.crt"
         - name: TLS_KEY

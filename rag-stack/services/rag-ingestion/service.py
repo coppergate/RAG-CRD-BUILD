@@ -96,6 +96,7 @@ QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 # the current ollama deploy does not support https
 _ollama_default = "http://ollama.llms-ollama.svc.cluster.local:11434"
 OLLAMA_URL = os.getenv("OLLAMA_URL", _ollama_default)
+OLLAMA_REQUIRED = os.getenv("OLLAMA_REQUIRED", "true").lower() != "false"
 DEFAULT_EMBEDDING_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "vectors")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
@@ -824,14 +825,15 @@ async def readyz():
     except Exception as e:
         errors["pulsar"] = str(e)
 
-    # Check Ollama
-    try:
-        logger.info(f"Checking Ollama health at: {OLLAMA_URL}/api/tags")
-        resp = http_session.get(f"{OLLAMA_URL}/api/tags", timeout=5)
-        resp.raise_for_status()
-    except Exception as e:
-        logger.error(f"Ollama health check failed for {OLLAMA_URL}: {e}")
-        errors["ollama"] = str(e)
+    # Check Ollama (skipped when OLLAMA_REQUIRED=false, e.g. no-GPU installs)
+    if OLLAMA_REQUIRED:
+        try:
+            logger.info(f"Checking Ollama health at: {OLLAMA_URL}/api/tags")
+            resp = http_session.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+            resp.raise_for_status()
+        except Exception as e:
+            logger.error(f"Ollama health check failed for {OLLAMA_URL}: {e}")
+            errors["ollama"] = str(e)
 
     # Check S3
     try:
