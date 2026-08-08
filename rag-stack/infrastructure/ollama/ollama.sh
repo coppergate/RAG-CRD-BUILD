@@ -105,13 +105,56 @@ EOF
 # We revert image.repository to the base Ollama image and specify models to pull from the local registry.
 REGISTRY="registry.container-registry.svc.cluster.local:5000"
 
+# --- GPU pinning: resolve the V100 by UUID -----------------------------------
+# inference-0 has a MIXED GPU pool (1x V100 32GB + 2x P4 8GB) all advertised as
+# one fungible nvidia.com/gpu. The GPU values files therefore set
+# ollama.gpu.enabled=false and pin the card by UUID instead, via the ConfigMap
+# built here. See values-qwen32b.yaml for why node-affinity is not an option.
+#
+# TODO(revisit once the cluster is stable): both GPU pods currently share the
+# V100, preserving the VRAM tuning written for the old single-GPU node
+# (OLLAMA_MAX_LOADED_MODELS is set accordingly in each values file). With three
+# cards available, ollama-llama3 could move to a P4 (gpu-p4-0-uuid) to free
+# ~5GB of V100 VRAM for the 32B executor. That also requires trimming the 32B
+# models from ollama-llama3's seed list in seed-models.sh (an 8GB P4 cannot
+# load them) and forcing its OLLAMA_MAX_LOADED_MODELS to 1. Deferred
+# deliberately: it changes model routing as well as placement.
+echo "--- Resolving GPU UUID for pinning ---"
+GPU_NODE=$($KUBECTL get nodes -l role=inference-node \
+  -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+if [[ -z "$GPU_NODE" ]]; then
+  echo "ERROR: no node carries role=inference-node — cannot pin a GPU." >&2
+  echo "       scripts/setup-node-labels.sh should have applied it." >&2
+  exit 1
+fi
+
+# Label published by kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh
+V100_UUID=$($KUBECTL get node "$GPU_NODE" \
+  -o jsonpath='{.metadata.labels.hierocracy\.home/gpu-v100-uuid}' 2>/dev/null || echo "")
+if [[ -z "$V100_UUID" ]]; then
+  echo "ERROR: node $GPU_NODE has no hierocracy.home/gpu-v100-uuid label." >&2
+  echo "       Re-run 52-install-gpu-operator.sh in kubernetes-setup/new-setup-external-gpu" >&2
+  echo "       to republish the GPU UUID labels, then retry." >&2
+  exit 1
+fi
+echo "  - $GPU_NODE V100 = $V100_UUID"
+
+# NVIDIA_DRIVER_CAPABILITIES must include 'compute' for CUDA; 'utility' alone
+# only yields nvidia-smi. Consumed via extraEnvFrom in both GPU values files.
+$KUBECTL create configmap ollama-gpu-pin-v100 -n llms-ollama \
+  --from-literal=NVIDIA_VISIBLE_DEVICES="$V100_UUID" \
+  --from-literal=NVIDIA_DRIVER_CAPABILITIES="compute,utility" \
+  --dry-run=client -o yaml | $KUBECTL apply -f -
+
 # Deploy Ollama WITHOUT model pulling — models are seeded separately via seed-models.sh
 # This avoids long postStart hangs during install.
 #
-# Two GPU deployments on inference-0:
+# Two GPU deployments on inference-0, both pinned to the V100 by UUID:
 #   ollama-llama3  — planner endpoint (ollama service); llama3.1 + granite3.1-dense:8b seeded
 #   ollama-qwen32b — executor endpoint (ollama-code service); qwen2.5:32b + all GPU models seeded
 # Both use nodeSelector: role=inference-node (values.yaml default) — no --set override needed.
+# NOTE: with no nvidia.com/gpu request there is no scheduler GPU accounting, so
+# co-residency on the V100 is enforced by these manifests, not by Kubernetes.
 $HELM upgrade --install ollama-llama3 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"

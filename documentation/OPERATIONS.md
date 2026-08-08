@@ -434,6 +434,73 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
    bash ./push-models-to-cluster.sh"
 ```
 
+#### GPU Selection on inference-0 (Mixed Pool — Pin by UUID)
+`inference-0` holds a **heterogeneous** GPU pool: 1x Tesla V100 32GB (sm_70, volta) and
+2x Tesla P4 8GB (sm_61, pascal). All three are advertised as a single fungible
+`nvidia.com/gpu` resource (`allocatable: 3`).
+
+**DO NOT request `nvidia.com/gpu` for inference workloads.** The scheduler cannot
+distinguish the cards, and two of the three cannot hold a 32B model (~19GB Q4_K_M)
+in 8GB of VRAM.
+
+**Node affinity on GFD labels does NOT work either.** GFD models a mixed node as a
+single product/memory/compute triple. Observed live on 2026-08-08 with
+`MIG_STRATEGY=none` correctly set, GFD still reported the P4:
+```text
+nvidia.com/gpu.product = Tesla-P4     nvidia.com/gpu.memory = 7680
+nvidia.com/gpu.family  = pascal       nvidia.com/gpu.compute.major/minor = 6/1
+```
+The `hierocracy.home/gpu-labels-describe=tesla-v100-32gb` label asserts the opposite
+and is currently **false**. Treat `nvidia.com/gpu.*` labels as unreliable on this node.
+
+**The supported mechanism is pin-by-UUID.** Published as node labels by
+`kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh`:
+
+| Label | Card |
+|---|---|
+| `hierocracy.home/gpu-v100-uuid` | Tesla V100 32GB, `05:00.0` |
+| `hierocracy.home/gpu-p4-0-uuid` | Tesla P4 8GB, `81:00.0` |
+| `hierocracy.home/gpu-p4-1-uuid` | Tesla P4 8GB, `82:00.0` |
+
+A workload pins a card by setting `NVIDIA_VISIBLE_DEVICES` to the UUID and
+`NVIDIA_DRIVER_CAPABILITIES=compute,utility` (`utility` alone yields only
+`nvidia-smi`, no CUDA), with `runtimeClassName: nvidia`, and requests **no**
+`nvidia.com/gpu`.
+
+In the RAG stack, `infrastructure/ollama/ollama.sh` resolves the V100 UUID from the
+node label at deploy time and writes it into the `ollama-gpu-pin-v100` ConfigMap in
+`llms-ollama`. Both GPU values files consume it via `extraEnvFrom` and set
+`ollama.gpu.enabled: false`. No UUID is hardcoded in the repo. `extraEnvFrom` is used
+rather than `extraEnv` because Helm replaces whole lists on merge, which makes an
+index-based `--set` override silently fragile.
+
+**Caveat:** with no `nvidia.com/gpu` request there is no scheduler GPU accounting.
+Preventing two pods from pinning the same card is the manifests' responsibility.
+
+**Current assignment** — both `ollama-llama3` and `ollama-qwen32b` share the V100,
+preserving the VRAM tuning originally written for the single-GPU node.
+**TODO (revisit once the cluster is stable):** move `ollama-llama3` to
+`gpu-p4-0-uuid` to free ~5GB of V100 VRAM for the 32B executor. That also requires
+trimming `qwen2.5:32b` / `qwen3:32b` from `ollama-llama3` in `seed-models.sh` (an 8GB
+P4 cannot load them) and forcing its `OLLAMA_MAX_LOADED_MODELS` to 1.
+
+#### WARNING: `setup-complete.sh --gpu` clobbers the tuned GPU operator
+The GPU operator on this cluster is installed and tuned by
+`kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh`, **not** by
+`complete-build`. Passing `--gpu` to `setup-complete.sh` runs
+`infrastructure/nvidia-operator.sh`, which:
+1. `helm uninstall`s the `nvidia-device-plugin` and `nvidia-dcgm-exporter` releases.
+2. Re-runs `helm upgrade --install gpu-operator` with a values file that omits
+   `mig.strategy: none` (chart default `single` asserts a uniform node and is what
+   drove the GFD collapse) and omits `devicePlugin.config.default: config.yaml`
+   (without which the operator ignores the `nvidia-device-plugin-config` ConfigMap
+   entirely and runs chart defaults).
+
+**On a cluster whose GPU operator already came from the sibling repo, omit `--gpu`.**
+That is the default, so plain `FRESH_INSTALL=true ./setup-complete.sh` is correct.
+Reconcile `nvidia-operator.sh` with `52-install-gpu-operator.sh` before ever using
+`--gpu` again.
+
 #### Model Seeding (During Install)
 `seed-models.sh` creates temporary seeder pods that pull models from the local registry into the PVCs. 
 - **Storage Path**: Models are seeded into the `models/` subdirectory of the PVC (e.g., `/root/.ollama/models/`) to match the default Ollama runtime configuration.

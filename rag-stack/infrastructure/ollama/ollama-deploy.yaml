@@ -1,3 +1,9 @@
+# NOT PART OF THE AUTOMATED INSTALL.
+# ollama.sh deploys Ollama via the otwld/ollama Helm chart (releases
+# ollama-llama3 / ollama-qwen32b); nothing applies this file. It is kept only
+# as a standalone manifest for manual smoke tests. Its GPU handling is kept in
+# sync with the Helm values on purpose — applying a stale copy that requests
+# nvidia.com/gpu would land the pod on an 8GB P4.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,6 +21,7 @@ spec:
     spec:
       nodeSelector:
         role: inference-node
+      runtimeClassName: nvidia
       containers:
         - name: ollama
           image: registry.container-registry.svc.cluster.local:5000/ollama/ollama:0.15.6
@@ -35,11 +42,13 @@ spec:
               value: "2"
             - name: OLLAMA_GPU_OVERHEAD
               value: "2147483648"
-          resources:
-            limits:
-              nvidia.com/gpu: 1
-            requests:
-              nvidia.com/gpu: 1
+          # Pin the V100 by UUID rather than requesting nvidia.com/gpu: the
+          # node's three GPUs (1x V100 32GB, 2x P4 8GB) are advertised as one
+          # fungible resource, so a generic request can land on an 8GB card.
+          # ConfigMap is created by ollama.sh from the node label.
+          envFrom:
+            - configMapRef:
+                name: ollama-gpu-pin-v100
           volumeMounts:
             - name: ollama-data
               mountPath: /root/.ollama
