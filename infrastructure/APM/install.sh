@@ -174,8 +174,7 @@ function deploy_lgtm_component() {
         helm upgrade --install $name $chart \
             --namespace $NAMESPACE \
             --values "$SAFE_TMP_DIR/$name-values.yaml" \
-            --wait --timeout 20m \
-            --debug
+            --wait --timeout 20m
 
         # Patch gateway service if it's loki or mimir to ensure port 443 maps to 8443 (SSL)
         if [[ "$name" == "loki" || "$name" == "mimir" ]]; then

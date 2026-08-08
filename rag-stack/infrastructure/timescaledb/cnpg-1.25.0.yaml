@@ -17547,9 +17547,6 @@ spec:
       - args:
         - controller
         - --leader-elect
-        - --leader-elect-lease-duration=60s
-        - --leader-elect-renew-deadline=40s
-        - --leader-elect-retry-period=10s
         - --max-concurrent-reconciles=10
         - --config-map-name=cnpg-controller-manager-config
         - --secret-name=cnpg-controller-manager-config
@@ -17571,6 +17568,9 @@ spec:
             path: /readyz
             port: 9443
             scheme: HTTPS
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          failureThreshold: 3
         name: manager
         ports:
         - containerPort: 8080
@@ -17584,6 +17584,9 @@ spec:
             path: /readyz
             port: 9443
             scheme: HTTPS
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
         resources:
           limits:
             cpu: 100m

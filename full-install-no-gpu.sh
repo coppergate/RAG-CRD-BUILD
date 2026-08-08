@@ -1,12 +1,15 @@
 #!/bin/bash
 # ==============================================================================
-# full-install.sh — End-to-end cluster + RAG stack install
+# full-install-no-gpu.sh — End-to-end cluster + RAG stack install (no GPU)
 # IMPORTANT: Must be executed on host: hierophant
 #
-# Usage: FRESH_INSTALL=true bash full-install.sh [--gpu]
+# Usage: FRESH_INSTALL=true bash full-install-no-gpu.sh
 #
-# Flags:
-#   --gpu               — install NVIDIA GPU operator (default: skipped)
+# This script installs everything EXCEPT GPU/inference-dependent components:
+#   - No inference VMs are provisioned
+#   - No NVIDIA GPU operator
+#   - No Ollama deployment
+#   - No LLM model pre-seeding
 #
 # Environment:
 #   FRESH_INSTALL=true  — clear ALL journals before starting (both cluster
@@ -15,27 +18,27 @@
 #
 # Stages:
 #   1. Pre-authenticate sudo (single password prompt, kept alive throughout)
-#   2. config-cluster.sh  — provision Talos VMs and bring up Kubernetes
+#   2. config-cluster.sh  — provision Talos VMs (worker nodes only, no inference)
 #   3. Wait for all nodes Ready
-#   4. setup-complete.sh  — deploy Rook/Ceph, APM, registry, RAG stack
+#   4. setup-complete-no-gpu.sh  — deploy Rook/Ceph, APM, registry, RAG stack
 # ==============================================================================
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-CLUSTER_SETUP_DIR="/mnt/hegemon-share/share/code/kubernetes-setup/new-setup-single"
+CLUSTER_SETUP_DIR="/mnt/hegemon-share/share/code/kubernetes-setup/new-setup-no-gpu"
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 
-# Export FRESH_INSTALL so child scripts (config-cluster.sh, setup-complete.sh) see it
+# Export FRESH_INSTALL so child scripts (config-cluster.sh, setup-complete-no-gpu.sh) see it
 export FRESH_INSTALL="${FRESH_INSTALL:-false}"
 
 # -----------------------------------------------------------------------
 # 0. Clear ALL journals on fresh install (BEFORE init_journal)
 # -----------------------------------------------------------------------
 # Three journal scopes exist:
-#   full-install.sh's own journal  — tracks top-level stages (this script)
-#   ~/.kubernetes-setup/journal/   — used by config-cluster.sh
-#   ~/.complete-build/journal/     — used by setup-complete.sh + setup-01-basic.sh
+#   full-install-no-gpu.sh's own journal  — tracks top-level stages (this script)
+#   ~/.kubernetes-setup/journal/          — used by config-cluster.sh
+#   ~/.complete-build/journal/            — used by setup-complete-no-gpu.sh + setup-01-basic.sh
 # Each child script only clears its own. We clear ALL here to guarantee
 # a truly fresh start and prevent stale journals from skipping steps.
 # This MUST happen before init_journal, otherwise init creates the journal
@@ -47,17 +50,17 @@ if [[ "$FRESH_INSTALL" == "true" ]]; then
     echo "All journals cleared."
 fi
 
-# full-install.sh uses its OWN journal (in the complete-build journal dir) to track
+# full-install-no-gpu.sh uses its OWN journal (in the complete-build journal dir) to track
 # which top-level stages have completed. This prevents the dangerous scenario where
-# config-cluster.sh clears its internal journal on success, then setup-complete.sh
-# fails — re-running full-install.sh would re-enter config-cluster.sh with a blank
-# journal and reformat disks on a running cluster.
+# config-cluster.sh clears its internal journal on success, then setup-complete-no-gpu.sh
+# fails — re-running would re-enter config-cluster.sh with a blank journal and reformat
+# disks on a running cluster.
 source "$SCRIPT_DIR/scripts/journal-helper.sh"
 init_journal
 
-# CRITICAL: Reset FRESH_INSTALL to false for child scripts. full-install.sh has
+# CRITICAL: Reset FRESH_INSTALL to false for child scripts. full-install-no-gpu.sh has
 # already cleared all journals above. If we leave FRESH_INSTALL=true, child scripts
-# (especially setup-complete.sh's clear_all_journals) will re-delete the
+# (especially setup-complete-no-gpu.sh's clear_all_journals) will re-delete the
 # ~/.complete-build/journal/ directory — which contains THIS script's journal.
 # That destroys our "cluster-provisioned" marker and causes re-entry on resume.
 export FRESH_INSTALL="false"
@@ -66,8 +69,9 @@ export FRESH_INSTALL="false"
 # 1. Sudo pre-authentication
 # -----------------------------------------------------------------------
 echo "============================================================"
-echo "  Full Install: Cluster + RAG Stack"
+echo "  Full Install (No GPU): Cluster + RAG Stack"
 echo "  FRESH_INSTALL=${FRESH_INSTALL}"
+echo "  Cluster setup dir: ${CLUSTER_SETUP_DIR}"
 echo "  This script requires sudo for system certificate setup."
 echo "============================================================"
 echo ""
@@ -81,16 +85,16 @@ echo "Sudo session active."
 echo ""
 
 # -----------------------------------------------------------------------
-# 2. Cluster provisioning
+# 2. Cluster provisioning (worker nodes only — no inference VMs)
 # -----------------------------------------------------------------------
 if ! is_step_done "cluster-provisioned"; then
   echo "============================================================"
-  echo "  Stage 1: Provisioning Kubernetes cluster (config-cluster.sh)"
+  echo "  Stage 1: Provisioning Kubernetes cluster (no-gpu config-cluster.sh)"
   echo "============================================================"
-  bash "${CLUSTER_SETUP_DIR}/config-cluster.sh" "$@"
+  bash "${CLUSTER_SETUP_DIR}/config-cluster.sh"
   mark_step_done "cluster-provisioned"
 else
-  echo "[full-install] Cluster already provisioned — skipping config-cluster.sh"
+  echo "[full-install-no-gpu] Cluster already provisioned — skipping config-cluster.sh"
 fi
 
 # -----------------------------------------------------------------------
@@ -128,18 +132,18 @@ if ! is_step_done "nodes-ready"; then
   echo ""
   mark_step_done "nodes-ready"
 else
-  echo "[full-install] Nodes already verified Ready — skipping wait"
+  echo "[full-install-no-gpu] Nodes already verified Ready — skipping wait"
 fi
 
 # -----------------------------------------------------------------------
-# 4. RAG stack deployment
+# 4. RAG stack deployment (no GPU, no Ollama)
 # -----------------------------------------------------------------------
 echo "============================================================"
-echo "  Stage 3: Deploying RAG stack (setup-complete.sh)"
+echo "  Stage 3: Deploying RAG stack (setup-complete-no-gpu.sh)"
 echo "============================================================"
-bash "${SCRIPT_DIR}/setup-complete.sh" "$@"
+bash "${SCRIPT_DIR}/setup-complete-no-gpu.sh"
 
 echo ""
 echo "============================================================"
-echo "  Full install complete."
+echo "  Full install (no GPU) complete."
 echo "============================================================"

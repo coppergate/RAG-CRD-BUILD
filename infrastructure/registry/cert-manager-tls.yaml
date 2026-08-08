@@ -42,8 +42,8 @@ spec:
     - registry.container-registry.svc.cluster.local
     - hierophant.hierocracy.home
   ipAddresses:
-    - 172.20.1.26
-    - 10.0.0.1
+    - 192.168.5.201
+    - 192.168.1.101
   issuerRef:
     name: hierocracy-ca-issuer
     kind: ClusterIssuer

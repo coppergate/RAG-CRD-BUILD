@@ -16728,9 +16728,6 @@ spec:
       containers:
         - args:
             - --leader-elect
-            - --leader-elect-lease-duration=60s
-            - --leader-elect-renew-deadline=40s
-            - --leader-elect-retry-period=10s
           command:
             - /manager
           env:
@@ -16742,7 +16739,7 @@ spec:
               value: ceph-csi-
             - name: WATCH_NAMESPACE
               value: ""
-          image: 10.0.0.1:5000/quay.io/cephcsi/ceph-csi-operator:v0.4.1
+          image: hierophant.hierocracy.home:5000/quay.io/cephcsi/ceph-csi-operator:v0.4.1
           livenessProbe:
             httpGet:
               path: /healthz

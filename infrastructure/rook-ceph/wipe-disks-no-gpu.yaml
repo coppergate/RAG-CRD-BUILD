@@ -1,0 +1,123 @@
+# wipe-disks-no-gpu.yaml — Wipe jobs for no-GPU worker layout
+#
+# No-GPU worker disk layout (from new-setup-no-gpu/30-build-all-workers.sh):
+#   worker-0: vdb (HDD OSD), vdc (NVMe BlueStore DB), vdd (NVMe fast-tier OSD)
+#   worker-1: vdb (HDD OSD), vdc (NVMe BlueStore DB)
+#   worker-2: vdb (HDD OSD), vdc (NVMe BlueStore DB)
+#   worker-3: vdb (HDD OSD), vdc (NVMe BlueStore DB), vdd (NVMe fast-tier OSD)
+#
+# Changes vs wipe-disks.yaml:
+#   - worker-0: only vdb/vdc/vdd (not vde/vdf — those don't exist without inference VM layout)
+#   - worker-3: added (4th worker present in no-gpu cluster, not in full setup)
+#   - wipefs removed: busybox image lacks wipefs; dd zeroing is sufficient to clear OSD headers
+#   - Labels added (app: wipe-disks-no-gpu) so kubectl wait can reliably select these jobs
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-0
+  namespace: rook-ceph
+  labels:
+    app: wipe-disks-no-gpu
+spec:
+  template:
+    metadata:
+      labels:
+        app: wipe-disks-no-gpu
+    spec:
+      containers:
+      - name: wipe
+        image: hierophant.hierocracy.home:5000/busybox:1.36
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            dd if=/dev/zero of=/dev/vdb bs=1M count=100
+            dd if=/dev/zero of=/dev/vdc bs=1M count=100
+            dd if=/dev/zero of=/dev/vdd bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-0
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-1
+  namespace: rook-ceph
+  labels:
+    app: wipe-disks-no-gpu
+spec:
+  template:
+    metadata:
+      labels:
+        app: wipe-disks-no-gpu
+    spec:
+      containers:
+      - name: wipe
+        image: hierophant.hierocracy.home:5000/busybox:1.36
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          dd if=/dev/zero of=/dev/vdb bs=1M count=100
+          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-1
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-2
+  namespace: rook-ceph
+  labels:
+    app: wipe-disks-no-gpu
+spec:
+  template:
+    metadata:
+      labels:
+        app: wipe-disks-no-gpu
+    spec:
+      containers:
+      - name: wipe
+        image: hierophant.hierocracy.home:5000/busybox:1.36
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          dd if=/dev/zero of=/dev/vdb bs=1M count=100
+          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-2
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-3
+  namespace: rook-ceph
+  labels:
+    app: wipe-disks-no-gpu
+spec:
+  template:
+    metadata:
+      labels:
+        app: wipe-disks-no-gpu
+    spec:
+      containers:
+      - name: wipe
+        image: hierophant.hierocracy.home:5000/busybox:1.36
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            dd if=/dev/zero of=/dev/vdb bs=1M count=100
+            dd if=/dev/zero of=/dev/vdc bs=1M count=100
+            dd if=/dev/zero of=/dev/vdd bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-3
+      restartPolicy: Never

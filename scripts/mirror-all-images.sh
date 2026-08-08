@@ -6,6 +6,8 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$SCRIPT_DIR/../config/network.env"
 PLAN_FILE="${PLAN_FILE:-$SCRIPT_DIR/install-image-plan.sh}"
 TARGET_REGISTRY="${TARGET_REGISTRY:-registry.hierocracy.home:5000}"
 APPLY="${APPLY:-false}"
@@ -13,7 +15,7 @@ PARALLELISM="${PARALLELISM:-3}"
 SKOPEO_TLS_VERIFY="${SKOPEO_TLS_VERIFY:-true}"
 SKOPEO_SRC_TLS_VERIFY="${SKOPEO_SRC_TLS_VERIFY:-true}"
 SOURCE_CACHE_ROOT="${SOURCE_CACHE_ROOT:-/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/image-source-cache}"
-HIEROPHANT_REGISTRY="${HIEROPHANT_REGISTRY:-10.0.0.1:5000}"
+HIEROPHANT_REGISTRY="${HIEROPHANT_REGISTRY:-$REGISTRY_PREFIX}"
 GROUPS_CSV="${MIRROR_GROUPS:-}"
 STEP_NAME="${STEP:-}"
 LIST_GROUPS="false"
@@ -47,7 +49,7 @@ Env:
   SKOPEO_SRC_TLS_VERIFY=true       Source TLS verify flag
   SOURCE_CACHE_ROOT=.../image-source-cache
                                    Local upstream image cache root
-  HIEROPHANT_REGISTRY=host:port    Bootstrap registry checked before internet (default 10.0.0.1:5000)
+  HIEROPHANT_REGISTRY=host:port    Bootstrap registry checked before internet (default ${REGISTRY_PREFIX} from config/network.env)
   PLAN_FILE=.../install-image-plan.sh
   TIMING_LOG=.../mirror-timing.log Timing output log path
 USAGE

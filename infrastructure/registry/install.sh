@@ -7,9 +7,11 @@ set -e
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-BOOTSTRAP_REGISTRY="${BOOTSTRAP_REGISTRY:-10.0.0.1:5000}"
-BOOTSTRAP_IMAGE="${BOOTSTRAP_IMAGE:-registry:2}"
 BASE_DIR=$(cd "$REPO_DIR/../.." && pwd)
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$BASE_DIR/config/network.env"
+BOOTSTRAP_REGISTRY="${BOOTSTRAP_REGISTRY:-$REGISTRY_PREFIX}"
+BOOTSTRAP_IMAGE="${BOOTSTRAP_IMAGE:-registry:2}"
 
 source "$BASE_DIR/scripts/journal-helper.sh"
 init_journal

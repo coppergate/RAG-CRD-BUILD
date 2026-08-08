@@ -10,6 +10,13 @@ export config_source_dir="$BASE_DIR"
 source "$config_source_dir/scripts/k8s-install-helper-functions.sh"
 source "$config_source_dir/scripts/journal-helper.sh"
 
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$config_source_dir/config/network.env"
+
+# Reconcile static manifests (registry prefix, in-cluster registry LB IP) to
+# config/network.env before anything is applied. Idempotent.
+bash "$config_source_dir/scripts/render-manifests.sh"
+
 # Ensure host trusts the registry CA for secure image mirroring/seeding
 bash "$config_source_dir/scripts/setup-host-trust.sh"
 
@@ -111,32 +118,97 @@ fi
 echo "Applying StorageClass..."
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
 
+# ── Wait for ceph-csi-controller-manager (the operator that creates CSI provisioner deployments) ──
+echo "Waiting for ceph-csi-controller-manager (up to 300s)..."
+csi_op_elapsed=0
+while (( csi_op_elapsed < 300 )); do
+    avail=$($KUBECTL get deployment -n rook-ceph ceph-csi-controller-manager \
+        -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)
+    if [[ "$avail" =~ ^[1-9] ]]; then
+        echo "  ceph-csi-controller-manager: $avail available (${csi_op_elapsed}s)"
+        break
+    fi
+    if (( csi_op_elapsed % 30 == 0 )); then
+        pod_status=$($KUBECTL get pods -n rook-ceph -l "control-plane=ceph-csi-op-controller-manager" \
+            --no-headers 2>/dev/null | awk '{print $3}' | head -1)
+        echo "  ceph-csi-controller-manager not ready — waiting 10s... (${csi_op_elapsed}s/300s) [pod: ${pod_status:-not found}]"
+    fi
+    sleep 10
+    (( csi_op_elapsed += 10 )) || true
+done
+if (( csi_op_elapsed >= 300 )); then
+    echo "ERROR: ceph-csi-controller-manager did not become ready within 300s."
+    echo "  Deployment:"
+    $KUBECTL get deployment -n rook-ceph ceph-csi-controller-manager -o wide 2>/dev/null || true
+    echo "  Pod status:"
+    $KUBECTL get pods -n rook-ceph -l "control-plane=ceph-csi-op-controller-manager" -o wide 2>/dev/null || true
+    echo "  Pod logs:"
+    $KUBECTL logs -n rook-ceph deployment/ceph-csi-controller-manager --tail=50 2>/dev/null || true
+    exit 1
+fi
+
+# ── Wait for Rook to create CephConnection/OperatorConfig CRs (precondition for CSI provisioner) ──
+echo "Waiting for CephConnection/OperatorConfig CRs from Rook (up to 300s)..."
+cr_elapsed=0
+while (( cr_elapsed < 300 )); do
+    conn=$($KUBECTL get cephconnection -n rook-ceph --no-headers 2>/dev/null | wc -l || echo 0)
+    opcfg=$($KUBECTL get operatorconfig -n rook-ceph --no-headers 2>/dev/null | wc -l || echo 0)
+    if (( conn > 0 && opcfg > 0 )); then
+        echo "  CephConnection (${conn}) and OperatorConfig (${opcfg}) found (${cr_elapsed}s)"
+        break
+    fi
+    if (( cr_elapsed % 30 == 0 )); then
+        echo "  CephConnection=${conn} OperatorConfig=${opcfg} — waiting 10s... (${cr_elapsed}s/300s)"
+    fi
+    sleep 10
+    (( cr_elapsed += 10 )) || true
+done
+if (( cr_elapsed >= 300 )); then
+    echo "ERROR: Rook did not create CephConnection/OperatorConfig CRs within 300s."
+    echo "  Rook operator logs (last 50 lines):"
+    $KUBECTL logs -n rook-ceph deployment/rook-ceph-operator --tail=50 2>/dev/null || true
+    echo "  ceph-csi-controller-manager logs (last 50 lines):"
+    $KUBECTL logs -n rook-ceph deployment/ceph-csi-controller-manager --tail=50 2>/dev/null || true
+    exit 1
+fi
+
 echo "Waiting for CSI provisioner pods (up to 900s)..."
+# ceph-csi-operator names ctrlplugin deployments after the CephConnection:
+# <cephconnection-name>.<driver>.csi.ceph.com-ctrlplugin
+# CephConnection is named "rook-ceph", so deployments are:
+#   rook-ceph.rbd.csi.ceph.com-ctrlplugin
+#   rook-ceph.cephfs.csi.ceph.com-ctrlplugin
 for csi_deploy in \
     "rook-ceph.rbd.csi.ceph.com-ctrlplugin" \
     "rook-ceph.cephfs.csi.ceph.com-ctrlplugin"; do
     csi_elapsed=0
     while (( csi_elapsed < 900 )); do
-        running=$($KUBECTL get pods -n rook-ceph \
-            -l "app=${csi_deploy}" \
-            --field-selector=status.phase=Running --no-headers 2>/dev/null | grep -c . || echo 0)
-        if (( running > 0 )); then
-            echo "  $csi_deploy: $running Running pods (${csi_elapsed}s)"
-            break
-        fi
-        # Also accept if the deployment exists and has available replicas
         avail=$($KUBECTL get deployment -n rook-ceph "$csi_deploy" \
-            -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo 0)
+            -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)
         if [[ "$avail" =~ ^[1-9] ]]; then
             echo "  $csi_deploy: $avail available replicas (${csi_elapsed}s)"
             break
         fi
-        echo "  $csi_deploy not ready — waiting 15s... (${csi_elapsed}s/900s)"
+        if (( csi_elapsed % 60 == 0 )); then
+            desired=$($KUBECTL get deployment -n rook-ceph "$csi_deploy" \
+                -o jsonpath='{.status.replicas}/{.status.readyReplicas}/{.status.availableReplicas}' 2>/dev/null || echo "not found")
+            echo "  $csi_deploy not ready — waiting 15s... (${csi_elapsed}s/900s) [desired/ready/avail: ${desired}]"
+        else
+            echo "  $csi_deploy not ready — waiting 15s... (${csi_elapsed}s/900s)"
+        fi
         sleep 15
         (( csi_elapsed += 15 )) || true
     done
     if (( csi_elapsed >= 900 )); then
         echo "ERROR: $csi_deploy did not become ready within 900s."
+        echo "  Deployment status:"
+        $KUBECTL get deployment -n rook-ceph "$csi_deploy" -o wide 2>/dev/null || true
+        echo "  Pods:"
+        $KUBECTL get pods -n rook-ceph -l "app.kubernetes.io/name=$csi_deploy" -o wide 2>/dev/null || true
+        echo "  ceph-csi-controller-manager logs:"
+        $KUBECTL logs -n rook-ceph deployment/ceph-csi-controller-manager --tail=80 2>/dev/null || true
+        echo "  Ceph cluster health:"
+        $KUBECTL -n rook-ceph get cephcluster rook-ceph -o jsonpath='{.status.ceph}' 2>/dev/null || true
         exit 1
     fi
 done
@@ -201,8 +273,8 @@ metadata:
 spec:
   local:
     v4pools:
-    - subnet: 172.20.0.0/16
-      pool: 172.20.1.16-172.20.1.240
+    - subnet: ${LB_POOL_SUBNET}
+      pool: ${LB_POOL_RANGE}
       aggregation: default
 EOF
 mark_step_done "purelb-config"

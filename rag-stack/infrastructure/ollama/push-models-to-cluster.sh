@@ -10,8 +10,11 @@ sudo -v
 SUDO_KEEPALIVE_PID=$!
 trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null' EXIT
 
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/config/network.env"
+
 REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
-HIEROPHANT_REGISTRY="${HIEROPHANT_REGISTRY:-10.0.0.1:5000}"
+HIEROPHANT_REGISTRY="${HIEROPHANT_REGISTRY:-$REGISTRY_PREFIX}"
 OLLAMA_IMAGE_LOCAL="${REGISTRY}/ollama/ollama:0.15.6"
 OLLAMA_IMAGE_UPSTREAM="docker.io/ollama/ollama:0.15.6"
 STORAGE_DIR="${OLLAMA_MODEL_STORE:-/mnt/storage/ollama-models}"

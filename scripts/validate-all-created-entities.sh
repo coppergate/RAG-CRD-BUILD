@@ -150,7 +150,7 @@ fi
 section "Namespace Checks"
 for ns in \
   rook-ceph monitoring container-registry apache-pulsar build-pipeline \
-  rag-system llms-ollama timescaledb gpu-operator headlamp purelb cert-manager
+  rag-system llms-ollama timescaledb headlamp purelb cert-manager
 do
   check_namespace "$ns"
 done
@@ -202,7 +202,10 @@ check_helm_release "monitoring" "tempo"
 check_helm_release "monitoring" "mimir"
 check_helm_release "monitoring" "grafana-operator"
 check_helm_release "monitoring" "alloy"
-check_helm_release "gpu-operator" "gpu-operator"
+if [[ "${WITH_GPU:-false}" == "true" ]]; then
+  check_namespace "gpu-operator"
+  check_helm_release "gpu-operator" "gpu-operator"
+fi
 check_helm_release "llms-ollama" "ollama-llama3"
 check_helm_release "llms-ollama" "ollama-granite31-8b"
 

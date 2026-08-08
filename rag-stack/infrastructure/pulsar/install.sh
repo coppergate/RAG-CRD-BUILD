@@ -219,12 +219,15 @@ if ! is_done 35.certWait; then
   while (( cert_elapsed < cert_timeout )); do
     log "  Polling certificates... (${cert_elapsed}s/${cert_timeout}s)"
     # Use --request-timeout to prevent hanging when API server is under load during install storm.
-    total=$($KUBECTL get certificate -n $NAMESPACE --no-headers \
-        --request-timeout=20s 2>/dev/null | wc -l || echo 0)
-    ready=$($KUBECTL get certificate -n $NAMESPACE \
+    # NOTE: '|| true' inside the pipe absorbs kubectl failures before wc/grep see them.
+    # Without it, pipefail causes both the pipe command AND '|| echo 0' to produce output,
+    # resulting in variables containing two values (e.g. "0\n0") which breaks (( )).
+    total=$({ $KUBECTL get certificate -n $NAMESPACE --no-headers \
+        --request-timeout=20s 2>/dev/null || true; } | wc -l)
+    ready=$({ $KUBECTL get certificate -n $NAMESPACE \
         --request-timeout=20s \
         -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' \
-        2>/dev/null | grep -c "^True$" || echo 0)
+        2>/dev/null || true; } | grep -c "^True$" || true)
     if (( total > 0 && ready >= total )); then
       log "All $total Pulsar certificates are Ready"
       break

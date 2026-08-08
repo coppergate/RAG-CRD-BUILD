@@ -8,15 +8,18 @@
 #
 # Env overrides:
 #   SRC_REGISTRY    default: registry.hierocracy.home:5000
-#   DST_REGISTRY    default: 10.0.0.1:5000
+#   DST_REGISTRY    default: ${REGISTRY_PREFIX} (config/network.env, hierophant.hierocracy.home:5000)
 #   KUBECTL         default: /home/k8s/kube/kubectl
 #   PARALLELISM     default: 4
 #   KUBECONFIG      default: /home/k8s/kube/config/kubeconfig
 
 set -Eeuo pipefail
 
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config/network.env"
+
 SRC_REGISTRY="${SRC_REGISTRY:-registry.hierocracy.home:5000}"
-DST_REGISTRY="${DST_REGISTRY:-10.0.0.1:5000}"
+DST_REGISTRY="${DST_REGISTRY:-$REGISTRY_PREFIX}"
 KUBECTL="${KUBECTL:-/home/k8s/kube/kubectl}"
 export KUBECONFIG="${KUBECONFIG:-/home/k8s/kube/config/kubeconfig}"
 PARALLELISM="${PARALLELISM:-4}"

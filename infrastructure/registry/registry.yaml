@@ -37,7 +37,7 @@ spec:
         role: storage-node
       containers:
       - name: registry
-        image: 10.0.0.1:5000/registry:2
+        image: hierophant.hierocracy.home:5000/registry:2
         ports:
         - containerPort: 5000
         env:
@@ -68,7 +68,7 @@ metadata:
     purelb.io/addresspool: default
 spec:
   type: LoadBalancer
-  loadBalancerIP: 172.20.1.26
+  loadBalancerIP: 192.168.5.201
   ports:
   - port: 5000
     targetPort: 5000
