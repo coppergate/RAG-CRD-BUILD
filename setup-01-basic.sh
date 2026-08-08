@@ -75,6 +75,10 @@ $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml
 # those CRs into the actual CSI provisioner deployments (ctrlplugin, nodeplugin).
 # Both must run — scaling ceph-csi-controller-manager to 0 prevents CSI from ever deploying.
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml
+# CSI defaults must exist BEFORE Rook creates its Driver CRs, so the nodeplugin
+# DaemonSet is born tolerating the inference-node GPU taint. Without this the
+# GPU Ollama pods cannot mount their rook-cephfs PVC on inference-0.
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator-config.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
 
 echo "Check the ceph-operator pod"

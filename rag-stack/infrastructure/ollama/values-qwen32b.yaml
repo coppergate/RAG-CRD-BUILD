@@ -108,6 +108,15 @@ persistentVolume:
 nodeSelector:
   role: inference-node
 
+# inference-0 is tainted nvidia.com/gpu=present:NoSchedule so only GPU workloads
+# land there (scripts/setup-node-labels.sh). This pod qualifies — it pins the V100.
+# nodeSelector states intent; the toleration is what gets past the taint. Both
+# are needed.
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
 updateStrategy:
   type: "Recreate"
 

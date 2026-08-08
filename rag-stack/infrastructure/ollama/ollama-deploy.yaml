@@ -21,6 +21,12 @@ spec:
     spec:
       nodeSelector:
         role: inference-node
+      # inference-0 is tainted nvidia.com/gpu=present:NoSchedule to reserve it for
+      # GPU work. Without this toleration the pod stays Pending.
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
       runtimeClassName: nvidia
       containers:
         - name: ollama

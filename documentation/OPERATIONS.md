@@ -484,6 +484,55 @@ preserving the VRAM tuning originally written for the single-GPU node.
 trimming `qwen2.5:32b` / `qwen3:32b` from `ollama-llama3` in `seed-models.sh` (an 8GB
 P4 cannot load them) and forcing its `OLLAMA_MAX_LOADED_MODELS` to 1.
 
+#### inference-0 is Tainted — GPU Workloads Only
+`inference-0` is tainted so that **only pods that need the GPU** schedule there:
+
+```text
+nvidia.com/gpu=present:NoSchedule
+```
+
+Applied by `scripts/setup-node-labels.sh` (after labelling, idempotent via
+`kubectl taint --overwrite`). `nodeSelector: role=storage-node` remains the way
+workloads *express* intent; the taint is what *enforces* it, so an unpinned manifest
+can no longer silently consume inference capacity.
+
+The key `nvidia.com/gpu` is deliberate: the NVIDIA GPU operator chart tolerates it by
+default, so device-plugin / GFD / DCGM-exporter / node-status-exporter /
+container-toolkit / operator-validator keep scheduling with no change to
+`kubernetes-setup/new-setup-external-gpu`. `NoSchedule`, not `NoExecute`.
+
+**Anything that legitimately runs on the GPU node must tolerate this taint.**
+Already handled in-repo:
+
+| Component | Where the toleration lives | Why it must run there |
+|---|---|---|
+| Ceph CSI nodeplugin | `rook-ceph/csi-operator-config.yaml` (`OperatorConfig`) + `CSI_PLUGIN_TOLERATIONS` in `rook-ceph/operator.yaml` | GPU Ollama pods mount a `rook-cephfs` RWX PVC — no nodeplugin means the volume never mounts and the pods hang in `ContainerCreating` |
+| Grafana Alloy | `APM/alloy/values.yaml` (`controller.tolerations`) | Scrapes DCGM using local-node pod discovery; without it GPU metrics/logs vanish **silently** |
+| GPU Ollama pods | `ollama/values.yaml`, `ollama/values-qwen32b.yaml` | The actual GPU workloads |
+
+Rook is installed **from manifests, not Helm** (`setup-01-basic.sh` adds the
+`rook-release` repo but only ever `kubectl apply`s). So `csi.pluginTolerations` in
+`rook-ceph/values.yaml` is dead config. With `ceph-csi-operator` (Rook v1.18+) the
+effective fields are `Driver.spec.nodePlugin.tolerations` (wins) and
+`OperatorConfig.spec.driverSpecDefaults.nodePlugin.tolerations`. Both the
+`OperatorConfig` CR and Rook's `CSI_PLUGIN_TOLERATIONS` are set so that whichever
+path the operator honours, the nodeplugin tolerates the taint. **Verify rather than
+assume:**
+
+```bash
+kubectl -n rook-ceph get pods --field-selector spec.nodeName=inference-0 | grep -i plugin
+```
+
+CPU-only Ollama pods (`ollama-embed-0`, `ollama-planner-cpu-0`) previously ran on
+`inference-0` and were removed from `ollama.sh`. The `ollama-embed` and
+`ollama-planner-cpu` ClusterIP services select on the `ollama-role` pod label, not
+release name, so the worker-node pods still back them — 8 embed and 4 planner-cpu.
+Do **not** reintroduce those two releases on the inference node; add worker instances
+with the `*-worker.yaml` values files instead.
+
+**Rollback:** `kubectl taint node inference-0 nvidia.com/gpu-`. Every other piece is
+additive — tolerations are inert without the taint.
+
 #### WARNING: `setup-complete.sh --gpu` clobbers the tuned GPU operator
 The GPU operator on this cluster is installed and tuned by
 `kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh`, **not** by

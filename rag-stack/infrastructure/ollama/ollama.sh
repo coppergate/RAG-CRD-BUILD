@@ -66,10 +66,15 @@ rm -f "$COMBINED_CA"
 $KUBECTL label nodes inference-0 role=inference-node --overwrite
 
 # Label worker nodes with embed-instance index for pod pinning.
-# worker-0..2 already carry role=storage-node; embed-instance is additive.
+# worker-0..3 already carry role=storage-node; embed-instance is additive.
+# NOTE: must cover every index the deploy loops below iterate (0..3). worker-3
+# was previously missing, which left ollama-embed-8, ollama-embed-9 and
+# ollama-planner-cpu-5 selecting embed-instance=3 — a label on no node — so they
+# sat permanently Pending on a fresh install.
 $KUBECTL label nodes worker-0 embed-instance=0 --overwrite
 $KUBECTL label nodes worker-1 embed-instance=1 --overwrite
 $KUBECTL label nodes worker-2 embed-instance=2 --overwrite
+$KUBECTL label nodes worker-3 embed-instance=3 --overwrite
 
 # Create services for CPU pods before installing them so they are ready when pods come up.
 # Each service selects pods by the ollama-role label set via podLabels in the values files.
@@ -164,19 +169,30 @@ $HELM upgrade --install ollama-qwen32b otwld/ollama --namespace llms-ollama -f "
 $KUBECTL expose deployment ollama-llama3 --name=ollama --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
 $KUBECTL expose deployment ollama-qwen32b --name=ollama-code --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
 
-# Deploy CPU-only embedding Ollama on inference-0.
-# Selected by the ollama-embed ClusterIP service alongside worker-node embed pods.
-# nodeSelector: role=inference-node comes from values-embed.yaml default.
-$HELM upgrade --install ollama-embed-0 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-embed.yaml" \
-  --set image.repository="${REGISTRY}/ollama/ollama" \
-  --set image.tag="0.15.6"
-
-# Deploy CPU-only alternate planner Ollama on inference-0.
-# Selected by the ollama-planner-cpu ClusterIP service alongside worker-node planner pods.
-# nodeSelector: role=inference-node comes from values-planner-cpu.yaml default.
-$HELM upgrade --install ollama-planner-cpu-0 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-planner-cpu.yaml" \
-  --set image.repository="${REGISTRY}/ollama/ollama" \
-  --set image.tag="0.15.6"
+# REMOVED: ollama-embed-0 and ollama-planner-cpu-0.
+#
+# Both were CPU-only pods (ollama.gpu.enabled=false) pinned to role=inference-node,
+# using values-embed.yaml / values-planner-cpu.yaml. inference-0 is now reserved
+# for GPU workloads only — it is tainted nvidia.com/gpu=present:NoSchedule by
+# scripts/setup-node-labels.sh — so CPU-only work belongs on the worker nodes.
+#
+# No service change is needed: ollama-embed and ollama-planner-cpu are ClusterIP
+# services selecting on the ollama-role pod label (set via podLabels in the values
+# files), not on release name. The worker-node pods deployed below continue to
+# back both services.
+#
+# Capacity after this change, with the worker-3 label fix above:
+#   embed        — 8 pods (ollama-embed-2..9, 2 per worker node)
+#   planner-cpu  — 4 pods (ollama-planner-cpu-2..5, 1 per worker node)
+#
+# values-embed.yaml and values-planner-cpu.yaml are now unreferenced. They are
+# kept as the templates for the inference-node variant in case a second, non-GPU
+# inference node is ever added; the deployed worker pods use the *-worker.yaml
+# variants instead.
+#
+# If embed/planner capacity needs to be restored, add instances on the workers
+# with values-embed-worker.yaml / values-planner-cpu-worker.yaml — do NOT
+# reintroduce these two releases on the inference node.
 
 # Deploy CPU-only embedding Ollama on each worker node — 2 pods per node (embed-2..9).
 # All pods carry ollama-role=embed and are picked up by the ollama-embed ClusterIP service.

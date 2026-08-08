@@ -217,6 +217,23 @@ data:
   #   - effect: NoExecute
   #     key: node-role.kubernetes.io/etcd
   #     operator: Exists
+  #
+  # ENABLED: inference-0 is tainted nvidia.com/gpu=present:NoSchedule to reserve it
+  # for GPU work (scripts/setup-node-labels.sh). The CSI *plugin* (nodeplugin)
+  # DaemonSet must still run there — the GPU Ollama pods mount a rook-cephfs RWX
+  # PVC, and without the nodeplugin the volume never mounts and they hang in
+  # ContainerCreating.
+  #
+  # Belt-and-braces with the OperatorConfig CR applied by setup-01-basic.sh: this
+  # cluster runs the ceph-csi-operator, where the effective field is
+  # Driver.spec.nodePlugin.tolerations. Rook translates this ConfigMap key into the
+  # Driver CRs it creates, and Driver-level spec overrides the OperatorConfig
+  # driverSpecDefaults — so setting both covers whichever path wins. Verify with:
+  #   kubectl -n rook-ceph get ds -l app=csi-cephfsplugin -o yaml | grep -A4 tolerations
+  CSI_PLUGIN_TOLERATIONS: |
+    - effect: NoSchedule
+      key: nvidia.com/gpu
+      operator: Exists
 
   # (Optional) CephCSI RBD provisioner NodeAffinity (if specified, overrides CSI_PROVISIONER_NODE_AFFINITY).
   # CSI_RBD_PROVISIONER_NODE_AFFINITY: "role=rbd-node"
