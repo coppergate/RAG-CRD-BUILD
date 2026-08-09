@@ -216,6 +216,100 @@ bash ./config-cluster.sh
 #### Post-Setup Route Appendix
 If you need to reach the Talos management network (`10.0.0.0/24`) from `dev-fedora`, append the routing steps in [`documentation/network-configuration.md`](network-configuration.md). The command blocks there are grouped by machine file name (`dev-fedora`, `hegemon`, `hierophant`) so they can be carried into the installation workflow cleanly.
 
+### 1.8.1 Install Dependency Order (verified 2026-08-09)
+The install order below was traced end to end and is **correct** — every consumer
+runs after its provider. When the install appears to "regress", suspect journal
+drift (§1.8.2) or a CRD race, not the ordering.
+
+**`setup-01-basic.sh`** — providers, in execution order:
+
+| # | Step | Provides | Requires |
+|---|---|---|---|
+| 1 | `registry-patch` | Talos nodes trust/mirror the registry | — |
+| 2 | `bootstrap-mirror` | seed images in bootstrap registry | 1 |
+| 3 | `setup-node-labels.sh` *(unguarded)* | `role=` labels, GPU taint | — |
+| 4 | `rook-ceph-operator` | `ceph.rook.io` + `csi.ceph.io` CRDs, operator | 1, 2 |
+| 5 | `rook-ceph-cluster` | CephCluster/FS/Object/Pool, **StorageClasses**, CSI | 4 |
+| 6 | `rook-ceph-storageclass` | StorageClasses (re-apply; see note) | 5 |
+| 7 | `k8tz` | timezone injection | — |
+| 8 | `namespaces` | `operators` ns | — |
+| 9–10 | `purelb`, `purelb-config` | **LoadBalancer IPs** from `LB_POOL_RANGE` | — |
+| 11 | `cert-manager` | **`Certificate` / `Issuer` CRDs** | — |
+| 12 | `local-registry` | in-cluster registry | 5 (PVC), 10 (LB IP), 11 (TLS) |
+| 13–14 | `metrics-server`, `kube-state-metrics` | metrics API | — |
+| 15–17 | `krew`, `rook-ceph-plugin`, `krew kube ai` | kubectl plugins | 4 |
+| 18 | `traefik` | ingress | 10 (LB IP), 11 (TLS) |
+
+**`setup-complete.sh`** — orchestration, in execution order:
+
+`registry-trust-verified` → `setup-node-labels` → **`basic`** (all of the above) →
+`headlamp` → `registry` (ensure) → `llm-models-pre-populate` →
+`image-prefetch-initial` → `apm` → `apm-stabilize` → **`pulsar`** → `pulsar-init` →
+`cnpg-operator` → `timescaledb` → `build-pipeline-infra` → `pre-build-stabilize` →
+`rag-images` → `rag-stack` → `nvidia` *(deferred to the end; omit `--gpu`, see §4.4)*
+
+Cross-step CRD→CR boundaries, all correctly ordered and guarded:
+
+- **cert-manager → Pulsar.** Pulsar's chart creates `Certificate`/`Issuer` objects. cert-manager is step 11 of `basic`; Pulsar runs later from `setup-complete.sh`.
+- **CNPG → TimescaleDB.** `cnpg-operator` applies `--server-side` and waits for the operator Deployment to be Available; `timescaledb/install.sh` additionally hard-fails if `cnpg-system` is missing.
+- **Rook CRDs → Ceph CRs**, and **csi-operator CRD → `OperatorConfig` CR**. Both now guarded by `WaitForCRD` (§1.8.3).
+
+Two non-ordering observations from the same trace:
+
+- `storageclass.yaml` is applied **twice** — once inside `rook-ceph-cluster` and again in `rook-ceph-storageclass`. Harmless (idempotent) but redundant.
+- `infrastructure/prometheus/prometheus-operator.yaml` is applied by **nothing**. It appears only in `render-manifests.sh` and the image prefetch plan. The APM stack uses Loki/Mimir/Tempo/Alloy with the Grafana operator instead. Dead config.
+
+### 1.8.2 Journal Drift — Why Steps Get Silently Skipped
+`mark_step_done` appends a line to a journal in `$HOME`; nothing checks that the
+step's output still exists. The journal and the cluster have **independent
+lifetimes**. Rebuild the cluster while the journal survives and every step is
+skipped against infrastructure that is no longer there.
+
+Observed 2026-08-09: cert-manager, Rook and the registry all marked done, while the
+cluster had **no Rook CRDs, no StorageClasses, and empty `rook-ceph` /
+`container-registry` namespaces**. The symptom surfaced far downstream as Pulsar
+failing on missing `Certificate` CRDs, then on an `apache-pulsar` namespace that was
+never created.
+
+`is_step_done` now takes an optional verify command:
+
+```bash
+is_step_done "cert-manager" $KUBECTL get crd certificates.cert-manager.io
+```
+
+Marker present **and** verify succeeds → skip. Marker present but verify fails →
+warn, delete the stale marker, re-run. No verify argument → legacy behaviour.
+
+**Add a verify command to any new step**, and make it a cheap read-only check of
+something the step actually creates. A check that can never succeed re-runs the step
+every install — which is why `k8tz` deliberately has none (its chart installs with no
+`--namespace`, so there is no `k8tz` namespace to test for).
+
+`rag-stack/infrastructure/timescaledb/install.sh` and `build-pipeline/install.sh`
+have a local `should_run_step` implementing the same idea, plus an adopt-existing-state
+case (not in journal but verify passes → mark done and skip). The shared helper
+deliberately implements only the conservative half — it will downgrade skip to run,
+never run to skip.
+
+### 1.8.3 CRD Establishment Races
+`kubectl apply` returns once the API server accepts a CRD object, but the type is not
+servable until it is established and discovery refreshes. Applying a CR in the same
+breath as its CRD races, and losing it aborts the install under `set -e`:
+
+```text
+resource mapping not found for name: "..." — ensure CRDs are installed first
+```
+
+Use `WaitForCRD` (in `scripts/k8s-install-helper-functions.sh`) between any CRD bundle
+apply and the first CR of that type. Timeout defaults to 180s per CRD, override with
+`CRD_WAIT_TIMEOUT`.
+
+```bash
+$KUBECTL apply -f csi-operator.yaml
+WaitForCRD operatorconfigs.csi.ceph.io
+$KUBECTL apply -f csi-operator-config.yaml
+```
+
 ### 1.9 Removed Install Steps: OLM and Quay (2026-08-09)
 The `olm` and `quay` steps were removed from `setup-01-basic.sh`. **Do not reinstate
 them without reading this.**
