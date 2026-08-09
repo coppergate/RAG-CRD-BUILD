@@ -233,6 +233,18 @@ if ! is_step_done "nvidia-gpu-labels" "$KUBECTL" get node -l hierocracy.home/gpu
     [[ -n "${D_P4[1]:-}" ]] && { echo "  discovered P4-1: ${D_P4[1]}"; GPU_UUID_P4_1="${D_P4[1]}"; }
   fi
 
+  # gpu=true is LOAD-BEARING, not inventory: the validation-fix DaemonSet and the
+  # devicePlugin / gfd / dcgmExporter Helm nodeSelectors all select on it. Without
+  # it those four workloads are unschedulable and the GPU never becomes usable.
+  #
+  # It is normally applied by Talos machine.nodeLabels in the sibling repo's
+  # configs/patch-inference-0.yaml. Asserting it here removes that cross-repo
+  # dependency, exactly as the UUID labels do — this script must be sufficient on
+  # its own. kubectl label is idempotent, so re-asserting a Talos-set label is a
+  # no-op. (Superseded 55-label-gpu-nodes.sh, which also set gpu-count and
+  # nvidia.com/gpu.present; the latter is GFD's to manage and is not re-asserted.)
+  "$KUBECTL" label --overwrite node "$GPU_NODE" gpu=true gpu-count=3
+
   # gpu-pool-mixed is the important one: even with mig.strategy=none the
   # nvidia.com/gpu pool contains all THREE devices, so the nvidia.com/gpu.*
   # labels describe only part of it. Pin by UUID; do not select on those labels.
