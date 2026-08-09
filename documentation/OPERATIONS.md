@@ -216,6 +216,32 @@ bash ./config-cluster.sh
 #### Post-Setup Route Appendix
 If you need to reach the Talos management network (`10.0.0.0/24`) from `dev-fedora`, append the routing steps in [`documentation/network-configuration.md`](network-configuration.md). The command blocks there are grouped by machine file name (`dev-fedora`, `hegemon`, `hierophant`) so they can be carried into the installation workflow cleanly.
 
+### 1.9 Removed Install Steps: OLM and Quay (2026-08-09)
+The `olm` and `quay` steps were removed from `setup-01-basic.sh`. **Do not reinstate
+them without reading this.**
+
+- **OLM** existed only to serve two Subscriptions, both now gone. It was also broken:
+  `quay.io/operator-framework/olm` is **absent from the bootstrap registry**, so
+  applying `vendor/olm.yaml` could only ever produce `ImagePullBackOff`.
+- **Quay** (`project-quay` Subscription) targeted a `registry` namespace that was
+  never adopted. The registry actually in use is deployed by
+  `infrastructure/registry/install.sh` into `container-registry`.
+- **cert-manager's OLM Subscription** installed a *second* cert-manager from
+  operatorhubio on top of the static `vendor/cert-manager-v1.19.2.yaml` bundle
+  applied immediately before it — two installs contending for the same CRDs and
+  webhooks. The static bundle is self-sufficient and is what the cluster runs.
+
+Also removed: three unguarded `kubectl get sub|csv|deployment -n registry`
+diagnostics that sat **outside** the `is_step_done` guard. Under `set -e` these abort
+the whole script once the OLM CRDs are gone (`kubectl get sub` exits non-zero with
+"the server doesn't have a resource type"), which would silently skip every step
+below them — metrics-server, kube-state-metrics and traefik.
+
+`vendor/olm.yaml` and `vendor/olm-crds.yaml` are retained on disk but are applied by
+nothing and are deliberately **not** in `render-manifests.sh`'s `MANIFESTS` list. To
+reinstate OLM: mirror the `olm` image into the registry first, re-add the file to
+that list, then restore the step.
+
 ### 2.1 Session Establishment (Operational Context)
 Every new session for the **Junie** agent MUST establish the operational context by following these steps:
 1.  **Git Initialization**:

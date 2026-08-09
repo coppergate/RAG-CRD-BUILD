@@ -242,9 +242,10 @@ mark_step_done "k8tz"
 fi
 
 if ! is_step_done "namespaces"; then
-$KUBECTL get namespace olm >/dev/null 2>&1 || $KUBECTL create namespace olm
-$KUBECTL label --overwrite namespace olm  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
-
+# The 'olm' namespace was removed along with the OLM and quay steps — see the
+# note where the OLM install used to be, below. 'operators' is left in place: the
+# name is generic enough that something outside this repo may use it, and an
+# empty namespace costs nothing.
 $KUBECTL get namespace operators >/dev/null 2>&1 || $KUBECTL create namespace operators
 $KUBECTL label --overwrite namespace operators  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
 mark_step_done "namespaces"
@@ -284,31 +285,25 @@ EOF
 mark_step_done "purelb-config"
 fi
 
-if ! is_step_done "olm"; then
-echo "installing crds"
-$KUBECTL apply -f \
-$config_source_dir/infrastructure/vendor/olm-crds.yaml
-
-echo "waiting for OLM CRDs to be established..."
-for crd in \
-  operatorgroups.operators.coreos.com \
-  clusterserviceversions.operators.coreos.com \
-  catalogsources.operators.coreos.com \
-  subscriptions.operators.coreos.com \
-  installplans.operators.coreos.com; do
-  $KUBECTL wait --for condition=established --timeout=180s "crd/$crd" 2>/dev/null || true
-done
-
-echo "installing olm"
-$KUBECTL apply -f \
-$config_source_dir/infrastructure/vendor/olm.yaml
-
-# WaitForDeploymentToComplete namespace grepString sleepTime
-WaitForDeploymentToComplete olm olm-operator 15
-WaitForDeploymentToComplete olm catalog-operator 15
-WaitForDeploymentToComplete olm packageserver 15
-mark_step_done "olm"
-fi
+# ── REMOVED: Operator Lifecycle Manager (OLM) ────────────────────────────────
+# OLM was installed here solely to serve two Subscriptions, both of which are
+# gone:
+#   1. cert-manager — installed a SECOND cert-manager from operatorhubio on top
+#      of the static v1.19.2 bundle applied a few steps below. Two installs
+#      contending for the same CRDs and webhooks; the static bundle is
+#      self-sufficient and is what the cluster actually runs.
+#   2. quay — the project-quay operator, for an in-cluster Quay registry that
+#      was never adopted. The registry in use is deployed by
+#      infrastructure/registry/install.sh into the container-registry namespace.
+#
+# It was also broken: quay.io/operator-framework/olm is absent from the
+# bootstrap registry, so 'kubectl apply -f vendor/olm.yaml' could only ever
+# produce ImagePullBackOff.
+#
+# infrastructure/vendor/olm.yaml and olm-crds.yaml are retained on disk but are
+# no longer applied by anything, and are no longer rendered by
+# scripts/render-manifests.sh. If OLM is ever reinstated, mirror the olm image
+# into the registry first and add olm.yaml back to that script's MANIFESTS list.
 
 if ! is_step_done "cert-manager"; then
 echo "install the cert-manager"
@@ -319,28 +314,17 @@ $KUBECTL label --overwrite namespace cert-manager  pod-security.kubernetes.io/au
  
 $KUBECTL apply -f "$config_source_dir/infrastructure/vendor/cert-manager-v1.19.2.yaml"
 
-$KUBECTL apply -f - <<EOF
----
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: og-cert-manager
-  namespace: cert-manager
-spec:
-  targetNamespaces:
-  - cert-manager
----
-apiVersion: operators.coreos.com/v1alpha1 
-kind: Subscription 
-metadata: 
-  name: cert-manager-local 
-  namespace: cert-manager
-spec: 
-  channel: stable 
-  name: cert-manager 
-  source: operatorhubio-catalog 
-  sourceNamespace: olm
-EOF
+# NOTE: an OLM OperatorGroup + Subscription used to follow this apply, installing
+# a second cert-manager from operatorhubio on top of the static bundle above.
+# Removed with OLM — the static v1.19.2 bundle installs the controller,
+# cainjector, webhook and all cert-manager CRDs on its own. Two installs fighting
+# over the same CRDs and webhook configurations was never the intent.
+#
+# The bundle's image references are rewritten to the current registry by
+# scripts/render-manifests.sh, which runs at the top of this script. Before that
+# was wired up the bundle still pointed at the dead 10.0.0.1:5000, which is what
+# made cert-manager silently absent and broke the Pulsar install downstream with
+# 'no matches for kind "Certificate" in version "cert-manager.io/v1"'.
 
 echo ""
 echo "Check the cert-manager operator pods"
@@ -445,54 +429,20 @@ bash $config_source_dir/infrastructure/registry/install.sh
 mark_step_done "local-registry"
 fi
 
-#setup an operator group in the registry namespace
-#then add the 'quay' operator (container registry service) subscription
-
-echo "apply the quay operator"
-
-if ! is_step_done "quay"; then
-$KUBECTL get namespace registry >/dev/null 2>&1 || $KUBECTL create namespace registry
-$KUBECTL label --overwrite namespace registry  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
-
-$KUBECTL apply -f - <<EOF
----
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: og-single
-  namespace: registry
-spec:
-  targetNamespaces:
-  - registry
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: quay
-  namespace: registry
-spec:
-  channel: stable-3.8
-  installPlanApproval: Automatic
-  name: project-quay
-  source: operatorhubio-catalog
-  sourceNamespace: olm
-  startingCSV: quay-operator.v3.8.1
-
-EOF
-
-WaitForDeploymentToComplete registry quay-operator 15
-mark_step_done "quay"
-fi
-# $KUBECTL expose deployment quay --name=quay-server --port=8080 --target-port=8080 --type=LoadBalancer -n registry
-
-echo "check the 'quay' subscription"
-$KUBECTL get sub -n registry
-
-echo "the 'quay' cluster service version"
-$KUBECTL get csv -n registry
-
-echo "the 'quay' deployment"
-$KUBECTL get deployment -n registry
+# ── REMOVED: Quay operator ───────────────────────────────────────────────────
+# The project-quay OLM Subscription installed a Quay registry into a 'registry'
+# namespace that was never adopted — the registry this cluster actually uses is
+# deployed by infrastructure/registry/install.sh (above) into container-registry
+# and reached at ${REGISTRY_LB_IP}. The 'registry' namespace does not exist on
+# the cluster.
+#
+# Removed together with OLM, which was its only remaining consumer.
+#
+# Three unguarded diagnostics also lived here — 'kubectl get sub|csv|deployment
+# -n registry'. They sat OUTSIDE the is_step_done guard, so with 'set -e' (line 5)
+# they would abort this entire script once the OLM CRDs were gone: 'kubectl get
+# sub' exits non-zero with "the server doesn't have a resource type sub". Every
+# step below here — metrics-server, kube-state-metrics, traefik — would never run.
 
 if ! is_step_done "metrics-server"; then
 echo "installing the metrics API"

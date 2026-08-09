@@ -48,8 +48,11 @@ MANIFESTS=(
   # Any new file under infrastructure/vendor/ that carries image references
   # must be added here.
   infrastructure/vendor/cert-manager-v1.19.2.yaml
-  infrastructure/vendor/olm.yaml
   infrastructure/vendor/kubernetes-dashboard-v2.7.0.yaml
+  # NOT listed: infrastructure/vendor/olm.yaml — OLM was removed from
+  # setup-01-basic.sh and the file is no longer applied by anything. If OLM is
+  # ever reinstated, mirror quay.io/operator-framework/olm into the registry
+  # (it is currently absent) and add the file back here.
 )
 
 render_one() {
