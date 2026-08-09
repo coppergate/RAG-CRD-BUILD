@@ -653,22 +653,49 @@ with the `*-worker.yaml` values files instead.
 **Rollback:** `kubectl taint node inference-0 nvidia.com/gpu-`. Every other piece is
 additive — tolerations are inert without the taint.
 
-#### WARNING: `setup-complete.sh --gpu` clobbers the tuned GPU operator
-The GPU operator on this cluster is installed and tuned by
-`kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh`, **not** by
-`complete-build`. Passing `--gpu` to `setup-complete.sh` runs
-`infrastructure/nvidia-operator.sh`, which:
-1. `helm uninstall`s the `nvidia-device-plugin` and `nvidia-dcgm-exporter` releases.
-2. Re-runs `helm upgrade --install gpu-operator` with a values file that omits
-   `mig.strategy: none` (chart default `single` asserts a uniform node and is what
-   drove the GFD collapse) and omits `devicePlugin.config.default: config.yaml`
-   (without which the operator ignores the `nvidia-device-plugin-config` ConfigMap
-   entirely and runs chart defaults).
+#### GPU Operator ownership and ordering (RESOLVED 2026-08-09)
+`complete-build/infrastructure/nvidia-operator.sh` is now **authoritative** for the
+GPU operator. The logic previously lived in two places and complete-build's copy
+had drifted into the worse of the two — missing `mig.strategy: none` and
+`devicePlugin.config.default: config.yaml`, so running it undid the tuned install.
+That is fixed; `--gpu` is safe, and GPU setup now **defaults ON**.
 
-**On a cluster whose GPU operator already came from the sibling repo, omit `--gpu`.**
-That is the default, so plain `FRESH_INSTALL=true ./setup-complete.sh` is correct.
-Reconcile `nvidia-operator.sh` with `52-install-gpu-operator.sh` before ever using
-`--gpu` again.
+**Repo boundary:** `kubernetes-setup/new-setup-external-gpu` owns Talos-level node
+provisioning (machine config, kernel modules, driver extensions, enrolment).
+`complete-build` owns everything that is a Kubernetes object — the operator Helm
+release, RuntimeClass, device-plugin ConfigMap, validation-fix DaemonSet, and the
+GPU node labels. `52-install-gpu-operator.sh` is left in place but is no longer the
+source of truth; do not edit both.
+
+**Ordering — this matters.** The operator publishes the
+`hierocracy.home/gpu-*-uuid` node labels, and `ollama.sh` **hard-fails** without
+them. The step therefore runs as **Step 1.9, immediately before the RAG stack**. It
+used to run after, which meant a fresh install could never deploy Ollama.
+
+**The old deferral rationale no longer applies.** It read:
+
+> The V100's PCIe initialization generates device resets and bus transactions that
+> cause hypervisor I/O latency spikes during KVM VM scheduling, which destabilizes
+> the Kubernetes control plane (etcd slow ops → controller lease timeouts → crash loops).
+
+The GPU is no longer passed through to a KVM guest — it sits in a separate physical
+machine enrolled as the external bare-metal node `inference-0`. There is no
+hypervisor in the path, and the control-plane and worker VMs have **no GPU
+involvement whatsoever**. Do not reintroduce the deferral on the strength of that
+symptom.
+
+Three settings in `nvidia-operator.sh` are load-bearing and interact:
+
+| Setting | Consequence if wrong |
+|---|---|
+| `mig.strategy: none` (Helm) | chart default `single` makes GFD collapse the mixed node onto one product and hide the V100. Surfaces as the `MIG_STRATEGY` env var, which the plugin resolves **above** its config file — so the ConfigMap alone cannot fix it |
+| `devicePlugin.config.default: config.yaml` | without it the operator ignores the ConfigMap entirely and runs chart defaults |
+| no empty `sharing: timeSlicing: {}` in the ConfigMap | fails parsing with "no resources specified"; the plugin will not start and `nvidia.com/gpu` drops to 0. Was previously present and *inert* — it only becomes fatal once `config.default` makes the file load |
+
+GPU UUIDs are now **discovered** from the live node via a throwaway privileged pod
+running `nvidia-smi -L` (Talos cannot run it directly), with the known UUIDs as
+fallback. Set `GPU_UUID_DISCOVER=false` to use the fallbacks only. Re-run this
+script after any GPU is added, removed or reseated.
 
 #### Model Seeding (During Install)
 `seed-models.sh` creates temporary seeder pods that pull models from the local registry into the PVCs. 

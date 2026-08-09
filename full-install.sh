@@ -3,10 +3,15 @@
 # full-install.sh — End-to-end cluster + RAG stack install
 # IMPORTANT: Must be executed on host: hierophant
 #
-# Usage: FRESH_INSTALL=true bash full-install.sh [--gpu]
+# Usage: FRESH_INSTALL=true bash full-install.sh [--no-gpu]
 #
 # Flags:
-#   --gpu               — install NVIDIA GPU operator (default: skipped)
+#   --no-gpu            — skip the NVIDIA GPU operator. Default is to INSTALL it:
+#                         it publishes the hierocracy.home/gpu-*-uuid node labels
+#                         that ollama.sh requires, so the RAG stack cannot deploy
+#                         without it. For a genuinely GPU-less build use
+#                         full-install-no-gpu.sh instead.
+#   --gpu               — retained as a no-op for backward compatibility.
 #
 # Environment:
 #   FRESH_INSTALL=true  — clear ALL journals before starting (both cluster

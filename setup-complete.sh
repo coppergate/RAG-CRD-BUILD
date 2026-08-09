@@ -1,7 +1,7 @@
 #!/bin/bash
 ## setup-complete.sh - Master Orchestration Script
 ## To be executed on host: hierophant
-## Usage: FRESH_INSTALL=true [FORCE_REINIT=true] [REPO_DIR=<path>] ./setup-complete.sh [--gpu]
+## Usage: FRESH_INSTALL=true [FORCE_REINIT=true] [REPO_DIR=<path>] ./setup-complete.sh [--no-gpu]
 ## Purpose:
 #     End-to-end bootstrap:
 #       basic infra (Rook-Ceph/Traefik),
@@ -15,7 +15,8 @@
 # FRESH_INSTALL=true -> clean from-scratch where supported;
 # FORCE_REINIT=true -> force Pulsar BookKeeper rejoin;
 # REPO_DIR -> override RAG stack path;
-# --gpu -> install NVIDIA GPU operator (default: skipped);
+# --no-gpu / SKIP_GPU=true -> skip the NVIDIA GPU operator (default: INSTALLED,
+#   because ollama.sh requires the GPU node labels it publishes);
 # set NO_PROXY to include cluster CIDRs and .hierocracy.home;
 # child scripts default to KUBECTL=/home/k8s/kube/kubectl and KUBECONFIG=/home/k8s/kube/config/kubeconfig.
 #
@@ -26,12 +27,19 @@ BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
 
 # --- Argument parsing ---
+# GPU setup now defaults ON. This cluster has a GPU node and the RAG stack cannot
+# deploy Ollama without the labels the GPU operator publishes, so opt-out is the
+# correct default rather than opt-in. --gpu is retained as a no-op so existing
+# invocations and docs keep working. For a genuinely GPU-less build use
+# setup-complete-no-gpu.sh.
 for arg in "$@"; do
   case "$arg" in
     --gpu) export WITH_GPU=true ;;
+    --no-gpu) export WITH_GPU=false ;;
     *) echo "Unknown argument: $arg"; exit 1 ;;
   esac
 done
+export WITH_GPU="${WITH_GPU:-true}"
 
 # Source of truth for versioning
 VERSION_FILE="$BASE_DIR/CURRENT_VERSION"
@@ -268,13 +276,22 @@ wait_namespace_stable "monitoring" 300
 mark_step_done "apm-stabilize"
 fi
 
-# NOTE: NVIDIA GPU operator is intentionally deferred to the end of the install.
-# The V100's PCIe initialization generates device resets and bus transactions that
-# cause hypervisor I/O latency spikes during KVM VM scheduling, which destabilizes
-# the Kubernetes control plane (etcd slow ops → controller lease timeouts → crash loops).
-# GPU resources are NOT needed until inference workloads start. Set SKIP_GPU=true to
-# skip GPU setup entirely (useful for cluster rebuilds and CI environments).
-# The step is journaled as "nvidia" so it can be resumed independently.
+# NOTE (2026-08-09): the GPU operator used to be deferred to the very end of the
+# install, on the grounds that the V100's PCIe initialization caused hypervisor
+# I/O latency spikes during KVM VM scheduling and destabilized the control plane
+# (etcd slow ops -> lease timeouts -> crash loops).
+#
+# THAT NO LONGER APPLIES. The GPU is not passed through to a KVM guest any more —
+# it lives in a separate physical machine enrolled as the external bare-metal node
+# inference-0. No hypervisor is in the path, and the control-plane and worker VMs
+# have no GPU involvement at all. The rationale is kept here only so nobody
+# rediscovers the old symptom and re-adds the deferral.
+#
+# The step now runs immediately BEFORE the RAG stack, because it must: the GPU
+# operator publishes the hierocracy.home/gpu-*-uuid node labels, and
+# rag-stack/infrastructure/ollama/ollama.sh hard-fails without them. With the
+# operator running after the RAG stack, a fresh install could never deploy Ollama.
+# Set SKIP_GPU=true (or pass --no-gpu) to skip it. Journaled as "nvidia".
 
 if ! is_step_done "pulsar"; then
 STEP_TS_START=$(date +%s)
@@ -419,6 +436,25 @@ STEP_TS_END=$(date +%s)
 log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+# GPU operator MUST precede the RAG stack — it publishes the gpu-*-uuid node
+# labels that ollama.sh requires. See the note above Step 1.5.8.
+if [[ "${WITH_GPU:-true}" == "true" && "${SKIP_GPU:-false}" != "true" ]]; then
+  if ! is_step_done "nvidia" $KUBECTL get node -l hierocracy.home/gpu-v100-uuid -o name; then
+    STEP_TS_START=$(date +%s)
+    echo ""
+    echo "Step 1.9: NVIDIA GPU Operator (must precede Ollama)"
+    echo "----------------------------------------------------"
+    bash "$BASE_DIR/infrastructure/nvidia-operator.sh"
+    mark_step_done "nvidia"
+    STEP_TS_END=$(date +%s)
+    log_step_timing "nvidia" "$STEP_TS_START" "$STEP_TS_END" "ok"
+  fi
+else
+  echo "GPU setup skipped (--no-gpu or SKIP_GPU=true)."
+  echo "  NOTE: ollama.sh will fail without hierocracy.home/gpu-v100-uuid."
+  echo "  Use setup-complete-no-gpu.sh for a genuinely GPU-less build."
+fi
+
 if ! is_step_done "rag-stack"; then
 STEP_TS_START=$(date +%s)
 echo ""
@@ -435,20 +471,8 @@ STEP_TS_END=$(date +%s)
 log_step_timing "rag-stack" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if [[ "${WITH_GPU:-false}" == "true" ]]; then
-  if ! is_step_done "nvidia"; then
-    STEP_TS_START=$(date +%s)
-    echo ""
-    echo "Step 3: NVIDIA GPU Operator (deferred — runs after full RAG stack)"
-    echo "----------------------------------------------------"
-    bash $BASE_DIR/infrastructure/nvidia-operator.sh
-    mark_step_done "nvidia"
-    STEP_TS_END=$(date +%s)
-    log_step_timing "nvidia" "$STEP_TS_START" "$STEP_TS_END" "ok"
-  fi
-else
-  echo "GPU skipped (pass --gpu to enable) — run nvidia-operator.sh manually when ready"
-fi
+# (The GPU operator formerly ran here, after the RAG stack. It now runs as
+# Step 1.9, before it — see the note above Step 1.5.8.)
 
 clear_journal
 
