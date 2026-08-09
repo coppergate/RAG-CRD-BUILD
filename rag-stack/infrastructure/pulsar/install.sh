@@ -20,9 +20,12 @@ log()  { printf "[%s] %s\n" "$(date +'%F %T')" "$*"; }
 warn() { log "WARN: $*"; }
 fail() { log "ERROR: $*"; exit 1; }
 
-# Bridge custom journaling to standard journal-helper
+# Bridge custom journaling to standard journal-helper.
+# is_done passes any extra arguments through as a verify command — see
+# is_step_done in scripts/journal-helper.sh. A step whose marker is present but
+# whose output has since vanished is re-run instead of skipped.
 mark_done() { mark_step_done "$1"; }
-is_done() { is_step_done "$1"; }
+is_done() { local s="$1"; shift || true; is_step_done "$s" "$@"; }
 
 # If we are forcibly removing/resetting, clear journal so we don't skip steps incorrectly
 if [[ "${PULSAR_REMOVE:-false}" == "true" ]]; then
@@ -31,7 +34,10 @@ if [[ "${PULSAR_REMOVE:-false}" == "true" ]]; then
 fi
 
 echo "--- 1. Preparing Namespace and Optional Cleanup ---"
-if ! is_done 10.ns; then
+# Verify the namespace still exists rather than trusting the marker. A stale
+# 10.ns entry against a rebuilt cluster skips creation entirely, and the helm
+# install below then fails against a namespace that was never made.
+if ! is_done 10.ns $KUBECTL get namespace $NAMESPACE; then
   if $KUBECTL get namespace $NAMESPACE >/dev/null 2>&1; then
       if [ "$PULSAR_REMOVE" = "true" ]; then
           log "Removing existing Pulsar release and PVCs in namespace $NAMESPACE..."

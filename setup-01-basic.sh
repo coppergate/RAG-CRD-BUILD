@@ -54,7 +54,7 @@ bash "$config_source_dir/scripts/setup-node-labels.sh"
 # rook-ceph-image-prefetch removed in favor of hierophant registry mirror bootstrap
 # This avoids downloading the same image 9 times from the internet.
 
-if ! is_step_done "rook-ceph-operator"; then
+if ! is_step_done "rook-ceph-operator" $KUBECTL get crd cephclusters.ceph.rook.io; then
 echo "install rook-ceph operator"
 
 $KUBECTL get namespace rook-ceph >/dev/null 2>&1 || $KUBECTL create namespace rook-ceph
@@ -75,6 +75,12 @@ $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml
 # those CRs into the actual CSI provisioner deployments (ctrlplugin, nodeplugin).
 # Both must run — scaling ceph-csi-controller-manager to 0 prevents CSI from ever deploying.
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml
+
+# csi-operator-config.yaml is a CR of a type registered by csi-operator.yaml
+# immediately above, so the CRD must be established before it can be applied —
+# otherwise this races and fails with "no matches for kind OperatorConfig".
+WaitForCRD operatorconfigs.csi.ceph.io
+
 # CSI defaults must exist BEFORE Rook creates its Driver CRs, so the nodeplugin
 # DaemonSet is born tolerating the inference-node GPU taint. Without this the
 # GPU Ollama pods cannot mount their rook-cephfs PVC on inference-0.
@@ -86,8 +92,19 @@ WaitForPodsRunning "rook-ceph" "rook-ceph-operator" 30
 mark_step_done "rook-ceph-operator"
 fi
 
-if ! is_step_done "rook-ceph-cluster"; then
+if ! is_step_done "rook-ceph-cluster" $KUBECTL get cephcluster -n rook-ceph rook-ceph; then
 echo "Next step the storage CRDs"
+
+# These four are all CRs of types registered by rook-ceph/crds.yaml in the
+# previous step. That step ends with a pod wait, which usually gives the
+# apiextensions controller enough time — but "usually" is not a guarantee on a
+# cold cluster, and losing the race aborts the install under 'set -e'. Make the
+# dependency explicit.
+WaitForCRD \
+  cephclusters.ceph.rook.io \
+  cephfilesystems.ceph.rook.io \
+  cephobjectstores.ceph.rook.io \
+  cephblockpools.ceph.rook.io
 
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/cluster.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/filesystem.yaml
@@ -222,13 +239,16 @@ mark_step_done "rook-ceph-cluster"
 mark_step_done "rook-ceph-storageclass"
 fi
 
-if ! is_step_done "rook-ceph-storageclass"; then
+if ! is_step_done "rook-ceph-storageclass" $KUBECTL get sc rook-cephfs; then
 echo "Next step defined the storage classes"
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
 mark_step_done "rook-ceph-storageclass"
 fi
 
 # install a tz manager and set the local timezone to UTC
+# No verify command: the k8tz chart is installed without --namespace, so it lands
+# in the context's default namespace and there is no 'k8tz' namespace to check for.
+# A verify that can never succeed would re-run this step on every install.
 if ! is_step_done "k8tz"; then
 helm repo add k8tz https://k8tz.github.io/k8tz/
 helm repo update
@@ -252,7 +272,7 @@ mark_step_done "namespaces"
 fi
 
 echo "install 'purelb' deployment"
-if ! is_step_done "purelb"; then
+if ! is_step_done "purelb" $KUBECTL get ns purelb; then
 helm repo add purelb https://gitlab.com/api/v4/projects/20400619/packages/helm/stable
 helm repo update
 
@@ -305,7 +325,7 @@ fi
 # scripts/render-manifests.sh. If OLM is ever reinstated, mirror the olm image
 # into the registry first and add olm.yaml back to that script's MANIFESTS list.
 
-if ! is_step_done "cert-manager"; then
+if ! is_step_done "cert-manager" $KUBECTL get crd certificates.cert-manager.io; then
 echo "install the cert-manager"
 
 echo "create cert-manager namespace"
@@ -423,7 +443,7 @@ $KUBECTL wait --for=delete namespace/cert-manager-test \
     --request-timeout=20s 2>/dev/null || true
 fi
 
-if ! is_step_done "local-registry"; then
+if ! is_step_done "local-registry" $KUBECTL get deploy -n container-registry registry; then
 echo "--- Bootstrapping Local Registry ---"
 bash $config_source_dir/infrastructure/registry/install.sh
 mark_step_done "local-registry"
@@ -444,7 +464,7 @@ fi
 # sub' exits non-zero with "the server doesn't have a resource type sub". Every
 # step below here — metrics-server, kube-state-metrics, traefik — would never run.
 
-if ! is_step_done "metrics-server"; then
+if ! is_step_done "metrics-server" $KUBECTL get deploy -n kube-system metrics-server; then
 echo "installing the metrics API"
 bash "$config_source_dir/infrastructure/metrics-server/metrics-server.sh"
 mark_step_done "metrics-server"
@@ -502,7 +522,7 @@ fi
 
 
 
-if ! is_step_done "traefik"; then
+if ! is_step_done "traefik" $KUBECTL get ns traefik; then
 echo "installing traefik"
 source $config_source_dir/infrastructure/traefik/traefik.sh
 mark_step_done "traefik"

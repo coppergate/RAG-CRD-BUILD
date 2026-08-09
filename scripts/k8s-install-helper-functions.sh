@@ -265,3 +265,34 @@ repeatToColWidth(){
 	repeat $count $char
 }
 
+
+# WaitForCRD <crd-name> [<crd-name> ...]
+#
+# Block until each named CRD reports condition=established.
+#
+# WHY: 'kubectl apply' returns as soon as the API server accepts the CRD object,
+# but the type is not servable until the apiextensions controller establishes it
+# and the discovery cache refreshes. Applying a custom resource in the same
+# breath as its CRD therefore races, and loses often enough to matter on a cold
+# cluster. The failure is the familiar:
+#
+#   resource mapping not found for name: "..." ... ensure CRDs are installed first
+#
+# Under 'set -e' that aborts the whole install, and because the enclosing step
+# never reaches mark_step_done it can leave a half-built namespace behind.
+#
+# Always call this between applying a CRD bundle and applying any CR of that
+# type. Default timeout 180s per CRD; override with CRD_WAIT_TIMEOUT.
+function WaitForCRD() {
+    local timeout="${CRD_WAIT_TIMEOUT:-180}"
+    local kubectl_bin="${KUBECTL:-kubectl}"
+    local crd rc=0
+    for crd in "$@"; do
+        echo "  waiting for CRD to be established: $crd"
+        if ! $kubectl_bin wait --for condition=established --timeout="${timeout}s" "crd/$crd"; then
+            echo "  ERROR: CRD '$crd' was not established within ${timeout}s" >&2
+            rc=1
+        fi
+    done
+    return $rc
+}
