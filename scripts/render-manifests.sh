@@ -40,6 +40,16 @@ MANIFESTS=(
   infrastructure/metrics-server/metrics-server.yaml
   infrastructure/prometheus/prometheus-operator.yaml
   infrastructure/kubernetes-setup/check-lsmod-job.yaml
+  # Vendored upstream bundles. These were MISSED in the initial flat-LAN
+  # conversion and still pointed at the dead 10.0.0.1:5000 (talos-nat) registry.
+  # That address is unreachable on the flat LAN, so cert-manager came up in
+  # ImagePullBackOff and, with no cert-manager CRDs, the Pulsar install failed
+  # with 'no matches for kind "Certificate" in version "cert-manager.io/v1"'.
+  # Any new file under infrastructure/vendor/ that carries image references
+  # must be added here.
+  infrastructure/vendor/cert-manager-v1.19.2.yaml
+  infrastructure/vendor/olm.yaml
+  infrastructure/vendor/kubernetes-dashboard-v2.7.0.yaml
 )
 
 render_one() {
