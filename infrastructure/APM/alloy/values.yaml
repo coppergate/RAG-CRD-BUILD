@@ -224,6 +224,20 @@ alloy:
 controller:
   type: daemonset
   replicas: 1
+  # inference-0 is tainted nvidia.com/gpu=present:NoSchedule to reserve it for GPU
+  # workloads (scripts/setup-node-labels.sh). Alloy must still run there.
+  #
+  # This is a silent-failure risk, not a loud one: Alloy scrapes the DCGM exporter
+  # using LOCAL-NODE pod discovery (see discovery.kubernetes "dcgm" above — targets
+  # are filtered to __meta_kubernetes_pod_node_name == the local node, to avoid
+  # err-mimir-sample-out-of-order from duplicate series). Only the Alloy instance
+  # ON inference-0 can scrape that node's DCGM exporter. Without this toleration
+  # there is no error anywhere — GPU metrics and logs from the GPU node simply
+  # stop existing.
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
   volumes:
     extra:
       - name: registry-ca

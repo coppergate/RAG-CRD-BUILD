@@ -255,8 +255,12 @@ tls:
     enabled: true
     cert_name: tls-bookie
   # settings for generating certs for zookeeper
+  # Disabled: BookKeeper's TLSContextFactory fails the TLS handshake with ZK's
+  # TLS implementation silently (15s timeout, exit 124 after 600s). ZK TLS uses
+  # ClientCnxnSocketNetty+zookeeper.client.secure injected by keytool.sh which
+  # overrides any BOOKIE_EXTRA_OPTS we set. Plain-text port 2181 is used instead.
   zookeeper:
-    enabled: true
+    enabled: false
     cert_name: tls-zookeeper
   # settings for generating certs for recovery
   autorecovery:
@@ -338,7 +342,7 @@ zookeeper:
   replicaCount: 3
   updateStrategy:
     type: RollingUpdate
-  podManagementPolicy: Parallel
+  podManagementPolicy: OrderedReady
   initContainers: [ ]
   # This is how prometheus discovers this component
   podMonitor:
@@ -588,10 +592,10 @@ bookkeeper:
       requests:
         memory: 4Gi
         cpu: 2
-  replicaCount: 4
+  replicaCount: 3
   updateStrategy:
     type: RollingUpdate
-  podManagementPolicy: Parallel
+  podManagementPolicy: OrderedReady
   initContainers: [ ]
   # This is how prometheus discovers this component
   podMonitor:

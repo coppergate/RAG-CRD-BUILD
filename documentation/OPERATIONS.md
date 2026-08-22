@@ -216,6 +216,126 @@ bash ./config-cluster.sh
 #### Post-Setup Route Appendix
 If you need to reach the Talos management network (`10.0.0.0/24`) from `dev-fedora`, append the routing steps in [`documentation/network-configuration.md`](network-configuration.md). The command blocks there are grouped by machine file name (`dev-fedora`, `hegemon`, `hierophant`) so they can be carried into the installation workflow cleanly.
 
+### 1.8.1 Install Dependency Order (verified 2026-08-09)
+The install order below was traced end to end and is **correct** — every consumer
+runs after its provider. When the install appears to "regress", suspect journal
+drift (§1.8.2) or a CRD race, not the ordering.
+
+**`setup-01-basic.sh`** — providers, in execution order:
+
+| # | Step | Provides | Requires |
+|---|---|---|---|
+| 1 | `registry-patch` | Talos nodes trust/mirror the registry | — |
+| 2 | `bootstrap-mirror` | seed images in bootstrap registry | 1 |
+| 3 | `setup-node-labels.sh` *(unguarded)* | `role=` labels, GPU taint | — |
+| 4 | `rook-ceph-operator` | `ceph.rook.io` + `csi.ceph.io` CRDs, operator | 1, 2 |
+| 5 | `rook-ceph-cluster` | CephCluster/FS/Object/Pool, **StorageClasses**, CSI | 4 |
+| 6 | `rook-ceph-storageclass` | StorageClasses (re-apply; see note) | 5 |
+| 7 | `k8tz` | timezone injection | — |
+| 8 | `namespaces` | `operators` ns | — |
+| 9–10 | `purelb`, `purelb-config` | **LoadBalancer IPs** from `LB_POOL_RANGE` | — |
+| 11 | `cert-manager` | **`Certificate` / `Issuer` CRDs** | — |
+| 12 | `local-registry` | in-cluster registry | 5 (PVC), 10 (LB IP), 11 (TLS) |
+| 13–14 | `metrics-server`, `kube-state-metrics` | metrics API | — |
+| 15–17 | `krew`, `rook-ceph-plugin`, `krew kube ai` | kubectl plugins | 4 |
+| 18 | `traefik` | ingress | 10 (LB IP), 11 (TLS) |
+
+**`setup-complete.sh`** — orchestration, in execution order:
+
+`registry-trust-verified` → `setup-node-labels` → **`basic`** (all of the above) →
+`headlamp` → `registry` (ensure) → `llm-models-pre-populate` →
+`image-prefetch-initial` → `apm` → `apm-stabilize` → **`pulsar`** → `pulsar-init` →
+`cnpg-operator` → `timescaledb` → `build-pipeline-infra` → `pre-build-stabilize` →
+`rag-images` → `rag-stack` → `nvidia` *(deferred to the end; omit `--gpu`, see §4.4)*
+
+Cross-step CRD→CR boundaries, all correctly ordered and guarded:
+
+- **cert-manager → Pulsar.** Pulsar's chart creates `Certificate`/`Issuer` objects. cert-manager is step 11 of `basic`; Pulsar runs later from `setup-complete.sh`.
+- **CNPG → TimescaleDB.** `cnpg-operator` applies `--server-side` and waits for the operator Deployment to be Available; `timescaledb/install.sh` additionally hard-fails if `cnpg-system` is missing.
+- **Rook CRDs → Ceph CRs**, and **csi-operator CRD → `OperatorConfig` CR**. Both now guarded by `WaitForCRD` (§1.8.3).
+
+Two non-ordering observations from the same trace:
+
+- `storageclass.yaml` is applied **twice** — once inside `rook-ceph-cluster` and again in `rook-ceph-storageclass`. Harmless (idempotent) but redundant.
+- `infrastructure/prometheus/prometheus-operator.yaml` is applied by **nothing**. It appears only in `render-manifests.sh` and the image prefetch plan. The APM stack uses Loki/Mimir/Tempo/Alloy with the Grafana operator instead. Dead config.
+
+### 1.8.2 Journal Drift — Why Steps Get Silently Skipped
+`mark_step_done` appends a line to a journal in `$HOME`; nothing checks that the
+step's output still exists. The journal and the cluster have **independent
+lifetimes**. Rebuild the cluster while the journal survives and every step is
+skipped against infrastructure that is no longer there.
+
+Observed 2026-08-09: cert-manager, Rook and the registry all marked done, while the
+cluster had **no Rook CRDs, no StorageClasses, and empty `rook-ceph` /
+`container-registry` namespaces**. The symptom surfaced far downstream as Pulsar
+failing on missing `Certificate` CRDs, then on an `apache-pulsar` namespace that was
+never created.
+
+`is_step_done` now takes an optional verify command:
+
+```bash
+is_step_done "cert-manager" $KUBECTL get crd certificates.cert-manager.io
+```
+
+Marker present **and** verify succeeds → skip. Marker present but verify fails →
+warn, delete the stale marker, re-run. No verify argument → legacy behaviour.
+
+**Add a verify command to any new step**, and make it a cheap read-only check of
+something the step actually creates. A check that can never succeed re-runs the step
+every install — which is why `k8tz` deliberately has none (its chart installs with no
+`--namespace`, so there is no `k8tz` namespace to test for).
+
+`rag-stack/infrastructure/timescaledb/install.sh` and `build-pipeline/install.sh`
+have a local `should_run_step` implementing the same idea, plus an adopt-existing-state
+case (not in journal but verify passes → mark done and skip). The shared helper
+deliberately implements only the conservative half — it will downgrade skip to run,
+never run to skip.
+
+### 1.8.3 CRD Establishment Races
+`kubectl apply` returns once the API server accepts a CRD object, but the type is not
+servable until it is established and discovery refreshes. Applying a CR in the same
+breath as its CRD races, and losing it aborts the install under `set -e`:
+
+```text
+resource mapping not found for name: "..." — ensure CRDs are installed first
+```
+
+Use `WaitForCRD` (in `scripts/k8s-install-helper-functions.sh`) between any CRD bundle
+apply and the first CR of that type. Timeout defaults to 180s per CRD, override with
+`CRD_WAIT_TIMEOUT`.
+
+```bash
+$KUBECTL apply -f csi-operator.yaml
+WaitForCRD operatorconfigs.csi.ceph.io
+$KUBECTL apply -f csi-operator-config.yaml
+```
+
+### 1.9 Removed Install Steps: OLM and Quay (2026-08-09)
+The `olm` and `quay` steps were removed from `setup-01-basic.sh`. **Do not reinstate
+them without reading this.**
+
+- **OLM** existed only to serve two Subscriptions, both now gone. It was also broken:
+  `quay.io/operator-framework/olm` is **absent from the bootstrap registry**, so
+  applying `vendor/olm.yaml` could only ever produce `ImagePullBackOff`.
+- **Quay** (`project-quay` Subscription) targeted a `registry` namespace that was
+  never adopted. The registry actually in use is deployed by
+  `infrastructure/registry/install.sh` into `container-registry`.
+- **cert-manager's OLM Subscription** installed a *second* cert-manager from
+  operatorhubio on top of the static `vendor/cert-manager-v1.19.2.yaml` bundle
+  applied immediately before it — two installs contending for the same CRDs and
+  webhooks. The static bundle is self-sufficient and is what the cluster runs.
+
+Also removed: three unguarded `kubectl get sub|csv|deployment -n registry`
+diagnostics that sat **outside** the `is_step_done` guard. Under `set -e` these abort
+the whole script once the OLM CRDs are gone (`kubectl get sub` exits non-zero with
+"the server doesn't have a resource type"), which would silently skip every step
+below them — metrics-server, kube-state-metrics and traefik.
+
+`vendor/olm.yaml` and `vendor/olm-crds.yaml` are retained on disk but are applied by
+nothing and are deliberately **not** in `render-manifests.sh`'s `MANIFESTS` list. To
+reinstate OLM: mirror the `olm` image into the registry first, re-add the file to
+that list, then restore the step.
+
 ### 2.1 Session Establishment (Operational Context)
 Every new session for the **Junie** agent MUST establish the operational context by following these steps:
 1.  **Git Initialization**:
@@ -433,6 +553,149 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
   "cd /mnt/hegemon-share/share/code/complete-build/rag-stack/infrastructure/ollama && \
    bash ./push-models-to-cluster.sh"
 ```
+
+#### GPU Selection on inference-0 (Mixed Pool — Pin by UUID)
+`inference-0` holds a **heterogeneous** GPU pool: 1x Tesla V100 32GB (sm_70, volta) and
+2x Tesla P4 8GB (sm_61, pascal). All three are advertised as a single fungible
+`nvidia.com/gpu` resource (`allocatable: 3`).
+
+**DO NOT request `nvidia.com/gpu` for inference workloads.** The scheduler cannot
+distinguish the cards, and two of the three cannot hold a 32B model (~19GB Q4_K_M)
+in 8GB of VRAM.
+
+**Node affinity on GFD labels does NOT work either.** GFD models a mixed node as a
+single product/memory/compute triple. Observed live on 2026-08-08 with
+`MIG_STRATEGY=none` correctly set, GFD still reported the P4:
+```text
+nvidia.com/gpu.product = Tesla-P4     nvidia.com/gpu.memory = 7680
+nvidia.com/gpu.family  = pascal       nvidia.com/gpu.compute.major/minor = 6/1
+```
+The `hierocracy.home/gpu-labels-describe=tesla-v100-32gb` label asserts the opposite
+and is currently **false**. Treat `nvidia.com/gpu.*` labels as unreliable on this node.
+
+**The supported mechanism is pin-by-UUID.** Published as node labels by
+`kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh`:
+
+| Label | Card |
+|---|---|
+| `hierocracy.home/gpu-v100-uuid` | Tesla V100 32GB, `05:00.0` |
+| `hierocracy.home/gpu-p4-0-uuid` | Tesla P4 8GB, `81:00.0` |
+| `hierocracy.home/gpu-p4-1-uuid` | Tesla P4 8GB, `82:00.0` |
+
+A workload pins a card by setting `NVIDIA_VISIBLE_DEVICES` to the UUID and
+`NVIDIA_DRIVER_CAPABILITIES=compute,utility` (`utility` alone yields only
+`nvidia-smi`, no CUDA), with `runtimeClassName: nvidia`, and requests **no**
+`nvidia.com/gpu`.
+
+In the RAG stack, `infrastructure/ollama/ollama.sh` resolves the V100 UUID from the
+node label at deploy time and writes it into the `ollama-gpu-pin-v100` ConfigMap in
+`llms-ollama`. Both GPU values files consume it via `extraEnvFrom` and set
+`ollama.gpu.enabled: false`. No UUID is hardcoded in the repo. `extraEnvFrom` is used
+rather than `extraEnv` because Helm replaces whole lists on merge, which makes an
+index-based `--set` override silently fragile.
+
+**Caveat:** with no `nvidia.com/gpu` request there is no scheduler GPU accounting.
+Preventing two pods from pinning the same card is the manifests' responsibility.
+
+**Current assignment** — both `ollama-llama3` and `ollama-qwen32b` share the V100,
+preserving the VRAM tuning originally written for the single-GPU node.
+**TODO (revisit once the cluster is stable):** move `ollama-llama3` to
+`gpu-p4-0-uuid` to free ~5GB of V100 VRAM for the 32B executor. That also requires
+trimming `qwen2.5:32b` / `qwen3:32b` from `ollama-llama3` in `seed-models.sh` (an 8GB
+P4 cannot load them) and forcing its `OLLAMA_MAX_LOADED_MODELS` to 1.
+
+#### inference-0 is Tainted — GPU Workloads Only
+`inference-0` is tainted so that **only pods that need the GPU** schedule there:
+
+```text
+nvidia.com/gpu=present:NoSchedule
+```
+
+Applied by `scripts/setup-node-labels.sh` (after labelling, idempotent via
+`kubectl taint --overwrite`). `nodeSelector: role=storage-node` remains the way
+workloads *express* intent; the taint is what *enforces* it, so an unpinned manifest
+can no longer silently consume inference capacity.
+
+The key `nvidia.com/gpu` is deliberate: the NVIDIA GPU operator chart tolerates it by
+default, so device-plugin / GFD / DCGM-exporter / node-status-exporter /
+container-toolkit / operator-validator keep scheduling with no change to
+`kubernetes-setup/new-setup-external-gpu`. `NoSchedule`, not `NoExecute`.
+
+**Anything that legitimately runs on the GPU node must tolerate this taint.**
+Already handled in-repo:
+
+| Component | Where the toleration lives | Why it must run there |
+|---|---|---|
+| Ceph CSI nodeplugin | `rook-ceph/csi-operator-config.yaml` (`OperatorConfig`) + `CSI_PLUGIN_TOLERATIONS` in `rook-ceph/operator.yaml` | GPU Ollama pods mount a `rook-cephfs` RWX PVC — no nodeplugin means the volume never mounts and the pods hang in `ContainerCreating` |
+| Grafana Alloy | `APM/alloy/values.yaml` (`controller.tolerations`) | Scrapes DCGM using local-node pod discovery; without it GPU metrics/logs vanish **silently** |
+| GPU Ollama pods | `ollama/values.yaml`, `ollama/values-qwen32b.yaml` | The actual GPU workloads |
+
+Rook is installed **from manifests, not Helm** (`setup-01-basic.sh` adds the
+`rook-release` repo but only ever `kubectl apply`s). So `csi.pluginTolerations` in
+`rook-ceph/values.yaml` is dead config. With `ceph-csi-operator` (Rook v1.18+) the
+effective fields are `Driver.spec.nodePlugin.tolerations` (wins) and
+`OperatorConfig.spec.driverSpecDefaults.nodePlugin.tolerations`. Both the
+`OperatorConfig` CR and Rook's `CSI_PLUGIN_TOLERATIONS` are set so that whichever
+path the operator honours, the nodeplugin tolerates the taint. **Verify rather than
+assume:**
+
+```bash
+kubectl -n rook-ceph get pods --field-selector spec.nodeName=inference-0 | grep -i plugin
+```
+
+CPU-only Ollama pods (`ollama-embed-0`, `ollama-planner-cpu-0`) previously ran on
+`inference-0` and were removed from `ollama.sh`. The `ollama-embed` and
+`ollama-planner-cpu` ClusterIP services select on the `ollama-role` pod label, not
+release name, so the worker-node pods still back them — 8 embed and 4 planner-cpu.
+Do **not** reintroduce those two releases on the inference node; add worker instances
+with the `*-worker.yaml` values files instead.
+
+**Rollback:** `kubectl taint node inference-0 nvidia.com/gpu-`. Every other piece is
+additive — tolerations are inert without the taint.
+
+#### GPU Operator ownership and ordering (RESOLVED 2026-08-09)
+`complete-build/infrastructure/nvidia-operator.sh` is now **authoritative** for the
+GPU operator. The logic previously lived in two places and complete-build's copy
+had drifted into the worse of the two — missing `mig.strategy: none` and
+`devicePlugin.config.default: config.yaml`, so running it undid the tuned install.
+That is fixed; `--gpu` is safe, and GPU setup now **defaults ON**.
+
+**Repo boundary:** `kubernetes-setup/new-setup-external-gpu` owns Talos-level node
+provisioning (machine config, kernel modules, driver extensions, enrolment).
+`complete-build` owns everything that is a Kubernetes object — the operator Helm
+release, RuntimeClass, device-plugin ConfigMap, validation-fix DaemonSet, and the
+GPU node labels. `52-install-gpu-operator.sh` is left in place but is no longer the
+source of truth; do not edit both.
+
+**Ordering — this matters.** The operator publishes the
+`hierocracy.home/gpu-*-uuid` node labels, and `ollama.sh` **hard-fails** without
+them. The step therefore runs as **Step 1.9, immediately before the RAG stack**. It
+used to run after, which meant a fresh install could never deploy Ollama.
+
+**The old deferral rationale no longer applies.** It read:
+
+> The V100's PCIe initialization generates device resets and bus transactions that
+> cause hypervisor I/O latency spikes during KVM VM scheduling, which destabilizes
+> the Kubernetes control plane (etcd slow ops → controller lease timeouts → crash loops).
+
+The GPU is no longer passed through to a KVM guest — it sits in a separate physical
+machine enrolled as the external bare-metal node `inference-0`. There is no
+hypervisor in the path, and the control-plane and worker VMs have **no GPU
+involvement whatsoever**. Do not reintroduce the deferral on the strength of that
+symptom.
+
+Three settings in `nvidia-operator.sh` are load-bearing and interact:
+
+| Setting | Consequence if wrong |
+|---|---|
+| `mig.strategy: none` (Helm) | chart default `single` makes GFD collapse the mixed node onto one product and hide the V100. Surfaces as the `MIG_STRATEGY` env var, which the plugin resolves **above** its config file — so the ConfigMap alone cannot fix it |
+| `devicePlugin.config.default: config.yaml` | without it the operator ignores the ConfigMap entirely and runs chart defaults |
+| no empty `sharing: timeSlicing: {}` in the ConfigMap | fails parsing with "no resources specified"; the plugin will not start and `nvidia.com/gpu` drops to 0. Was previously present and *inert* — it only becomes fatal once `config.default` makes the file load |
+
+GPU UUIDs are now **discovered** from the live node via a throwaway privileged pod
+running `nvidia-smi -L` (Talos cannot run it directly), with the known UUIDs as
+fallback. Set `GPU_UUID_DISCOVER=false` to use the fallbacks only. Re-run this
+script after any GPU is added, removed or reseated.
 
 #### Model Seeding (During Install)
 `seed-models.sh` creates temporary seeder pods that pull models from the local registry into the PVCs. 

@@ -7,9 +7,11 @@ set -e
 REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
-BOOTSTRAP_REGISTRY="${BOOTSTRAP_REGISTRY:-10.0.0.1:5000}"
-BOOTSTRAP_IMAGE="${BOOTSTRAP_IMAGE:-registry:2}"
 BASE_DIR=$(cd "$REPO_DIR/../.." && pwd)
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$BASE_DIR/config/network.env"
+BOOTSTRAP_REGISTRY="${BOOTSTRAP_REGISTRY:-$REGISTRY_PREFIX}"
+BOOTSTRAP_IMAGE="${BOOTSTRAP_IMAGE:-registry:2}"
 
 source "$BASE_DIR/scripts/journal-helper.sh"
 init_journal
@@ -68,7 +70,9 @@ fi
 
 if ! is_step_done "registry-wait"; then
 echo "--- 1.1 Waiting for Registry Pod to be Ready ---"
-$KUBECTL wait --for=condition=ready pod -l app=registry -n container-registry --timeout=120s
+# kubectl wait --for=condition=ready pod exits immediately if no pods exist yet.
+# Use rollout status instead — it blocks until the deployment's pods are up.
+$KUBECTL rollout status -n container-registry deployment/registry --timeout=240s
 mark_step_done "registry-wait"
 fi
 

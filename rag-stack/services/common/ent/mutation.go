@@ -25,6 +25,7 @@ import (
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/tag"
+	"app-builds/common/ent/tagembeddingcoverage"
 	"context"
 	"errors"
 	"fmt"
@@ -66,6 +67,7 @@ const (
 	TypeSession              = "Session"
 	TypeSessionGovernance    = "SessionGovernance"
 	TypeTag                  = "Tag"
+	TypeTagEmbeddingCoverage = "TagEmbeddingCoverage"
 )
 
 // ActionIdentifierMutation represents an operation that mutates the ActionIdentifier nodes in the graph.
@@ -15597,24 +15599,27 @@ func (m *SessionGovernanceMutation) ResetEdge(name string) error {
 // TagMutation represents an operation that mutates the Tag nodes in the graph.
 type TagMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *int64
-	name              *string
-	created_at        *time.Time
-	clearedFields     map[string]struct{}
-	sessions          map[int64]struct{}
-	removedsessions   map[int64]struct{}
-	clearedsessions   bool
-	ingestions        map[int64]struct{}
-	removedingestions map[int64]struct{}
-	clearedingestions bool
-	embeddings        map[int64]struct{}
-	removedembeddings map[int64]struct{}
-	clearedembeddings bool
-	done              bool
-	oldValue          func(context.Context) (*Tag, error)
-	predicates        []predicate.Tag
+	op                         Op
+	typ                        string
+	id                         *int64
+	name                       *string
+	created_at                 *time.Time
+	clearedFields              map[string]struct{}
+	sessions                   map[int64]struct{}
+	removedsessions            map[int64]struct{}
+	clearedsessions            bool
+	ingestions                 map[int64]struct{}
+	removedingestions          map[int64]struct{}
+	clearedingestions          bool
+	embeddings                 map[int64]struct{}
+	removedembeddings          map[int64]struct{}
+	clearedembeddings          bool
+	embedding_coverages        map[int]struct{}
+	removedembedding_coverages map[int]struct{}
+	clearedembedding_coverages bool
+	done                       bool
+	oldValue                   func(context.Context) (*Tag, error)
+	predicates                 []predicate.Tag
 }
 
 var _ ent.Mutation = (*TagMutation)(nil)
@@ -15955,6 +15960,60 @@ func (m *TagMutation) ResetEmbeddings() {
 	m.removedembeddings = nil
 }
 
+// AddEmbeddingCoverageIDs adds the "embedding_coverages" edge to the TagEmbeddingCoverage entity by ids.
+func (m *TagMutation) AddEmbeddingCoverageIDs(ids ...int) {
+	if m.embedding_coverages == nil {
+		m.embedding_coverages = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.embedding_coverages[ids[i]] = struct{}{}
+	}
+}
+
+// ClearEmbeddingCoverages clears the "embedding_coverages" edge to the TagEmbeddingCoverage entity.
+func (m *TagMutation) ClearEmbeddingCoverages() {
+	m.clearedembedding_coverages = true
+}
+
+// EmbeddingCoveragesCleared reports if the "embedding_coverages" edge to the TagEmbeddingCoverage entity was cleared.
+func (m *TagMutation) EmbeddingCoveragesCleared() bool {
+	return m.clearedembedding_coverages
+}
+
+// RemoveEmbeddingCoverageIDs removes the "embedding_coverages" edge to the TagEmbeddingCoverage entity by IDs.
+func (m *TagMutation) RemoveEmbeddingCoverageIDs(ids ...int) {
+	if m.removedembedding_coverages == nil {
+		m.removedembedding_coverages = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.embedding_coverages, ids[i])
+		m.removedembedding_coverages[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedEmbeddingCoverages returns the removed IDs of the "embedding_coverages" edge to the TagEmbeddingCoverage entity.
+func (m *TagMutation) RemovedEmbeddingCoveragesIDs() (ids []int) {
+	for id := range m.removedembedding_coverages {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// EmbeddingCoveragesIDs returns the "embedding_coverages" edge IDs in the mutation.
+func (m *TagMutation) EmbeddingCoveragesIDs() (ids []int) {
+	for id := range m.embedding_coverages {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetEmbeddingCoverages resets all changes to the "embedding_coverages" edge.
+func (m *TagMutation) ResetEmbeddingCoverages() {
+	m.embedding_coverages = nil
+	m.clearedembedding_coverages = false
+	m.removedembedding_coverages = nil
+}
+
 // Where appends a list predicates to the TagMutation builder.
 func (m *TagMutation) Where(ps ...predicate.Tag) {
 	m.predicates = append(m.predicates, ps...)
@@ -16105,7 +16164,7 @@ func (m *TagMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TagMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.sessions != nil {
 		edges = append(edges, tag.EdgeSessions)
 	}
@@ -16114,6 +16173,9 @@ func (m *TagMutation) AddedEdges() []string {
 	}
 	if m.embeddings != nil {
 		edges = append(edges, tag.EdgeEmbeddings)
+	}
+	if m.embedding_coverages != nil {
+		edges = append(edges, tag.EdgeEmbeddingCoverages)
 	}
 	return edges
 }
@@ -16140,13 +16202,19 @@ func (m *TagMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case tag.EdgeEmbeddingCoverages:
+		ids := make([]ent.Value, 0, len(m.embedding_coverages))
+		for id := range m.embedding_coverages {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TagMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedsessions != nil {
 		edges = append(edges, tag.EdgeSessions)
 	}
@@ -16155,6 +16223,9 @@ func (m *TagMutation) RemovedEdges() []string {
 	}
 	if m.removedembeddings != nil {
 		edges = append(edges, tag.EdgeEmbeddings)
+	}
+	if m.removedembedding_coverages != nil {
+		edges = append(edges, tag.EdgeEmbeddingCoverages)
 	}
 	return edges
 }
@@ -16181,13 +16252,19 @@ func (m *TagMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case tag.EdgeEmbeddingCoverages:
+		ids := make([]ent.Value, 0, len(m.removedembedding_coverages))
+		for id := range m.removedembedding_coverages {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TagMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.clearedsessions {
 		edges = append(edges, tag.EdgeSessions)
 	}
@@ -16196,6 +16273,9 @@ func (m *TagMutation) ClearedEdges() []string {
 	}
 	if m.clearedembeddings {
 		edges = append(edges, tag.EdgeEmbeddings)
+	}
+	if m.clearedembedding_coverages {
+		edges = append(edges, tag.EdgeEmbeddingCoverages)
 	}
 	return edges
 }
@@ -16210,6 +16290,8 @@ func (m *TagMutation) EdgeCleared(name string) bool {
 		return m.clearedingestions
 	case tag.EdgeEmbeddings:
 		return m.clearedembeddings
+	case tag.EdgeEmbeddingCoverages:
+		return m.clearedembedding_coverages
 	}
 	return false
 }
@@ -16235,6 +16317,945 @@ func (m *TagMutation) ResetEdge(name string) error {
 	case tag.EdgeEmbeddings:
 		m.ResetEmbeddings()
 		return nil
+	case tag.EdgeEmbeddingCoverages:
+		m.ResetEmbeddingCoverages()
+		return nil
 	}
 	return fmt.Errorf("unknown Tag edge %s", name)
+}
+
+// TagEmbeddingCoverageMutation represents an operation that mutates the TagEmbeddingCoverage nodes in the graph.
+type TagEmbeddingCoverageMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int
+	embedding_model  *string
+	vector_dims      *int
+	addvector_dims   *int
+	vector_count     *int64
+	addvector_count  *int64
+	file_count       *int
+	addfile_count    *int
+	status           *string
+	last_embedded_at *time.Time
+	created_at       *time.Time
+	updated_at       *time.Time
+	clearedFields    map[string]struct{}
+	tag              *int64
+	clearedtag       bool
+	done             bool
+	oldValue         func(context.Context) (*TagEmbeddingCoverage, error)
+	predicates       []predicate.TagEmbeddingCoverage
+}
+
+var _ ent.Mutation = (*TagEmbeddingCoverageMutation)(nil)
+
+// tagembeddingcoverageOption allows management of the mutation configuration using functional options.
+type tagembeddingcoverageOption func(*TagEmbeddingCoverageMutation)
+
+// newTagEmbeddingCoverageMutation creates new mutation for the TagEmbeddingCoverage entity.
+func newTagEmbeddingCoverageMutation(c config, op Op, opts ...tagembeddingcoverageOption) *TagEmbeddingCoverageMutation {
+	m := &TagEmbeddingCoverageMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeTagEmbeddingCoverage,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withTagEmbeddingCoverageID sets the ID field of the mutation.
+func withTagEmbeddingCoverageID(id int) tagembeddingcoverageOption {
+	return func(m *TagEmbeddingCoverageMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *TagEmbeddingCoverage
+		)
+		m.oldValue = func(ctx context.Context) (*TagEmbeddingCoverage, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().TagEmbeddingCoverage.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withTagEmbeddingCoverage sets the old TagEmbeddingCoverage of the mutation.
+func withTagEmbeddingCoverage(node *TagEmbeddingCoverage) tagembeddingcoverageOption {
+	return func(m *TagEmbeddingCoverageMutation) {
+		m.oldValue = func(context.Context) (*TagEmbeddingCoverage, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m TagEmbeddingCoverageMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m TagEmbeddingCoverageMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *TagEmbeddingCoverageMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *TagEmbeddingCoverageMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().TagEmbeddingCoverage.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTagID sets the "tag_id" field.
+func (m *TagEmbeddingCoverageMutation) SetTagID(i int64) {
+	m.tag = &i
+}
+
+// TagID returns the value of the "tag_id" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) TagID() (r int64, exists bool) {
+	v := m.tag
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTagID returns the old "tag_id" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldTagID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTagID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTagID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTagID: %w", err)
+	}
+	return oldValue.TagID, nil
+}
+
+// ResetTagID resets all changes to the "tag_id" field.
+func (m *TagEmbeddingCoverageMutation) ResetTagID() {
+	m.tag = nil
+}
+
+// SetEmbeddingModel sets the "embedding_model" field.
+func (m *TagEmbeddingCoverageMutation) SetEmbeddingModel(s string) {
+	m.embedding_model = &s
+}
+
+// EmbeddingModel returns the value of the "embedding_model" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) EmbeddingModel() (r string, exists bool) {
+	v := m.embedding_model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEmbeddingModel returns the old "embedding_model" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldEmbeddingModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEmbeddingModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEmbeddingModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEmbeddingModel: %w", err)
+	}
+	return oldValue.EmbeddingModel, nil
+}
+
+// ResetEmbeddingModel resets all changes to the "embedding_model" field.
+func (m *TagEmbeddingCoverageMutation) ResetEmbeddingModel() {
+	m.embedding_model = nil
+}
+
+// SetVectorDims sets the "vector_dims" field.
+func (m *TagEmbeddingCoverageMutation) SetVectorDims(i int) {
+	m.vector_dims = &i
+	m.addvector_dims = nil
+}
+
+// VectorDims returns the value of the "vector_dims" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) VectorDims() (r int, exists bool) {
+	v := m.vector_dims
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVectorDims returns the old "vector_dims" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldVectorDims(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVectorDims is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVectorDims requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVectorDims: %w", err)
+	}
+	return oldValue.VectorDims, nil
+}
+
+// AddVectorDims adds i to the "vector_dims" field.
+func (m *TagEmbeddingCoverageMutation) AddVectorDims(i int) {
+	if m.addvector_dims != nil {
+		*m.addvector_dims += i
+	} else {
+		m.addvector_dims = &i
+	}
+}
+
+// AddedVectorDims returns the value that was added to the "vector_dims" field in this mutation.
+func (m *TagEmbeddingCoverageMutation) AddedVectorDims() (r int, exists bool) {
+	v := m.addvector_dims
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVectorDims resets all changes to the "vector_dims" field.
+func (m *TagEmbeddingCoverageMutation) ResetVectorDims() {
+	m.vector_dims = nil
+	m.addvector_dims = nil
+}
+
+// SetVectorCount sets the "vector_count" field.
+func (m *TagEmbeddingCoverageMutation) SetVectorCount(i int64) {
+	m.vector_count = &i
+	m.addvector_count = nil
+}
+
+// VectorCount returns the value of the "vector_count" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) VectorCount() (r int64, exists bool) {
+	v := m.vector_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVectorCount returns the old "vector_count" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldVectorCount(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVectorCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVectorCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVectorCount: %w", err)
+	}
+	return oldValue.VectorCount, nil
+}
+
+// AddVectorCount adds i to the "vector_count" field.
+func (m *TagEmbeddingCoverageMutation) AddVectorCount(i int64) {
+	if m.addvector_count != nil {
+		*m.addvector_count += i
+	} else {
+		m.addvector_count = &i
+	}
+}
+
+// AddedVectorCount returns the value that was added to the "vector_count" field in this mutation.
+func (m *TagEmbeddingCoverageMutation) AddedVectorCount() (r int64, exists bool) {
+	v := m.addvector_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVectorCount resets all changes to the "vector_count" field.
+func (m *TagEmbeddingCoverageMutation) ResetVectorCount() {
+	m.vector_count = nil
+	m.addvector_count = nil
+}
+
+// SetFileCount sets the "file_count" field.
+func (m *TagEmbeddingCoverageMutation) SetFileCount(i int) {
+	m.file_count = &i
+	m.addfile_count = nil
+}
+
+// FileCount returns the value of the "file_count" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) FileCount() (r int, exists bool) {
+	v := m.file_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFileCount returns the old "file_count" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldFileCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFileCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFileCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFileCount: %w", err)
+	}
+	return oldValue.FileCount, nil
+}
+
+// AddFileCount adds i to the "file_count" field.
+func (m *TagEmbeddingCoverageMutation) AddFileCount(i int) {
+	if m.addfile_count != nil {
+		*m.addfile_count += i
+	} else {
+		m.addfile_count = &i
+	}
+}
+
+// AddedFileCount returns the value that was added to the "file_count" field in this mutation.
+func (m *TagEmbeddingCoverageMutation) AddedFileCount() (r int, exists bool) {
+	v := m.addfile_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetFileCount resets all changes to the "file_count" field.
+func (m *TagEmbeddingCoverageMutation) ResetFileCount() {
+	m.file_count = nil
+	m.addfile_count = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *TagEmbeddingCoverageMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *TagEmbeddingCoverageMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetLastEmbeddedAt sets the "last_embedded_at" field.
+func (m *TagEmbeddingCoverageMutation) SetLastEmbeddedAt(t time.Time) {
+	m.last_embedded_at = &t
+}
+
+// LastEmbeddedAt returns the value of the "last_embedded_at" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) LastEmbeddedAt() (r time.Time, exists bool) {
+	v := m.last_embedded_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastEmbeddedAt returns the old "last_embedded_at" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldLastEmbeddedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastEmbeddedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastEmbeddedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastEmbeddedAt: %w", err)
+	}
+	return oldValue.LastEmbeddedAt, nil
+}
+
+// ClearLastEmbeddedAt clears the value of the "last_embedded_at" field.
+func (m *TagEmbeddingCoverageMutation) ClearLastEmbeddedAt() {
+	m.last_embedded_at = nil
+	m.clearedFields[tagembeddingcoverage.FieldLastEmbeddedAt] = struct{}{}
+}
+
+// LastEmbeddedAtCleared returns if the "last_embedded_at" field was cleared in this mutation.
+func (m *TagEmbeddingCoverageMutation) LastEmbeddedAtCleared() bool {
+	_, ok := m.clearedFields[tagembeddingcoverage.FieldLastEmbeddedAt]
+	return ok
+}
+
+// ResetLastEmbeddedAt resets all changes to the "last_embedded_at" field.
+func (m *TagEmbeddingCoverageMutation) ResetLastEmbeddedAt() {
+	m.last_embedded_at = nil
+	delete(m.clearedFields, tagembeddingcoverage.FieldLastEmbeddedAt)
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *TagEmbeddingCoverageMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *TagEmbeddingCoverageMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *TagEmbeddingCoverageMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *TagEmbeddingCoverageMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the TagEmbeddingCoverage entity.
+// If the TagEmbeddingCoverage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagEmbeddingCoverageMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *TagEmbeddingCoverageMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearTag clears the "tag" edge to the Tag entity.
+func (m *TagEmbeddingCoverageMutation) ClearTag() {
+	m.clearedtag = true
+	m.clearedFields[tagembeddingcoverage.FieldTagID] = struct{}{}
+}
+
+// TagCleared reports if the "tag" edge to the Tag entity was cleared.
+func (m *TagEmbeddingCoverageMutation) TagCleared() bool {
+	return m.clearedtag
+}
+
+// TagIDs returns the "tag" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// TagID instead. It exists only for internal usage by the builders.
+func (m *TagEmbeddingCoverageMutation) TagIDs() (ids []int64) {
+	if id := m.tag; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetTag resets all changes to the "tag" edge.
+func (m *TagEmbeddingCoverageMutation) ResetTag() {
+	m.tag = nil
+	m.clearedtag = false
+}
+
+// Where appends a list predicates to the TagEmbeddingCoverageMutation builder.
+func (m *TagEmbeddingCoverageMutation) Where(ps ...predicate.TagEmbeddingCoverage) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the TagEmbeddingCoverageMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *TagEmbeddingCoverageMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.TagEmbeddingCoverage, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *TagEmbeddingCoverageMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *TagEmbeddingCoverageMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (TagEmbeddingCoverage).
+func (m *TagEmbeddingCoverageMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *TagEmbeddingCoverageMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.tag != nil {
+		fields = append(fields, tagembeddingcoverage.FieldTagID)
+	}
+	if m.embedding_model != nil {
+		fields = append(fields, tagembeddingcoverage.FieldEmbeddingModel)
+	}
+	if m.vector_dims != nil {
+		fields = append(fields, tagembeddingcoverage.FieldVectorDims)
+	}
+	if m.vector_count != nil {
+		fields = append(fields, tagembeddingcoverage.FieldVectorCount)
+	}
+	if m.file_count != nil {
+		fields = append(fields, tagembeddingcoverage.FieldFileCount)
+	}
+	if m.status != nil {
+		fields = append(fields, tagembeddingcoverage.FieldStatus)
+	}
+	if m.last_embedded_at != nil {
+		fields = append(fields, tagembeddingcoverage.FieldLastEmbeddedAt)
+	}
+	if m.created_at != nil {
+		fields = append(fields, tagembeddingcoverage.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, tagembeddingcoverage.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *TagEmbeddingCoverageMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case tagembeddingcoverage.FieldTagID:
+		return m.TagID()
+	case tagembeddingcoverage.FieldEmbeddingModel:
+		return m.EmbeddingModel()
+	case tagembeddingcoverage.FieldVectorDims:
+		return m.VectorDims()
+	case tagembeddingcoverage.FieldVectorCount:
+		return m.VectorCount()
+	case tagembeddingcoverage.FieldFileCount:
+		return m.FileCount()
+	case tagembeddingcoverage.FieldStatus:
+		return m.Status()
+	case tagembeddingcoverage.FieldLastEmbeddedAt:
+		return m.LastEmbeddedAt()
+	case tagembeddingcoverage.FieldCreatedAt:
+		return m.CreatedAt()
+	case tagembeddingcoverage.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *TagEmbeddingCoverageMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case tagembeddingcoverage.FieldTagID:
+		return m.OldTagID(ctx)
+	case tagembeddingcoverage.FieldEmbeddingModel:
+		return m.OldEmbeddingModel(ctx)
+	case tagembeddingcoverage.FieldVectorDims:
+		return m.OldVectorDims(ctx)
+	case tagembeddingcoverage.FieldVectorCount:
+		return m.OldVectorCount(ctx)
+	case tagembeddingcoverage.FieldFileCount:
+		return m.OldFileCount(ctx)
+	case tagembeddingcoverage.FieldStatus:
+		return m.OldStatus(ctx)
+	case tagembeddingcoverage.FieldLastEmbeddedAt:
+		return m.OldLastEmbeddedAt(ctx)
+	case tagembeddingcoverage.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case tagembeddingcoverage.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown TagEmbeddingCoverage field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TagEmbeddingCoverageMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case tagembeddingcoverage.FieldTagID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTagID(v)
+		return nil
+	case tagembeddingcoverage.FieldEmbeddingModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEmbeddingModel(v)
+		return nil
+	case tagembeddingcoverage.FieldVectorDims:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVectorDims(v)
+		return nil
+	case tagembeddingcoverage.FieldVectorCount:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVectorCount(v)
+		return nil
+	case tagembeddingcoverage.FieldFileCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFileCount(v)
+		return nil
+	case tagembeddingcoverage.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case tagembeddingcoverage.FieldLastEmbeddedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastEmbeddedAt(v)
+		return nil
+	case tagembeddingcoverage.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case tagembeddingcoverage.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TagEmbeddingCoverage field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *TagEmbeddingCoverageMutation) AddedFields() []string {
+	var fields []string
+	if m.addvector_dims != nil {
+		fields = append(fields, tagembeddingcoverage.FieldVectorDims)
+	}
+	if m.addvector_count != nil {
+		fields = append(fields, tagembeddingcoverage.FieldVectorCount)
+	}
+	if m.addfile_count != nil {
+		fields = append(fields, tagembeddingcoverage.FieldFileCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *TagEmbeddingCoverageMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case tagembeddingcoverage.FieldVectorDims:
+		return m.AddedVectorDims()
+	case tagembeddingcoverage.FieldVectorCount:
+		return m.AddedVectorCount()
+	case tagembeddingcoverage.FieldFileCount:
+		return m.AddedFileCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *TagEmbeddingCoverageMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case tagembeddingcoverage.FieldVectorDims:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVectorDims(v)
+		return nil
+	case tagembeddingcoverage.FieldVectorCount:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVectorCount(v)
+		return nil
+	case tagembeddingcoverage.FieldFileCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddFileCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown TagEmbeddingCoverage numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *TagEmbeddingCoverageMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(tagembeddingcoverage.FieldLastEmbeddedAt) {
+		fields = append(fields, tagembeddingcoverage.FieldLastEmbeddedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *TagEmbeddingCoverageMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *TagEmbeddingCoverageMutation) ClearField(name string) error {
+	switch name {
+	case tagembeddingcoverage.FieldLastEmbeddedAt:
+		m.ClearLastEmbeddedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown TagEmbeddingCoverage nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *TagEmbeddingCoverageMutation) ResetField(name string) error {
+	switch name {
+	case tagembeddingcoverage.FieldTagID:
+		m.ResetTagID()
+		return nil
+	case tagembeddingcoverage.FieldEmbeddingModel:
+		m.ResetEmbeddingModel()
+		return nil
+	case tagembeddingcoverage.FieldVectorDims:
+		m.ResetVectorDims()
+		return nil
+	case tagembeddingcoverage.FieldVectorCount:
+		m.ResetVectorCount()
+		return nil
+	case tagembeddingcoverage.FieldFileCount:
+		m.ResetFileCount()
+		return nil
+	case tagembeddingcoverage.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case tagembeddingcoverage.FieldLastEmbeddedAt:
+		m.ResetLastEmbeddedAt()
+		return nil
+	case tagembeddingcoverage.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case tagembeddingcoverage.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown TagEmbeddingCoverage field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *TagEmbeddingCoverageMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.tag != nil {
+		edges = append(edges, tagembeddingcoverage.EdgeTag)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *TagEmbeddingCoverageMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case tagembeddingcoverage.EdgeTag:
+		if id := m.tag; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *TagEmbeddingCoverageMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *TagEmbeddingCoverageMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *TagEmbeddingCoverageMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedtag {
+		edges = append(edges, tagembeddingcoverage.EdgeTag)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *TagEmbeddingCoverageMutation) EdgeCleared(name string) bool {
+	switch name {
+	case tagembeddingcoverage.EdgeTag:
+		return m.clearedtag
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *TagEmbeddingCoverageMutation) ClearEdge(name string) error {
+	switch name {
+	case tagembeddingcoverage.EdgeTag:
+		m.ClearTag()
+		return nil
+	}
+	return fmt.Errorf("unknown TagEmbeddingCoverage unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *TagEmbeddingCoverageMutation) ResetEdge(name string) error {
+	switch name {
+	case tagembeddingcoverage.EdgeTag:
+		m.ResetTag()
+		return nil
+	}
+	return fmt.Errorf("unknown TagEmbeddingCoverage edge %s", name)
 }

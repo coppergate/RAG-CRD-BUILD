@@ -89,9 +89,11 @@ spec:
   failureDomain: host
   replicated:
     size: 1
-    # Single NVMe OSD — no redundancy. Acceptable for rebuilable data (indexes, caches).
+    # Single OSD — no redundancy. Acceptable for rebuilable data (indexes, caches).
     requireSafeReplicaSize: false
-  deviceClass: nvme
+  # deviceClass intentionally omitted: KVM/QEMU VirtIO block devices are never
+  # classified as 'nvme' by Ceph regardless of physical backing media. Removing
+  # the constraint lets Rook use any available OSD for this pool.
   parameters:
     pg_autoscale_mode: 'on'
     compression_mode: none

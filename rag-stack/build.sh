@@ -18,7 +18,7 @@ MODE="${MODE:-cluster}"
 # Try to resolve build-orchestrator.hierocracy.home, fallback to LoadBalancer IP if needed
 DEFAULT_METADATA_URL="http://build-orchestrator.hierocracy.home/api/build"
 if ! host build-orchestrator.hierocracy.home >/dev/null 2>&1; then
-    LB_IP=$($KUBECTL get svc traefik -n traefik -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "172.20.1.16")
+    LB_IP=$($KUBECTL get svc traefik -n traefik --request-timeout=15s -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "172.20.1.16")
     DEFAULT_METADATA_URL="http://${LB_IP}/api/build"
     # We'll need to pass the Host header in curl calls if using IP
     CURL_H_HEADER="Host: build-orchestrator.hierocracy.home"
@@ -124,14 +124,23 @@ get_svc_version() {
     local svc="$1"
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
-    curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" | jq -r ".version // \"1.0.0\""
+    # Use -f so curl exits non-zero on HTTP 4xx/5xx (DB unavailable → build-orchestrator
+    # returns error JSON that jq can't parse as a version, causing "Invalid numeric literal").
+    # --max-time prevents hanging; jq 2>/dev/null||echo suppresses parse errors from bad bodies.
+    local raw
+    raw=$(curl -sf --max-time 10 "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" 2>/dev/null) \
+        || { echo "1.0.0"; return 0; }
+    echo "$raw" | jq -r ".version // \"1.0.0\"" 2>/dev/null || echo "1.0.0"
 }
 
 get_svc_last_build() {
     local svc="$1"
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
-    curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" | jq -r ".last_build // empty"
+    local raw
+    raw=$(curl -sf --max-time 10 "${h_args[@]}" "$BUILD_METADATA_URL/versions/$svc" 2>/dev/null) \
+        || { echo ""; return 0; }
+    echo "$raw" | jq -r ".last_build // empty" 2>/dev/null || echo ""
 }
 
 update_svc_info() {
@@ -151,9 +160,11 @@ sync_current_version_file() {
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
 
-    if curl -s "${h_args[@]}" "$BUILD_METADATA_URL/versions" \
+    local raw_versions
+    raw_versions=$(curl -sf --max-time 10 "${h_args[@]}" "$BUILD_METADATA_URL/versions" 2>/dev/null) || raw_versions=""
+    if echo "$raw_versions" \
         | jq 'sort_by(.service_name) | map({key: .service_name, value: {version: .version, last_build: .last_build}}) | from_entries' \
-        > "$tmp_file"; then
+        2>/dev/null > "$tmp_file" && [[ -s "$tmp_file" ]]; then
         mv "$tmp_file" "$CURRENT_VERSION_FILE"
         chmod 664 "$CURRENT_VERSION_FILE"
     else
@@ -165,9 +176,11 @@ sync_current_version_file() {
 cleanup_old_jobs() {
     if [[ "$MODE" == "cluster" ]]; then
         log "Cleaning up old completed/failed build jobs..."
-        "$KUBECTL" get jobs -n build-pipeline -o json | \
+        if ! "$KUBECTL" get jobs -n build-pipeline --request-timeout=20s -o json 2>/dev/null | \
             jq -r '.items[] | select(.status.succeeded > 0 or .status.failed > 0) | .metadata.name' | \
-            xargs -r "$KUBECTL" delete job -n build-pipeline
+            xargs -r "$KUBECTL" delete job -n build-pipeline --request-timeout=20s; then
+            log "WARN: cleanup_old_jobs encountered an error (API server may be slow) — continuing"
+        fi
     fi
 }
 
@@ -217,7 +230,10 @@ is_unchanged() {
     local svc="$1"; local hash="$2"
     local h_args=()
     [[ -n "${CURL_H_HEADER:-}" ]] && h_args=(-H "$CURL_H_HEADER")
-    local last_hash=$(curl -s "${h_args[@]}" "$BUILD_METADATA_URL/journals/$svc" | jq -r ".last_hash // empty")
+    local raw
+    raw=$(curl -sf --max-time 10 "${h_args[@]}" "$BUILD_METADATA_URL/journals/$svc" 2>/dev/null) || raw=""
+    local last_hash
+    last_hash=$(echo "$raw" | jq -r ".last_hash // empty" 2>/dev/null || echo "")
     [[ -n "$last_hash" ]] && [[ "$last_hash" == "$hash" ]]
 }
 
@@ -244,7 +260,7 @@ deploy_update() {
         # setup-all.sh will do the initial deployment; deploy_update only rolls running deployments.
         local ns
         ns=$(grep -m1 'namespace:' "$manifest" | awk '{print $2}' || true)
-        if [[ -n "$ns" ]] && ! "$KUBECTL" get namespace "$ns" >/dev/null 2>&1; then
+        if [[ -n "$ns" ]] && ! "$KUBECTL" get namespace "$ns" --request-timeout=15s >/dev/null 2>&1; then
             log "SKIP deploy update for $svc: namespace $ns does not exist yet"
             return 0
         fi
@@ -306,7 +322,7 @@ build_service() {
         if [[ "$MODE" == "cluster" ]]; then
             # Look for ANY job (running, completed, or failed) to avoid duplicates if it's still present in the system
             # We specifically avoid re-triggering if a job exists and it's not successful.
-            if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=$svc,version=$ver_safe" 2>/dev/null | grep -E '0/1|1/1' >/dev/null 2>&1; then
+            if "$KUBECTL" get job -n build-pipeline --request-timeout=15s -l "app=kaniko-build,service=$svc,version=$ver_safe" 2>/dev/null | grep -E '0/1|1/1' >/dev/null 2>&1; then
                 log "STILL BUILDING: $svc version $ver (job exists in cluster)"
                 needs_build=false
             else
@@ -454,7 +470,7 @@ main() {
                 fi
 				
 				# Verify success before deploying
-				if "$KUBECTL" get job -n build-pipeline -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep 1 >/dev/null; then
+				if "$KUBECTL" get job -n build-pipeline --request-timeout=15s -l "app=kaniko-build,service=build-orchestrator,version=$bver_safe" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep 1 >/dev/null; then
 					deploy_update "build-orchestrator" "$bver"
 					update_svc_info "build-orchestrator" "$bver"
 				else
@@ -487,9 +503,17 @@ main() {
 		if [[ ${#SERVICES_TO_BUILD[@]} -gt 0 ]]; then
 			if [[ "$MODE" == "cluster" ]]; then
 				log "Preparing shared source context for ${#SERVICES_TO_BUILD[@]} services..."
-				local UPLOAD_OUT=$(bash "$REPO_DIR/infrastructure/build-pipeline/trigger-build.sh" --upload-only 2>&1)
+				local UPLOAD_OUT
+				local UPLOAD_EXIT=0
+				UPLOAD_OUT=$(bash "$REPO_DIR/infrastructure/build-pipeline/trigger-build.sh" --upload-only 2>&1) || UPLOAD_EXIT=$?
 				export SOURCE_URL=$(echo "$UPLOAD_OUT" | grep "SOURCE_URL=" | cut -d= -f2-)
 				export SOURCE_TARBALL=$(echo "$UPLOAD_OUT" | grep "SOURCE_TARBALL=" | cut -d= -f2-)
+				if [[ -z "$SOURCE_URL" || $UPLOAD_EXIT -ne 0 ]]; then
+					log "ERROR: Shared source upload failed (exit=$UPLOAD_EXIT). Output:"
+					echo "$UPLOAD_OUT" >&2
+					log "Aborting build — fix the S3 upload issue and retry."
+					return 1
+				fi
 				log "Shared Context: $SOURCE_TARBALL"
 			fi
 
@@ -506,8 +530,8 @@ main() {
 	fi
 
     if [[ "$WAIT_FOR_COMPLETION" == "true" && "$MODE" == "cluster" ]]; then
-        log "Waiting for cluster builds to complete (timeout: 1800s)..."
-        local deadline=$((SECONDS + 1800))
+        log "Waiting for cluster builds to complete (timeout: 3600s)..."
+        local deadline=$((SECONDS + 3600))
 
         # Read the list of "svc ver" pairs written by build_service() subshells.
         # This is reliable because the API cannot store a custom last_build value
@@ -536,8 +560,20 @@ main() {
                 local job_label="app=kaniko-build,service=$svc,version=$ver_safe"
                 log "Waiting for Kaniko job to be created: $svc $ver..."
                 local job_start=$SECONDS
-                while ! "$KUBECTL" get job -n build-pipeline \
-                    -l "$job_label" --no-headers 2>/dev/null | grep -q .; do
+                while true; do
+                    # --request-timeout prevents hanging indefinitely when API server drops
+                    # connections under load; errors are logged rather than silenced.
+                    local kout
+                    local kerr
+                    kout=$("$KUBECTL" get job -n build-pipeline \
+                        -l "$job_label" --no-headers \
+                        --request-timeout=15s 2>&1) && rc=0 || rc=$?
+                    if [[ $rc -eq 0 ]] && echo "$kout" | grep -q .; then
+                        break  # job found
+                    fi
+                    if [[ $rc -ne 0 ]]; then
+                        log "  WARN: kubectl get job failed (rc=$rc) for $svc $ver: $kout"
+                    fi
                     if [[ $((SECONDS - job_start)) -ge $JOB_APPEAR_TIMEOUT ]]; then
                         log "TIMEOUT (${JOB_APPEAR_TIMEOUT}s): Kaniko job for $svc $ver never appeared in cluster."
                         break
@@ -548,7 +584,7 @@ main() {
                     fi
                     sleep 5
                 done
-                log "Kaniko job present: $svc $ver"
+                log "Kaniko job present (or timed out): $svc $ver"
             done
 
             # Phase 2: All triggered jobs now exist; wait for them all to complete.
@@ -564,18 +600,33 @@ main() {
             fi
 
             # Phase 3: Deploy all services whose Kaniko job succeeded.
+            # Retry the success check up to 3 times — a single API timeout must not
+            # incorrectly mark a successful build as failed and skip deployment.
             for i in "${!triggered_svcs[@]}"; do
                 local svc="${triggered_svcs[$i]}"
                 local ver="${triggered_vers[$i]}"
                 local ver_safe="${ver//./-}"
                 local job_label="app=kaniko-build,service=$svc,version=$ver_safe"
-                if "$KUBECTL" get job -n build-pipeline \
-                    -l "$job_label" \
-                    -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null | grep -q 1; then
+                local succeeded=false
+                local attempt
+                for attempt in 1 2 3; do
+                    local result
+                    result=$("$KUBECTL" get job -n build-pipeline \
+                        --request-timeout=15s \
+                        -l "$job_label" \
+                        -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null || true)
+                    if [[ "$result" == "1" ]]; then
+                        succeeded=true
+                        break
+                    fi
+                    log "  Phase 3 attempt $attempt/3 for $svc $ver: result='${result}' — retrying in 5s"
+                    sleep 5
+                done
+                if [[ "$succeeded" == "true" ]]; then
                     deploy_update "$svc" "$ver"
                     update_svc_info "$svc" "$ver"
                 else
-                    log "ERROR: Build for $svc version $ver did not succeed. Skipping deploy update."
+                    log "ERROR: Build for $svc version $ver did not succeed after 3 checks. Skipping deploy update."
                 fi
             done
         fi

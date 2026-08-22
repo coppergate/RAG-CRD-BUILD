@@ -260,6 +260,18 @@ func (f TagFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) 
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TagMutation", m)
 }
 
+// The TagEmbeddingCoverageFunc type is an adapter to allow the use of ordinary
+// function as TagEmbeddingCoverage mutator.
+type TagEmbeddingCoverageFunc func(context.Context, *ent.TagEmbeddingCoverageMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TagEmbeddingCoverageFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TagEmbeddingCoverageMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TagEmbeddingCoverageMutation", m)
+}
+
 // Condition is a hook condition function.
 type Condition func(context.Context, ent.Mutation) bool
 

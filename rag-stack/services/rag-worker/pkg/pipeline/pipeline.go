@@ -1,18 +1,12 @@
 package pipeline
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
-	"regexp"
-	"sort"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/apache/pulsar-client-go/pulsar"
 	"go.opentelemetry.io/otel"
@@ -41,9 +35,6 @@ var (
 	llmLatency       metric.Float64Histogram
 	responseSizeHist metric.Int64Histogram
 
-	literalAnswerFallbackPatterns = []*regexp.Regexp{
-		regexp.MustCompile(`(?i)\b(?:secret code|code|answer|token)\s*(?:is|:)\s*([A-Z0-9][A-Z0-9-]{2,})\b`),
-	}
 )
 
 func init() {
@@ -88,25 +79,6 @@ type ModelRegistry interface {
 	GetExecutor(modelID string) (models.Executor, error)
 }
 
-type chunkSource struct {
-	QdrantID       string `json:"qdrant_id,omitempty"`
-	Path           string `json:"path,omitempty"`
-	Chunk          int    `json:"chunk,omitempty"`
-	Content        string `json:"content,omitempty"`
-	EmbeddingModel string `json:"embedding_model,omitempty"`
-	VectorSize     int    `json:"vector_size,omitempty"`
-}
-
-type chunkGroupDetail struct {
-	Texts   []string      `json:"texts,omitempty"`
-	Sources []chunkSource `json:"sources,omitempty"`
-}
-
-type executionUnit struct {
-	Prompt   string
-	Contexts []interface{}
-	Label    string
-}
 
 // Handler processes RAG pipeline stage messages.
 type Handler struct {
@@ -493,6 +465,62 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	}
 	embeddingModels := h.resolveEmbeddingModelCandidates(req, plannerModelID)
 	logging.Printf("[%s][SID:%d] resolved embedding candidates=%v", req.Id, req.SessionId, embeddingModels)
+
+	// Coverage check: determine which tags have vectors for the primary embedding model.
+	// Tags without coverage are excluded from Qdrant search; pending ones trigger async ingest.
+	primaryEmbeddingModel := ""
+	if len(embeddingModels) > 0 {
+		primaryEmbeddingModel = embeddingModels[0]
+	}
+	if req.EmbeddingModel != "" {
+		primaryEmbeddingModel = req.EmbeddingModel
+	}
+
+	var missingEmbeddings []map[string]interface{}
+	searchableTags := tags // default: search all tags
+
+	if len(req.Tags) > 0 && primaryEmbeddingModel != "" {
+		coverage := h.checkEmbeddingCoverage(ctx, req.Tags, primaryEmbeddingModel)
+		if coverage != nil {
+			var filteredTagIDs []int64
+			for _, entry := range coverage {
+				switch entry.Status {
+				case "complete":
+					// Include in search — no advisory needed.
+					filteredTagIDs = append(filteredTagIDs, entry.TagID)
+				case "stale":
+					// Include in search (vectors exist) — add to advisory.
+					filteredTagIDs = append(filteredTagIDs, entry.TagID)
+					missingEmbeddings = append(missingEmbeddings, map[string]interface{}{
+						"tag_id": entry.TagID,
+						"tag":    entry.Tag,
+						"model":  primaryEmbeddingModel,
+						"status": "stale",
+					})
+				case "pending":
+					// No vectors — trigger async ingest and exclude from search.
+					h.triggerAsyncIngest(entry.TagID, entry.Tag, primaryEmbeddingModel)
+					missingEmbeddings = append(missingEmbeddings, map[string]interface{}{
+						"tag_id": entry.TagID,
+						"tag":    entry.Tag,
+						"model":  primaryEmbeddingModel,
+						"status": "pending",
+					})
+				case "building":
+					// Ingest already in progress — exclude from search and advise.
+					missingEmbeddings = append(missingEmbeddings, map[string]interface{}{
+						"tag_id": entry.TagID,
+						"tag":    entry.Tag,
+						"model":  primaryEmbeddingModel,
+						"status": "building",
+					})
+				}
+			}
+			searchableTags = filteredTagIDs
+			logging.Printf("[%s][SID:%d] coverage check: searchable=%v missing=%d", req.Id, req.SessionId, searchableTags, len(missingEmbeddings))
+		}
+	}
+
 	var allRawResults []interface{}
 	var retrievalProvenance []map[string]interface{}
 
@@ -503,13 +531,13 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 			continue
 		}
 
-		logging.Printf("[%s][SID:%d] retrieval pass model=%q tags=%v sub_queries=%d", req.Id, req.SessionId, embeddingModel, tags, len(subQueries))
+		logging.Printf("[%s][SID:%d] retrieval pass model=%q tags=%v sub_queries=%d", req.Id, req.SessionId, embeddingModel, searchableTags, len(subQueries))
 		contextFiles, err := h.fetchContextFiles(ctx, req, embeddingModel)
 		if err != nil {
 			logging.Printf("[%s][SID:%d] Context file discovery failed for %q: %v", req.Id, req.SessionId, embeddingModel, err)
 		}
 
-		modelResults, hydrated, hydrationNotes, err := h.searchWithEmbeddingModel(ctx, req, embeddingModel, embedder, subQueries, tags, contextFiles)
+		modelResults, hydrated, hydrationNotes, err := h.searchWithEmbeddingModel(ctx, req, embeddingModel, embedder, subQueries, searchableTags, contextFiles)
 		if err != nil {
 			if errors.Is(err, errUnsupportedEmbeddingModel) && idx+1 < len(embeddingModels) {
 				logging.Printf("[%s][SID:%d] Embedding model %q is not embedding-capable; falling back to carried override %q", req.Id, req.SessionId, embeddingModel, embeddingModels[idx+1])
@@ -525,7 +553,7 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	}
 
 	// 3. Deduplicate and chunk context
-	chunkGroups := h.chunkResultsDetailed(ctx, allRawResults)
+	chunkGroups := h.newChunkProcessor().chunkResultsDetailed(ctx, allRawResults)
 	allChunks := chunkGroupTexts(chunkGroups)
 
 	if req.Stream {
@@ -542,6 +570,9 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	metadataMap["chunks"] = allChunks
 	metadataMap["chunk_groups"] = chunkGroupsToMetadata(chunkGroups)
 	metadataMap["contexts"] = flattenChunkContexts(allChunks)
+	if len(missingEmbeddings) > 0 {
+		metadataMap["missing_embeddings"] = missingEmbeddings
+	}
 	if len(embeddingModels) > 0 {
 		metadataMap["embedding_models"] = embeddingModels
 	}
@@ -606,1117 +637,172 @@ func (h *Handler) handleSearch(ctx context.Context, req *contracts.InternalReque
 	return dlq.Success, nil
 }
 
-type contextFileRecord struct {
-	Path           string   `json:"path"`
-	Bucket         string   `json:"bucket"`
-	CreatedAt      string   `json:"created_at"`
-	Tags           []string `json:"tags"`
-	Status         string   `json:"status"`
-	EmbeddingModel string   `json:"embedding_model"`
-	VectorSize     int      `json:"vector_size"`
-	IngestionID    int64    `json:"ingestion_id"`
+// unitExecResult holds the outcome of processing a single execution unit.
+type unitExecResult struct {
+	content        string
+	hasSubstantial bool
+	metrics        *contracts.ExecutionMetrics
+	nextSeq        int
+	inConversation bool
 }
 
-func (h *Handler) resolveEmbeddingModelCandidates(req *contracts.InternalRequest, primaryModelID string) []string {
-	seen := make(map[string]bool)
-	candidates := make([]string, 0, 2)
+// processExecutionUnit runs the planner-refinement and executor for one unit,
+// returning the accumulated content, metrics, and updated streaming state.
+func (h *Handler) processExecutionUnit(
+	ctx context.Context,
+	unit executionUnit,
+	executor models.Executor,
+	planner models.Planner,
+	req *contracts.InternalRequest,
+	modelID string,
+	seq int,
+	inConversation bool,
+	history []interface{},
+) (unitExecResult, error) {
+	res := unitExecResult{nextSeq: seq, inConversation: inConversation}
 
-	add := func(model string) {
-		model = strings.TrimSpace(model)
-		if model == "" {
-			return
-		}
-		key := contracts.NormalizeEmbeddingModelName(model)
-		if key == "" {
-			key = strings.ToLower(model)
-		}
-		if seen[key] {
-			return
-		}
-		seen[key] = true
-		candidates = append(candidates, model)
-	}
-
-	add(primaryModelID)
-	add(req.EmbeddingModel)
-	if len(candidates) == 1 && req.Metadata != nil {
-		if meta := contracts.FromStruct(req.Metadata); meta != nil {
-			if model, _ := meta["embedding_model"].(string); model != "" {
-				add(model)
+	if planner != nil {
+		refinedPlan, _, err := planner.Plan(ctx, unit.Prompt, unit.Contexts, history)
+		if err == nil && refinedPlan != nil && len(refinedPlan.SearchQueries) > 0 && h.cfg.StreamIntermediate {
+			planningText := fmt.Sprintf("Refined sub-queries for %s:", unit.Label)
+			for _, sq := range refinedPlan.SearchQueries {
+				planningText += fmt.Sprintf("\n- %s", sq)
 			}
-		}
-	}
-	if len(candidates) == 0 && h.cfg.EmbeddingModel != "" {
-		add(h.cfg.EmbeddingModel)
-	}
-	return candidates
-}
-
-func (h *Handler) fetchContextFiles(ctx context.Context, req *contracts.InternalRequest, embeddingModel string) ([]contextFileRecord, error) {
-	baseURL := strings.TrimRight(h.cfg.DBAdapterURL, "/")
-	if baseURL == "" {
-		return nil, nil
-	}
-
-	params := url.Values{}
-	if req.SessionId > 0 {
-		params.Set("session_id", fmt.Sprintf("%d", req.SessionId))
-	}
-	for _, tagID := range req.Tags {
-		params.Add("tag_id", fmt.Sprintf("%d", tagID))
-	}
-	embeddingModel = strings.TrimSpace(embeddingModel)
-	if embeddingModel != "" {
-		params.Set("embedding_model", embeddingModel)
-	}
-
-	endpoint := baseURL + "/storage/files"
-	if encoded := params.Encode(); encoded != "" {
-		endpoint += "?" + encoded
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := h.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("storage file lookup returned %d", resp.StatusCode)
-	}
-
-	var files []contextFileRecord
-	if err := json.NewDecoder(resp.Body).Decode(&files); err != nil {
-		return nil, err
-	}
-	return files, nil
-}
-
-func groupContextFilesByModel(files []contextFileRecord) map[string][]contextFileRecord {
-	grouped := make(map[string][]contextFileRecord)
-	for _, file := range files {
-		model := strings.TrimSpace(file.EmbeddingModel)
-		if model == "" {
-			model = "default"
-		}
-		key := contracts.NormalizeEmbeddingModelName(model)
-		if key == "" {
-			key = strings.ToLower(model)
-		}
-		grouped[key] = append(grouped[key], file)
-	}
-	return grouped
-}
-
-func (h *Handler) searchWithEmbeddingModel(ctx context.Context, req *contracts.InternalRequest, embeddingModel string, embedder models.Planner, subQueries []string, tags []int64, contextFiles []contextFileRecord) ([]interface{}, bool, []map[string]interface{}, error) {
-	logging.Printf("[%s][SID:%d] searchWithEmbeddingModel start model=%q tag_count=%d sub_queries=%d context_files=%d",
-		req.Id, req.SessionId, embeddingModel, len(tags), len(subQueries), len(contextFiles))
-	results, missingCollection, err := h.searchEmbeddingModelOnce(ctx, req, embeddingModel, embedder, subQueries, tags)
-	if err != nil {
-		return nil, false, nil, err
-	}
-
-	grouped := groupContextFilesByModel(contextFiles)
-	modelKey := contracts.NormalizeEmbeddingModelName(embeddingModel)
-	if modelKey == "" {
-		modelKey = strings.ToLower(strings.TrimSpace(embeddingModel))
-	}
-	files := grouped[modelKey]
-	if len(files) == 0 || len(results) > 0 && !missingCollection {
-		return results, false, nil, nil
-	}
-
-	hydrationNotes, hydrateErr := h.hydrateContextFiles(ctx, req, embeddingModel, files)
-	if hydrateErr != nil {
-		return results, true, hydrationNotes, hydrateErr
-	}
-
-	var retryResults []interface{}
-	var retryErr error
-	for attempt := 0; attempt < 4; attempt++ {
-		time.Sleep(time.Duration(attempt+1) * time.Second)
-		retryResults, missingCollection, retryErr = h.searchEmbeddingModelOnce(ctx, req, embeddingModel, embedder, subQueries, tags)
-		if retryErr != nil {
-			if isMissingCollectionError(retryErr) {
-				continue
-			}
-			return results, true, hydrationNotes, retryErr
-		}
-		if len(retryResults) > 0 || !missingCollection {
-			return retryResults, true, hydrationNotes, nil
+			h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, planningText)
+		} else if err != nil && ollama.IsMissingModelError(err) {
+			h.msg.SendError(ctx, req.Id, fmt.Sprintf("Planner model unavailable in Ollama: %s", req.PlannerModel), false)
+			return res, fmt.Errorf("planner model unavailable: %w", err)
 		}
 	}
 
-	if retryErr != nil && !isMissingCollectionError(retryErr) {
-		return results, true, hydrationNotes, retryErr
-	}
-	return retryResults, true, hydrationNotes, nil
-}
+	if req.Stream {
+		stream, metaCh, errCh := executor.ExecuteStream(ctx, unit.Prompt, unit.Contexts, history)
+		var chunkBuffer string
+		var chunkCount int
 
-func (h *Handler) searchEmbeddingModelOnce(ctx context.Context, req *contracts.InternalRequest, embeddingModel string, embedder models.Planner, subQueries []string, tags []int64) ([]interface{}, bool, error) {
-	var allRawResults []interface{}
-	missingCollection := false
-
-	if len(tags) > 0 {
-		logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval start model=%q tags=%v limit=%d include_global=%v",
-			req.Id, req.SessionId, embeddingModel, tags, h.cfg.QdrantRetrievalLimit, req.IncludeGlobal)
-		h.msg.SendStatus(ctx, req.Id, req.SessionId, "RETRIEVING_CONTEXT", fmt.Sprintf("Retrieving tagged context for %s", embeddingModel))
-		tagResults, err := h.searcher.Search(ctx, embeddingModel, nil, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantRetrievalLimit)
-		if err != nil {
-			logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval failed model=%q tags=%v err=%v", req.Id, req.SessionId, embeddingModel, tags, err)
-			if isMissingCollectionError(err) {
-				missingCollection = true
-			} else {
-				return nil, false, err
-			}
-		} else {
-			logging.Printf("[%s][SID:%d] tag-only Qdrant retrieval returned %d items model=%q tags=%v", req.Id, req.SessionId, len(tagResults), embeddingModel, tags)
-			allRawResults = append(allRawResults, tagResults...)
-		}
-	}
-
-	if h.cfg.EmbedFanoutEnabled && h.embedProducer != nil && h.resultDispatcher != nil {
-		fanoutResults, err := h.embedFanout(ctx, req.Id, embeddingModel, subQueries)
-		if err != nil {
-			logging.Printf("[%s][SID:%d] embed fanout failed model=%q: %v — falling back to serial HTTP embedding",
-				req.Id, req.SessionId, embeddingModel, err)
-			// Fall through to serial path below.
-		} else {
-			for _, fr := range fanoutResults {
-				sq := subQueries[fr.index]
-				vs := len(fr.vector)
-				logging.Printf("[%s][SID:%d] qdrant search (fanout) model=%q vector_dims=%d tags=%v limit=%d query=%q",
-					req.Id, req.SessionId, embeddingModel, vs, tags, h.cfg.QdrantSearchLimit, sq)
-				results, err := h.searcher.Search(ctx, embeddingModel, fr.vector, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantSearchLimit)
-				if err != nil {
-					if isMissingCollectionError(err) {
-						missingCollection = true
-						continue
+		loop := true
+		for loop {
+			select {
+			case c, ok := <-stream:
+				if !ok {
+					stream = nil
+					if metaCh == nil && errCh == nil {
+						loop = false
 					}
-					logging.Printf("[%s][SID:%d] Qdrant search failed (fanout) model=%s query=%q dims=%d: %v",
-						req.Id, req.SessionId, embeddingModel, sq, vs, err)
 					continue
 				}
-				logging.Printf("[%s][SID:%d] Retrieved %d items (fanout) model=%s query=%q", req.Id, req.SessionId, len(results), embeddingModel, sq)
-				allRawResults = append(allRawResults, results...)
-			}
-			return allRawResults, missingCollection, nil
-		}
-	}
+				res.content += c
+				chunkBuffer += c
+				chunkCount++
+				res.inConversation = true
 
-	for _, sq := range subQueries {
-		logging.Printf("[%s][SID:%d] embedding sub-query model=%q query=%q tag_count=%d", req.Id, req.SessionId, embeddingModel, sq, len(tags))
-		vector, err := embedder.GetEmbeddings(ctx, sq)
+				if chunkCount >= h.cfg.StreamAccumulationCount {
+					h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, res.nextSeq, false, modelID, res.inConversation, nil)
+					res.nextSeq++
+					chunkBuffer = ""
+					chunkCount = 0
+				}
+			case rawMeta, ok := <-metaCh:
+				if !ok {
+					metaCh = nil
+					if stream == nil && errCh == nil {
+						loop = false
+					}
+					continue
+				}
+				res.metrics = mergeExecMetrics(res.metrics, h.mapMetrics(rawMeta, modelID))
+			case err, ok := <-errCh:
+				if !ok {
+					errCh = nil
+					if stream == nil && metaCh == nil {
+						loop = false
+					}
+					continue
+				}
+				if err != nil {
+					logging.Printf("[%s] Execution stream failed on %s: %v", req.Id, unit.Label, err)
+					h.msg.SendError(ctx, req.Id, fmt.Sprintf("%s failed: %v", unit.Label, err), res.inConversation)
+					if ollama.IsMissingModelError(err) {
+						return res, fmt.Errorf("executor stream model unavailable: %w", err)
+					}
+				}
+			case <-ctx.Done():
+				return res, ctx.Err()
+			}
+		}
+		if chunkBuffer != "" {
+			h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, res.nextSeq, false, modelID, res.inConversation, nil)
+			res.nextSeq++
+		}
+		if !executor.IsInsufficientContext(res.content) {
+			res.hasSubstantial = true
+		}
+	} else {
+		content, rawMeta, err := executor.Execute(ctx, unit.Prompt, unit.Contexts, history)
 		if err != nil {
-			logging.Printf("[%s][SID:%d] Failed to get embeddings for sub-query '%s' using %s: %v", req.Id, req.SessionId, sq, embeddingModel, err)
+			logging.Printf("[%s] Execution failed on %s: %v", req.Id, unit.Label, err)
+			h.msg.SendError(ctx, req.Id, fmt.Sprintf("%s failed: %v", unit.Label, err), res.inConversation)
 			if ollama.IsMissingModelError(err) {
-				return nil, false, fmt.Errorf("embedding model unavailable: %w", err)
+				return res, fmt.Errorf("executor model unavailable: %w", err)
 			}
-			if ollama.IsUnsupportedEmbeddingModelError(err) {
-				return nil, false, errUnsupportedEmbeddingModel
-			}
-			continue
+			return res, nil // non-fatal: continue to next unit
 		}
-		vs := len(vector)
-		logging.Printf("[%s][SID:%d] qdrant semantic search request model=%q vector_dims=%d tags=%v limit=%d query=%q",
-			req.Id, req.SessionId, embeddingModel, vs, tags, h.cfg.QdrantSearchLimit, sq)
-		logging.Printf("[%s][SID:%d] Searching Qdrant for model=%s dims=%d tags=%v global=%v query='%s'", req.Id, req.SessionId, embeddingModel, vs, tags, req.IncludeGlobal, sq)
-		results, err := h.searcher.Search(ctx, embeddingModel, vector, tags, req.SessionId, req.IncludeGlobal, h.cfg.QdrantSearchLimit)
-		if err != nil {
-			if isMissingCollectionError(err) {
-				missingCollection = true
-				continue
-			}
-			logging.Printf("[%s][SID:%d] Qdrant search failed for model=%s query '%s' (dims: %d): %v", req.Id, req.SessionId, embeddingModel, sq, vs, err)
-			continue
+		res.content = content
+		res.inConversation = true
+		if !executor.IsInsufficientContext(content) {
+			res.hasSubstantial = true
 		}
-		logging.Printf("[%s][SID:%d] Retrieved %d items for model=%s query '%s'", req.Id, req.SessionId, len(results), embeddingModel, sq)
-		allRawResults = append(allRawResults, results...)
+		res.metrics = mergeExecMetrics(res.metrics, h.mapMetrics(rawMeta, modelID))
+		if h.cfg.StreamIntermediate && req.Stream {
+			h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, content, res.nextSeq, false, modelID, res.inConversation, nil)
+			res.nextSeq++
+		}
 	}
 
-	return allRawResults, missingCollection, nil
+	return res, nil
 }
 
-func (h *Handler) hydrateContextFiles(ctx context.Context, req *contracts.InternalRequest, embeddingModel string, files []contextFileRecord) ([]map[string]interface{}, error) {
-	if len(files) == 0 {
-		return nil, nil
+func mergeExecMetrics(dst, src *contracts.ExecutionMetrics) *contracts.ExecutionMetrics {
+	if src == nil {
+		return dst
 	}
-
-	groupByBucket := make(map[string][]string)
-	for _, file := range files {
-		bucket := strings.TrimSpace(file.Bucket)
-		if bucket == "" {
-			continue
-		}
-		groupByBucket[bucket] = append(groupByBucket[bucket], file.Path)
+	if dst == nil {
+		return src
 	}
-
-	if len(groupByBucket) == 0 {
-		return nil, nil
-	}
-
-	baseURL := strings.TrimRight(h.cfg.IngestionURL, "/")
-	if baseURL == "" {
-		return nil, fmt.Errorf("ingestion URL is not configured")
-	}
-
-	notes := make([]map[string]interface{}, 0, len(groupByBucket))
-	for bucket, paths := range groupByBucket {
-		body := map[string]interface{}{
-			"tag_ids":         req.Tags,
-			"session_id":      req.SessionId,
-			"file_names":      paths,
-			"bucket_name":     bucket,
-			"embedding_model": embeddingModel,
-		}
-		payload, err := json.Marshal(body)
-		if err != nil {
-			return notes, err
-		}
-
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/ingest", bytes.NewReader(payload))
-		if err != nil {
-			return notes, err
-		}
-		httpReq.Header.Set("Content-Type", "application/json")
-
-		resp, err := h.hydrationClient.Do(httpReq)
-		if err != nil {
-			return notes, err
-		}
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return notes, fmt.Errorf("hydration ingest returned %d", resp.StatusCode)
-		}
-
-		notes = append(notes, map[string]interface{}{
-			"embedding_model": embeddingModel,
-			"bucket":          bucket,
-			"path_count":      len(paths),
-			"paths":           paths,
-		})
-	}
-
-	return notes, nil
+	dst.PromptTokens += src.PromptTokens
+	dst.CompletionTokens += src.CompletionTokens
+	dst.TotalDurationUsec += src.TotalDurationUsec
+	return dst
 }
 
-// embedQueryResult pairs an embedding vector with its sub-query index.
-type embedQueryResult struct {
-	index  int
-	vector []float32
-}
+type execDecision int
 
-// embedFanout fans out embedding calls for all subQueries to the Pulsar embed/jobs
-// topic and gathers results via the per-worker ResultDispatcher.
-// Returns results in sub-query index order. On any error the caller falls back to
-// the serial HTTP path and logs the reason.
-//
-// Only callable when h.embedProducer and h.resultDispatcher are non-nil.
-func (h *Handler) embedFanout(
-	ctx context.Context,
-	reqID string,
-	embeddingModel string,
-	subQueries []string,
-) ([]embedQueryResult, error) {
-	n := len(subQueries)
+const (
+	execSendResult execDecision = iota
+	execPaginate
+	execReplan
+)
 
-	// Register BEFORE publishing to avoid a race where a fast gateway publishes
-	// results before the dispatcher is ready to receive them.
-	resultCh := h.resultDispatcher.Register(reqID, n)
-	defer h.resultDispatcher.Deregister(reqID)
-
-	deadline := time.Now().Add(h.cfg.EmbedFanoutTimeout)
-
-	for i, sq := range subQueries {
-		job := embed.EmbedJob{
-			RequestID:        reqID,
-			SubQueryIndex:    i,
-			SubQuery:         sq,
-			EmbeddingModel:   embeddingModel,
-			WorkerInstanceID: h.cfg.WorkerInstanceID,
-			DeadlineUnix:     deadline.Unix(),
+// handleExecDecision is a pure function that determines what to do after
+// processing a batch of execution units.
+func handleExecDecision(
+	isInsufficient, hasSubstantial bool,
+	budget, recursionCount, totalChunks float64,
+	unitsEnd, unitsLen, maxTotal, maxRecursion int,
+) execDecision {
+	if unitsEnd < unitsLen && !hasSubstantial {
+		if totalChunks >= float64(maxTotal) || budget <= 0 {
+			return execSendResult
 		}
-		payload, _ := json.Marshal(job)
-		if _, err := h.embedProducer.Send(ctx, &pulsar.ProducerMessage{
-			Payload: payload,
-			Properties: map[string]string{
-				"request_id": reqID,
-				"worker_id":  h.cfg.WorkerInstanceID,
-				"model":      embeddingModel,
-			},
-		}); err != nil {
-			return nil, fmt.Errorf("embed fanout: publish sub-query %d: %w", i, err)
-		}
+		return execPaginate
 	}
-	logging.Printf("[%s] embed fanout: published %d jobs model=%s timeout=%s",
-		reqID, n, embeddingModel, h.cfg.EmbedFanoutTimeout)
-
-	// Gather results with deadline.
-	results := make([]embedQueryResult, n)
-	gathered := 0
-	gatherCtx, cancel := context.WithDeadline(ctx, deadline)
-	defer cancel()
-
-	for gathered < n {
-		select {
-		case r := <-resultCh:
-			if r.Error != "" {
-				return nil, fmt.Errorf("embed fanout: sub-query %d failed on gateway %s: %s",
-					r.SubQueryIndex, r.GatewayID, r.Error)
-			}
-			if r.SubQueryIndex < 0 || r.SubQueryIndex >= n {
-				logging.Printf("[%s] embed fanout: unexpected sub_query_index %d (expected 0-%d) — skipping",
-					reqID, r.SubQueryIndex, n-1)
-				continue
-			}
-			results[r.SubQueryIndex] = embedQueryResult{
-				index:  r.SubQueryIndex,
-				vector: r.Vector,
-			}
-			gathered++
-		case <-gatherCtx.Done():
-			return nil, fmt.Errorf("embed fanout: timeout waiting for results (%d/%d received) after %s",
-				gathered, n, h.cfg.EmbedFanoutTimeout)
+	if isInsufficient && !hasSubstantial && budget >= 1.0 {
+		if recursionCount >= float64(maxRecursion) {
+			return execSendResult
 		}
+		return execReplan
 	}
-
-	logging.Printf("[%s] embed fanout: gathered %d/%d results model=%s", reqID, gathered, n, embeddingModel)
-	return results, nil
-}
-
-func isMissingCollectionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "collection not found") || strings.Contains(msg, "status 404")
-}
-
-func flattenChunkContexts(chunks [][]string) []interface{} {
-	contexts := make([]interface{}, 0)
-	for _, chunk := range chunks {
-		for _, item := range chunk {
-			if item != "" {
-				contexts = append(contexts, item)
-			}
-		}
-	}
-	return contexts
-}
-
-func contextBucketSummary(items []*contracts.MemoryWriteItem) []string {
-	seen := make(map[string]bool)
-	order := make([]string, 0)
-	for _, item := range items {
-		if item == nil {
-			continue
-		}
-		bucket := ""
-		if item.Metadata != nil {
-			meta := contracts.FromStruct(item.Metadata)
-			bucket, _ = meta["context_bucket"].(string)
-		}
-		if bucket == "" {
-			bucket = normalizeContextBucket(item.MemoryType)
-		} else {
-			bucket = normalizeContextBucket(bucket)
-		}
-		if bucket == "" {
-			continue
-		}
-		if !seen[bucket] {
-			seen[bucket] = true
-			order = append(order, bucket)
-		}
-	}
-	return order
-}
-
-func appliedRuleSummaries(pack *contracts.MemoryPack) []string {
-	if pack == nil {
-		return nil
-	}
-	summaries := make([]string, 0)
-	for _, item := range pack.Items {
-		if item == nil || item.MemoryType != "behavioral_rule" || item.Metadata == nil {
-			continue
-		}
-		meta := contracts.FromStruct(item.Metadata)
-		ruleID := formatMetricValue(meta["rule_id"])
-		scope := formatMetricValue(meta["scope"])
-		priority := formatMetricValue(meta["applied_priority"])
-		summaries = append(summaries, fmt.Sprintf("%s:%s:%s", ruleID, scope, priority))
-	}
-	return summaries
-}
-
-func buildPlannerMetrics(req *contracts.InternalRequest, plan *contracts.PlannerTaskPlan, metrics interface{}, historyPack *contracts.MemoryPack, detectedActionType, finalActionType string) map[string]interface{} {
-	metricMap := make(map[string]interface{})
-	metricMap["prompt_char_count"] = len(req.Prompt)
-	metricMap["detected_action_type"] = detectedActionType
-	metricMap["final_action_type"] = finalActionType
-	metricMap["context_budget"] = plan.ContextBudget
-	metricMap["step_count"] = len(plan.Steps)
-	metricMap["sub_query_count"] = len(plan.SearchQueries)
-	metricMap["history_item_count"] = 0
-	metricMap["behavioral_rule_count"] = 0
-	metricMap["task_context_count"] = 0
-	metricMap["episodic_history_count"] = 0
-
-	if historyPack != nil {
-		metricMap["history_item_count"] = len(historyPack.Items)
-		for _, item := range historyPack.Items {
-			if item == nil {
-				continue
-			}
-			meta := map[string]interface{}{}
-			if item.Metadata != nil {
-				meta = contracts.FromStruct(item.Metadata)
-			}
-			bucket, _ := meta["context_bucket"].(string)
-			bucket = normalizeContextBucket(bucket)
-			if bucket == "" {
-				bucket = normalizeContextBucket(item.MemoryType)
-			}
-			switch bucket {
-			case "behavioral_rules", "action_scoped_behavior", "global_fallback_policy":
-				metricMap["behavioral_rule_count"] = metricMap["behavioral_rule_count"].(int) + 1
-			case "task_local_retrieval":
-				metricMap["task_context_count"] = metricMap["task_context_count"].(int) + 1
-			case "episodic_history":
-				metricMap["episodic_history_count"] = metricMap["episodic_history_count"].(int) + 1
-			}
-		}
-	}
-
-	if normalized := normalizeAny(metrics); normalized != nil {
-		metricMap["planner_model_metrics"] = normalized
-	}
-	return metricMap
-}
-
-func normalizeAny(v interface{}) interface{} {
-	if v == nil {
-		return nil
-	}
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	var out interface{}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return out
-}
-
-func formatMetricValue(v interface{}) string {
-	switch t := v.(type) {
-	case nil:
-		return ""
-	case string:
-		return t
-	case fmt.Stringer:
-		return t.String()
-	default:
-		return fmt.Sprintf("%v", v)
-	}
-}
-
-func mergeNestedMetricMap(existing interface{}, update map[string]interface{}) map[string]interface{} {
-	merged := map[string]interface{}{}
-	if existing != nil {
-		if existingMap, ok := normalizeAny(existing).(map[string]interface{}); ok {
-			for k, v := range existingMap {
-				merged[k] = v
-			}
-		}
-	}
-	for k, v := range update {
-		if existingVal, ok := merged[k].(map[string]interface{}); ok {
-			if updateVal, ok := v.(map[string]interface{}); ok {
-				merged[k] = mergeNestedMetricMap(existingVal, updateVal)
-				continue
-			}
-		}
-		merged[k] = v
-	}
-	return merged
-}
-
-func normalizeContextBucket(bucket string) string {
-	switch strings.ToLower(strings.TrimSpace(bucket)) {
-	case "behavioral_rule":
-		return "behavioral_rules"
-	case "chat_history":
-		return "episodic_history"
-	default:
-		return strings.TrimSpace(bucket)
-	}
-}
-
-func (h *Handler) chunkResults(ctx context.Context, rawResults []interface{}) [][]string {
-	return chunkGroupTexts(h.chunkResultsDetailed(ctx, rawResults))
-}
-
-func (h *Handler) chunkResultsDetailed(ctx context.Context, rawResults []interface{}) []chunkGroupDetail {
-	seenIDs := make(map[string]bool)
-	type chunkInfo struct {
-		source chunkSource
-		index  int
-	}
-	files := make(map[string][]chunkInfo)
-	var nonFileContexts []chunkSource
-	pathsToFetch := make(map[string]map[string]bool)
-
-	for _, it := range rawResults {
-		m, ok := it.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		id, _ := m["_qdrant_id"].(string)
-		if id != "" {
-			if seenIDs[id] {
-				continue
-			}
-			seenIDs[id] = true
-		}
-
-		content, _ := m["content"].(string)
-		if content == "" {
-			content, _ = m["text"].(string)
-		}
-		if content == "" {
-			continue
-		}
-
-		path, _ := m["path"].(string)
-		embeddingModel, _ := m["embedding_model"].(string)
-		if embeddingModel == "" {
-			if meta, ok := m["metadata"].(map[string]interface{}); ok {
-				embeddingModel, _ = meta["embedding_model"].(string)
-			}
-		}
-		vectorSize := 0
-		if vs, ok := m["vector_size"].(float64); ok {
-			vectorSize = int(vs)
-		} else if meta, ok := m["metadata"].(map[string]interface{}); ok {
-			if vs, ok := meta["vector_size"].(float64); ok {
-				vectorSize = int(vs)
-			}
-		}
-		idxVal, _ := m["chunk"].(float64)
-		src := chunkSource{
-			QdrantID:       id,
-			Path:           path,
-			Chunk:          int(idxVal),
-			Content:        content,
-			EmbeddingModel: embeddingModel,
-			VectorSize:     vectorSize,
-		}
-
-		if path != "" {
-			key := chunkResultKey(path, embeddingModel)
-			files[key] = append(files[key], chunkInfo{source: src, index: src.Chunk})
-			if _, ok := pathsToFetch[embeddingModel]; !ok {
-				pathsToFetch[embeddingModel] = make(map[string]bool)
-			}
-			pathsToFetch[embeddingModel][path] = true
-		} else {
-			nonFileContexts = append(nonFileContexts, src)
-		}
-	}
-
-	if len(pathsToFetch) > 0 {
-		for embeddingModel, fileSet := range pathsToFetch {
-			pathList := make([]string, 0, len(fileSet))
-			for p := range fileSet {
-				pathList = append(pathList, p)
-			}
-
-			logging.Printf("Reassembling %d files for model %s from paths: %v", len(pathList), embeddingModel, pathList)
-			fullFileChunks, err := h.searcher.RetrieveByPaths(ctx, embeddingModel, pathList)
-			if err == nil {
-				for _, it := range fullFileChunks {
-					m, ok := it.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					id, _ := m["_qdrant_id"].(string)
-					if id != "" && seenIDs[id] {
-						continue
-					}
-					if id != "" {
-						seenIDs[id] = true
-					}
-
-					path, _ := m["path"].(string)
-					content, _ := m["content"].(string)
-					if content == "" {
-						content, _ = m["text"].(string)
-					}
-					if path == "" || content == "" {
-						continue
-					}
-					idxVal, _ := m["chunk"].(float64)
-					vectorSize := 0
-					if vs, ok := m["vector_size"].(float64); ok {
-						vectorSize = int(vs)
-					}
-					src := chunkSource{
-						QdrantID:       id,
-						Path:           path,
-						Chunk:          int(idxVal),
-						Content:        content,
-						EmbeddingModel: embeddingModel,
-						VectorSize:     vectorSize,
-					}
-					key := chunkResultKey(path, embeddingModel)
-					files[key] = append(files[key], chunkInfo{source: src, index: src.Chunk})
-				}
-			} else {
-				logging.Printf("Failed to fetch full file chunks for %s: %v", embeddingModel, err)
-			}
-		}
-	}
-
-	var chunks []chunkGroupDetail
-	currentChunk := chunkGroupDetail{}
-	currentChunkSize := 0
-	currentChunkModel := ""
-	limit := h.cfg.ChunkVectorLimit
-	if limit <= 0 {
-		limit = 50
-	}
-
-	pathKeys := make([]string, 0, len(files))
-	for p := range files {
-		pathKeys = append(pathKeys, p)
-	}
-	sort.Strings(pathKeys)
-
-	appendChunk := func(group chunkGroupDetail) {
-		if len(group.Texts) == 0 {
-			return
-		}
-		chunks = append(chunks, group)
-	}
-
-	for _, p := range pathKeys {
-		_, groupModel := splitChunkGroupKey(p)
-		fChunks := files[p]
-		sort.Slice(fChunks, func(i, j int) bool {
-			return fChunks[i].index < fChunks[j].index
-		})
-
-		numVectors := len(fChunks)
-		if len(currentChunk.Texts) > 0 && currentChunkModel != "" && groupModel != currentChunkModel {
-			appendChunk(currentChunk)
-			currentChunk = chunkGroupDetail{}
-			currentChunkSize = 0
-			currentChunkModel = ""
-		}
-		if numVectors > limit {
-			logging.Printf("ERROR: File %s too large (%d vectors), splitting into chunks of %d", p, numVectors, limit)
-			if len(currentChunk.Texts) > 0 {
-				appendChunk(currentChunk)
-				currentChunk = chunkGroupDetail{}
-				currentChunkSize = 0
-				currentChunkModel = ""
-			}
-			for i := 0; i < numVectors; i += limit {
-				end := i + limit
-				if end > numVectors {
-					end = numVectors
-				}
-				var sb strings.Builder
-				sb.WriteString(fmt.Sprintf("--- File: %s (Part %d) ---", displayChunkGroupName(p), (i/limit)+1))
-				var sources []chunkSource
-				for _, c := range fChunks[i:end] {
-					if sb.Len() > 0 {
-						sb.WriteString("\n")
-					}
-					sb.WriteString(c.source.Content)
-					sources = append(sources, c.source)
-				}
-				group := chunkGroupDetail{
-					Texts:   []string{sb.String()},
-					Sources: sources,
-				}
-				if (end - i) == limit {
-					appendChunk(group)
-				} else {
-					currentChunk = group
-					currentChunkSize = end - i
-					currentChunkModel = groupModel
-				}
-			}
-			continue
-		}
-
-		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("--- File: %s ---", displayChunkGroupName(p)))
-		var sources []chunkSource
-		for _, c := range fChunks {
-			sb.WriteString("\n")
-			sb.WriteString(c.source.Content)
-			sources = append(sources, c.source)
-		}
-		group := chunkGroupDetail{
-			Texts:   []string{sb.String()},
-			Sources: sources,
-		}
-
-		if currentChunkSize+numVectors > limit {
-			appendChunk(currentChunk)
-			currentChunk = group
-			currentChunkSize = numVectors
-			currentChunkModel = groupModel
-		} else {
-			currentChunk.Texts = append(currentChunk.Texts, group.Texts...)
-			currentChunk.Sources = append(currentChunk.Sources, group.Sources...)
-			currentChunkSize += numVectors
-			currentChunkModel = groupModel
-		}
-	}
-
-	for _, nfc := range nonFileContexts {
-		if currentChunkSize+1 > limit {
-			appendChunk(currentChunk)
-			currentChunk = chunkGroupDetail{}
-			currentChunkSize = 0
-		}
-		currentChunk.Texts = append(currentChunk.Texts, nfc.Content)
-		currentChunk.Sources = append(currentChunk.Sources, nfc)
-		currentChunkSize++
-	}
-
-	appendChunk(currentChunk)
-	return chunks
-}
-
-func chunkGroupTexts(groups []chunkGroupDetail) [][]string {
-	chunks := make([][]string, 0, len(groups))
-	for _, group := range groups {
-		if len(group.Texts) == 0 {
-			continue
-		}
-		texts := make([]string, len(group.Texts))
-		copy(texts, group.Texts)
-		chunks = append(chunks, texts)
-	}
-	return chunks
-}
-
-func chunkResultKey(path, embeddingModel string) string {
-	return path + "::" + strings.ToLower(strings.TrimSpace(embeddingModel))
-}
-
-func displayChunkGroupName(key string) string {
-	parts := strings.SplitN(key, "::", 2)
-	path := ""
-	model := ""
-	if len(parts) > 0 {
-		path = parts[0]
-	}
-	if len(parts) > 1 {
-		model = parts[1]
-	}
-	if model != "" {
-		return fmt.Sprintf("%s [%s]", path, model)
-	}
-	if path != "" {
-		return path
-	}
-	return key
-}
-
-func splitChunkGroupKey(key string) (string, string) {
-	parts := strings.SplitN(key, "::", 2)
-	if len(parts) == 0 {
-		return "", ""
-	}
-	if len(parts) == 1 {
-		return parts[0], ""
-	}
-	return parts[0], parts[1]
-}
-
-func chunkGroupsToMetadata(groups []chunkGroupDetail) []map[string]interface{} {
-	out := make([]map[string]interface{}, 0, len(groups))
-	for _, group := range groups {
-		if len(group.Texts) == 0 {
-			continue
-		}
-		sources := make([]map[string]interface{}, 0, len(group.Sources))
-		for _, source := range group.Sources {
-			sources = append(sources, map[string]interface{}{
-				"qdrant_id":       source.QdrantID,
-				"path":            source.Path,
-				"chunk":           source.Chunk,
-				"embedding_model": source.EmbeddingModel,
-				"vector_size":     source.VectorSize,
-			})
-		}
-		out = append(out, map[string]interface{}{
-			"texts":   group.Texts,
-			"sources": sources,
-		})
-	}
-	return out
-}
-
-func countChunkSources(groups []chunkGroupDetail) int {
-	total := 0
-	for _, group := range groups {
-		total += len(group.Sources)
-	}
-	return total
-}
-
-func normalizeTextTokens(text string) map[string]struct{} {
-	tokens := make(map[string]struct{})
-	fields := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
-		return !(unicode.IsLetter(r) || unicode.IsDigit(r))
-	})
-	for _, field := range fields {
-		if len(field) < 3 {
-			continue
-		}
-		tokens[field] = struct{}{}
-	}
-	return tokens
-}
-
-func joinPlanTerms(step contracts.PlannerStep) string {
-	parts := []string{step.Objective, step.ActionType}
-	parts = append(parts, step.SearchQueries...)
-	parts = append(parts, step.Inputs...)
-	parts = append(parts, step.Outputs...)
-	parts = append(parts, step.Dependencies...)
-	parts = append(parts, step.EvidenceRequirements...)
-	return strings.Join(parts, " ")
-}
-
-func scoreChunkGroup(step contracts.PlannerStep, group chunkGroupDetail) int {
-	stepTokens := normalizeTextTokens(joinPlanTerms(step))
-	if len(stepTokens) == 0 {
-		return 0
-	}
-	groupTokens := normalizeTextTokens(strings.Join(group.Texts, "\n"))
-	score := 0
-	for token := range stepTokens {
-		if _, ok := groupTokens[token]; ok {
-			score++
-		}
-	}
-	return score
-}
-
-func buildPlanStepContexts(plan *contracts.PlannerTaskPlan, groups []chunkGroupDetail, originalPrompt string) []map[string]interface{} {
-	if plan == nil || len(plan.Steps) == 0 || len(groups) == 0 {
-		return nil
-	}
-
-	results := make([]map[string]interface{}, 0, len(plan.Steps))
-	for idx, step := range plan.Steps {
-		limit := step.ContextBudget
-		if limit <= 0 {
-			limit = 2
-		}
-
-		type scoredGroup struct {
-			index int
-			score int
-		}
-
-		scored := make([]scoredGroup, 0, len(groups))
-		for gi, group := range groups {
-			scored = append(scored, scoredGroup{index: gi, score: scoreChunkGroup(step, group)})
-		}
-
-		sort.SliceStable(scored, func(i, j int) bool {
-			if scored[i].score == scored[j].score {
-				return scored[i].index < scored[j].index
-			}
-			return scored[i].score > scored[j].score
-		})
-
-		selectedTexts := make([]interface{}, 0, limit)
-		selectedSources := make([]map[string]interface{}, 0)
-		selectedGroupIndices := make([]int, 0, limit)
-
-		for _, candidate := range scored {
-			if candidate.score <= 0 && len(selectedTexts) > 0 {
-				break
-			}
-			group := groups[candidate.index]
-			groupText := strings.Join(group.Texts, "\n")
-			if groupText == "" {
-				continue
-			}
-			selectedGroupIndices = append(selectedGroupIndices, candidate.index)
-			selectedTexts = append(selectedTexts, groupText)
-			for _, source := range group.Sources {
-				selectedSources = append(selectedSources, map[string]interface{}{
-					"qdrant_id":       source.QdrantID,
-					"path":            source.Path,
-					"chunk":           source.Chunk,
-					"embedding_model": source.EmbeddingModel,
-					"vector_size":     source.VectorSize,
-				})
-			}
-			if len(selectedTexts) >= limit {
-				break
-			}
-		}
-
-		if len(selectedTexts) == 0 && len(groups) > 0 {
-			groupText := strings.Join(groups[0].Texts, "\n")
-			if groupText != "" {
-				selectedTexts = append(selectedTexts, groupText)
-				selectedGroupIndices = append(selectedGroupIndices, 0)
-				for _, source := range groups[0].Sources {
-					selectedSources = append(selectedSources, map[string]interface{}{
-						"qdrant_id":       source.QdrantID,
-						"path":            source.Path,
-						"chunk":           source.Chunk,
-						"embedding_model": source.EmbeddingModel,
-						"vector_size":     source.VectorSize,
-					})
-				}
-			}
-		}
-
-		// Always use the original user question as the executor prompt so the
-		// extraction instruction ("return the exact answer") is never replaced by
-		// the planner's decomposed step objective. Step objectives are useful for
-		// scoring/ranking context groups but must not reach the executor model.
-		stepPrompt := strings.TrimSpace(originalPrompt)
-		if stepPrompt == "" {
-			stepPrompt = strings.TrimSpace(plan.Objective)
-		}
-
-		results = append(results, map[string]interface{}{
-			"step_index":          idx,
-			"step_order":          step.Order,
-			"step_objective":      step.Objective,
-			"step_action_type":    step.ActionType,
-			"step_prompt":         stepPrompt,
-			"contexts":            selectedTexts,
-			"context_texts":       selectedTexts,
-			"matched_groups":      selectedGroupIndices,
-			"matched_sources":     selectedSources,
-			"context_budget":      limit,
-			"step_search_queries": step.SearchQueries,
-		})
-	}
-
-	return results
-}
-
-func extractExecutionUnits(metadata map[string]interface{}, fallbackPrompt string, chunks [][]interface{}) []executionUnit {
-	if raw, ok := metadata["plan_step_contexts"].([]interface{}); ok && len(raw) > 0 {
-		units := make([]executionUnit, 0, len(raw))
-		for _, item := range raw {
-			stepMap, ok := item.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			unit := executionUnit{Prompt: fallbackPrompt}
-			if prompt, ok := stepMap["step_prompt"].(string); ok && strings.TrimSpace(prompt) != "" {
-				unit.Prompt = prompt
-			}
-			if contexts, ok := stepMap["contexts"].([]interface{}); ok {
-				unit.Contexts = append(unit.Contexts, contexts...)
-			}
-			if len(unit.Contexts) == 0 {
-				if contextTexts, ok := stepMap["context_texts"].([]interface{}); ok {
-					unit.Contexts = append(unit.Contexts, contextTexts...)
-				}
-			}
-			if label, ok := stepMap["step_objective"].(string); ok && label != "" {
-				unit.Label = label
-			} else if action, ok := stepMap["step_action_type"].(string); ok && action != "" {
-				unit.Label = action
-			} else {
-				unit.Label = fmt.Sprintf("step-%v", stepMap["step_order"])
-			}
-			if len(unit.Contexts) > 0 {
-				units = append(units, unit)
-			}
-		}
-		if len(units) > 0 {
-			return units
-		}
-	}
-
-	units := make([]executionUnit, 0, len(chunks))
-	for idx, chunk := range chunks {
-		unit := executionUnit{Prompt: fallbackPrompt, Contexts: chunk, Label: fmt.Sprintf("chunk-%d", idx+1)}
-		units = append(units, unit)
-	}
-	return units
-}
-
-func rawResultContextText(item interface{}) string {
-	switch v := item.(type) {
-	case map[string]interface{}:
-		if content, _ := v["content"].(string); content != "" {
-			return content
-		}
-		if text, _ := v["text"].(string); text != "" {
-			return text
-		}
-		if payload, ok := v["payload"].(map[string]interface{}); ok {
-			if content, _ := payload["content"].(string); content != "" {
-				return content
-			}
-			if text, _ := payload["text"].(string); text != "" {
-				return text
-			}
-		}
-		if encoded, err := json.Marshal(v); err == nil {
-			return string(encoded)
-		}
-	default:
-		if v == nil {
-			return ""
-		}
-		return fmt.Sprintf("%v", v)
-	}
-	return ""
-}
-
-func extractLiteralAnswerFallback(prompt string, chunks [][]interface{}) (string, bool) {
-	promptLower := strings.ToLower(prompt)
-	interested := strings.Contains(promptLower, "code") || strings.Contains(promptLower, "answer") || strings.Contains(promptLower, "token")
-	if !interested {
-		return "", false
-	}
-
-	for _, chunk := range chunks {
-		for _, item := range chunk {
-			text := rawResultContextText(item)
-			if text == "" {
-				continue
-			}
-			for _, re := range literalAnswerFallbackPatterns {
-				match := re.FindStringSubmatch(text)
-				if len(match) > 1 {
-					return strings.TrimSpace(match[1]), true
-				}
-			}
-		}
-	}
-
-	return "", false
+	return execSendResult
 }
 
 func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest) (dlq.ProcessResult, error) {
@@ -1811,133 +897,26 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 		h.msg.SendStatus(ctx, req.Id, req.SessionId, "EXECUTING_TASK", fmt.Sprintf("Processing %s %d/%d (Total: %d)", label, actualIndex+1, end, len(executionUnits)))
 		if req.Stream {
 			h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, fmt.Sprintf("⌛ *Generating response (%s %d/%d)*...", label, actualIndex+1, end))
-		}
-
-		if planner != nil {
-			refinedPlan, _, err := planner.Plan(ctx, unit.Prompt, unit.Contexts, history)
-			if err == nil && refinedPlan != nil && len(refinedPlan.SearchQueries) > 0 && h.cfg.StreamIntermediate {
-				planningText := fmt.Sprintf("Refined sub-queries for %s %d:", label, actualIndex+1)
-				for _, sq := range refinedPlan.SearchQueries {
-					planningText += fmt.Sprintf("\n- %s", sq)
-				}
-				h.msg.SendPlanningResponse(ctx, req.Id, req.SessionId, planningText)
-			} else if err != nil && ollama.IsMissingModelError(err) {
-				h.msg.SendError(ctx, req.Id, fmt.Sprintf("Planner model unavailable in Ollama: %s", plannerModelID), false)
-				return dlq.PermanentFailure, fmt.Errorf("planner model unavailable: %w", err)
-			}
-		}
-
-		if req.Stream {
 			if actualIndex == 0 {
 				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, "", 0, false, modelID, false, metadata)
 			}
-
-			stream, metaCh, errCh := executor.ExecuteStream(ctx, unit.Prompt, unit.Contexts, history)
-			var chunkBuffer string
-			var chunkCount int
-			var currentChunkResult string
-
-			loop := true
-			for loop {
-				select {
-				case c, ok := <-stream:
-					if !ok {
-						stream = nil
-						if metaCh == nil && errCh == nil {
-							loop = false
-						}
-						continue
-					}
-					fullAccumulatedResult += c
-					currentChunkResult += c
-					chunkBuffer += c
-					chunkCount++
-					inConversation = true
-
-					if chunkCount >= h.cfg.StreamAccumulationCount {
-						h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, seq, false, modelID, inConversation, nil)
-						seq++
-						chunkBuffer = ""
-						chunkCount = 0
-					}
-				case rawMeta, ok := <-metaCh:
-					if !ok {
-						metaCh = nil
-						if stream == nil && errCh == nil {
-							loop = false
-						}
-						continue
-					}
-					m := h.mapMetrics(rawMeta, modelID)
-					if finalMetrics == nil {
-						finalMetrics = m
-					} else if m != nil {
-						finalMetrics.PromptTokens += m.PromptTokens
-						finalMetrics.CompletionTokens += m.CompletionTokens
-						finalMetrics.TotalDurationUsec += m.TotalDurationUsec
-					}
-				case err, ok := <-errCh:
-					if !ok {
-						errCh = nil
-						if stream == nil && metaCh == nil {
-							loop = false
-						}
-						continue
-					}
-					if err != nil {
-						logging.Printf("[%s] Execution stream failed on %s %d: %v", req.Id, label, actualIndex+1, err)
-						h.msg.SendError(ctx, req.Id, fmt.Sprintf("%s %d failed: %v", label, actualIndex+1, err), inConversation)
-						if ollama.IsMissingModelError(err) {
-							return dlq.PermanentFailure, fmt.Errorf("executor stream model unavailable: %w", err)
-						}
-					}
-				case <-ctx.Done():
-					h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
-					return dlq.TransientFailure, ctx.Err()
-				}
-			}
-			if chunkBuffer != "" {
-				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, chunkBuffer, seq, false, modelID, inConversation, nil)
-				seq++
-			}
-			if !executor.IsInsufficientContext(currentChunkResult) {
-				hasSubstantialResult = true
-			}
-		} else {
-			res, rawMeta, err := executor.Execute(ctx, unit.Prompt, unit.Contexts, history)
-			if err != nil {
-				logging.Printf("[%s] Execution failed on %s %d: %v", req.Id, label, actualIndex+1, err)
-				h.msg.SendError(ctx, req.Id, fmt.Sprintf("%s %d failed: %v", label, actualIndex+1, err), inConversation)
-				if ollama.IsMissingModelError(err) {
-					return dlq.PermanentFailure, fmt.Errorf("executor model unavailable: %w", err)
-				}
-				continue
-			}
-			fullAccumulatedResult += res
-			inConversation = true
-			if !executor.IsInsufficientContext(res) {
-				hasSubstantialResult = true
-			}
-
-			m := h.mapMetrics(rawMeta, modelID)
-			if finalMetrics == nil {
-				finalMetrics = m
-			} else if m != nil {
-				finalMetrics.PromptTokens += m.PromptTokens
-				finalMetrics.CompletionTokens += m.CompletionTokens
-				finalMetrics.TotalDurationUsec += m.TotalDurationUsec
-			}
-
-			// Only send intermediate stream chunks when the request is itself a
-			// streaming request. In non-streaming mode SendResult will transmit the
-			// full accumulated result as the single final chunk, so emitting an
-			// additional non-final chunk here would cause the db-adapter to append
-			// the content twice and produce a duplicated response.
-			if h.cfg.StreamIntermediate && req.Stream {
-				h.msg.SendStreamChunk(ctx, req.Id, req.SessionId, res, seq, false, modelID, inConversation, nil)
-				seq++
-			}
 		}
+
+		result, err := h.processExecutionUnit(ctx, unit, executor, planner, req, modelID, seq, inConversation, history)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				h.msg.SendCompletion(ctx, req.Id, req.SessionId, startTime, modelID, "FAILED", nil)
+				return dlq.TransientFailure, err
+			}
+			return dlq.PermanentFailure, err
+		}
+		fullAccumulatedResult += result.content
+		seq = result.nextSeq
+		inConversation = result.inConversation
+		if result.hasSubstantial {
+			hasSubstantialResult = true
+		}
+		finalMetrics = mergeExecMetrics(finalMetrics, result.metrics)
 	}
 
 	isInsufficient := executor.IsInsufficientContext(fullAccumulatedResult)
@@ -1977,54 +956,47 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	logging.Printf("[%s][SID:%d] Exec Summary: Insufficient=%v, Substantial=%v, Budget=%v, Recursions=%v, TotalChunks=%v",
 		req.Id, req.SessionId, isInsufficient, hasSubstantialResult, budget, recursionCount, totalChunks)
 
-	if end < len(executionUnits) && !hasSubstantialResult {
-		if totalChunks >= float64(h.cfg.MaxTotalChunks) {
-			logging.Printf("[%s][SID:%d] Max total chunks reached (%v), stopping pagination", req.Id, req.SessionId, totalChunks)
-		} else if budget <= 0 {
-			logging.Printf("[%s][SID:%d] Budget exhausted, stopping pagination", req.Id, req.SessionId)
-		} else {
-			logging.Printf("[%s][SID:%d] No substantial result in units %d-%d, paginating to next batch", req.Id, req.SessionId, offset+1, end)
-			metadata["chunk_offset"] = float64(end)
-			metadata["recursion_budget"] = budget - 0.1
-			req.Metadata = contracts.ToStruct(metadata)
-			marshaller := protojson.MarshalOptions{UseProtoNames: true}
-			payload, err := marshaller.Marshal(req)
-			if err != nil {
-				logging.Printf("[%s][SID:%d] Failed to marshal request for exec pagination: %v", req.Id, req.SessionId, err)
-				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to continue pagination", inConversation)
-				return dlq.TransientFailure, fmt.Errorf("marshal for exec pagination [%s]: %w", req.Id, err)
-			}
-			if _, sendErr := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); sendErr != nil {
-				logging.Printf("[%s][SID:%d] Failed to send to exec topic for pagination: %v", req.Id, req.SessionId, sendErr)
-				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to continue pagination", inConversation)
-				return dlq.TransientFailure, fmt.Errorf("send to exec for pagination [%s]: %w", req.Id, sendErr)
-			}
-			return dlq.Success, nil
+	decision := handleExecDecision(isInsufficient, hasSubstantialResult, budget, recursionCount, totalChunks,
+		end, len(executionUnits), h.cfg.MaxTotalChunks, h.cfg.MaxRecursionCount)
+
+	switch decision {
+	case execPaginate:
+		logging.Printf("[%s][SID:%d] No substantial result in units %d-%d, paginating to next batch", req.Id, req.SessionId, offset+1, end)
+		metadata["chunk_offset"] = float64(end)
+		metadata["recursion_budget"] = budget - 0.1
+		req.Metadata = contracts.ToStruct(metadata)
+		marshaller := protojson.MarshalOptions{UseProtoNames: true}
+		payload, err := marshaller.Marshal(req)
+		if err != nil {
+			h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to continue pagination", inConversation)
+			return dlq.TransientFailure, fmt.Errorf("marshal for exec pagination [%s]: %w", req.Id, err)
 		}
-	} else if isInsufficient && !hasSubstantialResult && budget >= 1.0 {
-		if recursionCount >= float64(h.cfg.MaxRecursionCount) {
-			logging.Printf("[%s][SID:%d] Max recursion count reached (%v), stopping", req.Id, req.SessionId, recursionCount)
-		} else {
-			logging.Printf("[%s][SID:%d] Context insufficient after all units, triggering re-plan", req.Id, req.SessionId)
-			metadata["recursion_budget"] = budget - 1.0
-			metadata["recursion_count"] = recursionCount + 1
-			metadata["chunk_offset"] = float64(0)
-			req.Metadata = contracts.ToStruct(metadata)
-			marshaller := protojson.MarshalOptions{UseProtoNames: true}
-			payload, err := marshaller.Marshal(req)
-			if err != nil {
-				logging.Printf("[%s][SID:%d] Failed to marshal request for re-plan: %v", req.Id, req.SessionId, err)
-				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to trigger re-plan", inConversation)
-				return dlq.TransientFailure, fmt.Errorf("marshal for re-plan [%s]: %w", req.Id, err)
-			}
-			if _, sendErr := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); sendErr != nil {
-				logging.Printf("[%s][SID:%d] Failed to send to plan topic for re-plan: %v", req.Id, req.SessionId, sendErr)
-				h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to trigger re-plan", inConversation)
-				return dlq.TransientFailure, fmt.Errorf("send to plan for re-plan [%s]: %w", req.Id, sendErr)
-			}
-			return dlq.Success, nil
+		if _, sendErr := h.msg.Producers.Exec.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); sendErr != nil {
+			h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to continue pagination", inConversation)
+			return dlq.TransientFailure, fmt.Errorf("send to exec for pagination [%s]: %w", req.Id, sendErr)
 		}
-	} else if end < len(executionUnits) && hasSubstantialResult {
+		return dlq.Success, nil
+
+	case execReplan:
+		logging.Printf("[%s][SID:%d] Context insufficient after all units, triggering re-plan", req.Id, req.SessionId)
+		metadata["recursion_budget"] = budget - 1.0
+		metadata["recursion_count"] = recursionCount + 1
+		metadata["chunk_offset"] = float64(0)
+		req.Metadata = contracts.ToStruct(metadata)
+		marshaller := protojson.MarshalOptions{UseProtoNames: true}
+		payload, err := marshaller.Marshal(req)
+		if err != nil {
+			h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to trigger re-plan", inConversation)
+			return dlq.TransientFailure, fmt.Errorf("marshal for re-plan [%s]: %w", req.Id, err)
+		}
+		if _, sendErr := h.msg.Producers.Plan.Send(ctx, &pulsar.ProducerMessage{Payload: payload}); sendErr != nil {
+			h.msg.SendError(ctx, req.Id, "Internal pipeline routing error: failed to trigger re-plan", inConversation)
+			return dlq.TransientFailure, fmt.Errorf("send to plan for re-plan [%s]: %w", req.Id, sendErr)
+		}
+		return dlq.Success, nil
+	}
+
+	if end < len(executionUnits) && hasSubstantialResult {
 		logging.Printf("[%s][SID:%d] Found substantial result, stopping processing early at %d/%d", req.Id, req.SessionId, end, len(executionUnits))
 	}
 
@@ -2039,25 +1011,3 @@ func (h *Handler) handleExec(ctx context.Context, req *contracts.InternalRequest
 	return dlq.Success, nil
 }
 
-func (h *Handler) mapMetrics(raw interface{}, modelID string) *contracts.ExecutionMetrics {
-	if raw == nil {
-		return nil
-	}
-
-	var m *contracts.ExecutionMetrics
-	if or, ok := raw.(interface {
-		GetMetrics() *contracts.ExecutionMetrics
-	}); ok {
-		m = or.GetMetrics()
-	}
-
-	if m != nil && m.ModelFamily == "" {
-		if strings.Contains(strings.ToLower(modelID), "llama") {
-			m.ModelFamily = "llama"
-		} else if strings.Contains(strings.ToLower(modelID), "granite") {
-			m.ModelFamily = "granite"
-		}
-	}
-
-	return m
-}

@@ -10,6 +10,13 @@ export config_source_dir="$BASE_DIR"
 source "$config_source_dir/scripts/k8s-install-helper-functions.sh"
 source "$config_source_dir/scripts/journal-helper.sh"
 
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$config_source_dir/config/network.env"
+
+# Reconcile static manifests (registry prefix, in-cluster registry LB IP) to
+# config/network.env before anything is applied. Idempotent.
+bash "$config_source_dir/scripts/render-manifests.sh"
+
 # Ensure host trusts the registry CA for secure image mirroring/seeding
 bash "$config_source_dir/scripts/setup-host-trust.sh"
 
@@ -47,7 +54,7 @@ bash "$config_source_dir/scripts/setup-node-labels.sh"
 # rook-ceph-image-prefetch removed in favor of hierophant registry mirror bootstrap
 # This avoids downloading the same image 9 times from the internet.
 
-if ! is_step_done "rook-ceph-operator"; then
+if ! is_step_done "rook-ceph-operator" $KUBECTL get crd cephclusters.ceph.rook.io; then
 echo "install rook-ceph operator"
 
 $KUBECTL get namespace rook-ceph >/dev/null 2>&1 || $KUBECTL create namespace rook-ceph
@@ -61,9 +68,23 @@ fi
 
 helm repo add rook-release https://charts.rook.io/release
 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/crds.yaml 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml 
-$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml 
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/crds.yaml
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/common.yaml
+# csi-operator.yaml registers CRDs (CephConnection, OperatorConfig) that Rook v1.18+
+# REQUIRES. Rook creates CephConnection/OperatorConfig CRs; ceph-csi-operator reconciles
+# those CRs into the actual CSI provisioner deployments (ctrlplugin, nodeplugin).
+# Both must run — scaling ceph-csi-controller-manager to 0 prevents CSI from ever deploying.
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator.yaml
+
+# csi-operator-config.yaml is a CR of a type registered by csi-operator.yaml
+# immediately above, so the CRD must be established before it can be applied —
+# otherwise this races and fails with "no matches for kind OperatorConfig".
+WaitForCRD operatorconfigs.csi.ceph.io
+
+# CSI defaults must exist BEFORE Rook creates its Driver CRs, so the nodeplugin
+# DaemonSet is born tolerating the inference-node GPU taint. Without this the
+# GPU Ollama pods cannot mount their rook-cephfs PVC on inference-0.
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/csi-operator-config.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/operator.yaml
 
 echo "Check the ceph-operator pod"
@@ -71,8 +92,19 @@ WaitForPodsRunning "rook-ceph" "rook-ceph-operator" 30
 mark_step_done "rook-ceph-operator"
 fi
 
-if ! is_step_done "rook-ceph-cluster"; then
+if ! is_step_done "rook-ceph-cluster" $KUBECTL get cephcluster -n rook-ceph rook-ceph; then
 echo "Next step the storage CRDs"
+
+# These four are all CRs of types registered by rook-ceph/crds.yaml in the
+# previous step. That step ends with a pod wait, which usually gives the
+# apiextensions controller enough time — but "usually" is not a guarantee on a
+# cold cluster, and losing the race aborts the install under 'set -e'. Make the
+# dependency explicit.
+WaitForCRD \
+  cephclusters.ceph.rook.io \
+  cephfilesystems.ceph.rook.io \
+  cephobjectstores.ceph.rook.io \
+  cephblockpools.ceph.rook.io
 
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/cluster.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/filesystem.yaml
@@ -80,20 +112,143 @@ $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/object.yaml
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/pool.yaml
 
 
-echo "Check the ceph-rook-cephfs/rdb deploys"
-sleep 60
-$KUBECTL rollout status -n rook-ceph deployment.apps/rook-ceph.cephfs.csi.ceph.com-ctrlplugin --timeout=600s
-$KUBECTL rollout status -n rook-ceph deployment.apps/rook-ceph.rbd.csi.ceph.com-ctrlplugin --timeout=600s
-mark_step_done "rook-ceph-cluster"
+# ── Wait for Ceph to fully initialize before marking this step done ──────────
+# The rook-ceph-cluster step must NOT complete until Ceph is actually ready.
+# Everything downstream (registry, APM, Pulsar) needs PVC provisioning to work.
+# Sequence: MONs start → MGR starts → OSDs start → Ceph health OK → MDS →
+#           StorageClass applied → CSI ctrlplugin deployed → PVC provisioning works.
+
+echo "Waiting for Ceph cluster health (up to 1800s)..."
+ceph_elapsed=0
+while (( ceph_elapsed < 1800 )); do
+    ceph_status=$($KUBECTL -n rook-ceph get cephcluster rook-ceph \
+        -o jsonpath='{.status.ceph.health}' 2>/dev/null || echo "UNKNOWN")
+    if [[ "$ceph_status" == HEALTH_OK* ]] || [[ "$ceph_status" == HEALTH_WARN* ]]; then
+        echo "  Ceph health: $ceph_status (${ceph_elapsed}s)"
+        break
+    fi
+    echo "  Ceph health: ${ceph_status:-UNKNOWN} — waiting 30s... (${ceph_elapsed}s/1800s)"
+    sleep 30
+    (( ceph_elapsed += 30 )) || true
+done
+if [[ "$ceph_status" != HEALTH_OK* ]] && [[ "$ceph_status" != HEALTH_WARN* ]]; then
+    echo "ERROR: Ceph did not reach healthy state within 1800s. Aborting."
+    exit 1
 fi
 
-if ! is_step_done "rook-ceph-storageclass"; then
+echo "Applying StorageClass..."
+$KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
+
+# ── Wait for ceph-csi-controller-manager (the operator that creates CSI provisioner deployments) ──
+echo "Waiting for ceph-csi-controller-manager (up to 300s)..."
+csi_op_elapsed=0
+while (( csi_op_elapsed < 300 )); do
+    avail=$($KUBECTL get deployment -n rook-ceph ceph-csi-controller-manager \
+        -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)
+    if [[ "$avail" =~ ^[1-9] ]]; then
+        echo "  ceph-csi-controller-manager: $avail available (${csi_op_elapsed}s)"
+        break
+    fi
+    if (( csi_op_elapsed % 30 == 0 )); then
+        pod_status=$($KUBECTL get pods -n rook-ceph -l "control-plane=ceph-csi-op-controller-manager" \
+            --no-headers 2>/dev/null | awk '{print $3}' | head -1)
+        echo "  ceph-csi-controller-manager not ready — waiting 10s... (${csi_op_elapsed}s/300s) [pod: ${pod_status:-not found}]"
+    fi
+    sleep 10
+    (( csi_op_elapsed += 10 )) || true
+done
+if (( csi_op_elapsed >= 300 )); then
+    echo "ERROR: ceph-csi-controller-manager did not become ready within 300s."
+    echo "  Deployment:"
+    $KUBECTL get deployment -n rook-ceph ceph-csi-controller-manager -o wide 2>/dev/null || true
+    echo "  Pod status:"
+    $KUBECTL get pods -n rook-ceph -l "control-plane=ceph-csi-op-controller-manager" -o wide 2>/dev/null || true
+    echo "  Pod logs:"
+    $KUBECTL logs -n rook-ceph deployment/ceph-csi-controller-manager --tail=50 2>/dev/null || true
+    exit 1
+fi
+
+# ── Wait for Rook to create CephConnection/OperatorConfig CRs (precondition for CSI provisioner) ──
+echo "Waiting for CephConnection/OperatorConfig CRs from Rook (up to 300s)..."
+cr_elapsed=0
+while (( cr_elapsed < 300 )); do
+    conn=$($KUBECTL get cephconnection -n rook-ceph --no-headers 2>/dev/null | wc -l || echo 0)
+    opcfg=$($KUBECTL get operatorconfig -n rook-ceph --no-headers 2>/dev/null | wc -l || echo 0)
+    if (( conn > 0 && opcfg > 0 )); then
+        echo "  CephConnection (${conn}) and OperatorConfig (${opcfg}) found (${cr_elapsed}s)"
+        break
+    fi
+    if (( cr_elapsed % 30 == 0 )); then
+        echo "  CephConnection=${conn} OperatorConfig=${opcfg} — waiting 10s... (${cr_elapsed}s/300s)"
+    fi
+    sleep 10
+    (( cr_elapsed += 10 )) || true
+done
+if (( cr_elapsed >= 300 )); then
+    echo "ERROR: Rook did not create CephConnection/OperatorConfig CRs within 300s."
+    echo "  Rook operator logs (last 50 lines):"
+    $KUBECTL logs -n rook-ceph deployment/rook-ceph-operator --tail=50 2>/dev/null || true
+    echo "  ceph-csi-controller-manager logs (last 50 lines):"
+    $KUBECTL logs -n rook-ceph deployment/ceph-csi-controller-manager --tail=50 2>/dev/null || true
+    exit 1
+fi
+
+echo "Waiting for CSI provisioner pods (up to 900s)..."
+# ceph-csi-operator names ctrlplugin deployments after the CephConnection:
+# <cephconnection-name>.<driver>.csi.ceph.com-ctrlplugin
+# CephConnection is named "rook-ceph", so deployments are:
+#   rook-ceph.rbd.csi.ceph.com-ctrlplugin
+#   rook-ceph.cephfs.csi.ceph.com-ctrlplugin
+for csi_deploy in \
+    "rook-ceph.rbd.csi.ceph.com-ctrlplugin" \
+    "rook-ceph.cephfs.csi.ceph.com-ctrlplugin"; do
+    csi_elapsed=0
+    while (( csi_elapsed < 900 )); do
+        avail=$($KUBECTL get deployment -n rook-ceph "$csi_deploy" \
+            -o jsonpath='{.status.availableReplicas}' 2>/dev/null || true)
+        if [[ "$avail" =~ ^[1-9] ]]; then
+            echo "  $csi_deploy: $avail available replicas (${csi_elapsed}s)"
+            break
+        fi
+        if (( csi_elapsed % 60 == 0 )); then
+            desired=$($KUBECTL get deployment -n rook-ceph "$csi_deploy" \
+                -o jsonpath='{.status.replicas}/{.status.readyReplicas}/{.status.availableReplicas}' 2>/dev/null || echo "not found")
+            echo "  $csi_deploy not ready — waiting 15s... (${csi_elapsed}s/900s) [desired/ready/avail: ${desired}]"
+        else
+            echo "  $csi_deploy not ready — waiting 15s... (${csi_elapsed}s/900s)"
+        fi
+        sleep 15
+        (( csi_elapsed += 15 )) || true
+    done
+    if (( csi_elapsed >= 900 )); then
+        echo "ERROR: $csi_deploy did not become ready within 900s."
+        echo "  Deployment status:"
+        $KUBECTL get deployment -n rook-ceph "$csi_deploy" -o wide 2>/dev/null || true
+        echo "  Pods:"
+        $KUBECTL get pods -n rook-ceph -l "app.kubernetes.io/name=$csi_deploy" -o wide 2>/dev/null || true
+        echo "  ceph-csi-controller-manager logs:"
+        $KUBECTL logs -n rook-ceph deployment/ceph-csi-controller-manager --tail=80 2>/dev/null || true
+        echo "  Ceph cluster health:"
+        $KUBECTL -n rook-ceph get cephcluster rook-ceph -o jsonpath='{.status.ceph}' 2>/dev/null || true
+        exit 1
+    fi
+done
+echo "Rook-Ceph is fully operational — PVC provisioning available."
+mark_step_done "rook-ceph-cluster"
+# rook-ceph-storageclass is applied above; mark done so the old separate step is skipped
+mark_step_done "rook-ceph-storageclass"
+fi
+
+if ! is_step_done "rook-ceph-storageclass" $KUBECTL get sc rook-cephfs; then
 echo "Next step defined the storage classes"
 $KUBECTL apply -f $config_source_dir/infrastructure/rook-ceph/storageclass.yaml
 mark_step_done "rook-ceph-storageclass"
 fi
 
 # install a tz manager and set the local timezone to UTC
+# No verify command: the k8tz chart is installed without --namespace, so it lands
+# in the context's default namespace and there is no 'k8tz' namespace to check for.
+# A verify that can never succeed would re-run this step on every install.
 if ! is_step_done "k8tz"; then
 helm repo add k8tz https://k8tz.github.io/k8tz/
 helm repo update
@@ -107,16 +262,17 @@ mark_step_done "k8tz"
 fi
 
 if ! is_step_done "namespaces"; then
-$KUBECTL get namespace olm >/dev/null 2>&1 || $KUBECTL create namespace olm
-$KUBECTL label --overwrite namespace olm  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
-
+# The 'olm' namespace was removed along with the OLM and quay steps — see the
+# note where the OLM install used to be, below. 'operators' is left in place: the
+# name is generic enough that something outside this repo may use it, and an
+# empty namespace costs nothing.
 $KUBECTL get namespace operators >/dev/null 2>&1 || $KUBECTL create namespace operators
 $KUBECTL label --overwrite namespace operators  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
 mark_step_done "namespaces"
 fi
 
 echo "install 'purelb' deployment"
-if ! is_step_done "purelb"; then
+if ! is_step_done "purelb" $KUBECTL get ns purelb; then
 helm repo add purelb https://gitlab.com/api/v4/projects/20400619/packages/helm/stable
 helm repo update
 
@@ -142,30 +298,34 @@ metadata:
 spec:
   local:
     v4pools:
-    - subnet: 172.20.0.0/16
-      pool: 172.20.1.16-172.20.1.240
+    - subnet: ${LB_POOL_SUBNET}
+      pool: ${LB_POOL_RANGE}
       aggregation: default
 EOF
 mark_step_done "purelb-config"
 fi
 
-if ! is_step_done "olm"; then
-echo "installing crds"
-$KUBECTL apply -f \
-$config_source_dir/infrastructure/vendor/olm-crds.yaml
+# ── REMOVED: Operator Lifecycle Manager (OLM) ────────────────────────────────
+# OLM was installed here solely to serve two Subscriptions, both of which are
+# gone:
+#   1. cert-manager — installed a SECOND cert-manager from operatorhubio on top
+#      of the static v1.19.2 bundle applied a few steps below. Two installs
+#      contending for the same CRDs and webhooks; the static bundle is
+#      self-sufficient and is what the cluster actually runs.
+#   2. quay — the project-quay operator, for an in-cluster Quay registry that
+#      was never adopted. The registry in use is deployed by
+#      infrastructure/registry/install.sh into the container-registry namespace.
+#
+# It was also broken: quay.io/operator-framework/olm is absent from the
+# bootstrap registry, so 'kubectl apply -f vendor/olm.yaml' could only ever
+# produce ImagePullBackOff.
+#
+# infrastructure/vendor/olm.yaml and olm-crds.yaml are retained on disk but are
+# no longer applied by anything, and are no longer rendered by
+# scripts/render-manifests.sh. If OLM is ever reinstated, mirror the olm image
+# into the registry first and add olm.yaml back to that script's MANIFESTS list.
 
-echo "installing olm"
-$KUBECTL apply -f \
-$config_source_dir/infrastructure/vendor/olm.yaml
-
-# WaitForDeploymentToComplete namespace grepString sleepTime
-WaitForDeploymentToComplete olm olm-operator 15
-WaitForDeploymentToComplete olm catalog-operator 15
-WaitForDeploymentToComplete olm packageserver 15
-mark_step_done "olm"
-fi
-
-if ! is_step_done "cert-manager"; then
+if ! is_step_done "cert-manager" $KUBECTL get crd certificates.cert-manager.io; then
 echo "install the cert-manager"
 
 echo "create cert-manager namespace"
@@ -174,28 +334,17 @@ $KUBECTL label --overwrite namespace cert-manager  pod-security.kubernetes.io/au
  
 $KUBECTL apply -f "$config_source_dir/infrastructure/vendor/cert-manager-v1.19.2.yaml"
 
-$KUBECTL apply -f - <<EOF
----
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: og-cert-manager
-  namespace: cert-manager
-spec:
-  targetNamespaces:
-  - cert-manager
----
-apiVersion: operators.coreos.com/v1alpha1 
-kind: Subscription 
-metadata: 
-  name: cert-manager-local 
-  namespace: cert-manager
-spec: 
-  channel: stable 
-  name: cert-manager 
-  source: operatorhubio-catalog 
-  sourceNamespace: olm
-EOF
+# NOTE: an OLM OperatorGroup + Subscription used to follow this apply, installing
+# a second cert-manager from operatorhubio on top of the static bundle above.
+# Removed with OLM — the static v1.19.2 bundle installs the controller,
+# cainjector, webhook and all cert-manager CRDs on its own. Two installs fighting
+# over the same CRDs and webhook configurations was never the intent.
+#
+# The bundle's image references are rewritten to the current registry by
+# scripts/render-manifests.sh, which runs at the top of this script. Before that
+# was wired up the bundle still pointed at the dead 10.0.0.1:5000, which is what
+# made cert-manager silently absent and broke the Pulsar install downstream with
+# 'no matches for kind "Certificate" in version "cert-manager.io/v1"'.
 
 echo ""
 echo "Check the cert-manager operator pods"
@@ -210,9 +359,14 @@ mark_step_done "cert-manager"
 
 
 echo ""
-# for some reason this next step fails if it happens too soon after the deploy?
-echo "Waiting for 120s to let the cert-manager catch its breath before we ask for the test cert"
-sleep 120;
+# Wait for cert-manager webhook to be ready before requesting test cert.
+echo "Waiting for cert-manager webhook to be Ready before creating test cert..."
+$KUBECTL wait --for=condition=Ready pods \
+    -l app.kubernetes.io/component=webhook \
+    -n cert-manager \
+    --timeout=300s \
+    --request-timeout=20s 2>/dev/null || \
+  echo "WARNING: cert-manager webhook pods not yet Ready — proceeding anyway"
 
 echo ""
 echo "test cert-manager deploy. this should create a self-signed certificate without error. see: cert-manager/test-resources.yaml"
@@ -244,8 +398,11 @@ spec:
 EOF
 
 echo ""
-echo "Waiting for 25s to let the cert-manager make the test cert available"
-sleep 25
+echo "Waiting for test cert to be Ready (timeout: 120s)..."
+$KUBECTL wait --for=condition=Ready certificate/selfsigned-cert \
+    -n cert-manager-test \
+    --timeout=120s \
+    --request-timeout=20s 2>/dev/null || true
 
 echo "checking cert.  review this and ensure it looks like a valid cert"
 $KUBECTL describe certificate -n cert-manager-test
@@ -280,67 +437,34 @@ spec:
     name: test-selfsigned
 EOF
 
-echo "waiting for 1 minute"
-
-sleep 1m;
+echo "waiting for cert-manager test namespace termination..."
+$KUBECTL wait --for=delete namespace/cert-manager-test \
+    --timeout=120s \
+    --request-timeout=20s 2>/dev/null || true
 fi
 
-if ! is_step_done "local-registry"; then
+if ! is_step_done "local-registry" $KUBECTL get deploy -n container-registry registry; then
 echo "--- Bootstrapping Local Registry ---"
 bash $config_source_dir/infrastructure/registry/install.sh
 mark_step_done "local-registry"
 fi
 
-#setup an operator group in the registry namespace
-#then add the 'quay' operator (container registry service) subscription
+# ── REMOVED: Quay operator ───────────────────────────────────────────────────
+# The project-quay OLM Subscription installed a Quay registry into a 'registry'
+# namespace that was never adopted — the registry this cluster actually uses is
+# deployed by infrastructure/registry/install.sh (above) into container-registry
+# and reached at ${REGISTRY_LB_IP}. The 'registry' namespace does not exist on
+# the cluster.
+#
+# Removed together with OLM, which was its only remaining consumer.
+#
+# Three unguarded diagnostics also lived here — 'kubectl get sub|csv|deployment
+# -n registry'. They sat OUTSIDE the is_step_done guard, so with 'set -e' (line 5)
+# they would abort this entire script once the OLM CRDs were gone: 'kubectl get
+# sub' exits non-zero with "the server doesn't have a resource type sub". Every
+# step below here — metrics-server, kube-state-metrics, traefik — would never run.
 
-echo "apply the quay operator"
-
-if ! is_step_done "quay"; then
-$KUBECTL get namespace registry >/dev/null 2>&1 || $KUBECTL create namespace registry
-$KUBECTL label --overwrite namespace registry  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
-
-$KUBECTL apply -f - <<EOF
----
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: og-single
-  namespace: registry
-spec:
-  targetNamespaces:
-  - registry
----
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: quay
-  namespace: registry
-spec:
-  channel: stable-3.8
-  installPlanApproval: Automatic
-  name: project-quay
-  source: operatorhubio-catalog
-  sourceNamespace: olm
-  startingCSV: quay-operator.v3.8.1
-
-EOF
-
-WaitForDeploymentToComplete registry quay-operator 15
-mark_step_done "quay"
-fi
-# $KUBECTL expose deployment quay --name=quay-server --port=8080 --target-port=8080 --type=LoadBalancer -n registry
-
-echo "check the 'quay' subscription"
-$KUBECTL get sub -n registry
-
-echo "the 'quay' cluster service version"
-$KUBECTL get csv -n registry
-
-echo "the 'quay' deployment"
-$KUBECTL get deployment -n registry
-
-if ! is_step_done "metrics-server"; then
+if ! is_step_done "metrics-server" $KUBECTL get deploy -n kube-system metrics-server; then
 echo "installing the metrics API"
 bash "$config_source_dir/infrastructure/metrics-server/metrics-server.sh"
 mark_step_done "metrics-server"
@@ -398,7 +522,7 @@ fi
 
 
 
-if ! is_step_done "traefik"; then
+if ! is_step_done "traefik" $KUBECTL get ns traefik; then
 echo "installing traefik"
 source $config_source_dir/infrastructure/traefik/traefik.sh
 mark_step_done "traefik"

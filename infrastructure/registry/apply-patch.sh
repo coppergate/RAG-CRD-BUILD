@@ -1,10 +1,16 @@
 #!/bin/bash
+REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$REPO_DIR/config/network.env"
+
 TALOS_BIN="/home/k8s/talos/talosctl"
 TALOS_CONFIG="/home/k8s/talos/config/talosconfig"
 PATCH_FILE="/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml"
 
-# Standard nodes to patch (Control Plane + Workers + Inference)
-NODES=("10.0.0.200" "10.0.0.201" "10.0.0.202" "10.0.0.110" "10.0.0.111" "10.0.0.112" "10.0.0.113" "10.0.0.120" "10.0.0.121")
+# Standard nodes to patch (Control Plane + Workers), flat-LAN static IPs from
+# config/network.env: control-0/1/2 = 192.168.5.11-13, worker-0..3 = .21-.24.
+# The external GPU inference node (INFERENCE_IPS) is patched during enrollment.
+NODES=(${CP_IPS} ${WORKER_IPS})
 
 # If KUBECONFIG is available, try to get current node IPs dynamically to ensure full coverage
 if [[ -f "$KUBECONFIG" ]]; then

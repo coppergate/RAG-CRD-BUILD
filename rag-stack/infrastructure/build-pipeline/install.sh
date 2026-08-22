@@ -57,6 +57,12 @@ if should_run_step "build-pipeline-ns" "$KUBECTL get namespace $NAMESPACE"; then
     mark_step_done "build-pipeline-ns"
 fi
 
+echo "--- Ensuring Go module cache PVC ---"
+# Shared CephFS RWX PVC mounted into every Kaniko job at /go-module-cache.
+# Kaniko maps it into the build chroot at /go/pkg/mod via --volume flag so
+# go mod download finds cached modules and skips re-downloading them.
+$KUBECTL apply -f "$REPO_DIR/go-module-cache-pvc.yaml"
+
 echo "--- Applying Combined Registry & Pulsar CA ---"
 
 if [[ -f "$REPO_DIR/../../../CURRENT_VERSION" ]]; then
@@ -137,13 +143,13 @@ if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1
     mark_step_done "build-orchestrator-image"
 fi
 
-if should_run_step "build-orchestrator" "$KUBECTL get deployment build-orchestrator -n $NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | grep -q \":$ORCHESTRATOR_TAG$\" && $KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=30s"; then
+if should_run_step "build-orchestrator" "$KUBECTL get deployment build-orchestrator -n $NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null | grep -q \":$ORCHESTRATOR_TAG$\" && $KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=120s"; then
     echo "--- Deploying Build Orchestrator ---"
     $KUBECTL apply -f "$REPO_DIR/orchestrator-deployment.yaml"
     $KUBECTL -n "$NAMESPACE" set image deploy/build-orchestrator orchestrator="$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"
     # Force a fresh rollout in case the deployment is unchanged but prior pods are stuck.
     $KUBECTL rollout restart deploy/build-orchestrator -n $NAMESPACE || true
-    if ! $KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=300s; then
+    if ! $KUBECTL rollout status deploy/build-orchestrator -n $NAMESPACE --timeout=600s; then
         echo "ERROR: build-orchestrator rollout failed; diagnostics follow."
         $KUBECTL -n "$NAMESPACE" get deploy,rs,pods -l app=build-orchestrator -o wide || true
         POD_NAME=$($KUBECTL -n "$NAMESPACE" get pods -l app=build-orchestrator -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)

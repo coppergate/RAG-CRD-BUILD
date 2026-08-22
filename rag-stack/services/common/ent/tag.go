@@ -35,9 +35,11 @@ type TagEdges struct {
 	Ingestions []*CodeIngestion `json:"ingestions,omitempty"`
 	// Embeddings holds the value of the embeddings edge.
 	Embeddings []*CodeEmbedding `json:"embeddings,omitempty"`
+	// EmbeddingCoverages holds the value of the embedding_coverages edge.
+	EmbeddingCoverages []*TagEmbeddingCoverage `json:"embedding_coverages,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [4]bool
 }
 
 // SessionsOrErr returns the Sessions value or an error if the edge
@@ -65,6 +67,15 @@ func (e TagEdges) EmbeddingsOrErr() ([]*CodeEmbedding, error) {
 		return e.Embeddings, nil
 	}
 	return nil, &NotLoadedError{edge: "embeddings"}
+}
+
+// EmbeddingCoveragesOrErr returns the EmbeddingCoverages value or an error if the edge
+// was not loaded in eager-loading.
+func (e TagEdges) EmbeddingCoveragesOrErr() ([]*TagEmbeddingCoverage, error) {
+	if e.loadedTypes[3] {
+		return e.EmbeddingCoverages, nil
+	}
+	return nil, &NotLoadedError{edge: "embedding_coverages"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -137,6 +148,11 @@ func (_m *Tag) QueryIngestions() *CodeIngestionQuery {
 // QueryEmbeddings queries the "embeddings" edge of the Tag entity.
 func (_m *Tag) QueryEmbeddings() *CodeEmbeddingQuery {
 	return NewTagClient(_m.config).QueryEmbeddings(_m)
+}
+
+// QueryEmbeddingCoverages queries the "embedding_coverages" edge of the Tag entity.
+func (_m *Tag) QueryEmbeddingCoverages() *TagEmbeddingCoverageQuery {
+	return NewTagClient(_m.config).QueryEmbeddingCoverages(_m)
 }
 
 // Update returns a builder for updating this Tag.

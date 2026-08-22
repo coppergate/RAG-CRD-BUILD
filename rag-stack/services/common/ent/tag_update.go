@@ -8,6 +8,7 @@ import (
 	"app-builds/common/ent/predicate"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
+	"app-builds/common/ent/tagembeddingcoverage"
 	"context"
 	"errors"
 	"fmt"
@@ -89,6 +90,21 @@ func (_u *TagUpdate) AddEmbeddings(v ...*CodeEmbedding) *TagUpdate {
 	return _u.AddEmbeddingIDs(ids...)
 }
 
+// AddEmbeddingCoverageIDs adds the "embedding_coverages" edge to the TagEmbeddingCoverage entity by IDs.
+func (_u *TagUpdate) AddEmbeddingCoverageIDs(ids ...int) *TagUpdate {
+	_u.mutation.AddEmbeddingCoverageIDs(ids...)
+	return _u
+}
+
+// AddEmbeddingCoverages adds the "embedding_coverages" edges to the TagEmbeddingCoverage entity.
+func (_u *TagUpdate) AddEmbeddingCoverages(v ...*TagEmbeddingCoverage) *TagUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddEmbeddingCoverageIDs(ids...)
+}
+
 // Mutation returns the TagMutation object of the builder.
 func (_u *TagUpdate) Mutation() *TagMutation {
 	return _u.mutation
@@ -155,6 +171,27 @@ func (_u *TagUpdate) RemoveEmbeddings(v ...*CodeEmbedding) *TagUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveEmbeddingIDs(ids...)
+}
+
+// ClearEmbeddingCoverages clears all "embedding_coverages" edges to the TagEmbeddingCoverage entity.
+func (_u *TagUpdate) ClearEmbeddingCoverages() *TagUpdate {
+	_u.mutation.ClearEmbeddingCoverages()
+	return _u
+}
+
+// RemoveEmbeddingCoverageIDs removes the "embedding_coverages" edge to TagEmbeddingCoverage entities by IDs.
+func (_u *TagUpdate) RemoveEmbeddingCoverageIDs(ids ...int) *TagUpdate {
+	_u.mutation.RemoveEmbeddingCoverageIDs(ids...)
+	return _u
+}
+
+// RemoveEmbeddingCoverages removes "embedding_coverages" edges to TagEmbeddingCoverage entities.
+func (_u *TagUpdate) RemoveEmbeddingCoverages(v ...*TagEmbeddingCoverage) *TagUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveEmbeddingCoverageIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -331,6 +368,51 @@ func (_u *TagUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.EmbeddingCoveragesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   tag.EmbeddingCoveragesTable,
+			Columns: []string{tag.EmbeddingCoveragesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tagembeddingcoverage.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedEmbeddingCoveragesIDs(); len(nodes) > 0 && !_u.mutation.EmbeddingCoveragesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   tag.EmbeddingCoveragesTable,
+			Columns: []string{tag.EmbeddingCoveragesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tagembeddingcoverage.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.EmbeddingCoveragesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   tag.EmbeddingCoveragesTable,
+			Columns: []string{tag.EmbeddingCoveragesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tagembeddingcoverage.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{tag.Label}
@@ -410,6 +492,21 @@ func (_u *TagUpdateOne) AddEmbeddings(v ...*CodeEmbedding) *TagUpdateOne {
 	return _u.AddEmbeddingIDs(ids...)
 }
 
+// AddEmbeddingCoverageIDs adds the "embedding_coverages" edge to the TagEmbeddingCoverage entity by IDs.
+func (_u *TagUpdateOne) AddEmbeddingCoverageIDs(ids ...int) *TagUpdateOne {
+	_u.mutation.AddEmbeddingCoverageIDs(ids...)
+	return _u
+}
+
+// AddEmbeddingCoverages adds the "embedding_coverages" edges to the TagEmbeddingCoverage entity.
+func (_u *TagUpdateOne) AddEmbeddingCoverages(v ...*TagEmbeddingCoverage) *TagUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddEmbeddingCoverageIDs(ids...)
+}
+
 // Mutation returns the TagMutation object of the builder.
 func (_u *TagUpdateOne) Mutation() *TagMutation {
 	return _u.mutation
@@ -476,6 +573,27 @@ func (_u *TagUpdateOne) RemoveEmbeddings(v ...*CodeEmbedding) *TagUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveEmbeddingIDs(ids...)
+}
+
+// ClearEmbeddingCoverages clears all "embedding_coverages" edges to the TagEmbeddingCoverage entity.
+func (_u *TagUpdateOne) ClearEmbeddingCoverages() *TagUpdateOne {
+	_u.mutation.ClearEmbeddingCoverages()
+	return _u
+}
+
+// RemoveEmbeddingCoverageIDs removes the "embedding_coverages" edge to TagEmbeddingCoverage entities by IDs.
+func (_u *TagUpdateOne) RemoveEmbeddingCoverageIDs(ids ...int) *TagUpdateOne {
+	_u.mutation.RemoveEmbeddingCoverageIDs(ids...)
+	return _u
+}
+
+// RemoveEmbeddingCoverages removes "embedding_coverages" edges to TagEmbeddingCoverage entities.
+func (_u *TagUpdateOne) RemoveEmbeddingCoverages(v ...*TagEmbeddingCoverage) *TagUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveEmbeddingCoverageIDs(ids...)
 }
 
 // Where appends a list predicates to the TagUpdate builder.
@@ -675,6 +793,51 @@ func (_u *TagUpdateOne) sqlSave(ctx context.Context) (_node *Tag, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.EmbeddingCoveragesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   tag.EmbeddingCoveragesTable,
+			Columns: []string{tag.EmbeddingCoveragesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tagembeddingcoverage.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedEmbeddingCoveragesIDs(); len(nodes) > 0 && !_u.mutation.EmbeddingCoveragesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   tag.EmbeddingCoveragesTable,
+			Columns: []string{tag.EmbeddingCoveragesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tagembeddingcoverage.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.EmbeddingCoveragesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   tag.EmbeddingCoveragesTable,
+			Columns: []string{tag.EmbeddingCoveragesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tagembeddingcoverage.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

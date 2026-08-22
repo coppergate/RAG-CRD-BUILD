@@ -97,9 +97,9 @@ mark_step_done "registry-ca-cm"
 if ! is_step_done "apm-gateways-tls"; then
     echo "--- Applying APM Gateway TLS Certificates ---"
     $KUBECTL apply -f "$REPO_DIR/common/apm-gateways-tls.yaml"
-    $KUBECTL wait --for=condition=Ready certificate/loki-gateway-cert -n $NAMESPACE --timeout=60s
-    $KUBECTL wait --for=condition=Ready certificate/tempo-cert -n $NAMESPACE --timeout=60s
-    $KUBECTL wait --for=condition=Ready certificate/mimir-gateway-cert -n $NAMESPACE --timeout=60s
+    $KUBECTL wait --for=condition=Ready certificate/loki-gateway-cert -n $NAMESPACE --timeout=300s
+    $KUBECTL wait --for=condition=Ready certificate/tempo-cert -n $NAMESPACE --timeout=300s
+    $KUBECTL wait --for=condition=Ready certificate/mimir-gateway-cert -n $NAMESPACE --timeout=300s
     mark_step_done "apm-gateways-tls"
 fi
 
@@ -174,8 +174,7 @@ function deploy_lgtm_component() {
         helm upgrade --install $name $chart \
             --namespace $NAMESPACE \
             --values "$SAFE_TMP_DIR/$name-values.yaml" \
-            --wait --timeout 15m \
-            --debug
+            --wait --timeout 20m
 
         # Patch gateway service if it's loki or mimir to ensure port 443 maps to 8443 (SSL)
         if [[ "$name" == "loki" || "$name" == "mimir" ]]; then
@@ -196,7 +195,7 @@ deploy_lgtm_component "mimir" "grafana/mimir-distributed" "https://grafana.githu
 if ! is_step_done "deploy-otel-collector"; then
     echo "--- Applying OTEL Collector TLS ---"
     $KUBECTL apply -f "$REPO_DIR/otel-collector/otel-tls.yaml"
-    $KUBECTL wait --for=condition=Ready certificate/otel-collector-cert -n $NAMESPACE --timeout=60s
+    $KUBECTL wait --for=condition=Ready certificate/otel-collector-cert -n $NAMESPACE --timeout=300s
         
     echo "--- Deploying OpenTelemetry Collector ---"
     $KUBECTL apply -f "$REPO_DIR/otel-collector/otel-collector.yaml"
@@ -208,7 +207,7 @@ if ! is_step_done "deploy-grafana"; then
         
     echo "Applying Grafana TLS..."
     $KUBECTL apply -f "$REPO_DIR/grafana/grafana-tls.yaml"
-    $KUBECTL wait --for=condition=Ready certificate/grafana-cert -n $NAMESPACE --timeout=60s
+    $KUBECTL wait --for=condition=Ready certificate/grafana-cert -n $NAMESPACE --timeout=300s
 
     echo "Adding Grafana Operator repo..."
     helm repo add grafana https://grafana.github.io/helm-charts

@@ -7,6 +7,7 @@ import (
 	"app-builds/common/ent/codeingestion"
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/tag"
+	"app-builds/common/ent/tagembeddingcoverage"
 	"context"
 	"errors"
 	"fmt"
@@ -94,6 +95,21 @@ func (_c *TagCreate) AddEmbeddings(v ...*CodeEmbedding) *TagCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddEmbeddingIDs(ids...)
+}
+
+// AddEmbeddingCoverageIDs adds the "embedding_coverages" edge to the TagEmbeddingCoverage entity by IDs.
+func (_c *TagCreate) AddEmbeddingCoverageIDs(ids ...int) *TagCreate {
+	_c.mutation.AddEmbeddingCoverageIDs(ids...)
+	return _c
+}
+
+// AddEmbeddingCoverages adds the "embedding_coverages" edges to the TagEmbeddingCoverage entity.
+func (_c *TagCreate) AddEmbeddingCoverages(v ...*TagEmbeddingCoverage) *TagCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddEmbeddingCoverageIDs(ids...)
 }
 
 // Mutation returns the TagMutation object of the builder.
@@ -227,6 +243,22 @@ func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(codeembedding.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.EmbeddingCoveragesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   tag.EmbeddingCoveragesTable,
+			Columns: []string{tag.EmbeddingCoveragesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tagembeddingcoverage.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

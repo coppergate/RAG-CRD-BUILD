@@ -101,17 +101,17 @@ if ! is_step_done "rag-system-tls"; then
 echo "--- 1.1 Applying RAG System TLS Certificates ---"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/rag-system-tls.yaml"
 echo "Waiting for RAG System certificates to be issued..."
-$KUBECTL wait --for=condition=Ready certificate/llm-gateway-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/rag-ingestion-cert -n $NAMESPACE --timeout=60s
-# $KUBECTL wait --for=condition=Ready certificate/rag-web-ui-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/db-adapter-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/qdrant-adapter-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/rag-admin-api-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/object-store-mgr-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=60s
-# $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=60s
-$KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/llm-gateway-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/rag-ingestion-cert -n $NAMESPACE --timeout=180s
+# $KUBECTL wait --for=condition=Ready certificate/rag-web-ui-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/db-adapter-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/qdrant-adapter-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/rag-admin-api-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/object-store-mgr-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=180s
+# $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=180s
 mark_step_done "rag-system-tls"
 fi
 
@@ -123,6 +123,9 @@ fi
 
 if ! is_step_done "embed-gateway-rbac"; then
 echo "--- 1.3 Applying Embed Gateway RBAC ---"
+# The embed-gateway Role/RoleBinding live in llms-ollama (Ollama's namespace).
+# Ollama is installed later, so ensure the namespace exists before applying RBAC.
+$KUBECTL get namespace llms-ollama >/dev/null 2>&1 || $KUBECTL create namespace llms-ollama
 $KUBECTL apply -f "$REPO_DIR/infrastructure/embed-gateway/rbac.yaml"
 mark_step_done "embed-gateway-rbac"
 fi
@@ -322,7 +325,7 @@ $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-tls.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-config.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-pvc.yaml"
 echo "Waiting for Qdrant certificate..."
-$KUBECTL wait --for=condition=Ready certificate/qdrant-cert -n $NAMESPACE --timeout=60s
+$KUBECTL wait --for=condition=Ready certificate/qdrant-cert -n $NAMESPACE --timeout=180s
 apply_manifest "$REPO_DIR/infrastructure/qdrant/qdrant-deploy.yaml"
 $KUBECTL apply -f "$REPO_DIR/infrastructure/qdrant/qdrant-service.yaml"
 mark_step_done "qdrant"
@@ -400,20 +403,25 @@ if [[ -f "$VERSION_FILE" ]]; then
     ORCH_URL="http://${LB_IP}/api/build"
     H_HEADER="Host: build-orchestrator.hierocracy.home"
     
-    # Check if we can reach it
-    if curl -s -I -H "$H_HEADER" "$ORCH_URL/versions" >/dev/null; then
+    # Check if we can reach it (10s connect timeout, 15s max-time)
+    if curl -s -I -H "$H_HEADER" "$ORCH_URL/versions" \
+        --connect-timeout 5 --max-time 15 >/dev/null 2>&1; then
         jq -r 'to_entries[] | "\(.key) \(.value.version)"' "$VERSION_FILE" | while read -r svc ver; do
             echo "  Seeding $svc: $ver"
-            curl -s -X POST -H "$H_HEADER" "$ORCH_URL/versions/$svc" -d "{\"version\": \"$ver\"}" >/dev/null
+            curl -s -X POST -H "$H_HEADER" "$ORCH_URL/versions/$svc" \
+                --connect-timeout 5 --max-time 15 \
+                -d "{\"version\": \"$ver\"}" >/dev/null
         done
-        
+
         # Seed journals if available
         if [[ -d "/tmp/.build_journal_junie" ]]; then
             find "/tmp/.build_journal_junie" -name "*.last_hash" | while read -r jf; do
                 svc=$(basename "$jf" .last_hash)
                 hash=$(cat "$jf")
                 echo "  Seeding journal for $svc"
-                curl -s -X POST -H "$H_HEADER" "$ORCH_URL/journals/$svc" -d "{\"last_hash\": \"$hash\"}" >/dev/null
+                curl -s -X POST -H "$H_HEADER" "$ORCH_URL/journals/$svc" \
+                    --connect-timeout 5 --max-time 15 \
+                    -d "{\"last_hash\": \"$hash\"}" >/dev/null
             done
         fi
         mark_step_done "migrate-build-metadata"

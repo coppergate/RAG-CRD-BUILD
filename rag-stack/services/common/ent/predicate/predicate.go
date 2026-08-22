@@ -68,3 +68,6 @@ type SessionGovernance func(*sql.Selector)
 
 // Tag is the predicate function for tag builders.
 type Tag func(*sql.Selector)
+
+// TagEmbeddingCoverage is the predicate function for tagembeddingcoverage builders.
+type TagEmbeddingCoverage func(*sql.Selector)

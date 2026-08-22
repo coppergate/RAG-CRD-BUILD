@@ -46,22 +46,70 @@ function init_journal() {
     echo "Using journal: $JOURNAL_FILE"
 }
 
+# is_step_done <step_name> [verify_command...]
+#
+# Returns 0 (skip the step) only when the journal says the step ran AND — if a
+# verify command is supplied — that command still succeeds.
+#
+# WHY THE VERIFY ARGUMENT EXISTS
+# The journal is a write-ahead record of intent: mark_step_done appends a line
+# and nothing ever checks that the step's output still exists. The journal lives
+# in $HOME, but the thing it describes lives in the cluster, and the two have
+# independent lifetimes. Rebuild the cluster (or wipe a namespace) while the
+# journal survives, and every step is skipped against infrastructure that is no
+# longer there.
+#
+# That is not hypothetical. On 2026-08-09 the cluster had cert-manager, Rook and
+# the registry all marked done in the journal while the cluster had no Rook CRDs,
+# no StorageClasses, and empty rook-ceph / container-registry namespaces. The
+# visible symptom was several layers downstream: the Pulsar install failing on
+# missing cert-manager CRDs, then on a namespace that was never created.
+#
+# Passing a cheap read-only check makes the journal self-correcting: if the
+# output is gone, the marker is ignored and the step re-runs.
+#
+#   is_step_done "cert-manager" $KUBECTL get crd certificates.cert-manager.io
+#
+# Steps called without a verify command keep the old trust-the-marker behaviour,
+# so this is backward compatible.
 function is_step_done() {
     local step_name="$1"
-    if [[ -f "$JOURNAL_FILE" ]] && grep -q "^$step_name$" "$JOURNAL_FILE"; then
+    shift || true
+
+    if [[ ! -f "$JOURNAL_FILE" ]] || ! grep -q "^$step_name$" "$JOURNAL_FILE"; then
+        return 1
+    fi
+
+    # Marker present and no verification requested — legacy behaviour.
+    if [[ $# -eq 0 ]]; then
         echo "Skipping already completed step: $step_name"
         return 0
+    fi
+
+    if "$@" >/dev/null 2>&1; then
+        echo "Skipping already completed step: $step_name (verified)"
+        return 0
+    fi
+
+    echo "WARNING: step '$step_name' is marked done but its output is missing." >&2
+    echo "         verify command failed: $*" >&2
+    echo "         Re-running the step and clearing the stale journal entry." >&2
+    # Drop the stale marker so mark_step_done does not create a duplicate line.
+    if [[ -w "$JOURNAL_FILE" ]]; then
+        sed -i "/^${step_name//\//\\/}$/d" "$JOURNAL_FILE" 2>/dev/null || true
     fi
     return 1
 }
 
 function mark_step_done() {
     local step_name="$1"
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     # Ensure file exists with shared write perms to allow multiple users to continue
     touch "$JOURNAL_FILE"
     chmod 666 "$JOURNAL_FILE" 2>/dev/null || true
     echo "$step_name" >> "$JOURNAL_FILE"
-    echo "Completed step: $step_name"
+    echo "Completed step: $step_name [$ts]"
 }
 
 function clear_journal() {

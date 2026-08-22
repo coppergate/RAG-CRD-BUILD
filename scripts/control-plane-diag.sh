@@ -9,9 +9,11 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 TALOSCTL="/home/k8s/talos/talosctl"
 export TALOSCONFIG="/home/k8s/talos/config/talosconfig"
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config/network.env"
 # Ensure proxies do not interfere with cluster traffic
 export HTTP_PROXY="" HTTPS_PROXY="" http_proxy="" https_proxy=""
-export NO_PROXY="127.0.0.1,localhost,10.0.0.0/8,10.96.0.0/12,.cluster.local,.hierocracy.home,10.0.0.15"
+export NO_PROXY="127.0.0.1,localhost,192.168.0.0/16,10.96.0.0/12,.cluster.local,.hierocracy.home,${CP_VIP}"
 export no_proxy="$NO_PROXY"
 
 TS=$(date +%Y%m%d-%H%M%S)
@@ -118,10 +120,10 @@ for n in $CP_NODES; do
 done
 
 # 7) VIP reachability and TLS handshake
-section "VIP 10.0.0.15 reachability"
-run ping -c3 -W1 10.0.0.15
+section "VIP ${CP_VIP} reachability"
+run ping -c3 -W1 "${CP_VIP}"
 section "VIP TLS handshake (openssl s_client first 40 lines)"
-run bash -lc "timeout 5 openssl s_client -connect 10.0.0.15:6443 -servername kubernetes < /dev/null 2>&1 | sed -n '1,40p'"
+run bash -lc "timeout 5 openssl s_client -connect ${CP_VIP}:6443 -servername kubernetes < /dev/null 2>&1 | sed -n '1,40p'"
 
 # 8) Summary pointer
 section "Completed"

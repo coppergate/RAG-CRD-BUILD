@@ -6,6 +6,8 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$SCRIPT_DIR/../config/network.env"
 PLAN_FILE="${PLAN_FILE:-$SCRIPT_DIR/install-image-plan.sh}"
 TARGET_REGISTRY="${TARGET_REGISTRY:-registry.hierocracy.home:5000}"
 APPLY="${APPLY:-false}"
@@ -13,6 +15,7 @@ PARALLELISM="${PARALLELISM:-3}"
 SKOPEO_TLS_VERIFY="${SKOPEO_TLS_VERIFY:-true}"
 SKOPEO_SRC_TLS_VERIFY="${SKOPEO_SRC_TLS_VERIFY:-true}"
 SOURCE_CACHE_ROOT="${SOURCE_CACHE_ROOT:-/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/image-source-cache}"
+HIEROPHANT_REGISTRY="${HIEROPHANT_REGISTRY:-$REGISTRY_PREFIX}"
 GROUPS_CSV="${MIRROR_GROUPS:-}"
 STEP_NAME="${STEP:-}"
 LIST_GROUPS="false"
@@ -46,6 +49,7 @@ Env:
   SKOPEO_SRC_TLS_VERIFY=true       Source TLS verify flag
   SOURCE_CACHE_ROOT=.../image-source-cache
                                    Local upstream image cache root
+  HIEROPHANT_REGISTRY=host:port    Bootstrap registry checked before internet (default ${REGISTRY_PREFIX} from config/network.env)
   PLAN_FILE=.../install-image-plan.sh
   TIMING_LOG=.../mirror-timing.log Timing output log path
 USAGE
@@ -235,6 +239,7 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
   tls_verify_src="$4"
   source_cache_root="$5"
   timing_dir="$6"
+  hierophant_registry="$7"
   dst="$target_registry/$src"
 
   start_epoch="$(date +%s)"
@@ -268,22 +273,47 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
       echo "[CACHE-HIT] $src"
       cache_status="hit"
     else
-      echo "[CACHE-MISS] $src (mirroring to cache...)"
-      cache_status="update"
-      # Populate/refresh source cache with exact image:tag first.
-      tmp_cache_dir="${cache_dir}.tmp.$$"
-      rm -rf "$tmp_cache_dir"
-      mkdir -p "$tmp_cache_dir"
-      if ! skopeo copy --all --src-tls-verify="$tls_verify_src" "docker://$src" "dir:$tmp_cache_dir"; then
-        echo "[ERROR] Failed to mirror $src to cache"
-        status="fail"
-        err_msg="cache_fill_failed"
+      # cache miss — try hierophant bootstrap registry before hitting the internet
+      hierophant_hit=false
+      if [[ -n "$hierophant_registry" ]] && \
+         skopeo inspect --tls-verify="$tls_verify_dest" \
+           "docker://$hierophant_registry/$src" >/dev/null 2>&1; then
+        echo "[HIEROPHANT] $src"
+        cache_status="hierophant"
+        tmp_cache_dir="${cache_dir}.tmp.$$"
         rm -rf "$tmp_cache_dir"
-      else
-        rm -rf "$cache_dir"
-        mv "$tmp_cache_dir" "$cache_dir"
-        printf "%s\n" "$src" > "$cache_dir/.cached"
-        date -u +%Y-%m-%dT%H:%M:%SZ > "$cache_dir/.cached_at"
+        mkdir -p "$tmp_cache_dir"
+        if skopeo copy --all --src-tls-verify="$tls_verify_dest" \
+             "docker://$hierophant_registry/$src" "dir:$tmp_cache_dir"; then
+          rm -rf "$cache_dir"
+          mv "$tmp_cache_dir" "$cache_dir"
+          printf "%s\n" "$src" > "$cache_dir/.cached"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$cache_dir/.cached_at"
+          hierophant_hit=true
+        else
+          echo "[WARN] Hierophant copy failed for $src — falling back to internet"
+          rm -rf "$tmp_cache_dir"
+        fi
+      fi
+
+      if [[ "$hierophant_hit" == "false" ]]; then
+        echo "[CACHE-MISS] $src (mirroring from internet...)"
+        cache_status="update"
+        # Populate/refresh source cache with exact image:tag first.
+        tmp_cache_dir="${cache_dir}.tmp.$$"
+        rm -rf "$tmp_cache_dir"
+        mkdir -p "$tmp_cache_dir"
+        if ! skopeo copy --all --src-tls-verify="$tls_verify_src" "docker://$src" "dir:$tmp_cache_dir"; then
+          echo "[ERROR] Failed to mirror $src to cache"
+          status="fail"
+          err_msg="cache_fill_failed"
+          rm -rf "$tmp_cache_dir"
+        else
+          rm -rf "$cache_dir"
+          mv "$tmp_cache_dir" "$cache_dir"
+          printf "%s\n" "$src" > "$cache_dir/.cached"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$cache_dir/.cached_at"
+        fi
       fi
     fi
   fi
@@ -308,7 +338,7 @@ printf '%s\n' "${images[@]}" | xargs -P "$PARALLELISM" -I{} bash -c '
   if [[ "$status" != "ok" && "$status" != "skip" ]]; then
     exit 1
   fi
-' _ {} "$TARGET_REGISTRY" "$SKOPEO_TLS_VERIFY" "$SKOPEO_SRC_TLS_VERIFY" "$SOURCE_CACHE_ROOT" "$timing_tmp_dir"
+' _ {} "$TARGET_REGISTRY" "$SKOPEO_TLS_VERIFY" "$SKOPEO_SRC_TLS_VERIFY" "$SOURCE_CACHE_ROOT" "$timing_tmp_dir" "$HIEROPHANT_REGISTRY"
 copy_rc=$?
 set -e
 

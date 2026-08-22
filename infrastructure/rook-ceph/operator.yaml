@@ -119,13 +119,13 @@ data:
   # The default version of CSI supported by Rook will be started. To change the version
   # of the CSI driver to something other than what is officially supported, change
   # these images to the desired release of the CSI driver.
-  ROOK_CSI_CEPH_IMAGE: "10.0.0.1:5000/quay.io/cephcsi/cephcsi:v3.15.0"
-  ROOK_CSI_REGISTRAR_IMAGE: "10.0.0.1:5000/registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.13.0"
-  ROOK_CSI_RESIZER_IMAGE: "10.0.0.1:5000/registry.k8s.io/sig-storage/csi-resizer:v1.13.2"
-  ROOK_CSI_PROVISIONER_IMAGE: "10.0.0.1:5000/registry.k8s.io/sig-storage/csi-provisioner:v5.2.0"
-  ROOK_CSI_SNAPSHOTTER_IMAGE: "10.0.0.1:5000/registry.k8s.io/sig-storage/csi-snapshotter:v8.2.1"
-  ROOK_CSI_ATTACHER_IMAGE: "10.0.0.1:5000/registry.k8s.io/sig-storage/csi-attacher:v4.8.1"
-  ROOK_CSIADDONS_IMAGE: "10.0.0.1:5000/quay.io/csiaddons/k8s-sidecar:v0.13.0"
+  ROOK_CSI_CEPH_IMAGE: "hierophant.hierocracy.home:5000/quay.io/cephcsi/cephcsi:v3.15.0"
+  ROOK_CSI_REGISTRAR_IMAGE: "hierophant.hierocracy.home:5000/registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.13.0"
+  ROOK_CSI_RESIZER_IMAGE: "hierophant.hierocracy.home:5000/registry.k8s.io/sig-storage/csi-resizer:v1.13.2"
+  ROOK_CSI_PROVISIONER_IMAGE: "hierophant.hierocracy.home:5000/registry.k8s.io/sig-storage/csi-provisioner:v5.2.0"
+  ROOK_CSI_SNAPSHOTTER_IMAGE: "hierophant.hierocracy.home:5000/registry.k8s.io/sig-storage/csi-snapshotter:v8.2.1"
+  ROOK_CSI_ATTACHER_IMAGE: "hierophant.hierocracy.home:5000/registry.k8s.io/sig-storage/csi-attacher:v4.8.1"
+  ROOK_CSIADDONS_IMAGE: "hierophant.hierocracy.home:5000/quay.io/csiaddons/k8s-sidecar:v0.13.0"
 
   # To indicate the image pull policy to be applied to all the containers in the csi driver pods.
   # ROOK_CSI_IMAGE_PULL_POLICY: "IfNotPresent"
@@ -217,6 +217,23 @@ data:
   #   - effect: NoExecute
   #     key: node-role.kubernetes.io/etcd
   #     operator: Exists
+  #
+  # ENABLED: inference-0 is tainted nvidia.com/gpu=present:NoSchedule to reserve it
+  # for GPU work (scripts/setup-node-labels.sh). The CSI *plugin* (nodeplugin)
+  # DaemonSet must still run there — the GPU Ollama pods mount a rook-cephfs RWX
+  # PVC, and without the nodeplugin the volume never mounts and they hang in
+  # ContainerCreating.
+  #
+  # Belt-and-braces with the OperatorConfig CR applied by setup-01-basic.sh: this
+  # cluster runs the ceph-csi-operator, where the effective field is
+  # Driver.spec.nodePlugin.tolerations. Rook translates this ConfigMap key into the
+  # Driver CRs it creates, and Driver-level spec overrides the OperatorConfig
+  # driverSpecDefaults — so setting both covers whichever path wins. Verify with:
+  #   kubectl -n rook-ceph get ds -l app=csi-cephfsplugin -o yaml | grep -A4 tolerations
+  CSI_PLUGIN_TOLERATIONS: |
+    - effect: NoSchedule
+      key: nvidia.com/gpu
+      operator: Exists
 
   # (Optional) CephCSI RBD provisioner NodeAffinity (if specified, overrides CSI_PROVISIONER_NODE_AFFINITY).
   # CSI_RBD_PROVISIONER_NODE_AFFINITY: "role=rbd-node"
@@ -618,7 +635,7 @@ spec:
       serviceAccountName: rook-ceph-system
       containers:
         - name: rook-ceph-operator
-          image: 10.0.0.1:5000/docker.io/rook/ceph:v1.18.8
+          image: hierophant.hierocracy.home:5000/docker.io/rook/ceph:v1.18.8
           args: [ "ceph", "operator" ]
           securityContext:
             runAsNonRoot: true

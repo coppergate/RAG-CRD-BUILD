@@ -24,6 +24,7 @@ import (
 	"app-builds/common/ent/session"
 	"app-builds/common/ent/sessiongovernance"
 	"app-builds/common/ent/tag"
+	"app-builds/common/ent/tagembeddingcoverage"
 	"context"
 	"errors"
 	"fmt"
@@ -114,6 +115,7 @@ func checkColumn(t, c string) error {
 			session.Table:              session.ValidColumn,
 			sessiongovernance.Table:    sessiongovernance.ValidColumn,
 			tag.Table:                  tag.ValidColumn,
+			tagembeddingcoverage.Table: tagembeddingcoverage.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

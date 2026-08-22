@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: go-module-cache
+  namespace: build-pipeline
+  labels:
+    app: build-pipeline
+    component: go-module-cache
+spec:
+  # CephFS RWX so multiple parallel Kaniko jobs can share the cache.
+  # Go's module cache uses atomic file operations so concurrent writes are safe.
+  accessModes:
+    - ReadWriteMany
+  storageClassName: rook-cephfs
+  resources:
+    requests:
+      storage: 15Gi

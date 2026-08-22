@@ -1,0 +1,39 @@
+# csi-operator-config.yaml — Ceph CSI operator defaults
+#
+# WHY THIS EXISTS
+# inference-0 is tainted 'nvidia.com/gpu=present:NoSchedule' by
+# scripts/setup-node-labels.sh to reserve it for GPU workloads. The Ceph CSI
+# *nodeplugin* DaemonSet must keep running there anyway: the GPU Ollama pods
+# mount a 100Gi rook-cephfs RWX PVC, and with no nodeplugin on the node the
+# volume never mounts and both pods hang in ContainerCreating.
+#
+# This cluster runs Rook v1.18+ with the ceph-csi-operator (csi-operator.yaml),
+# so the legacy in-Rook CSI toleration path is not authoritative. The effective
+# fields are:
+#   Driver.spec.nodePlugin.tolerations                      (per-driver, wins)
+#   OperatorConfig.spec.driverSpecDefaults.nodePlugin.tolerations  (default)
+#
+# Rook creates the Driver CRs and translates CSI_PLUGIN_TOLERATIONS from the
+# rook-ceph-operator-config ConfigMap into them, so that key is set in
+# operator.yaml as well. Both are set deliberately: whichever path the operator
+# version actually honours, the nodeplugin ends up tolerating the taint.
+#
+# The name and namespace are the ceph-csi-operator's expected defaults — the
+# operator reads 'ceph-csi-operator-config' from its own OPERATOR_NAMESPACE.
+# Renaming it makes it silently inert.
+#
+# The controllerPlugin (provisioner Deployment) is deliberately NOT given the
+# toleration: it does not need to run on the GPU node, and keeping it off is the
+# point of the taint.
+apiVersion: csi.ceph.io/v1
+kind: OperatorConfig
+metadata:
+  name: ceph-csi-operator-config
+  namespace: rook-ceph
+spec:
+  driverSpecDefaults:
+    nodePlugin:
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule

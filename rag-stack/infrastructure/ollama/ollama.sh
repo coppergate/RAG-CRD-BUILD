@@ -67,6 +67,10 @@ $KUBECTL label nodes inference-0 role=inference-node --overwrite
 
 # Label worker nodes with embed-instance index for pod pinning.
 # worker-0..3 already carry role=storage-node; embed-instance is additive.
+# NOTE: must cover every index the deploy loops below iterate (0..3). worker-3
+# was previously missing, which left ollama-embed-8, ollama-embed-9 and
+# ollama-planner-cpu-5 selecting embed-instance=3 — a label on no node — so they
+# sat permanently Pending on a fresh install.
 $KUBECTL label nodes worker-0 embed-instance=0 --overwrite
 $KUBECTL label nodes worker-1 embed-instance=1 --overwrite
 $KUBECTL label nodes worker-2 embed-instance=2 --overwrite
@@ -106,13 +110,56 @@ EOF
 # We revert image.repository to the base Ollama image and specify models to pull from the local registry.
 REGISTRY="registry.container-registry.svc.cluster.local:5000"
 
+# --- GPU pinning: resolve the V100 by UUID -----------------------------------
+# inference-0 has a MIXED GPU pool (1x V100 32GB + 2x P4 8GB) all advertised as
+# one fungible nvidia.com/gpu. The GPU values files therefore set
+# ollama.gpu.enabled=false and pin the card by UUID instead, via the ConfigMap
+# built here. See values-qwen32b.yaml for why node-affinity is not an option.
+#
+# TODO(revisit once the cluster is stable): both GPU pods currently share the
+# V100, preserving the VRAM tuning written for the old single-GPU node
+# (OLLAMA_MAX_LOADED_MODELS is set accordingly in each values file). With three
+# cards available, ollama-llama3 could move to a P4 (gpu-p4-0-uuid) to free
+# ~5GB of V100 VRAM for the 32B executor. That also requires trimming the 32B
+# models from ollama-llama3's seed list in seed-models.sh (an 8GB P4 cannot
+# load them) and forcing its OLLAMA_MAX_LOADED_MODELS to 1. Deferred
+# deliberately: it changes model routing as well as placement.
+echo "--- Resolving GPU UUID for pinning ---"
+GPU_NODE=$($KUBECTL get nodes -l role=inference-node \
+  -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+if [[ -z "$GPU_NODE" ]]; then
+  echo "ERROR: no node carries role=inference-node — cannot pin a GPU." >&2
+  echo "       scripts/setup-node-labels.sh should have applied it." >&2
+  exit 1
+fi
+
+# Label published by kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh
+V100_UUID=$($KUBECTL get node "$GPU_NODE" \
+  -o jsonpath='{.metadata.labels.hierocracy\.home/gpu-v100-uuid}' 2>/dev/null || echo "")
+if [[ -z "$V100_UUID" ]]; then
+  echo "ERROR: node $GPU_NODE has no hierocracy.home/gpu-v100-uuid label." >&2
+  echo "       Re-run 52-install-gpu-operator.sh in kubernetes-setup/new-setup-external-gpu" >&2
+  echo "       to republish the GPU UUID labels, then retry." >&2
+  exit 1
+fi
+echo "  - $GPU_NODE V100 = $V100_UUID"
+
+# NVIDIA_DRIVER_CAPABILITIES must include 'compute' for CUDA; 'utility' alone
+# only yields nvidia-smi. Consumed via extraEnvFrom in both GPU values files.
+$KUBECTL create configmap ollama-gpu-pin-v100 -n llms-ollama \
+  --from-literal=NVIDIA_VISIBLE_DEVICES="$V100_UUID" \
+  --from-literal=NVIDIA_DRIVER_CAPABILITIES="compute,utility" \
+  --dry-run=client -o yaml | $KUBECTL apply -f -
+
 # Deploy Ollama WITHOUT model pulling — models are seeded separately via seed-models.sh
 # This avoids long postStart hangs during install.
 #
-# Two GPU deployments on inference-0:
+# Two GPU deployments on inference-0, both pinned to the V100 by UUID:
 #   ollama-llama3  — planner endpoint (ollama service); llama3.1 + granite3.1-dense:8b seeded
 #   ollama-qwen32b — executor endpoint (ollama-code service); qwen2.5:32b + all GPU models seeded
 # Both use nodeSelector: role=inference-node (values.yaml default) — no --set override needed.
+# NOTE: with no nvidia.com/gpu request there is no scheduler GPU accounting, so
+# co-residency on the V100 is enforced by these manifests, not by Kubernetes.
 $HELM upgrade --install ollama-llama3 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
@@ -122,19 +169,30 @@ $HELM upgrade --install ollama-qwen32b otwld/ollama --namespace llms-ollama -f "
 $KUBECTL expose deployment ollama-llama3 --name=ollama --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
 $KUBECTL expose deployment ollama-qwen32b --name=ollama-code --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
 
-# Deploy CPU-only embedding Ollama on inference-0.
-# Selected by the ollama-embed ClusterIP service alongside worker-node embed pods.
-# nodeSelector: role=inference-node comes from values-embed.yaml default.
-$HELM upgrade --install ollama-embed-0 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-embed.yaml" \
-  --set image.repository="${REGISTRY}/ollama/ollama" \
-  --set image.tag="0.15.6"
-
-# Deploy CPU-only alternate planner Ollama on inference-0.
-# Selected by the ollama-planner-cpu ClusterIP service alongside worker-node planner pods.
-# nodeSelector: role=inference-node comes from values-planner-cpu.yaml default.
-$HELM upgrade --install ollama-planner-cpu-0 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-planner-cpu.yaml" \
-  --set image.repository="${REGISTRY}/ollama/ollama" \
-  --set image.tag="0.15.6"
+# REMOVED: ollama-embed-0 and ollama-planner-cpu-0.
+#
+# Both were CPU-only pods (ollama.gpu.enabled=false) pinned to role=inference-node,
+# using values-embed.yaml / values-planner-cpu.yaml. inference-0 is now reserved
+# for GPU workloads only — it is tainted nvidia.com/gpu=present:NoSchedule by
+# scripts/setup-node-labels.sh — so CPU-only work belongs on the worker nodes.
+#
+# No service change is needed: ollama-embed and ollama-planner-cpu are ClusterIP
+# services selecting on the ollama-role pod label (set via podLabels in the values
+# files), not on release name. The worker-node pods deployed below continue to
+# back both services.
+#
+# Capacity after this change, with the worker-3 label fix above:
+#   embed        — 8 pods (ollama-embed-2..9, 2 per worker node)
+#   planner-cpu  — 4 pods (ollama-planner-cpu-2..5, 1 per worker node)
+#
+# values-embed.yaml and values-planner-cpu.yaml are now unreferenced. They are
+# kept as the templates for the inference-node variant in case a second, non-GPU
+# inference node is ever added; the deployed worker pods use the *-worker.yaml
+# variants instead.
+#
+# If embed/planner capacity needs to be restored, add instances on the workers
+# with values-embed-worker.yaml / values-planner-cpu-worker.yaml — do NOT
+# reintroduce these two releases on the inference node.
 
 # Deploy CPU-only embedding Ollama on each worker node — 2 pods per node (embed-2..9).
 # All pods carry ollama-role=embed and are picked up by the ollama-embed ClusterIP service.
@@ -167,18 +225,18 @@ done
 
 # Wait for inference-node pods to be ready before seeding models
 echo "Waiting for inference-node Ollama pods to be ready..."
-$KUBECTL rollout status deploy/ollama-llama3 -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-qwen32b -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-embed-0 -n llms-ollama --timeout=120s || true
-$KUBECTL rollout status deploy/ollama-planner-cpu-0 -n llms-ollama --timeout=120s || true
+$KUBECTL rollout status deploy/ollama-llama3 -n llms-ollama --timeout=600s || true
+$KUBECTL rollout status deploy/ollama-qwen32b -n llms-ollama --timeout=600s || true
+$KUBECTL rollout status deploy/ollama-embed-0 -n llms-ollama --timeout=600s || true
+$KUBECTL rollout status deploy/ollama-planner-cpu-0 -n llms-ollama --timeout=600s || true
 
 # Wait for worker-node pods to be ready
 echo "Waiting for worker-node Ollama pods to be ready..."
 for IDX in 2 3 4 5 6 7 8 9; do
-  $KUBECTL rollout status deploy/ollama-embed-${IDX} -n llms-ollama --timeout=120s || true
+  $KUBECTL rollout status deploy/ollama-embed-${IDX} -n llms-ollama --timeout=600s || true
 done
 for IDX in 2 3 4 5; do
-  $KUBECTL rollout status deploy/ollama-planner-cpu-${IDX} -n llms-ollama --timeout=120s || true
+  $KUBECTL rollout status deploy/ollama-planner-cpu-${IDX} -n llms-ollama --timeout=600s || true
 done
 
 # Seed models from local registry into PVCs

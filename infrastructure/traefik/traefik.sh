@@ -22,6 +22,10 @@ helm upgrade --install traefik traefik/traefik -n $NAMESPACE -f - <<EOF
 nodeSelector:
   role: storage-node
 
+# Traefik Hub is disabled by default when no hub.token is provided.
+# The Hub CRDs are installed by the chart regardless — they contribute to
+# OpenAPI aggregation overhead but cannot be prevented via values.
+
 experimental:
   otlpLogs: true
 

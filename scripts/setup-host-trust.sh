@@ -9,10 +9,14 @@
 
 set -uo pipefail
 
+REPO_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# Single source of truth for network + registry addressing (flat-LAN design).
+source "$REPO_DIR/config/network.env"
+
 PATCH_FILE="/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml"
 CERT_DIR="$HOME/.config/containers/certs.d"
-HOSTS=("10.0.0.1:5000" "hierophant:5000" "hierophant.hierocracy.home:5000" \
-       "registry.hierocracy.home:5000" "172.20.1.26:5000" "127.0.0.1:5000" "localhost:5000")
+HOSTS=("$REGISTRY_PREFIX" "hierophant:5000" "registry.hierocracy.home:5000" \
+       "${REGISTRY_LB_IP}:5000" "127.0.0.1:5000" "localhost:5000")
 
 echo "--- Configuring Host Trust for current user ---"
 
