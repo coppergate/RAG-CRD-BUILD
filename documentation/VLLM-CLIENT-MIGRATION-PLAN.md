@@ -2,10 +2,11 @@
 
 ## Context
 
-`inference-0` is being rebuilt as a dual-V100 32GB node serving a 27B model
-under 1Cat-vLLM (`kubernetes-setup/new-setup-external-gpu/VLLM-DUAL-V100-PLAN.md`).
-**vLLM does not speak the Ollama API.** Phase 7 of that plan is the client-side
-gap, and it is called out there as the largest non-GPU risk.
+`inference-0` is being rebuilt as a dual-V100 32GB node running 1Cat-vLLM
+(`kubernetes-setup/new-setup-external-gpu/VLLM-DUAL-V100-PLAN.md` — that doc was
+restructured 2026-09-07 and now uses §0–§10 rather than "Phase N"). **vLLM does
+not speak the Ollama API.** §9 of that plan is the client-side gap, and it is
+called out there as the largest non-GPU risk.
 
 `rag-worker` currently talks Ollama-native routes only —
 `internal/ollama/client.go` uses `/api/chat` (l.120, l.174), `/api/embeddings`
@@ -21,14 +22,23 @@ That makes a clean replacement possible rather than a second parallel client:
 
 - Only **one** protocol in the codebase, no `EXECUTOR_BACKEND` switch to reason about.
 - The refactor is **provable today against the running Ollama pods**, before vLLM
-  exists at all. It de-risks Phase 7 without waiting on Phases 0–6.
+  exists at all. It de-risks the client work without waiting on §0–§8, and is
+  the one piece of this migration that needs no new hardware.
 - Cutting the executor over to vLLM later becomes a **pure deployment change** —
   set `EXECUTOR_URL` and `EXECUTOR_MODEL`, no code, no rebuild.
 
-Scope is the executor role's *protocol*. Planner (`granite3.1-dense:8b`) and
-embeddings (`ollama-embed-*` CPU pods) stay on Ollama **servers**; they just get
-talked to over `/v1` instead of `/api`. `rag-ingestion` and the Python tests are
-untouched — they only call embedding-side routes.
+Scope here is the **protocol**, for every role at once; the **server** each role
+talks to moves separately and later. On day one the planner
+(`granite3.1-dense:8b`) and embeddings (`ollama-embed-*` CPU pods) keep hitting
+Ollama — just over `/v1` instead of `/api`. The sibling doc's §9 then migrates
+them to `gpu-small-models` on card 1 in stages (executor → planner → embeddings
+→ reranker), and **no client change is needed for any of those steps** — only
+the URL and model name per role. That property is the whole reason one client
+beats two.
+
+`rag-ingestion` and the Python tests stay on `/api` for now: they only call
+embedding-side routes, and those move at §9 step 3, which carries its own
+vector-equivalence gate.
 
 ## The seam already exists
 
@@ -209,6 +219,14 @@ create `work-2026-09-07`, commit with timestamp messages and the
 - `rag-ingestion/service.py` and `rag-stack/tests/*.py` — embedding-side only
   (`/api/embeddings`, `/api/show`, `/api/tags`) against CPU Ollama pods that are
   not moving.
-- Planner migration to vLLM (open question #6 in the plan doc, unresolved).
-- Phases 0–6 and 8: hardware verification, GPU-operator label cleanup, image
-  build, model seeding, the `llms-vllm` Deployment, cutover.
+- Repointing any role's **server** from Ollama to vLLM — that is §9 steps 1–3 of
+  the sibling doc, gated on the hardware, and is env-var work not code work.
+- The **reranker**, which is net-new: `ChatClient`
+  (`internal/models/interfaces.go:9`) is only `Chat`/`ChatStream`/`GetEmbeddings`,
+  so a reranker needs a new client type *and* a new pipeline stage between the
+  Qdrant search and the executor call, behind a feature flag.
+- §0–§8 and §10 of the sibling doc: hardware verification, GPU-operator label
+  cleanup, image build, model seeding, the `llms-vllm` Deployments, cutover.
+- Note §2.3 there: removing the `gpu-v100-uuid` label makes `ollama.sh` exit 1,
+  which breaks the Ollama rollback. Not this plan's work, but it is the thing
+  that would strand a rollback if the client cutover needed one.
