@@ -336,6 +336,152 @@ nothing and are deliberately **not** in `render-manifests.sh`'s `MANIFESTS` list
 reinstate OLM: mirror the `olm` image into the registry first, re-add the file to
 that list, then restore the step.
 
+### 1.10 Worker VM Layout — Asymmetric Pool and the `node-size` Label (2026-09-07)
+
+The worker pool is **deliberately asymmetric**. Defined in
+`kubernetes-setup/new-setup-external-gpu/30-build-all-workers.sh` (l.70-73):
+
+| Node | RAM | vCPU | `--cpuset` | NUMA | Ceph OSDs | Extra |
+|---|---|---|---|---|---|---|
+| `worker-0` | 28 GiB | 8 | `14-17,42-45` | 1 | 2 | NVMe fast-tier OSD on a *separate* physical NVMe from its OS |
+| `worker-1` | 28 GiB | 8 | `18-21,46-49` | 1 | 1 | |
+| `worker-2` | 28 GiB | 8 | `22-25,50-53` | 1 | 1 | |
+| `worker-3` | **64 GiB** | **14** | `0-13` | **0** | 2 | NVMe fast-tier OSD **co-located with its own OS disk** |
+
+Pool total: 148 GiB / 38 vCPU. Every worker also carries a 1.8 TB HDD OSD (`vdb`)
+plus an NVMe BlueStore DB (`vdc`), and 2 iothreads.
+
+#### The asymmetry is larger than the vCPU counts suggest
+
+The cpuset pattern implies a dual-socket host with 14 cores per socket and a
+hyperthread sibling offset of 28 (NUMA 1 pairs `14-17` with `42-45`; NUMA 0
+reserves `40-41`, the siblings of `12-13`). On that reading:
+
+- `worker-0..2` each get **4 physical cores presented as 8 vCPUs** — the cpuset
+  is 4 cores plus their own siblings, so the two threads of each core contend.
+- `worker-3` gets **14 distinct physical cores with no siblings** (`0-13`), so
+  its 14 vCPUs have no intra-VM hyperthread contention at all.
+
+So worker-3 has roughly **3.5× the physical CPU** of a small worker, not the
+1.75× the vCPU numbers imply — and cleaner cores at that. **A size class based
+on memory alone understates it.** Confirm the topology before relying on this:
+
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "lscpu -e=CPU,CORE,SOCKET,NODE | head -60"
+```
+
+Related: siblings `28-39` on NUMA 0 appear **unallocated** (only `40-41` are
+noted as host-reserved), so there may be ~12 spare logical CPUs on socket 0.
+Whether that is deliberate hypervisor headroom or unclaimed capacity is an open
+question — do not grow worker-3 into it without checking host load first.
+
+#### `hierocracy.home/node-size`
+
+Applied by `scripts/setup-node-labels.sh` (step 3):
+
+| Label | Value | Meaning |
+|---|---|---|
+| `hierocracy.home/node-size` | `large` \| `standard` | size class; `large` at ≥ 48 GiB |
+| `hierocracy.home/node-memory-gib` | e.g. `62` | observed capacity, so the classification is auditable |
+
+**It is derived from live `.status.capacity.memory`, not hardcoded to
+`worker-3`, and deliberately not set in the Talos machine config.** Same lesson
+as the GPU UUID labels (§4.4): capacity is a *discovered* fact, and Talos
+re-asserts whatever its config says on every apply — a resized VM would keep a
+stale size class forever. Resize the VM, re-run the script, the label follows.
+
+The boundary is a fixed threshold rather than "largest node wins", because
+relative ranking would flip the label when a node goes `NotReady` and would
+silently promote a small node if the big one were removed. Override with
+`NODE_SIZE_LARGE_GIB` if the pool changes shape. The script **warns loudly** if
+no worker qualifies, because a manifest selecting `node-size=large` would
+otherwise sit `Pending` with no explanation.
+
+Target it from a manifest with an ordinary selector:
+
+```yaml
+nodeSelector:
+  role: storage-node
+  hierocracy.home/node-size: large
+```
+
+#### Qdrant is the case this label exists for — and it is mis-specified today
+
+`rag-stack/infrastructure/qdrant/qdrant-deploy.yaml` currently sets:
+
+```yaml
+nodeSelector:
+  role: storage-node        # any of the four workers
+resources:
+  requests: { cpu: "1", memory: 4Gi }
+  limits:   { cpu: "4", memory: 32Gi }
+```
+
+The **32 GiB limit exceeds the entire RAM of `worker-0..2`**. On three of the
+four workers that limit is unreachable: Qdrant is not limit-killed at 32 GiB, it
+drives the *node* into memory pressure and gets OOM-killed or evicted somewhere
+below 28 GiB — taking neighbouring pods with it via eviction. And with a 4 GiB
+request the scheduler reserves almost nothing, so the burst is entirely unbacked
+(Burstable QoS).
+
+Which worker it lands on is currently a **scheduler lottery with a 3-in-4 chance
+of being wrong.** Fixing it is `node-size: large` plus an honest request. Raise
+the request to what the working set actually needs — the request is what
+reserves memory; the limit only caps it.
+
+#### Placement guidance
+
+- **Do** put memory-resident services on `node-size: large`: Qdrant first, then
+  anything holding a large in-process cache or index.
+- **Do** express need with **`requests`**, not just a `nodeSelector`. The label
+  steers placement; only a request reserves capacity. This is the mechanism
+  question that matters — a label with a 4 GiB request still lets other pods
+  fill the node.
+- **Do not taint `worker-3`.** The inference-0 taint (§4.4) works because that
+  node runs only GPU workloads. `worker-3` is a general storage node running two
+  Ceph OSDs, so a taint would need tolerations on Rook OSDs and mons, Alloy, and
+  everything else that runs pool-wide — the same cascade documented for
+  inference-0, but wider, and for less benefit.
+- **Budget for Ceph.** `worker-3` runs **two** OSDs. Rook's default
+  `osd_memory_target` is 4 GiB each, and the memory limits in
+  `infrastructure/rook-ceph/cluster.yaml` are **commented out** (l.238, l.241),
+  so OSDs are effectively unbounded. Assume ~8 GiB of the 64 is Ceph before
+  anything else lands.
+- **Do not concentrate quorum members there.** One large node out of four means
+  anything pinned to it has *no failover* — if `worker-3` drains, those pods go
+  `Pending`, not rescheduled. Keep Ceph mons, ZooKeeper and Pulsar bookies
+  spread. (Qdrant is already a single-replica Deployment on one PVC, so pinning
+  it does not worsen its availability class — but it makes the SPOF deliberate
+  rather than accidental, which is the improvement.)
+- **NUMA is fine for this purpose.** `worker-3` sits on NUMA 0 while the NVMe
+  drives are described as NUMA 1, so its OSD I/O crosses the interconnect — a
+  mild penalty for its *storage* role. Its RAM is node-local, which is the
+  factor that matters for in-memory work. Do not "fix" the NUMA placement in
+  the name of in-memory performance; it is already right for that.
+
+#### Known consequence: `embed-instance` spread ignores the asymmetry
+
+`rag-stack/infrastructure/ollama/ollama.sh:74-77` labels `worker-0..3` with
+`embed-instance=0..3` and then deploys an even **2 embed + 1 planner-cpu per
+worker**. `worker-3` therefore carries the same embedding load as a node with
+one-third the physical cores. Options: leave it (keeps headroom free for
+in-memory services — arguably the right call), or weight the spread. Moot once
+embeddings move to the GPU under the vLLM plan's §9 step 3.
+
+#### Verify
+
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   /home/k8s/kube/kubectl get nodes -L role,hierocracy.home/node-size,hierocracy.home/node-memory-gib"
+```
+
+```bash
+# what is actually requested vs available on the large node
+/home/k8s/kube/kubectl describe node worker-3 | sed -n '/Allocated resources/,/Events/p'
+```
+
 ### 2.1 Session Establishment (Operational Context)
 Every new session for the **Junie** agent MUST establish the operational context by following these steps:
 1.  **Git Initialization**:
