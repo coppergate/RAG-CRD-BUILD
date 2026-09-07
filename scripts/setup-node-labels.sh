@@ -30,9 +30,64 @@ if [[ -n "$INFERENCE_NODES" ]]; then
     done
 fi
 
+# 3. Node size class: hierocracy.home/node-size on worker nodes.
+#
+# The worker pool is deliberately ASYMMETRIC (see OPERATIONS.md 1.10):
+#   worker-0..2   28 GiB /  8 vCPU
+#   worker-3      64 GiB / 14 vCPU
+# The label exists so memory-resident services (Qdrant above all) can be
+# steered to the node that can actually hold them, instead of landing on a
+# 28 GiB node by scheduler lottery.
+#
+# DERIVED from live .status.capacity.memory, not hardcoded to worker-3, and
+# deliberately NOT set in the Talos machine config. Same reasoning as the GPU
+# UUID labels: capacity is a discovered fact, and Talos re-asserts whatever its
+# config says on every apply — so a resized VM would keep a stale size class
+# forever. Resize the VM, re-run this script, the label follows.
+#
+# Threshold rather than "largest node wins": relative ranking would flip the
+# label when a node goes NotReady, and would silently promote a small node if
+# the big one were removed. A fixed boundary is predictable and auditable.
+# Override with NODE_SIZE_LARGE_GIB when the pool changes shape.
+NODE_SIZE_LARGE_GIB="${NODE_SIZE_LARGE_GIB:-48}"
+
+if [[ -n "$WORKER_NODES" ]]; then
+    echo "--- Applying node size class (large >= ${NODE_SIZE_LARGE_GIB} GiB) ---"
+    for node in $WORKER_NODES; do
+        # capacity.memory is a Ki quantity, e.g. "65787276Ki"
+        mem_ki=$($KUBECTL get node "$node" \
+            -o jsonpath='{.status.capacity.memory}' 2>/dev/null | tr -d 'Ki') || mem_ki=""
+        if [[ -z "$mem_ki" || ! "$mem_ki" =~ ^[0-9]+$ ]]; then
+            echo "  - WARNING: $node reported no usable capacity.memory — skipping size class" >&2
+            continue
+        fi
+        mem_gib=$(( mem_ki / 1048576 ))
+
+        if (( mem_gib >= NODE_SIZE_LARGE_GIB )); then
+            size="large"
+        else
+            size="standard"
+        fi
+
+        echo "  - $node: ${mem_gib} GiB -> node-size=${size}"
+        $KUBECTL label node "$node" \
+            "hierocracy.home/node-size=${size}" \
+            "hierocracy.home/node-memory-gib=${mem_gib}" --overwrite
+    done
+
+    # Fail loudly if nothing qualified. A manifest that selects node-size=large
+    # would otherwise sit Pending with no clue why.
+    if ! $KUBECTL get nodes -l hierocracy.home/node-size=large \
+            -o name 2>/dev/null | grep -q .; then
+        echo "  - WARNING: no worker qualified as node-size=large." >&2
+        echo "    Anything with nodeSelector hierocracy.home/node-size=large will stay Pending." >&2
+        echo "    Check worker RAM, or lower NODE_SIZE_LARGE_GIB (currently ${NODE_SIZE_LARGE_GIB})." >&2
+    fi
+fi
+
 echo "Node labeling complete."
 
-# 3. Taint: reserve inference nodes for GPU work only.
+# 4. Taint: reserve inference nodes for GPU work only.
 #
 # nodeSelector alone is opt-in — it steers pods that ask for a node but does not
 # stop a manifest that forgets 'role: storage-node' from consuming GPU-node
