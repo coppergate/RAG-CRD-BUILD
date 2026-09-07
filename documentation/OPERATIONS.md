@@ -362,19 +362,62 @@ reserves `40-41`, the siblings of `12-13`). On that reading:
 - `worker-3` gets **14 distinct physical cores with no siblings** (`0-13`), so
   its 14 vCPUs have no intra-VM hyperthread contention at all.
 
-So worker-3 has roughly **3.5× the physical CPU** of a small worker, not the
-1.75× the vCPU numbers imply — and cleaner cores at that. **A size class based
-on memory alone understates it.** Confirm the topology before relying on this:
+So worker-3 reaches **3.5× the core count** of a small worker, not the 1.75× the
+vCPU numbers imply, and has no *intra-VM* thread contention. But see the NUMA 0
+accounting below before treating that as 3.5× the usable CPU — the sibling
+threads of 12 of those cores run the control plane. Confirm the topology before
+relying on any of this:
 
 ```bash
 ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
   "lscpu -e=CPU,CORE,SOCKET,NODE | head -60"
 ```
 
-Related: siblings `28-39` on NUMA 0 appear **unallocated** (only `40-41` are
-noted as host-reserved), so there may be ~12 spare logical CPUs on socket 0.
-Whether that is deliberate hypervisor headroom or unclaimed capacity is an open
-question — do not grow worker-3 into it without checking host load first.
+#### ⚠ NUMA 0 is fully allocated — and worker-3 shares silicon with the control plane
+
+**Corrected 2026-09-07.** An earlier revision of this section claimed siblings
+`28-39` on NUMA 0 were unallocated spare capacity. **They are not.** They are the
+three control-plane VMs (`10-build-control-plane.sh:41,58,75`):
+
+| Host CPUs | Owner | vCPU |
+|---|---|---|
+| `0-13` | `worker-3` | 14 |
+| `28-31` | `control-0` | 4 |
+| `32-35` | `control-1` | 4 |
+| `36-39` | `control-2` | 4 |
+| `40-41` | host reserved | — |
+
+14 + 4 + 4 + 4 + 2 = 28 = the whole socket. **There are no free threads on
+NUMA 0.** Do not attempt to widen `worker-3`'s cpuset into `28-39` — that takes
+CPUs away from etcd.
+
+At sibling offset 28, the ownership maps thread-for-thread onto worker-3's cores:
+
+| worker-3 core | sibling | runs |
+|---|---|---|
+| `0-3` | `28-31` | `control-0` |
+| `4-7` | `32-35` | `control-1` |
+| `8-11` | `36-39` | `control-2` |
+| `12-13` | `40-41` | host |
+
+**So every one of worker-3's lower 12 cores shares physical silicon with a
+control-plane VM.** Two consequences that matter more than the spare-capacity
+question ever did:
+
+- **Heavy CPU load on `worker-3` steals cycles from etcd** through hyperthread
+  sharing. That is the etcd-slow-ops → lease-timeout → controller-crash-loop
+  path. Note the old GPU-deferral comment blamed this class of symptom on V100
+  PCIe initialisation (§4.4 records why that was wrong); this is a real
+  mechanism for the same symptom, and it is still live.
+- **It makes memory-resident services the *right* tenant for `worker-3`.** They
+  are RAM-bound and comparatively CPU-cheap, so they consume the resource
+  `worker-3` genuinely has spare without contending for the resource the control
+  plane needs. CPU-heavy tenants are the ones to keep off it.
+
+This also tempers the multiple above: `worker-3` touches **3.5× the core count**
+of a small worker, but those cores are shared with the control plane, so
+effective CPU headroom is lower than 3.5× and **varies with control-plane
+activity**. Treat the core count as an upper bound, not a budget.
 
 #### `hierocracy.home/node-size`
 
