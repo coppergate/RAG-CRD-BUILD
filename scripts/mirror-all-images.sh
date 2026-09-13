@@ -123,10 +123,15 @@ if [[ -n "$STEP_NAME" ]]; then
   done
 fi
 
-# default: all groups except local-build-output
+# default: all groups except those this script cannot produce.
+#   local-build-output — built by the Kaniko pipeline
+#   ollama-models      — produced by `ollama pull` + `ollama push`, not skopeo;
+#                        see push-models-to-cluster.sh
+# Both can still be named explicitly with --group, which will fail as expected.
 if [[ ${#requested_groups[@]} -eq 0 ]]; then
   while IFS= read -r g; do
     [[ "$g" == "local-build-output" ]] && continue
+    [[ "$g" == "ollama-models" ]] && continue
     requested_groups+=("$g")
   done < <(plan_groups)
 fi

@@ -64,7 +64,7 @@ spec:
             role: storage-node
           containers:
             - name: image-renderer
-              image: grafana/grafana-image-renderer:latest
+              image: hierophant.hierocracy.home:5000/grafana/grafana-image-renderer:latest
               env:
                 - name: IGNORE_HTTPS_ERRORS
                   value: "true"

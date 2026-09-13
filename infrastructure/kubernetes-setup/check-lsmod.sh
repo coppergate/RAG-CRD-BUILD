@@ -16,7 +16,7 @@ spec:
       hostPID: true
       containers:
       - name: check-lsmod
-        image: docker.io/library/busybox:latest
+        image: hierophant.hierocracy.home:5000/busybox:1.37.0
         securityContext:
           privileged: true
         command: ["lsmod"]

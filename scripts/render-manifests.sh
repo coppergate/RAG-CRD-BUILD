@@ -40,6 +40,14 @@ MANIFESTS=(
   infrastructure/metrics-server/metrics-server.yaml
   infrastructure/prometheus/prometheus-operator.yaml
   infrastructure/kubernetes-setup/check-lsmod-job.yaml
+  infrastructure/kubernetes-setup/check-lsmod.sh
+  # These two carried bare upstream refs (ghcr.io/... and docker.io/grafana/...)
+  # until 2026-09-13. Bare refs only resolve through the containerd mirror, which
+  # strips the registry host — so the mirror asked hierophant for
+  # /v2/headlamp-k8s/headlamp/... (404) and silently fell through to the
+  # internet. Now prefixed with the registry, so they are rendered here.
+  infrastructure/headlamp/headlamp.yaml
+  infrastructure/APM/grafana/operator-manifests.yaml
   # Vendored upstream bundles. These were MISSED in the initial flat-LAN
   # conversion and still pointed at the dead 10.0.0.1:5000 (talos-nat) registry.
   # That address is unreachable on the flat LAN, so cert-manager came up in

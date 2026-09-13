@@ -1,0 +1,180 @@
+# values-devstral.yaml — GPU Ollama for devstral-small-2:24b (coding/agent executor)
+#
+# DROP-IN REPLACEMENT for values-qwen32b.yaml on the SAME card, NOT an addition.
+# inference-0 has exactly two V100 32GB cards and both are allocated:
+#   ollama-llama3  -> planner endpoint  (service: ollama)
+#   ollama-qwen32b -> executor endpoint (service: ollama-code)  <- this file
+# Selected by EXECUTOR_VALUES in ollama.sh, which still installs it under the
+# release name 'ollama-qwen32b'. The name is a misnomer once this file is in
+# use, and it is kept deliberately: the otwld/ollama chart names the PVC after
+# the release, so renaming would create a fresh PVC and discard every seeded
+# model (15GB+ re-download). Service name, endpoint URL and rag-worker config
+# are all unchanged by the swap.
+#
+# WHY THIS MODEL ON THIS HARDWARE (2026-09-13):
+#   Devstral Small 2 24B scores 68.0% on SWE-bench Verified (Mistral's own
+#   figure) against 72.2% for Devstral 2 123B — 4.2 points for a model that
+#   fits one card instead of needing both plus host RAM offload. The 123B is
+#   not a candidate here on three independent grounds: its released weights are
+#   FP8 and sm_70 has no FP8 path; a 4-bit requant is ~62GB of weights against
+#   64GB of split, non-NVLinked VRAM (nvidia-smi topo -m = SYS), so it offloads
+#   over cross-socket PCIe; and the Go E2E driver returns empty answers past
+#   ~30s, which an offloaded 123B would breach on nearly every agentic turn.
+#   Apache 2.0, so no revenue clause to track (the 123B is modified-MIT).
+#
+# QUANT CHOICE — q4_K_M, and the tag is 'devstral-small-2:24b'.
+#   Published Ollama tags are q4_K_M (15GB, = :24b = :latest), q8_0 (26GB) and
+#   fp16 (48GB). THERE IS NO q6_K TAG — do not go looking for one.
+#     q8_0  26 GB + 2.5 GiB KV(16384) + 2 GiB overhead = ~30.5/32. That is the
+#           same >30/32 line that was rejected as "too close to run unattended"
+#           for qwen3:32b, and it buys 16k context instead of 64k.
+#     fp16  48 GB — exceeds one card outright; would need the planner's card.
+#
+# VRAM BUDGET, at f16 KV. Geometry from the model's own config.json
+# (text_config: 40 layers, 8 kv heads, head_dim 128, 32 q heads):
+#   KV/token = 2(K,V) x 40 layers x 8 KV heads x 128 head_dim x 2 bytes
+#            = 160 KiB/token          (qwen3:32b is 256 KiB/token — 64 layers)
+#   16384 ctx  ->  2.5 GiB KV
+#   32768 ctx  ->  5   GiB KV
+#   65536 ctx  -> 10   GiB KV     <- chosen
+#   131072 ctx -> 20   GiB KV        (15 + 20 + 2 = 37/32, does not fit)
+#   q4_K_M weights ~15 GB + 10 GiB KV + 2 GiB GPU_OVERHEAD = ~27/32
+# That leaves ~5 GB of headroom, matching the ~26/32 envelope already accepted
+# for qwen3:32b — but at 65536 context rather than 16384. Four times the window
+# in the same envelope is the real reason to prefer this model here: coding
+# agents are context-bound, and the shallower KV per token is what pays for it.
+# The model itself supports 393216 (max_position_embeddings), so 65536 is a VRAM
+# limit, not a model limit. To go further, q8_0 KV halves the cost and 131072
+# would fit at ~25/32 — measure first, KV quantisation is a quality trade.
+
+replicaCount: 1
+
+image:
+  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  pullPolicy: IfNotPresent
+  tag: ""
+
+namespaceOverride: "llms-ollama"
+
+service:
+  enabled: false
+
+ollama:
+  port: 11434
+
+  gpu:
+    # One whole card, same as the qwen32b arrangement it replaces. Both
+    # remaining cards are identical V100 32GB, so a plain nvidia.com/gpu
+    # request is correct and the scheduler keeps this pod and the planner on
+    # distinct cards (allocatable = 2). No UUID pinning — that mechanism was
+    # retired with the mixed pool on 2026-09-13.
+    enabled: true
+    type: nvidia
+    number: 1
+    nvidiaResource: "nvidia.com/gpu"
+
+  # Models are seeded into the PVC by seed-models.sh, never pulled by the pod.
+  # Pulling here causes long postStart hangs during install.
+  models:
+    pull: []
+    run: []
+    create: []
+    clean: false
+
+  insecure: false
+
+volumes:
+  - name: registry-ca
+    configMap:
+      name: registry-ca-cm
+
+volumeMounts:
+  - name: registry-ca
+    mountPath: /etc/ssl/certs/ca-certificates.crt
+    subPath: ca.crt
+
+extraEnv:
+  - name: OLLAMA_HOST
+    value: "0.0.0.0:11434"
+  - name: OLLAMA_REGISTRY_INSECURE
+    value: "0"
+  - name: SSL_CERT_FILE
+    value: "/etc/ssl/certs/ca-certificates.crt"
+  # Required for the KV cache type below to take effect.
+  - name: OLLAMA_FLASH_ATTENTION
+    value: "true"
+  - name: OLLAMA_KV_CACHE_TYPE
+    value: "f16"
+  # OLLAMA_CONTEXT_LENGTH is the real variable — OLLAMA_NUM_CTX is NOT
+  # recognised by Ollama and was inert in every values file until 2026-09-13.
+  # 65536 per the budget in the header (~27/32 GB with q4_K_M weights).
+  - name: OLLAMA_CONTEXT_LENGTH
+    value: "65536"
+  - name: OLLAMA_KEEP_ALIVE
+    value: "-1"
+  - name: OLLAMA_NUM_PARALLEL
+    value: "1"
+  # KEEP AT 1. All GPU models are seeded into this PVC for routing flexibility,
+  # so a second resident model is one API call away — and at 65536 context this
+  # pod's own KV allocation is 10 GiB, so a second model plus its KV would
+  # overcommit the card.
+  - name: OLLAMA_MAX_LOADED_MODELS
+    value: "1"
+  - name: OLLAMA_GPU_OVERHEAD
+    value: "2147483648"
+
+# Empty by design. The deleted ollama-gpu-pin-v100 ConfigMap used to be
+# referenced here; the device plugin injects NVIDIA_VISIBLE_DEVICES and
+# NVIDIA_DRIVER_CAPABILITIES now that a real nvidia.com/gpu request is made.
+# A stale reference here puts the pod in CreateContainerConfigError.
+extraEnvFrom: []
+
+# Selects the NVIDIA container runtime that maps the device and driver
+# libraries in. Talos sets containerd default_runtime_name=nvidia, but naming
+# it here survives a change to that default.
+runtimeClassName: "nvidia"
+
+persistentVolume:
+  enabled: true
+  accessModes:
+    - ReadWriteMany
+  size: 100Gi
+  storageClass: "rook-cephfs"
+  volumeMode: "Filesystem"
+
+nodeSelector:
+  role: inference-node
+
+# inference-0 is tainted nvidia.com/gpu=present:NoSchedule by
+# scripts/setup-node-labels.sh. nodeSelector states intent; the toleration is
+# what gets past the taint. Both are needed. The chart adds a second, identical
+# toleration of its own while ollama.gpu.enabled=true; duplicates are legal and
+# inert, and this block is kept so the toleration does not silently depend on
+# that flag staying true.
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+updateStrategy:
+  type: "Recreate"
+
+terminationGracePeriodSeconds: 120
+
+livenessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  path: /
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 6
+  successThreshold: 1

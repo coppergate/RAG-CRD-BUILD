@@ -148,10 +148,32 @@ REGISTRY="registry.container-registry.svc.cluster.local:5000"
 # Two identical tolerations are legal and inert; Kubernetes does not dedupe them.
 # The explicit blocks are kept deliberately so the toleration does not silently
 # depend on gpu.enabled staying true.
+# --- Executor model selection ------------------------------------------------
+# The executor pod's values file is switchable because the two candidates are
+# mutually exclusive: there are two cards, the planner holds one, so the
+# executor model is a swap and never an addition.
+#
+#   values-qwen32b.yaml   qwen3:32b        ~20 GB Q4_K_M, 16384 ctx  (default)
+#   values-devstral.yaml  devstral-small-2 ~15 GB q4_K_M, 65536 ctx
+#
+# To switch:  EXECUTOR_VALUES=values-devstral.yaml bash ollama.sh
+#
+# The release name stays 'ollama-qwen32b' under either file. The otwld/ollama
+# chart names the PVC after the release, so renaming it would create a new PVC
+# and discard every seeded model. Service name (ollama-code), endpoint URL and
+# rag-worker config are unaffected by the swap; only which model is resident
+# changes, and both are seeded into this PVC by seed-models.sh.
+EXECUTOR_VALUES="${EXECUTOR_VALUES:-values-qwen32b.yaml}"
+if [[ ! -f "$SCRIPT_DIR/$EXECUTOR_VALUES" ]]; then
+  echo "ERROR: EXECUTOR_VALUES=$EXECUTOR_VALUES not found in $SCRIPT_DIR" >&2
+  exit 1
+fi
+echo "Executor values file: $EXECUTOR_VALUES"
+
 $HELM upgrade --install ollama-llama3 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
-$HELM upgrade --install ollama-qwen32b otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-qwen32b.yaml" \
+$HELM upgrade --install ollama-qwen32b otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/$EXECUTOR_VALUES" \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
 $KUBECTL expose deployment ollama-llama3 --name=ollama --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
