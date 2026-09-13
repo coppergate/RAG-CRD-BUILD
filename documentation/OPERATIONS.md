@@ -186,6 +186,103 @@ As of version `2.2.11`, Alloy (DaemonSet) uses **local pod discovery** for clust
     -   Certificates and keys are mounted from secrets named `<service>-tls`.
     -   Probes use `scheme: HTTPS`.
 
+### 1.7 DNS — Zone `hierocracy.home` and the Pod `ndots` Trap (verified 2026-09-13)
+
+**Server**: Technitium DNS on **diakonia.hierocracy.home / 192.168.1.210**
+(`DNS_SERVER` in `config/network.env`). Admin UI and REST API on port **5380**;
+the API requires a token, so record edits are made in the UI unless one is
+issued. **AXFR is refused** from both the editing VM and **hierophant**, so the
+zone cannot be enumerated remotely — when you need the full record list, export
+it from the Technitium UI. A `dig`-derived list only covers names you already
+know to ask for and must not be treated as complete.
+
+**Zone**: `hierocracy.home`, SOA `diakonia.hierocracy.home. admin.hierocracy.home.`
+
+#### Record model (current, after the 2026-09-13 wildcard removal)
+
+| Name | Type | Value |
+|---|---|---|
+| `traefik` | A | `192.168.5.200` (`INGRESS_IP`) |
+| `hierophant`, `registry` | A | `192.168.1.101` (`REGISTRY_PREFIX` host) |
+| `k8s-api` | A | `192.168.5.10` (kube API VIP) |
+| exposed services (below) | CNAME | `traefik.hierocracy.home.` |
+
+CNAME'd to `traefik` at the zone apex: `build-orchestrator`, `dashboard`,
+`gateway`, `grafana`, `ollama`, `qdrant`, `s3`, `timescaledb`. Under `rag.`:
+`grafana.rag`, `rag-admin-api.rag`, `rag-explorer.rag` — the only `rag.` names
+any manifest actually declares. Every other `*.rag.hierocracy.home` name in the
+documentation (`db-adapter`, `llm-gateway`, `memory-controller`,
+`object-store-mgr`, `qdrant-adapter`, `qdrant.rag`, `rag-ingestion`) is prose
+only and has no record.
+
+Ingress names are CNAMEs on purpose: when `INGRESS_IP` moves, exactly one A
+record changes. Per guidelines §SERVICE EXPOSURE every exposed service needs a
+`*.hierocracy.home` name, which means **adding a CNAME here is now part of
+exposing a service** — there is no wildcard left to fall back on.
+
+#### The removed wildcard — do not reintroduce it
+
+`*.hierocracy.home 3600 IN A 192.168.5.200` existed from 2026-07-03 to
+2026-09-13. It made in-pod resolution of the registry host **silently wrong**,
+and the failure mode is worth understanding before anyone adds a wildcard back:
+
+1. Pods get `options ndots:5` and inherit `hierocracy.home` in their search path
+   from the Talos node config (verified in-pod: `search default.svc.cluster.local
+   svc.cluster.local cluster.local hierocracy.home`, `nameserver 10.96.0.10`).
+2. `hierophant.hierocracy.home` has only 2 dots, under the `ndots:5` threshold,
+   so the **search list is tried before the absolute name**.
+3. The walk NXDOMAINs through the `cluster.local` suffixes, then reaches
+   `hierophant.hierocracy.home.hierocracy.home` — which the apex wildcard
+   synthesized, because per RFC 4592 a wildcard applies at *any* depth whose
+   closest encloser is the apex.
+4. That returns `192.168.5.200` and resolution **stops on the positive answer**.
+   The correct record is never consulted.
+
+Symptom: anything in a pod reaching the registry by name landed on the ingress
+VIP (`can't connect to remote host (192.168.5.200)`), while the same pull by IP
+worked. **Nodes were unaffected** — node `resolv.conf` uses the default
+`ndots:1`, so 2 dots clears the threshold and the absolute name is tried first.
+That asymmetry is why the fault looked identical on all 8 nodes and appeared
+node-independent: it was never the node, it was the pod resolver.
+
+#### Verification
+
+```bash
+# Absolute vs search-expanded. The doubled form MUST be NXDOMAIN.
+dig +short A hierophant.hierocracy.home. @192.168.1.210
+dig +short A hierophant.hierocracy.home.hierocracy.home @192.168.1.210
+
+# End to end from inside a pod (on hierophant):
+export KUBECONFIG=/home/k8s/kube/config/kubeconfig
+/home/k8s/kube/kubectl run dnscheck --rm -i --restart=Never \
+  --image=registry.hierocracy.home:5000/busybox:1.36 \
+  --command -- nslookup hierophant.hierocracy.home
+# Expect 192.168.1.101, NOT 192.168.5.200.
+```
+
+#### Gotchas
+
+- **Technitium "Last Used" is contaminated by diagnostics.** Any `dig` you run
+  updates it, so it is not evidence that a real client depends on a record.
+- **TTL tells explicit records from wildcard synthesis.** Host records carry
+  604800; the old wildcard carried 3600. A name answering with the wildcard's
+  TTL had no record of its own.
+- **`DNS_SEARCH` in `config/network.env` is dead config** — nothing reads it.
+  Pod search domains come from the Talos node config via kubelet, so editing
+  `network.env` changes nothing about resolution.
+- **Do not add a trailing dot to image references** to force an absolute lookup.
+  It re-keys the registry host, so the containerd mirror configured in
+  `kubernetes-setup/configs/talos-registry-patch.yaml` (see §1.6) no longer
+  matches and the pull escapes to the internet. Keep refs prefixed with the bare
+  `REGISTRY_PREFIX` as `scripts/render-manifests.sh` emits them.
+- **Do not add `dnsConfig`/`ndots` overrides** for this. They were only ever
+  compensation for the wildcard and are unnecessary now.
+- **`rag.hierocracy.home` is an empty non-terminal**, created by the records
+  beneath it. Names under it need explicit records; no apex wildcard would cover
+  them even if one existed.
+- DNS is **not** part of `config-cluster.sh` or any install step. It is
+  hand-maintained on diakonia and survives cluster rebuilds independently.
+
 ### 1.8 Cluster Installation & Build Orchestration
 If you need to build the cluster from scratch, use the orchestration script on **hierophant**. This script handles disk formatting, network setup, bootstrap registry creation, and VM building in the correct order.
 
