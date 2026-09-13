@@ -288,11 +288,6 @@ spec:
           - name: "vdd"
             config:
               deviceClass: "nvme"
-          # HDD OSD #2 (1.8TB, former worker-3 SATA) with NVMe bluestore DB
-          - name: "vde"
-            config:
-              metadataDevice: "vdf"
-              deviceClass: "hdd"
       - name: "worker-1"
         devices:
           - name: "vdb"
@@ -305,6 +300,22 @@ spec:
             config:
               metadataDevice: "vdc"
               deviceClass: "hdd"
+      # worker-3 was absent from this list until 2026-09-13, even though
+      # OPERATIONS.md 1.10 documents it as a 2-OSD node and its disks are
+      # attached and idle. The phantom worker-0 vde/vdf entry removed above was
+      # a half-finished consolidation of this node's SATA disk onto worker-0;
+      # the disks were never moved, so the node is used directly instead.
+      - name: "worker-3"
+        devices:
+          # HDD OSD (1.8TB) with NVMe bluestore DB acceleration
+          - name: "vdb"
+            config:
+              metadataDevice: "vdc"
+              deviceClass: "hdd"
+          # NVMe-only fast-tier OSD (195GB, nvme-362935-part2)
+          - name: "vdd"
+            config:
+              deviceClass: "nvme"
     # Whether to always schedule OSD pods on nodes declared explicitly in the "nodes" section, even if they are
     # temporarily not schedulable. If set to true, consider adding placement tolerations for unschedulable nodes.
     scheduleAlways: false

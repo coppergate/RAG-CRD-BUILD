@@ -14,12 +14,16 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            wipefs -a /dev/vdb /dev/vdc /dev/vdd /dev/vde /dev/vdf
+            # busybox has no wipefs, so this is best-effort and normally a
+            # no-op; the dd zeroing below is what actually clears the disks.
+            wipefs -a /dev/vdb /dev/vdc /dev/vdd 2>/dev/null || true
+            # worker-0 has exactly vda(OS) vdb(HDD) vdc(DB) vdd(NVMe).
+            # vde/vdf were listed here until 2026-09-13 and DO NOT EXIST: dd to
+            # a missing /dev/X writes a regular file onto the container's 64MB
+            # /dev tmpfs, which fills, fails, and exits the job non-zero.
             dd if=/dev/zero of=/dev/vdb bs=1M count=100
             dd if=/dev/zero of=/dev/vdc bs=1M count=100
             dd if=/dev/zero of=/dev/vdd bs=1M count=100
-            dd if=/dev/zero of=/dev/vde bs=1M count=100
-            dd if=/dev/zero of=/dev/vdf bs=1M count=100
       nodeSelector:
         kubernetes.io/hostname: worker-0
       restartPolicy: Never
@@ -40,7 +44,8 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          wipefs -a /dev/vdb /dev/vdc
+          # busybox has no wipefs; best-effort, the dd below does the work.
+          wipefs -a /dev/vdb /dev/vdc 2>/dev/null || true
           dd if=/dev/zero of=/dev/vdb bs=1M count=100
           dd if=/dev/zero of=/dev/vdc bs=1M count=100
       nodeSelector:
@@ -63,9 +68,37 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
-          wipefs -a /dev/vdb /dev/vdc
+          # busybox has no wipefs; best-effort, the dd below does the work.
+          wipefs -a /dev/vdb /dev/vdc 2>/dev/null || true
           dd if=/dev/zero of=/dev/vdb bs=1M count=100
           dd if=/dev/zero of=/dev/vdc bs=1M count=100
       nodeSelector:
         kubernetes.io/hostname: worker-2
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-3
+  namespace: rook-ceph
+spec:
+  template:
+    spec:
+      containers:
+      - name: wipe
+        image: hierophant.hierocracy.home:5000/busybox:1.36
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # worker-3 has the same layout as worker-0: vda(OS) vdb(HDD)
+            # vdc(DB) vdd(NVMe). It had no wipe job at all until 2026-09-13,
+            # while OPERATIONS.md 1.10 documented it as a 2-OSD node.
+            wipefs -a /dev/vdb /dev/vdc /dev/vdd 2>/dev/null || true
+            dd if=/dev/zero of=/dev/vdb bs=1M count=100
+            dd if=/dev/zero of=/dev/vdc bs=1M count=100
+            dd if=/dev/zero of=/dev/vdd bs=1M count=100
+      nodeSelector:
+        kubernetes.io/hostname: worker-3
       restartPolicy: Never

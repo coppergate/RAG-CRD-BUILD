@@ -480,6 +480,53 @@ The worker pool is **deliberately asymmetric**. Defined in
 | `worker-2` | 28 GiB | 8 | `22-25,50-53` | 1 | 1 | |
 | `worker-3` | **64 GiB** | **14** | `0-13` | **0** | 2 | NVMe fast-tier OSD **co-located with its own OS disk** |
 
+#### CephCluster drifted from this table — reconciled 2026-09-13
+
+The table above is correct and `infrastructure/rook-ceph/cluster.yaml` was the
+file that drifted. Do not "fix" it back. Until 2026-09-13 it omitted `worker-3`
+entirely and instead declared a third OSD on worker-0:
+
+```yaml
+# HDD OSD #2 (1.8TB, former worker-3 SATA) with NVMe bluestore DB
+- name: "vde"
+  config:
+    metadataDevice: "vdf"
+```
+
+That was a half-finished consolidation of worker-3's SATA disk onto worker-0.
+The config was written; **the disks were never moved**. `virsh domblklist
+worker-0` shows only `vda`–`vdd`, while worker-3 still holds its own 2 TB HDD,
+75 GB DB partition and 209 GB NVMe — attached, running, and unused by Ceph.
+Resolved by using worker-3 directly, which restores the 6 OSDs this table
+describes.
+
+`wipe-disks.yaml` had two matching faults: worker-0 wiped the nonexistent
+`vde`/`vdf`, and **worker-3 had no wipe job at all**. Both fixed.
+
+##### Why a nonexistent device fails the wipe job instead of being skipped
+
+`dd if=/dev/zero of=/dev/vde` on a node without `vde` does **not** error out.
+The container's `/dev` is a 64 MB tmpfs, so `dd` creates a *regular file* there
+and writes until the tmpfs fills:
+
+```
+dd: error writing '/dev/vde': No space left on device
+65+0 records in / 64+0 records out          <- exactly 64 MB, the tmpfs size
+dd: error writing '/dev/vdf': No space left on device
+1+0 records in / 0+0 records out            <- tmpfs already full
+```
+
+The job then exits non-zero on the last `dd` and the rook step fails. A
+`No space left on device` against a supposedly multi-terabyte disk means the
+device does not exist — check `virsh domblklist <node>` before believing the
+manifest.
+
+Also note `wipefs -a` is a **no-op on every node**: the job runs busybox, which
+has no `wipefs` (`/bin/sh: wipefs: not found`). The `dd` zeroing of the first
+100 MB is the entire wipe. It now reads `|| true` to make that explicit. If a
+disk ever carries a GPT whose *backup* header at the end of the device survives,
+that 100 MB will not clear it and ceph-volume may reject the disk.
+
 Pool total: 148 GiB / 38 vCPU. Every worker also carries a 1.8 TB HDD OSD (`vdb`)
 plus an NVMe BlueStore DB (`vdc`), and 2 iothreads.
 
