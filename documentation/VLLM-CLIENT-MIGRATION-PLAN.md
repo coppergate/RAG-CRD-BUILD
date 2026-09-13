@@ -1,12 +1,43 @@
 # Replace the Ollama-native LLM client with a single OpenAI-protocol client
 
+> ## ⚠ STATUS 2026-09-13 — STILL WORTH DOING, FOR A DIFFERENT REASON
+>
+> **The vLLM *server* migration is shelved. This *client* refactor is not.**
+>
+> `inference-0` has been rebuilt with two V100 32GB cards, and the decision was
+> to **stay on Ollama** (rationale: `documentation/OPERATIONS.md` §4.4.2 —
+> concurrency is 1 so continuous batching does not pay; `sm_70` has no native
+> BF16 and vLLM's Volta quantisation path depends on a fork with an
+> unbenchmarked backend choice; vLLM reserves VRAM statically; and the cards
+> have no NVLink, which penalises tensor parallelism).
+>
+> That removes this plan's **original** justification — there is no vLLM
+> deployment to be incompatible with. It does **not** remove the plan's value,
+> because every benefit below was already independent of vLLM:
+>
+> - **One protocol in the codebase** instead of Ollama-native routes. Ollama
+>   0.15.6 serves an OpenAI-compatible `/v1` surface, so the refactor stands on
+>   its own.
+> - **Provable today against the running Ollama pods** — always the point, and
+>   the reason this was sequenced before any hardware work.
+> - **No new hardware, no cluster change, no rebuild of anything else.**
+> - It keeps a future engine swap a *deployment* change rather than a code one,
+>   which is now insurance rather than a plan.
+>
+> **Read every "when vLLM arrives" statement below as conditional.** Anything
+> gated on the server migration (repointing `EXECUTOR_URL` at `llms-vllm`, the
+> reranker, embeddings moving to GPU) is **not scheduled**. The client work
+> itself — §1 onward — is unaffected.
+
 ## Context
 
-`inference-0` is being rebuilt as a dual-V100 32GB node running 1Cat-vLLM
+**Historical, as written 2026-09-07:** `inference-0` was to be rebuilt as a
+dual-V100 32GB node running 1Cat-vLLM
 (`kubernetes-setup/new-setup-external-gpu/VLLM-DUAL-V100-PLAN.md` — that doc was
 restructured 2026-09-07 and now uses §0–§10 rather than "Phase N"). **vLLM does
 not speak the Ollama API.** §9 of that plan is the client-side gap, and it is
-called out there as the largest non-GPU risk.
+called out there as the largest non-GPU risk. The hardware arrived; the engine
+swap did not — see the status block above.
 
 `rag-worker` currently talks Ollama-native routes only —
 `internal/ollama/client.go` uses `/api/chat` (l.120, l.174), `/api/embeddings`
@@ -227,6 +258,8 @@ create `work-2026-09-07`, commit with timestamp messages and the
   Qdrant search and the executor call, behind a feature flag.
 - §0–§8 and §10 of the sibling doc: hardware verification, GPU-operator label
   cleanup, image build, model seeding, the `llms-vllm` Deployments, cutover.
-- Note §2.3 there: removing the `gpu-v100-uuid` label makes `ollama.sh` exit 1,
-  which breaks the Ollama rollback. Not this plan's work, but it is the thing
-  that would strand a rollback if the client cutover needed one.
+- ~~Note §2.3 there: removing the `gpu-v100-uuid` label makes `ollama.sh` exit 1,
+  which breaks the Ollama rollback.~~ **RESOLVED 2026-09-13.** Handled via that
+  section's Approach 1: the label is gone and `ollama.sh` no longer reads it —
+  both GPU Ollama pods now request `nvidia.com/gpu: 1` like any other workload.
+  There is no rollback to strand, because Ollama is the steady state.

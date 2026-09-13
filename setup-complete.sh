@@ -436,10 +436,22 @@ STEP_TS_END=$(date +%s)
 log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-# GPU operator MUST precede the RAG stack — it publishes the gpu-*-uuid node
-# labels that ollama.sh requires. See the note above Step 1.5.8.
+# GPU operator MUST precede the RAG stack. Until the device plugin is running
+# there is no nvidia.com/gpu resource on the node, and the two GPU Ollama pods
+# (which request 'nvidia.com/gpu: 1' each) would sit Pending forever.
+#
+# The verify predicate below was 'get node -l hierocracy.home/gpu-v100-uuid',
+# which no longer exists — nvidia-operator.sh stopped publishing per-card UUID
+# labels on 2026-09-13 and actively unsets them. Left alone it would fail every
+# run, re-running the step each install. It now tests the label-schema revision
+# that script does publish. Note 'kubectl get -l' exits 0 with no output when
+# nothing matches, so emptiness is tested explicitly via grep -q.
+gpu_labels_published() {
+  $KUBECTL get node -l hierocracy.home/gpu-inventory-rev=2 -o name 2>/dev/null \
+    | grep -q . 
+}
 if [[ "${WITH_GPU:-true}" == "true" && "${SKIP_GPU:-false}" != "true" ]]; then
-  if ! is_step_done "nvidia" $KUBECTL get node -l hierocracy.home/gpu-v100-uuid -o name; then
+  if ! is_step_done "nvidia" gpu_labels_published; then
     STEP_TS_START=$(date +%s)
     echo ""
     echo "Step 1.9: NVIDIA GPU Operator (must precede Ollama)"
@@ -451,7 +463,11 @@ if [[ "${WITH_GPU:-true}" == "true" && "${SKIP_GPU:-false}" != "true" ]]; then
   fi
 else
   echo "GPU setup skipped (--no-gpu or SKIP_GPU=true)."
-  echo "  NOTE: ollama.sh will fail without hierocracy.home/gpu-v100-uuid."
+  echo "  NOTE: the GPU Ollama pods (ollama-llama3, ollama-qwen32b) request"
+  echo "        nvidia.com/gpu: 1 and will stay Pending without the device plugin."
+  echo "        ollama.sh itself no longer hard-fails — it stopped resolving a GPU"
+  echo "        UUID label on 2026-09-13 — so the install now continues and the"
+  echo "        failure surfaces as unschedulable pods rather than an aborted run."
   echo "  Use setup-complete-no-gpu.sh for a genuinely GPU-less build."
 fi
 

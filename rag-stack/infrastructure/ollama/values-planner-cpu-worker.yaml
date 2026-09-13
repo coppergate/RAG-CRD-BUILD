@@ -56,7 +56,13 @@ extraEnv:
     value: "2"
   - name: OLLAMA_MAX_LOADED_MODELS
     value: "1"
-  - name: OLLAMA_NUM_CTX
+  # RENAMED 2026-09-13: was OLLAMA_NUM_CTX, which Ollama does not recognise
+  # (verified against ollama/ollama:0.15.6 — 'ollama serve --help' lists
+  # OLLAMA_CONTEXT_LENGTH). VALUE DELIBERATELY UNCHANGED: 4096 matches Ollama's
+  # own default, so this corrects the variable name without altering behaviour.
+  # These are CPU pods on 28GiB workers — raising context here costs host RAM,
+  # not VRAM, and wants its own sizing exercise.
+  - name: OLLAMA_CONTEXT_LENGTH
     value: "4096"
 
 resources:

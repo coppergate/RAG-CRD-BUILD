@@ -509,8 +509,14 @@ reserves memory; the limit only caps it.
 `embed-instance=0..3` and then deploys an even **2 embed + 1 planner-cpu per
 worker**. `worker-3` therefore carries the same embedding load as a node with
 one-third the physical cores. Options: leave it (keeps headroom free for
-in-memory services — arguably the right call), or weight the spread. Moot once
-embeddings move to the GPU under the vLLM plan's §9 step 3.
+in-memory services — arguably the right call), or weight the spread.
+
+**Correction 2026-09-13:** this used to end "Moot once embeddings move to the GPU
+under the vLLM plan's §9 step 3." That is not happening. Embeddings were fixed on
+CPU by decision (plan §9.1, closed 2026-09-07 — nothing in the embedding path
+batches, so a GPU endpoint would spend VRAM for no gain), and the vLLM server
+migration is itself shelved (§4.4.2). The uneven spread is therefore a standing
+condition to decide on, not something a future migration resolves.
 
 #### Verify
 
@@ -743,56 +749,189 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
    bash ./push-models-to-cluster.sh"
 ```
 
-#### GPU Selection on inference-0 (Mixed Pool — Pin by UUID)
-`inference-0` holds a **heterogeneous** GPU pool: 1x Tesla V100 32GB (sm_70, volta) and
-2x Tesla P4 8GB (sm_61, pascal). All three are advertised as a single fungible
-`nvidia.com/gpu` resource (`allocatable: 3`).
+#### GPU Selection on inference-0 (Uniform Dual V100 — Ordinary Requests)
 
-**DO NOT request `nvidia.com/gpu` for inference workloads.** The scheduler cannot
-distinguish the cards, and two of the three cannot hold a 32B model (~19GB Q4_K_M)
-in 8GB of VRAM.
+**Rewritten 2026-09-13. This section previously documented a pin-by-UUID
+workaround; that workaround is retired and must not be reintroduced while the
+pool stays uniform.**
 
-**Node affinity on GFD labels does NOT work either.** GFD models a mixed node as a
-single product/memory/compute triple. Observed live on 2026-08-08 with
-`MIG_STRATEGY=none` correctly set, GFD still reported the P4:
-```text
-nvidia.com/gpu.product = Tesla-P4     nvidia.com/gpu.memory = 7680
-nvidia.com/gpu.family  = pascal       nvidia.com/gpu.compute.major/minor = 6/1
+`inference-0` holds **two identical Tesla V100 32GB cards**. Verified on the live
+node 2026-09-13:
+
+| idx | UUID | Reported name | Memory | Compute | PCI |
+|---|---|---|---|---|---|
+| 0 | `GPU-ce06ba79-…47c6ecb` | `Tesla PG500-216` | 32768 MiB | 7.0 | `05:00.0` |
+| 1 | `GPU-1b623f18-…f03761e5` | `Tesla PG500-216` | 32768 MiB | 7.0 | `81:00.0` |
+
+Driver `580.126.16`. The 2x Tesla P4 8GB cards have been **physically removed**.
+
+> `Tesla PG500-216` is a **board code**, not a marketing name — the driver falls
+> back to it when it has no SKU string. **Do not grep for "V100".** Classify
+> these cards on memory and compute capability instead; `nvidia-operator.sh`
+> does exactly that.
+
+**Request GPUs the ordinary way.** With a uniform pool the device plugin's single
+`nvidia.com/gpu` resource is honest, `allocatable` is 2, and the scheduler keeps
+two single-GPU pods on two distinct cards:
+
+```yaml
+resources:
+  limits:
+    nvidia.com/gpu: 1
+runtimeClassName: nvidia      # required: selects the NVIDIA container runtime
+nodeSelector:
+  role: inference-node
+tolerations:                  # inference-0 is tainted; see the next subsection
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
 ```
-The `hierocracy.home/gpu-labels-describe=tesla-v100-32gb` label asserts the opposite
-and is currently **false**. Treat `nvidia.com/gpu.*` labels as unreliable on this node.
 
-**The supported mechanism is pin-by-UUID.** Published as node labels by
-`kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh`:
+`nvidia.com/gpu` is an *extended resource*: setting only `limits` is correct —
+Kubernetes copies the limit into `requests`, and the two may not differ.
 
-| Label | Card |
+**Do NOT pin by UUID any more.** There are no `hierocracy.home/gpu-*-uuid` node
+labels; `nvidia-operator.sh` actively unsets them. Pinning sets
+`NVIDIA_VISIBLE_DEVICES` and requests no resource, so the scheduler does not know
+the card is taken — two pods can pin the same card and contend for VRAM while
+Kubernetes reports both as satisfied. That accounting hole is the whole reason
+the workaround was removed.
+
+**Interconnect: no NVLink.** `nvidia-smi topo -m` reports `SYS` between the two
+cards — GPU0 on NUMA 0, GPU1 on NUMA 1, traversing PCIe *and* the cross-socket
+interconnect. Consequences:
+
+- **One card per pod is the right topology**, and it is what the RAG stack uses.
+- **Tensor parallelism would be penalised here.** A TP job all-reduces every
+  layer across that link. Avoid it.
+- **Layer-split across both cards is fine** (llama.cpp/Ollama's default mode):
+  activations cross the boundary once per split point, which is a small
+  transfer. If you ever want a single model larger than 32GB, this is the
+  supported route — give one pod `nvidia.com/gpu: 2` and set
+  `OLLAMA_SCHED_SPREAD=1`. Nothing does this today.
+
+**Current assignment — one card each, which is new.** Both GPU Ollama pods used
+to share a single card (a hangover from the single-GPU node) and contend for its
+VRAM. They now get a card apiece by ordinary scheduling:
+
+| Deployment | Service | Role | Card |
+|---|---|---|---|
+| `ollama-llama3` | `ollama` | planner | one, scheduler-assigned |
+| `ollama-qwen32b` | `ollama-code` | executor | the other |
+
+VRAM tuning was re-based on that in `values.yaml` / `values-qwen32b.yaml` — see
+§4.4.1.
+
+**Inventory labels** published by `nvidia-operator.sh`, all measured rather than
+asserted:
+
+| Label | Meaning |
 |---|---|
-| `hierocracy.home/gpu-v100-uuid` | Tesla V100 32GB, `05:00.0` |
-| `hierocracy.home/gpu-p4-0-uuid` | Tesla P4 8GB, `81:00.0` |
-| `hierocracy.home/gpu-p4-1-uuid` | Tesla P4 8GB, `82:00.0` |
+| `gpu=true` | **load-bearing** — device plugin, GFD, DCGM exporter and the Talos validation-fix DaemonSet all select on it |
+| `gpu-count`, `hierocracy.home/gpu-total-count` | cards discovered on the node |
+| `hierocracy.home/gpu-32gb-count` | how many are ≥32GB / `sm_7x` |
+| `hierocracy.home/gpu-inventory-rev` | label-schema revision (currently `2`); the idempotency predicate for the label step |
 
-A workload pins a card by setting `NVIDIA_VISIBLE_DEVICES` to the UUID and
-`NVIDIA_DRIVER_CAPABILITIES=compute,utility` (`utility` alone yields only
-`nvidia-smi`, no CUDA), with `runtimeClassName: nvidia`, and requests **no**
-`nvidia.com/gpu`.
+`gpu-32gb-count` is named for the **property**, not for "v100", because these
+cards do not report a V100 product string. If it ever differs from
+`gpu-total-count` the pool is no longer uniform and the script warns loudly —
+treat that as a blocker for anything assuming 32GB.
 
-In the RAG stack, `infrastructure/ollama/ollama.sh` resolves the V100 UUID from the
-node label at deploy time and writes it into the `ollama-gpu-pin-v100` ConfigMap in
-`llms-ollama`. Both GPU values files consume it via `extraEnvFrom` and set
-`ollama.gpu.enabled: false`. No UUID is hardcoded in the repo. `extraEnvFrom` is used
-rather than `extraEnv` because Helm replaces whole lists on merge, which makes an
-index-based `--set` override silently fragile.
+> **GFD's `nvidia.com/gpu.*` labels: record, do not gate.** They were observed
+> lying on this node while the pool was mixed (reporting `Tesla-P4` /
+> `memory=7680` with `MIG_STRATEGY=none` correctly set), and `gpu.product`
+> reports the board code. Now that the pool is uniform they should be truthful,
+> but reconcile them by eye rather than writing a `nodeAffinity` against them.
 
-**Caveat:** with no `nvidia.com/gpu` request there is no scheduler GPU accounting.
-Preventing two pods from pinning the same card is the manifests' responsibility.
+#### 4.4.1 Ollama VRAM tuning (re-based 2026-09-13)
 
-**Current assignment** — both `ollama-llama3` and `ollama-qwen32b` share the V100,
-preserving the VRAM tuning originally written for the single-GPU node.
-**TODO (revisit once the cluster is stable):** move `ollama-llama3` to
-`gpu-p4-0-uuid` to free ~5GB of V100 VRAM for the 32B executor. That also requires
-trimming `qwen2.5:32b` / `qwen3:32b` from `ollama-llama3` in `seed-models.sh` (an 8GB
-P4 cannot load them) and forcing its `OLLAMA_MAX_LOADED_MODELS` to 1.
+Two corrections landed together here.
 
+**`OLLAMA_NUM_CTX` is not a real Ollama variable.** Verified against the
+mirrored image — `ollama serve --help` on `ollama/ollama:0.15.6` lists
+`OLLAMA_CONTEXT_LENGTH` and no `OLLAMA_NUM_CTX`. Every values file had been
+setting the wrong name, so the documented context length was **inert** and
+Ollama used its own default (`4k/32k/256k based on VRAM`). Renamed in
+`values.yaml`, `values-qwen32b.yaml`, `values-planner-cpu.yaml` and
+`values-planner-cpu-worker.yaml`.
+
+> `rag-stack/infrastructure/ollama/ollama-deploy.yaml` carries the same stale
+> variable but is **referenced by no script** — dead config, left untouched.
+> Fix the name there if it is ever revived.
+
+**The old tuning assumed two pods on one card.** That premise is gone. Current
+values, with the arithmetic that justifies them:
+
+| | `ollama-llama3` (planner) | `ollama-qwen32b` (executor) |
+|---|---|---|
+| `OLLAMA_CONTEXT_LENGTH` | 16384 | 16384 |
+| `OLLAMA_MAX_LOADED_MODELS` | 2 | 1 |
+| `OLLAMA_KV_CACHE_TYPE` | `f16` | `f16` |
+| `OLLAMA_GPU_OVERHEAD` | 2 GiB | 2 GiB |
+| KV per token @ f16 | ~128 KiB (8B class) | ~256 KiB (32B, 64 layers, 8 KV heads) |
+| Budget | 2×~5 GB weights + 4 GiB KV + 2 GiB = **~16/32 GB** | ~20 GB weights + 4 GiB KV + 2 GiB = **~26/32 GB** |
+
+Both sit at 16384 rather than higher even though the planner has room, because
+`seed-models.sh` also seeds `qwen2.5:32b` / `qwen3:32b` into the planner PVC — a
+routing change could make a 32B resident there, and 16384 stays inside the
+envelope if it does.
+
+**To go beyond 16384**, halve the KV cache with `OLLAMA_KV_CACHE_TYPE=q8_0`
+(flash attention is already enabled, which it requires); 32768 then fits the
+same envelope. **Measure first** — `q8_0` KV is a quality trade, not a free win.
+
+These figures are arithmetic, not measurements. Validate against real VRAM use
+before trusting them under load:
+
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   /home/k8s/kube/kubectl get nodes -L gpu,hierocracy.home/gpu-total-count,hierocracy.home/gpu-32gb-count && \
+   /home/k8s/kube/kubectl get node inference-0 -o jsonpath='{.status.allocatable.nvidia\.com/gpu}{\"\\n\"}'"
+```
+
+#### 4.4.2 Serving engine: Ollama retained, vLLM server swap shelved (2026-09-13)
+
+**Decision: stay on Ollama.** The dual-V100 rebuild was originally the trigger
+for migrating the executor to vLLM
+(`kubernetes-setup/new-setup-external-gpu/VLLM-DUAL-V100-PLAN.md`). That server
+migration is **shelved**, not paused. Reasons, in order of weight:
+
+1. **Concurrency is 1.** `OLLAMA_NUM_PARALLEL=1` and the workload is a
+   single-user coding assistant plus RAG experimentation. vLLM's decisive
+   advantage is continuous batching under concurrent load, which does not pay
+   here. The plan's own open question 6 had already flagged this.
+2. **Volta is the wrong side of the BF16/FP8 line.** `sm_70` has no native
+   BF16. GGUF INT4/INT8 via llama.cpp is a well-supported path on this
+   hardware; vLLM's quantised kernels are not uniformly available for `sm_70`,
+   which is precisely why the plan targeted a **fork** (1Cat-vLLM) exposing
+   `VLLM_SM70_QUANT_BACKEND` with `marlin`/`turbomind` and **no benchmarked
+   winner**. Depending on one fork's Volta support is real exposure.
+3. **vLLM reserves VRAM statically.** `--gpu-memory-utilization` is
+   pre-allocated and held; Ollama allocates per model and can unload. Useful on
+   a box also used for experiments. *(Caveat: our
+   `OLLAMA_KEEP_ALIVE=-1` disables unloading by choice, to keep the coding
+   assistant warm.)*
+4. **No NVLink** (`SYS`, cross-socket) makes vLLM's TP2 variant unattractive
+   while leaving Ollama's layer-split mode viable — see §4.4.
+
+Arguments that did **not** drive this, because they were not true of the plan as
+written: vLLM does not require Ray for single-node TP; the plan specified AWQ
+INT4 rather than BF16/FP16 inference; the plan used no tensor parallelism at
+all; and the RAG pipeline does not compete for VRAM — Qdrant, `rag-worker` and
+TimescaleDB run on worker nodes and **embeddings stay on CPU** by decision
+(plan §9.1, closed 2026-09-07).
+
+**What survives from the migration work.** The OpenAI-protocol client refactor
+in `documentation/VLLM-CLIENT-MIGRATION-PLAN.md` is **still worth doing on its
+own merits** and is independent of this decision: Ollama 0.15.6 serves an
+OpenAI-compatible `/v1` surface, so replacing `rag-worker`'s Ollama-native
+client collapses the codebase to one protocol, is provable against the running
+Ollama pods, and needs no new hardware. It only *also* happens to be what a
+future vLLM cutover would require.
+
+**To revisit this decision**, the trigger is concurrency rising above 1 or a
+measured need for throughput Ollama cannot reach — not new hardware.
 #### inference-0 is Tainted — GPU Workloads Only
 `inference-0` is tainted so that **only pods that need the GPU** schedule there:
 
@@ -853,13 +992,22 @@ That is fixed; `--gpu` is safe, and GPU setup now **defaults ON**.
 provisioning (machine config, kernel modules, driver extensions, enrolment).
 `complete-build` owns everything that is a Kubernetes object — the operator Helm
 release, RuntimeClass, device-plugin ConfigMap, validation-fix DaemonSet, and the
-GPU node labels. `52-install-gpu-operator.sh` is left in place but is no longer the
-source of truth; do not edit both.
+GPU node labels. `52-install-gpu-operator.sh` has since been **deleted** (commit
+`e1d54a4`); `nvidia-operator.sh` is the only copy. Any error message still telling
+you to re-run it is stale — report it.
 
-**Ordering — this matters.** The operator publishes the
-`hierocracy.home/gpu-*-uuid` node labels, and `ollama.sh` **hard-fails** without
-them. The step therefore runs as **Step 1.9, immediately before the RAG stack**. It
-used to run after, which meant a fresh install could never deploy Ollama.
+**Ordering — this matters.** The operator must run before the RAG stack, as
+**Step 1.9**. It used to run after, which meant a fresh install could never deploy
+Ollama.
+
+The *reason* changed on 2026-09-13 and the requirement did not. It used to be that
+the operator published the `hierocracy.home/gpu-*-uuid` labels and `ollama.sh`
+hard-failed without them. Those labels are gone, and `ollama.sh` no longer reads
+any label — but the GPU Ollama pods now request `nvidia.com/gpu: 1`, and that
+resource does not exist on the node until the device plugin is running. Deploy the
+RAG stack first and both GPU pods sit `Pending` on an unschedulable resource
+instead. Same ordering, sturdier reason: a resource request is visible in
+`kubectl describe pod`, where a missing label was not.
 
 **The old deferral rationale no longer applies.** It read:
 
@@ -877,14 +1025,40 @@ Three settings in `nvidia-operator.sh` are load-bearing and interact:
 
 | Setting | Consequence if wrong |
 |---|---|
-| `mig.strategy: none` (Helm) | chart default `single` makes GFD collapse the mixed node onto one product and hide the V100. Surfaces as the `MIG_STRATEGY` env var, which the plugin resolves **above** its config file — so the ConfigMap alone cannot fix it |
+| `mig.strategy: none` (Helm) | the V100 does not support MIG and the chart default is `single`. Surfaces as the `MIG_STRATEGY` env var, which the plugin resolves **above** its config file — so `migStrategy` in the ConfigMap alone cannot fix a wrong value here. *(Its original, sharper purpose was stopping GFD collapsing the mixed V100+P4 pool onto one product and hiding the V100. That pool is gone; the env-above-config precedence is a plugin property and is unchanged.)* |
 | `devicePlugin.config.default: config.yaml` | without it the operator ignores the ConfigMap entirely and runs chart defaults |
 | no empty `sharing: timeSlicing: {}` in the ConfigMap | fails parsing with "no resources specified"; the plugin will not start and `nvidia.com/gpu` drops to 0. Was previously present and *inert* — it only becomes fatal once `config.default` makes the file load |
 
-GPU UUIDs are now **discovered** from the live node via a throwaway privileged pod
-running `nvidia-smi -L` (Talos cannot run it directly), with the known UUIDs as
-fallback. Set `GPU_UUID_DISCOVER=false` to use the fallbacks only. Re-run this
-script after any GPU is added, removed or reseated.
+**GPU inventory is discovered, not configured** (rewritten 2026-09-13). A
+throwaway privileged pod runs `nvidia-smi --query-gpu=...` on the node (Talos
+cannot run it directly) and the script derives the card count and how many are
+≥32GB/`sm_7x`. No UUIDs are collected — nothing pins a card any more. Set
+`GPU_INVENTORY_DISCOVER=false` to skip the probe and trust `GPU_EXPECTED_COUNT`
+(default 2). Re-run the script after any GPU is added, removed or reseated.
+
+> **Two bugs were fixed here on 2026-09-13; both had been silent.**
+>
+> 1. **The probe never worked.** It ran `kubectl run` with **no `-n`**, so the
+>    pod landed in `default`, which this cluster admits at PodSecurity
+>    `baseline` — `privileged`, `hostPID` and `hostPath` are all rejected there.
+>    `2>/dev/null || echo ""` swallowed the `Forbidden` error, so every run
+>    silently fell back to hardcoded UUIDs while appearing to discover them. The
+>    probe now runs in `$NAMESPACE`, which the script labels
+>    `enforce=privileged` in its first step. That step also gained a verify
+>    command (§1.8.2), since a stale journal marker there would break the probe.
+> 2. **The label step's idempotency guard never skipped.** It read
+>    `is_step_done "nvidia-gpu-labels" $KUBECTL get node -l ... -o name | grep -q node`,
+>    where bash binds the pipe to `is_step_done`'s **own stdout**, not to
+>    kubectl's — so the guard tested a log message for the string `node` and
+>    always failed. Harmless, because the step is idempotent, but it was not
+>    doing what it read as doing. The predicate is now a shell function that
+>    tests for the current label-schema revision and checks for empty output
+>    explicitly (`kubectl get -l` exits 0 when nothing matches).
+>
+> The label step's journal key is `nvidia-gpu-labels-v2`. Bump `GPU_LABEL_REV`
+> if the label set changes shape again — a marker alone cannot tell you which
+> schema is on the node, which is exactly how rev-1 labels would otherwise
+> outlive the hardware.
 
 #### Model Seeding (During Install)
 `seed-models.sh` creates temporary seeder pods that pull models from the local registry into the PVCs. 
