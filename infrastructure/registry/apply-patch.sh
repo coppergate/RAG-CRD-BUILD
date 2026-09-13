@@ -5,7 +5,20 @@ source "$REPO_DIR/config/network.env"
 
 TALOS_BIN="/home/k8s/talos/talosctl"
 TALOS_CONFIG="/home/k8s/talos/config/talosconfig"
-PATCH_FILE="/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml"
+# The patch applied here MUST be the one maintained by the live build path.
+# new-setup-external-gpu is the only current build (confirmed 2026-09-13), and
+# its copy is the maintained one: correct registry IP, no dead 10.0.0.1:5000
+# mirrors, and TLS via insecureSkipVerify so a regenerated bootstrap cert can
+# never break pulls.
+#
+# kubernetes-setup/configs/talos-registry-patch.yaml was used here until
+# 2026-09-13 and still pins the PRE-FLAT-LAN registry IP 172.20.1.26. Because
+# this script clears extraHostEntries and machine.registries before applying,
+# running it with that file actively WROTE the dead IP onto every control plane
+# and worker, and every image pull then timed out on 172.20.1.26:5000. That file
+# is still read elsewhere for its `ca:` field (in-cluster registry-ca-cm trust),
+# so it is left in place — just not applied to nodes.
+PATCH_FILE="/mnt/hegemon-share/share/code/kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml"
 
 # Standard nodes to patch (Control Plane + Workers), flat-LAN static IPs from
 # config/network.env: control-0/1/2 = 192.168.5.11-13, worker-0..3 = .21-.24.

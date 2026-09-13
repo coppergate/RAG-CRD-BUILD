@@ -179,7 +179,7 @@ As of version `2.2.11`, Alloy (DaemonSet) uses **local pod discovery** for clust
 ### 1.6 TLS and Security
 1.  **Management Guide**: Refer to [TLS-GUIDE.md](TLS-GUIDE.md) for step-by-step instructions on creating certificates, adding SANs, and managing trust.
 2.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
-3.  **Trust Distribution**: The Root CA is distributed to all Talos nodes via the `machine.install.extraCerts` configuration in `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml`, and managed in-cluster via the `registry-ca-cm` ConfigMap in target namespaces.
+3.  **Trust Distribution**: **Corrected 2026-09-13.** There is no `machine.install.extraCerts` anywhere in `kubernetes-setup` — that claim was wrong. Talos nodes trust the bootstrap registry via `tls: insecureSkipVerify: true` in the registry section of [`kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml`](../../kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml), deliberately, so a regenerated bootstrap cert cannot break pulls. In-cluster trust is still the `registry-ca-cm` ConfigMap; its CA is read from the `ca:` field of the legacy `kubernetes-setup/configs/talos-registry-patch.yaml` by `APM/install.sh`, `rag-stack/setup-all.sh`, `pulsar/install.sh` and `ollama/ollama.sh` as a fallback — which is the only remaining reason that file exists.
 4.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`).
 5.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.
 6.  **Service TLS**: All RAG services (adapters, gateway, admin-api) now use TLS for their REST APIs (port 8080 or 443).
@@ -272,7 +272,7 @@ export KUBECONFIG=/home/k8s/kube/config/kubeconfig
   `network.env` changes nothing about resolution.
 - **Do not add a trailing dot to image references** to force an absolute lookup.
   It re-keys the registry host, so the containerd mirror configured in
-  `kubernetes-setup/configs/talos-registry-patch.yaml` (see §1.6) no longer
+  `kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml` (see §1.6) no longer
   matches and the pull escapes to the internet. Keep refs prefixed with the bare
   `REGISTRY_PREFIX` as `scripts/render-manifests.sh` emits them.
 - **Do not add `dnsConfig`/`ndots` overrides** for this. They were only ever
@@ -282,6 +282,41 @@ export KUBECONFIG=/home/k8s/kube/config/kubeconfig
   them even if one existed.
 - DNS is **not** part of `config-cluster.sh` or any install step. It is
   hand-maintained on diakonia and survives cluster rebuilds independently.
+
+#### 1.7.1 Node registry addressing — `extraHostEntries` beats DNS (2026-09-13)
+
+`infrastructure/registry/apply-patch.sh` (step 1 `registry-patch` of
+`setup-01-basic.sh`) does not merge. It **replaces**:
+
+```bash
+patch machineconfig --patch '[{"op":"replace","path":"/machine/network/extraHostEntries","value":[]}]'
+patch machineconfig --patch '[{"op":"replace","path":"/machine/registries","value":{}}]'
+patch machineconfig --patch "@$PATCH_FILE"
+```
+
+So whatever `$PATCH_FILE` says becomes the node's registry reality on every run,
+and a stale file does not merely fail to help — it actively writes bad state.
+
+Observed 2026-09-13: the script pointed at
+`kubernetes-setup/configs/talos-registry-patch.yaml`, which still pins the
+pre-flat-LAN `registry.hierocracy.home -> 172.20.1.26`. Running the install
+wrote that dead IP onto all three control planes and all four workers, and every
+pull failed:
+
+```
+failed to resolve reference "hierophant.hierocracy.home:5000/busybox:1.36":
+  Head "https://registry.hierocracy.home:5000/v2/busybox/manifests/1.36?ns=..."
+  dial tcp 172.20.1.26:5000: i/o timeout
+```
+
+Note the shape of that error: the ref is correct, the registry is healthy, the
+tag is present, and DNS resolves the name correctly to 192.168.1.101 — but
+`extraHostEntries` is a static host entry and **overrides DNS on the node**, so
+none of that matters. When a pull fails on an IP that DNS does not return,
+suspect the machine config, not the registry and not DNS.
+
+`apply-patch.sh` now points at the live build path's patch. Keep exactly one
+authoritative patch file: `new-setup-external-gpu` is the only current build.
 
 ### 1.8 Cluster Installation & Build Orchestration
 If you need to build the cluster from scratch, use the orchestration script on **hierophant**. This script handles disk formatting, network setup, bootstrap registry creation, and VM building in the correct order.
@@ -301,7 +336,7 @@ bash ./config-cluster.sh
     3.  Defines Libvirt networks (talos-nat, lb-net).
     4.  Starts and seeds the bootstrap registry (Podman) with Talos installer images.
     5.  Builds Control Plane VMs and waits for maintenance mode.
-    6.  Generates and applies Talos configuration (using the registry patch at `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml`).
+    6.  Generates and applies Talos configuration (using the registry patch at `kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml`).
     7.  Bootstraps the Kubernetes control plane.
     8.  Builds all Worker and Inference VMs.
     9.  Applies configuration and labels nodes (GPU Operator, etc.).
