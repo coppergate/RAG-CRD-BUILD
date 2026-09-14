@@ -33,7 +33,23 @@ init_journal
 #echo "create a local olm sdk install..."
 #operator-sdk olm install --timeout 5m0s
 
-if ! is_step_done "registry-patch"; then
+# Verify: the node machineconfig must carry the in-cluster registry alias at
+# REGISTRY_LB_IP. Guards the case that bit on 2026-09-14 -- a marker written by
+# a run that applied a STALE patch, leaving nodes pointing at a dead address
+# while the step was skipped as "done". Cheap, read-only, and it can succeed, so
+# it will not re-run the step needlessly.
+registry_patch_applied() {
+    local cp="${CP_IPS%% *}"
+    # Must be ADJACENCY, not mere presence: REGISTRY_LB_IP also appears
+    # elsewhere in the machineconfig (the PureLB pool), so a bare grep passes
+    # even on a node whose registry alias still points at hierophant. Anchor on
+    # the alias line and look at the following lines for the IP.
+    /home/k8s/talos/talosctl --talosconfig /home/k8s/talos/config/talosconfig \
+        -n "$cp" -e "$cp" get machineconfig -o yaml 2>/dev/null \
+        | grep -A3 'registry\.container-registry\.svc\.cluster\.local' \
+        | grep -q "$REGISTRY_LB_IP"
+}
+if ! is_step_done "registry-patch" registry_patch_applied; then
 echo "--- 1. Applying Talos Registry Patches (Bootstrap) ---"
 # We apply the patch early so that all subsequent pulls can use the hierophant mirror.
 # This avoids redundant internet downloads across all cluster nodes.
@@ -60,7 +76,13 @@ echo "install rook-ceph operator"
 $KUBECTL get namespace rook-ceph >/dev/null 2>&1 || $KUBECTL create namespace rook-ceph
 $KUBECTL label --overwrite namespace rook-ceph  pod-security.kubernetes.io/audit=privileged  pod-security.kubernetes.io/warn=privileged pod-security.kubernetes.io/enforce=privileged
 
-# wipe disks before cluster creation to ensure clean OSDs
+# wipe disks before cluster creation to ensure clean OSDs.
+#
+# NO VERIFY, deliberately: a wipe leaves no lasting artifact to test (the jobs
+# are deleted afterwards), so any verify would permanently fail and re-run a
+# DESTRUCTIVE step on every install. The protection lives in wipe-disks.sh
+# instead, which refuses to run while rook-ceph-osd deployments exist unless
+# FORCE_WIPE=true. See OPERATIONS.md 1.10.
 if ! is_step_done "rook-ceph-wipe-disks"; then
   bash $config_source_dir/infrastructure/rook-ceph/wipe-disks.sh
   mark_step_done "rook-ceph-wipe-disks"

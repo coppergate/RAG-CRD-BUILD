@@ -417,6 +417,35 @@ something the step actually creates. A check that can never succeed re-runs the 
 every install — which is why `k8tz` deliberately has none (its chart installs with no
 `--namespace`, so there is no `k8tz` namespace to test for).
 
+**Verifies added 2026-09-14.** `basic`, `apm`, `apm-stabilize`, `pulsar`,
+`cnpg-operator` and `timescaledb` used the bare legacy form until then; all six
+now pass a verify (helpers at the top of `setup-complete.sh`, beside
+`gpu_labels_published`). Each was confirmed to SUCCEED against a healthy
+cluster first — a verify that can never succeed re-runs its step on every
+install, which for a destructive step is far worse than a stale marker.
+
+Two deliberate exceptions:
+
+- **`pulsar-init` has no verify.** Its output is Pulsar tenants/namespaces,
+  confirmable only by exec-ing `pulsar-admin` in the toolset pod. Too expensive
+  for a guard. COUPLING: clearing `pulsar` means clearing `pulsar-init` too.
+- **`rook-ceph-wipe-disks` has no verify.** A wipe leaves no artifact to test —
+  the jobs are deleted — so any verify would permanently fail and re-run a
+  DESTRUCTIVE step every install. Its protection is the OSD-existence gate in
+  `wipe-disks.sh` instead.
+
+One trap when writing these: **the verify must test the right thing.** The
+first `registry-patch` verify grepped the whole machineconfig for
+`REGISTRY_LB_IP` and passed on a node whose registry alias still pointed at
+hierophant, because that IP also appears in the PureLB pool. It now anchors on
+the alias line and checks the following lines for the IP. Presence is not
+adjacency.
+
+Note also that these verifies test **Kubernetes objects, which survive
+destruction of Ceph itself**. Rebuilding storage therefore requires deleting
+the dependent namespaces/PVCs — only then do the verifies correctly fail and
+re-run the steps that repopulate them.
+
 `rag-stack/infrastructure/timescaledb/install.sh` and `build-pipeline/install.sh`
 have a local `should_run_step` implementing the same idea, plus an adopt-existing-state
 case (not in journal but verify passes → mark done and skip). The shared helper

@@ -1,3 +1,20 @@
+# wipe-disks.yaml - zero Rook-Ceph candidate disks BEFORE OSDs exist.
+#
+# GUARDED: wipe-disks.sh refuses to run this while rook-ceph-osd deployments
+# exist (FORCE_WIPE=true overrides). On 2026-09-14 an ungated re-run zeroed the
+# LVM/BlueStore labels under five LIVE OSDs. See OPERATIONS.md 1.10.
+#
+# Device lists must match the node's real disks. `blockdev --getsize64` below is
+# an existence probe as well as a size query: a device that does not exist is
+# skipped. Without it, `dd of=/dev/vdX` on a missing device writes a regular
+# FILE onto the container's 64MB /dev tmpfs, fills it, and fails the job --
+# which is exactly how the phantom vde/vdf entries broke worker-0.
+#
+# busybox has no wipefs, so zeroing is the whole wipe. Both ends are cleared:
+# the head takes the GPT primary header, LVM PV label and BlueStore superblock;
+# the tail takes the GPT BACKUP header, which a head-only wipe leaves behind and
+# which can make ceph-volume reject an otherwise clean disk.
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -14,16 +31,17 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # busybox has no wipefs, so this is best-effort and normally a
-            # no-op; the dd zeroing below is what actually clears the disks.
-            wipefs -a /dev/vdb /dev/vdc /dev/vdd 2>/dev/null || true
-            # worker-0 has exactly vda(OS) vdb(HDD) vdc(DB) vdd(NVMe).
-            # vde/vdf were listed here until 2026-09-13 and DO NOT EXIST: dd to
-            # a missing /dev/X writes a regular file onto the container's 64MB
-            # /dev tmpfs, which fills, fails, and exits the job non-zero.
-            dd if=/dev/zero of=/dev/vdb bs=1M count=100
-            dd if=/dev/zero of=/dev/vdc bs=1M count=100
-            dd if=/dev/zero of=/dev/vdd bs=1M count=100
+            set -e
+            for d in vdb vdc vdd; do
+              sz=$(blockdev --getsize64 "/dev/$d" 2>/dev/null) || {
+                echo "SKIP /dev/$d: not present on worker-0"; continue; }
+              echo "wiping /dev/$d ($sz bytes)"
+              dd if=/dev/zero of="/dev/$d" bs=1M count=100
+              tail_mb=$(( sz / 1048576 - 20 ))
+              [ "$tail_mb" -gt 100 ] && \
+                dd if=/dev/zero of="/dev/$d" bs=1M count=20 seek="$tail_mb"
+            done
+            echo "wipe complete on worker-0"
       nodeSelector:
         kubernetes.io/hostname: worker-0
       restartPolicy: Never
@@ -43,11 +61,18 @@ spec:
           privileged: true
         command: ["/bin/sh", "-c"]
         args:
-        - |
-          # busybox has no wipefs; best-effort, the dd below does the work.
-          wipefs -a /dev/vdb /dev/vdc 2>/dev/null || true
-          dd if=/dev/zero of=/dev/vdb bs=1M count=100
-          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+          - |
+            set -e
+            for d in vdb vdc; do
+              sz=$(blockdev --getsize64 "/dev/$d" 2>/dev/null) || {
+                echo "SKIP /dev/$d: not present on worker-1"; continue; }
+              echo "wiping /dev/$d ($sz bytes)"
+              dd if=/dev/zero of="/dev/$d" bs=1M count=100
+              tail_mb=$(( sz / 1048576 - 20 ))
+              [ "$tail_mb" -gt 100 ] && \
+                dd if=/dev/zero of="/dev/$d" bs=1M count=20 seek="$tail_mb"
+            done
+            echo "wipe complete on worker-1"
       nodeSelector:
         kubernetes.io/hostname: worker-1
       restartPolicy: Never
@@ -67,11 +92,18 @@ spec:
           privileged: true
         command: ["/bin/sh", "-c"]
         args:
-        - |
-          # busybox has no wipefs; best-effort, the dd below does the work.
-          wipefs -a /dev/vdb /dev/vdc 2>/dev/null || true
-          dd if=/dev/zero of=/dev/vdb bs=1M count=100
-          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+          - |
+            set -e
+            for d in vdb vdc; do
+              sz=$(blockdev --getsize64 "/dev/$d" 2>/dev/null) || {
+                echo "SKIP /dev/$d: not present on worker-2"; continue; }
+              echo "wiping /dev/$d ($sz bytes)"
+              dd if=/dev/zero of="/dev/$d" bs=1M count=100
+              tail_mb=$(( sz / 1048576 - 20 ))
+              [ "$tail_mb" -gt 100 ] && \
+                dd if=/dev/zero of="/dev/$d" bs=1M count=20 seek="$tail_mb"
+            done
+            echo "wipe complete on worker-2"
       nodeSelector:
         kubernetes.io/hostname: worker-2
       restartPolicy: Never
@@ -92,13 +124,17 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # worker-3 has the same layout as worker-0: vda(OS) vdb(HDD)
-            # vdc(DB) vdd(NVMe). It had no wipe job at all until 2026-09-13,
-            # while OPERATIONS.md 1.10 documented it as a 2-OSD node.
-            wipefs -a /dev/vdb /dev/vdc /dev/vdd 2>/dev/null || true
-            dd if=/dev/zero of=/dev/vdb bs=1M count=100
-            dd if=/dev/zero of=/dev/vdc bs=1M count=100
-            dd if=/dev/zero of=/dev/vdd bs=1M count=100
+            set -e
+            for d in vdb vdc vdd; do
+              sz=$(blockdev --getsize64 "/dev/$d" 2>/dev/null) || {
+                echo "SKIP /dev/$d: not present on worker-3"; continue; }
+              echo "wiping /dev/$d ($sz bytes)"
+              dd if=/dev/zero of="/dev/$d" bs=1M count=100
+              tail_mb=$(( sz / 1048576 - 20 ))
+              [ "$tail_mb" -gt 100 ] && \
+                dd if=/dev/zero of="/dev/$d" bs=1M count=20 seek="$tail_mb"
+            done
+            echo "wipe complete on worker-3"
       nodeSelector:
         kubernetes.io/hostname: worker-3
       restartPolicy: Never
