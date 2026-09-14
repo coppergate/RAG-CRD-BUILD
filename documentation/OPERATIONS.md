@@ -503,6 +503,44 @@ describes.
 `wipe-disks.yaml` had two matching faults: worker-0 wiped the nonexistent
 `vde`/`vdf`, and **worker-3 had no wipe job at all**. Both fixed.
 
+##### ⚠ 2026-09-14: the wipe ran against a LIVE cluster and silently destroyed all OSDs
+
+`wipe-disks.sh` zeroes the first 100 MB of every device its YAML lists. Run
+after OSDs exist, that destroys the LVM PV labels and BlueStore superblocks
+underneath them. **The OSDs do not fail.** They keep serving from device-mapper
+mappings already present in the kernel, so `kubectl get pods` shows
+`READY=true, RESTARTS=0` while nothing on disk is recoverable. The loss only
+surfaces at the next reboot, `dm` reload, or OSD pod restart.
+
+How to recognise it — the disks backing running OSDs read as all zeros:
+
+```bash
+# in a privileged pod pinned to the node (rook-ceph ns; default rejects privileged)
+dd if=/dev/vdb bs=1M count=4 2>/dev/null | tr -d '\000' | wc -c   # 0 == destroyed
+ls -A /sys/block/vdb/holders/                                     # dm-N still mapped
+```
+
+Why it re-ran: the only guard in `setup-01-basic.sh` was the journal marker
+`rook-ceph-wipe-disks`, and an earlier run had created the CephCluster and then
+died **before** writing it. A journal marker cannot express "OSDs now exist" —
+that state lives in the cluster, not the journal. This is the same class of
+problem as §1.8.2, one level deeper: the marker was not stale, it was *missing*,
+and re-running the step was destructive rather than merely redundant.
+
+`wipe-disks.sh` now asks the cluster and refuses by default:
+
+```bash
+osd_count=$($KUBECTL -n rook-ceph get deploy -l app=rook-ceph-osd --no-headers | wc -l)
+# >0 and FORCE_WIPE != true  ->  skip with a loud message, exit 0
+```
+
+`FORCE_WIPE=true` is the deliberate "reprovisioning storage, accept the loss"
+override. **Any new destructive step must be gated on observed cluster state,
+never on a journal marker alone.**
+
+Also fixed: the default `WIPE_JOB_SELECTOR` waited only on workers 0-2, so the
+worker-3 job added the same day would never have been waited on.
+
 ##### Why a nonexistent device fails the wipe job instead of being skipped
 
 `dd if=/dev/zero of=/dev/vde` on a node without `vde` does **not** error out.
