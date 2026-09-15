@@ -360,12 +360,21 @@ Fixed by naming the right registry in each case:
 **Rule of thumb: pull third-party images from `REGISTRY_PREFIX`; push and pull
 locally built artifacts via the in-cluster name.**
 
-Known wart, not fixed: the bootstrap's own idempotency check `skopeo inspect`s
-`$SKOPEO_REGISTRY` (hierophant) for an image it pushes to the in-cluster
-registry, so the check can never pass and the orchestrator is rebuilt on every
-run. Harmless but wasteful. A correct check has to run in-cluster —
-`REGISTRY_LB_IP:5000` is **not** reachable from hierophant (verified: `curl`
-returns 000).
+**Fixed 2026-09-15: the bootstrap's idempotency check.** It used to `skopeo
+inspect` hierophant for an image that is only ever pushed to the in-cluster
+registry, so it could never pass and the orchestrator was rebuilt on every
+install. Both check sites (`build-pipeline/install.sh` and
+`bootstrap-orchestrator.sh`) now probe `REGISTRY_LB_IP:REGISTRY_PORT`, sourced
+from `network.env`.
+
+An earlier revision of this section claimed `REGISTRY_LB_IP:5000` is
+unreachable from hierophant. **That was wrong** — it was measured while the
+`container-registry` namespace was deleted, so nothing was listening. The LB
+pool is reachable: `ip route get 192.168.5.201` resolves on-link via `br-lan`,
+and the ingress VIP on the same pool (`192.168.5.200:80`) answers from
+hierophant. What hierophant genuinely cannot do is resolve the
+`.svc.cluster.local` name (it has no cluster DNS), which is why the probe uses
+the IP, with `--tls-verify=false` since the cert carries no SAN for a bare IP.
 
 ### 1.8 Cluster Installation & Build Orchestration
 If you need to build the cluster from scratch, use the orchestration script on **hierophant**. This script handles disk formatting, network setup, bootstrap registry creation, and VM building in the correct order.

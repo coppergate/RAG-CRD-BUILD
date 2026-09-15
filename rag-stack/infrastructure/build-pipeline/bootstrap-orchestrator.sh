@@ -31,12 +31,24 @@ INTERNAL_REGISTRY="registry.container-registry.svc.cluster.local:5000"
 # REGISTRY as the INTERNAL name and passes it in, overriding this script's own
 # default, so REGISTRY cannot be used for upstream pulls.
 UPSTREAM_REGISTRY="${UPSTREAM_REGISTRY:-hierophant.hierocracy.home:5000}"
+
+# CHECK_REGISTRY is where we PROBE for an already-built artifact from the host.
+# Must be the in-cluster registry, addressed by its PureLB IP because hierophant
+# has no cluster DNS. Sourced from network.env so it tracks REGISTRY_LB_IP.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env" ]]; then
+    # shellcheck source=../../../config/network.env
+    source "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env"
+fi
+CHECK_REGISTRY="${CHECK_REGISTRY:-${REGISTRY_LB_IP:-192.168.5.201}:${REGISTRY_PORT:-5000}}"
 ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
 
 # Check if image already exists in registry to avoid redundant bootstrap builds
 echo "--- Checking if Build Orchestrator image $ORCHESTRATOR_TAG already exists ---"
 if command -v skopeo >/dev/null 2>&1; then
-    if skopeo inspect --tls-verify=false "docker://$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG" >/dev/null 2>&1; then
+    # Probe the registry that HOLDS the artifact (the in-cluster one), reachable
+    # from hierophant via its PureLB address. $REGISTRY is the in-cluster DNS
+    # name, which does not resolve off-cluster, so it cannot be used here.
+    if skopeo inspect --tls-verify=false "docker://$CHECK_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG" >/dev/null 2>&1; then
         echo "Image build-orchestrator:$ORCHESTRATOR_TAG already exists in registry. Skipping bootstrap build."
         exit 0
     fi
