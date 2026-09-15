@@ -55,6 +55,14 @@ MANIFESTS=(
   # with 'no matches for kind "Certificate" in version "cert-manager.io/v1"'.
   # Any new file under infrastructure/vendor/ that carries image references
   # must be added here.
+  # Third-party helper images consumed by the build pipeline and ingestion.
+  # These pulled upstream images via the IN-CLUSTER registry name until
+  # 2026-09-15, which only worked while extraHostEntries pointed that name at
+  # hierophant. They belong on REGISTRY_PREFIX (the upstream mirror). Safe to
+  # render: render_one's regex needs a literal "<host>:5000/", so it cannot
+  # touch the "${REGISTRY}/..." push destinations in the kaniko template.
+  rag-stack/infrastructure/build-pipeline/kaniko-job-template.yaml
+  rag-stack/infrastructure/ingestion/ingest-job.yaml
   infrastructure/vendor/cert-manager-v1.19.2.yaml
   infrastructure/vendor/kubernetes-dashboard-v2.7.0.yaml
   # NOT listed: infrastructure/vendor/olm.yaml — OLM was removed from

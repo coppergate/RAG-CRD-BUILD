@@ -318,6 +318,55 @@ suspect the machine config, not the registry and not DNS.
 `apply-patch.sh` now points at the live build path's patch. Keep exactly one
 authoritative patch file: `new-setup-external-gpu` is the only current build.
 
+#### 1.7.2 Two registries, complementary content — do not conflate them (2026-09-15)
+
+There are two registries and they hold **different** things:
+
+| Registry | Name | Holds |
+|---|---|---|
+| bootstrap / upstream mirror | `hierophant.hierocracy.home:5000` (`REGISTRY_PREFIX`) | the 84 mirrored third-party images from `install-image-plan.sh` |
+| in-cluster | `registry.container-registry.svc.cluster.local:5000` (`REGISTRY_LB_IP` 192.168.5.201) | locally built artifacts: `build-orchestrator`, the rag service images |
+
+Neither contains the other's content. The in-cluster registry is a plain
+`registry:2` — **no `REGISTRY_PROXY_REMOTEURL`**, so it is not a pull-through
+cache and will not fall back to hierophant.
+
+The same name also resolves differently depending on who asks:
+
+| Consumer | Resolves via | Lands on |
+|---|---|---|
+| a pod (Kaniko pushing, skopeo in-cluster) | CoreDNS → Service ClusterIP | in-cluster registry |
+| containerd pulling a pod's image | node `extraHostEntries` (§1.7.1) | whatever that entry says |
+
+So an image reference must name the registry that actually holds it. Until
+2026-09-15 several manifests pulled **upstream** images via the **in-cluster**
+name, which worked only because `extraHostEntries` pinned that name to
+hierophant. Splitting that entry so `build-orchestrator` could be pulled broke
+those helper pulls — same name, different destination, and the upstream images
+are not in the in-cluster registry.
+
+Fixed by naming the right registry in each case:
+
+- `bootstrap-orchestrator.sh` gained `UPSTREAM_REGISTRY` for busybox / kaniko /
+  aws-cli. It deliberately does **not** reuse `$REGISTRY`, because
+  `build-pipeline/install.sh` exports `REGISTRY` as the *internal* name and
+  passes it in, overriding the script's own default.
+- `kaniko-job-template.yaml` and `ingestion/ingest-job.yaml` now use
+  `REGISTRY_PREFIX` for their helper images, and are listed in
+  `render-manifests.sh` so the prefix tracks `network.env`. Safe to render:
+  `render_one`'s regex needs a literal `<host>:5000/`, so it cannot touch the
+  `${REGISTRY}/...` push destinations.
+
+**Rule of thumb: pull third-party images from `REGISTRY_PREFIX`; push and pull
+locally built artifacts via the in-cluster name.**
+
+Known wart, not fixed: the bootstrap's own idempotency check `skopeo inspect`s
+`$SKOPEO_REGISTRY` (hierophant) for an image it pushes to the in-cluster
+registry, so the check can never pass and the orchestrator is rebuilt on every
+run. Harmless but wasteful. A correct check has to run in-cluster —
+`REGISTRY_LB_IP:5000` is **not** reachable from hierophant (verified: `curl`
+returns 000).
+
 ### 1.8 Cluster Installation & Build Orchestration
 If you need to build the cluster from scratch, use the orchestration script on **hierophant**. This script handles disk formatting, network setup, bootstrap registry creation, and VM building in the correct order.
 
