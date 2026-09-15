@@ -9,7 +9,7 @@
 replicaCount: 1
 
 image:
-  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  repository: hierophant.hierocracy.home:5000/ollama/ollama
   pullPolicy: IfNotPresent
   tag: ""
 

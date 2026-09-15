@@ -360,6 +360,38 @@ Fixed by naming the right registry in each case:
 **Rule of thumb: pull third-party images from `REGISTRY_PREFIX`; push and pull
 locally built artifacts via the in-cluster name.**
 
+The full set of third-party images that had to be repointed (2026-09-15), found
+only after `otel-collector` failed in `ImagePullBackOff` during the `apm` step:
+
+| Image | Would have broken |
+|---|---|
+| `otel/opentelemetry-collector-contrib` | `apm` (this is the one that fired) |
+| `apachepulsar/pulsar-all`, `apachepulsar/pulsar-manager`, `streamnative/oxia` | `pulsar` |
+| `ghcr.io/cloudnative-pg/cloudnative-pg`, `ghcr.io/imusmanmalik/timescaledb-postgis` | `timescaledb` |
+| `qdrant/qdrant`, `ollama/ollama` | `rag-stack` |
+
+**How to find these properly.** The first sweep pattern-matched a hand-written
+list of vendor prefixes (`busybox|amazon|martizih|gcr.io|alpine|golang|python`)
+and therefore missed `otel/`, `apachepulsar/`, `streamnative/`, `ollama/`,
+`qdrant/` and both `ghcr.io/` refs. Enumerate every reference and classify it
+instead of guessing the vendor list:
+
+```bash
+# every distinct path referenced via the in-cluster registry name
+grep -rhoE 'registry\.container-registry\.svc\.cluster\.local:5000/[A-Za-z0-9._/-]+' \
+  --include='*.yaml' --include='*.sh' . | grep -v vendor \
+  | sed 's#.*:5000/##' | sort -u
+# anything NOT in CURRENT_VERSION's key list is third-party and belongs on
+# REGISTRY_PREFIX; the built services legitimately keep the in-cluster name.
+python3 -c "import json;print(sorted(json.load(open('CURRENT_VERSION'))))"
+```
+
+After the fix the only in-cluster-name refs remaining are the ten built
+services (`db-adapter`, `embed-gateway`, `llm-gateway`, `memory-controller`,
+`object-store-mgr`, `qdrant-adapter`, `rag-explorer`, `rag-ingestion`,
+`rag-test-runner`, `rag-worker`) — which is correct, because that is where
+Kaniko pushes them.
+
 **Fixed 2026-09-15: the bootstrap's idempotency check.** It used to `skopeo
 inspect` hierophant for an image that is only ever pushed to the in-cluster
 registry, so it could never pass and the orchestrator was rebuilt on every

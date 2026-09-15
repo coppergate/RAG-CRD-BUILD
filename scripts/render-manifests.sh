@@ -61,6 +61,29 @@ MANIFESTS=(
   # hierophant. They belong on REGISTRY_PREFIX (the upstream mirror). Safe to
   # render: render_one's regex needs a literal "<host>:5000/", so it cannot
   # touch the "${REGISTRY}/..." push destinations in the kaniko template.
+  # Third-party images that were referenced via the IN-CLUSTER registry name
+  # until 2026-09-15. Same root cause as the kaniko/ingest entries below: the
+  # name only resolved to the upstream mirror while extraHostEntries pinned it
+  # to hierophant (§1.7.1). otel-collector was the one that actually failed, in
+  # ImagePullBackOff during the apm step; the rest would have cascaded through
+  # pulsar, timescaledb, qdrant and ollama.
+  #
+  # Verified before adding: none of these files reference a locally BUILT
+  # service, so render_one's blanket "<host>:5000/" -> REGISTRY_PREFIX rewrite
+  # cannot mis-point a built artifact. Do NOT add a file here that mixes the two.
+  infrastructure/APM/otel-collector/otel-collector.yaml
+  rag-stack/infrastructure/pulsar/full-values.yaml
+  rag-stack/infrastructure/timescaledb/cnpg-1.25.0.yaml
+  rag-stack/infrastructure/timescaledb/cluster.yaml
+  rag-stack/infrastructure/qdrant/qdrant-deploy.yaml
+  rag-stack/infrastructure/ollama/ollama-deploy.yaml
+  rag-stack/infrastructure/ollama/values.yaml
+  rag-stack/infrastructure/ollama/values-embed.yaml
+  rag-stack/infrastructure/ollama/values-embed-worker.yaml
+  rag-stack/infrastructure/ollama/values-qwen32b.yaml
+  rag-stack/infrastructure/ollama/values-planner-cpu.yaml
+  rag-stack/infrastructure/ollama/values-planner-cpu-worker.yaml
+  rag-stack/infrastructure/ollama/values-devstral.yaml
   rag-stack/infrastructure/build-pipeline/kaniko-job-template.yaml
   rag-stack/infrastructure/ingestion/ingest-job.yaml
   infrastructure/vendor/cert-manager-v1.19.2.yaml
