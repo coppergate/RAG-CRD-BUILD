@@ -570,6 +570,52 @@ never on a journal marker alone.**
 Also fixed: the default `WIPE_JOB_SELECTOR` waited only on workers 0-2, so the
 worker-3 job added the same day would never have been waited on.
 
+##### ⚠ BlueStore keeps REDUNDANT labels at 1G/10G/100G — a head wipe is not enough
+
+Ceph Squid (19.x) writes BlueStore bdev label copies at **0, 1 GiB, 10 GiB and
+100 GiB** into the device (`BDEV_LABEL_POSITIONS`). Zeroing only the head — or
+even head and tail — leaves the deeper copies intact. `ceph-bluestore-tool
+show-label` then reads a survivor, `ceph-volume raw prepare` refuses the disk
+with `Raw device /dev/vdX is already prepared`, and Rook logs:
+
+```
+skipping osd.N: "<osd-uuid>" belonging to a different ceph cluster "<old-fsid>"
+```
+
+The device then **silently never becomes an OSD**. Nothing fails loudly; you
+just get fewer OSDs than `cluster.yaml` declares.
+
+This is expensive to diagnose because every ordinary check says the disk is
+clean:
+
+```bash
+lsblk -o NAME,FSTYPE /dev/vdd                      # no filesystem
+dd if=/dev/vdd bs=1M count=4 | tr -d '\000' | wc -c  # 0 -- head is zeroed
+ceph-volume raw list                               # ...but reports an OSD
+ceph-bluestore-tool show-label --dev /dev/vdd      # and shows its fsid + btime
+```
+
+Scan the actual positions instead:
+
+```bash
+for off in 0 1 10 100; do
+  printf '%sG: ' $off
+  dd if=/dev/vdd bs=1M count=1 skip=$((off*1024)) 2>/dev/null \
+    | strings | grep -m1 -i bluestore || echo clean
+done
+```
+
+Observed 2026-09-14: a label with `btime: 2026-06-21` survived **every** wipe in
+this build, including a full teardown. worker-0 and worker-3 `vdd` were skipped
+in every OSD-prepare run for weeks, which is the whole reason the pool kept
+coming up with 4 OSDs instead of 6. `wipe-disks.yaml` now zeroes all four
+positions (guarded by device size, so a small DB device does not error on the
+100 G offset) plus the tail. **Re-check `BDEV_LABEL_POSITIONS` when upgrading
+Ceph.**
+
+`ceph-volume zap --destroy` is the "proper" tool but did not clear the labels
+when tried here; the explicit offset zeroing did, and is what the manifest uses.
+
 ##### Why a nonexistent device fails the wipe job instead of being skipped
 
 `dd if=/dev/zero of=/dev/vde` on a node without `vde` does **not** error out.
