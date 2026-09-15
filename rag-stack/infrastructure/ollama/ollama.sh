@@ -110,60 +110,70 @@ EOF
 # We revert image.repository to the base Ollama image and specify models to pull from the local registry.
 REGISTRY="registry.container-registry.svc.cluster.local:5000"
 
-# --- GPU pinning: resolve the V100 by UUID -----------------------------------
-# inference-0 has a MIXED GPU pool (1x V100 32GB + 2x P4 8GB) all advertised as
-# one fungible nvidia.com/gpu. The GPU values files therefore set
-# ollama.gpu.enabled=false and pin the card by UUID instead, via the ConfigMap
-# built here. See values-qwen32b.yaml for why node-affinity is not an option.
+# --- GPU allocation ----------------------------------------------------------
+# REMOVED 2026-09-13: the UUID-resolve block and the ollama-gpu-pin-v100
+# ConfigMap that used to live here.
 #
-# TODO(revisit once the cluster is stable): both GPU pods currently share the
-# V100, preserving the VRAM tuning written for the old single-GPU node
-# (OLLAMA_MAX_LOADED_MODELS is set accordingly in each values file). With three
-# cards available, ollama-llama3 could move to a P4 (gpu-p4-0-uuid) to free
-# ~5GB of V100 VRAM for the 32B executor. That also requires trimming the 32B
-# models from ollama-llama3's seed list in seed-models.sh (an 8GB P4 cannot
-# load them) and forcing its OLLAMA_MAX_LOADED_MODELS to 1. Deferred
-# deliberately: it changes model routing as well as placement.
-echo "--- Resolving GPU UUID for pinning ---"
-GPU_NODE=$($KUBECTL get nodes -l role=inference-node \
-  -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-if [[ -z "$GPU_NODE" ]]; then
-  echo "ERROR: no node carries role=inference-node — cannot pin a GPU." >&2
-  echo "       scripts/setup-node-labels.sh should have applied it." >&2
-  exit 1
-fi
-
-# Label published by kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh
-V100_UUID=$($KUBECTL get node "$GPU_NODE" \
-  -o jsonpath='{.metadata.labels.hierocracy\.home/gpu-v100-uuid}' 2>/dev/null || echo "")
-if [[ -z "$V100_UUID" ]]; then
-  echo "ERROR: node $GPU_NODE has no hierocracy.home/gpu-v100-uuid label." >&2
-  echo "       Re-run 52-install-gpu-operator.sh in kubernetes-setup/new-setup-external-gpu" >&2
-  echo "       to republish the GPU UUID labels, then retry." >&2
-  exit 1
-fi
-echo "  - $GPU_NODE V100 = $V100_UUID"
-
-# NVIDIA_DRIVER_CAPABILITIES must include 'compute' for CUDA; 'utility' alone
-# only yields nvidia-smi. Consumed via extraEnvFrom in both GPU values files.
-$KUBECTL create configmap ollama-gpu-pin-v100 -n llms-ollama \
-  --from-literal=NVIDIA_VISIBLE_DEVICES="$V100_UUID" \
-  --from-literal=NVIDIA_DRIVER_CAPABILITIES="compute,utility" \
-  --dry-run=client -o yaml | $KUBECTL apply -f -
-
-# Deploy Ollama WITHOUT model pulling — models are seeded separately via seed-models.sh
-# This avoids long postStart hangs during install.
+# inference-0 held a MIXED pool (1x V100 32GB + 2x P4 8GB) advertised as one
+# fungible nvidia.com/gpu, so a plain resource request could hand a 32B model an
+# 8GB card. The workaround was to set ollama.gpu.enabled=false, skip the resource
+# request entirely, and pin the V100 via NVIDIA_VISIBLE_DEVICES from a ConfigMap
+# built right here from the hierocracy.home/gpu-v100-uuid node label.
 #
-# Two GPU deployments on inference-0, both pinned to the V100 by UUID:
+# The P4s are gone and the node now holds TWO identical V100 32GB cards, so:
+#   - ordinary 'nvidia.com/gpu: 1' requests are correct and sufficient;
+#   - allocatable is 2, so the scheduler puts the two GPU pods on TWO DISTINCT
+#     cards instead of stacking both on one — this is a straight win over the
+#     old arrangement, where they shared a card and contended for VRAM;
+#   - scheduler accounting is restored, so nothing can double-book a card.
+#
+# Both values files now set ollama.gpu.enabled=true with number: 1, and neither
+# references the deleted ConfigMap. infrastructure/nvidia-operator.sh no longer
+# publishes any gpu-*-uuid label, so resolving one here would fail outright.
+#
+# Deploy Ollama WITHOUT model pulling — models are seeded separately via
+# seed-models.sh. This avoids long postStart hangs during install.
+#
+# Two GPU deployments on inference-0, one card each:
 #   ollama-llama3  — planner endpoint (ollama service); llama3.1 + granite3.1-dense:8b seeded
 #   ollama-qwen32b — executor endpoint (ollama-code service); qwen2.5:32b + all GPU models seeded
 # Both use nodeSelector: role=inference-node (values.yaml default) — no --set override needed.
-# NOTE: with no nvidia.com/gpu request there is no scheduler GPU accounting, so
-# co-residency on the V100 is enforced by these manifests, not by Kubernetes.
+#
+# NOTE: inference-0 is tainted nvidia.com/gpu=present:NoSchedule by
+# scripts/setup-node-labels.sh. These pods tolerate it TWICE over, and that is
+# expected — verified with 'helm template' 2026-09-13:
+#   1. an explicit block in each values file (values.yaml, values-qwen32b.yaml);
+#   2. one the chart itself adds now that ollama.gpu.enabled=true (it added
+#      none while that flag was false, which is why the explicit block exists).
+# Two identical tolerations are legal and inert; Kubernetes does not dedupe them.
+# The explicit blocks are kept deliberately so the toleration does not silently
+# depend on gpu.enabled staying true.
+# --- Executor model selection ------------------------------------------------
+# The executor pod's values file is switchable because the two candidates are
+# mutually exclusive: there are two cards, the planner holds one, so the
+# executor model is a swap and never an addition.
+#
+#   values-qwen32b.yaml   qwen3:32b        ~20 GB Q4_K_M, 16384 ctx  (default)
+#   values-devstral.yaml  devstral-small-2 ~15 GB q4_K_M, 65536 ctx
+#
+# To switch:  EXECUTOR_VALUES=values-devstral.yaml bash ollama.sh
+#
+# The release name stays 'ollama-qwen32b' under either file. The otwld/ollama
+# chart names the PVC after the release, so renaming it would create a new PVC
+# and discard every seeded model. Service name (ollama-code), endpoint URL and
+# rag-worker config are unaffected by the swap; only which model is resident
+# changes, and both are seeded into this PVC by seed-models.sh.
+EXECUTOR_VALUES="${EXECUTOR_VALUES:-values-qwen32b.yaml}"
+if [[ ! -f "$SCRIPT_DIR/$EXECUTOR_VALUES" ]]; then
+  echo "ERROR: EXECUTOR_VALUES=$EXECUTOR_VALUES not found in $SCRIPT_DIR" >&2
+  exit 1
+fi
+echo "Executor values file: $EXECUTOR_VALUES"
+
 $HELM upgrade --install ollama-llama3 otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values.yaml" \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
-$HELM upgrade --install ollama-qwen32b otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/values-qwen32b.yaml" \
+$HELM upgrade --install ollama-qwen32b otwld/ollama --namespace llms-ollama -f "$SCRIPT_DIR/$EXECUTOR_VALUES" \
   --set image.repository="${REGISTRY}/ollama/ollama" \
   --set image.tag="0.15.6"
 $KUBECTL expose deployment ollama-llama3 --name=ollama --port=11434 --target-port=11434 --type=LoadBalancer -n llms-ollama || true
@@ -227,8 +237,11 @@ done
 echo "Waiting for inference-node Ollama pods to be ready..."
 $KUBECTL rollout status deploy/ollama-llama3 -n llms-ollama --timeout=600s || true
 $KUBECTL rollout status deploy/ollama-qwen32b -n llms-ollama --timeout=600s || true
-$KUBECTL rollout status deploy/ollama-embed-0 -n llms-ollama --timeout=600s || true
-$KUBECTL rollout status deploy/ollama-planner-cpu-0 -n llms-ollama --timeout=600s || true
+# REMOVED 2026-09-13: waits on deploy/ollama-embed-0 and
+# deploy/ollama-planner-cpu-0. Both releases were deleted from this script (see
+# the REMOVED note further down) when inference-0 became GPU-only, so these
+# waited on objects that do not exist. Harmless under '|| true', but they logged
+# a failure on every install and read as if two pods were missing.
 
 # Wait for worker-node pods to be ready
 echo "Waiting for worker-node Ollama pods to be ready..."

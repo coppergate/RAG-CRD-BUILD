@@ -191,7 +191,7 @@ echo "Starting Complete Kubernetes Build and RAG Stack"
 echo "Target service image version: $VERSION"
 echo "===================================================="
 
-if ! is_step_done "basic"; then
+if ! is_step_done "basic" basic_complete; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1: Basic Infrastructure Setup (includes Rook-Ceph)"
@@ -257,7 +257,7 @@ STEP_TS_END=$(date +%s)
 log_step_timing "image-prefetch-initial" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "apm"; then
+if ! is_step_done "apm" apm_complete; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.2: APM (LGTM + Grafana Alloy)"
@@ -268,7 +268,7 @@ STEP_TS_END=$(date +%s)
 log_step_timing "apm" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "apm-stabilize"; then
+if ! is_step_done "apm-stabilize" apm_stable; then
 echo ""
 echo "Step 1.2.1: Wait for APM namespace to stabilize"
 echo "----------------------------------------------------"
@@ -293,7 +293,7 @@ fi
 # operator running after the RAG stack, a fresh install could never deploy Ollama.
 # Set SKIP_GPU=true (or pass --no-gpu) to skip it. Journaled as "nvidia".
 
-if ! is_step_done "pulsar"; then
+if ! is_step_done "pulsar" pulsar_complete; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.8: Apache Pulsar Infrastructure"
@@ -319,6 +319,10 @@ STEP_TS_END=$(date +%s)
 log_step_timing "pulsar" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
+# No verify: pulsar-init creates Pulsar tenants/namespaces, which can only be
+# confirmed by exec-ing pulsar-admin in the toolset pod -- too expensive for a
+# guard, and a verify that cannot succeed would re-run the step every install.
+# COUPLING: if you clear the "pulsar" marker, clear "pulsar-init" too.
 if ! is_step_done "pulsar-init"; then
 STEP_TS_START=$(date +%s)
 echo ""
@@ -345,7 +349,7 @@ STEP_TS_END=$(date +%s)
 log_step_timing "pulsar-init" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "cnpg-operator"; then
+if ! is_step_done "cnpg-operator" cnpg_complete; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.8.2: CloudNativePG Operator"
@@ -383,7 +387,7 @@ STEP_TS_END=$(date +%s)
 log_step_timing "cnpg-operator" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-if ! is_step_done "timescaledb"; then
+if ! is_step_done "timescaledb" timescaledb_complete; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.5.8.3: TimescaleDB Infrastructure"
@@ -436,10 +440,38 @@ STEP_TS_END=$(date +%s)
 log_step_timing "rag-images" "$STEP_TS_START" "$STEP_TS_END" "ok"
 fi
 
-# GPU operator MUST precede the RAG stack — it publishes the gpu-*-uuid node
-# labels that ollama.sh requires. See the note above Step 1.5.8.
+# GPU operator MUST precede the RAG stack. Until the device plugin is running
+# there is no nvidia.com/gpu resource on the node, and the two GPU Ollama pods
+# (which request 'nvidia.com/gpu: 1' each) would sit Pending forever.
+#
+# The verify predicate below was 'get node -l hierocracy.home/gpu-v100-uuid',
+# which no longer exists — nvidia-operator.sh stopped publishing per-card UUID
+# labels on 2026-09-13 and actively unsets them. Left alone it would fail every
+# run, re-running the step each install. It now tests the label-schema revision
+# that script does publish. Note 'kubectl get -l' exits 0 with no output when
+# nothing matches, so emptiness is tested explicitly via grep -q.
+# ── Step verifies (see OPERATIONS.md 1.8.2) ─────────────────────────────────
+# Each checks a cheap, read-only artifact the step actually creates, so a marker
+# left behind by a run that died -- or invalidated by a storage rebuild that
+# deleted the namespace -- downgrades "skip" to "run" instead of silently
+# skipping work whose output no longer exists.
+#
+# NOTE: these artifacts are Kubernetes objects and survive destruction of Ceph
+# itself. Rebuilding storage therefore requires DELETING the dependent
+# namespaces/PVCs; only then do these verifies correctly fail and re-run.
+basic_complete()        { $KUBECTL -n traefik get deploy traefik >/dev/null 2>&1; }
+apm_complete()          { $KUBECTL -n monitoring get secret loki-s3-bucket >/dev/null 2>&1; }
+apm_stable()            { $KUBECTL -n monitoring get statefulset loki >/dev/null 2>&1; }
+pulsar_complete()       { $KUBECTL -n apache-pulsar get statefulset pulsar-bookie >/dev/null 2>&1; }
+cnpg_complete()         { $KUBECTL -n cnpg-system get deploy cnpg-controller-manager >/dev/null 2>&1; }
+timescaledb_complete()  { $KUBECTL -n timescaledb get cluster.postgresql.cnpg.io timescaledb >/dev/null 2>&1; }
+
+gpu_labels_published() {
+  $KUBECTL get node -l hierocracy.home/gpu-inventory-rev=2 -o name 2>/dev/null \
+    | grep -q . 
+}
 if [[ "${WITH_GPU:-true}" == "true" && "${SKIP_GPU:-false}" != "true" ]]; then
-  if ! is_step_done "nvidia" $KUBECTL get node -l hierocracy.home/gpu-v100-uuid -o name; then
+  if ! is_step_done "nvidia" gpu_labels_published; then
     STEP_TS_START=$(date +%s)
     echo ""
     echo "Step 1.9: NVIDIA GPU Operator (must precede Ollama)"
@@ -451,7 +483,11 @@ if [[ "${WITH_GPU:-true}" == "true" && "${SKIP_GPU:-false}" != "true" ]]; then
   fi
 else
   echo "GPU setup skipped (--no-gpu or SKIP_GPU=true)."
-  echo "  NOTE: ollama.sh will fail without hierocracy.home/gpu-v100-uuid."
+  echo "  NOTE: the GPU Ollama pods (ollama-llama3, ollama-qwen32b) request"
+  echo "        nvidia.com/gpu: 1 and will stay Pending without the device plugin."
+  echo "        ollama.sh itself no longer hard-fails — it stopped resolving a GPU"
+  echo "        UUID label on 2026-09-13 — so the install now continues and the"
+  echo "        failure surfaces as unschedulable pods rather than an aborted run."
   echo "  Use setup-complete-no-gpu.sh for a genuinely GPU-less build."
 fi
 

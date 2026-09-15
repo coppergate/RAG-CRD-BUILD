@@ -7,7 +7,7 @@
 replicaCount: 1
 
 image:
-  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  repository: hierophant.hierocracy.home:5000/ollama/ollama
   pullPolicy: IfNotPresent
   tag: ""
 
@@ -20,23 +20,30 @@ ollama:
   port: 11434
 
   gpu:
-    # Deliberately FALSE — do not re-enable without reading the note below.
+    # TRUE as of 2026-09-13 — one whole card for the 32B executor.
     #
-    # inference-0 holds a MIXED GPU pool: 1x Tesla V100 32GB (sm_70) and
-    # 2x Tesla P4 8GB (sm_61), all three advertised as a single fungible
-    # 'nvidia.com/gpu' resource. Requesting nvidia.com/gpu here would let the
-    # scheduler hand this pod any of the three; two of them cannot hold a 32B
-    # model (~19GB Q4_K_M) in 8GB of VRAM.
+    # This block previously carried a 17-line "deliberately FALSE, do not
+    # re-enable" warning. Its entire premise was the mixed pool: inference-0 held
+    # 1x V100 32GB (sm_70) + 2x Tesla P4 8GB (sm_61) advertised as one fungible
+    # nvidia.com/gpu, so a request could hand this pod 8GB — not enough for a 32B
+    # model at ~19GB Q4_K_M. GFD could not disambiguate them either. The pod
+    # therefore pinned the V100 by UUID and requested no resource at all.
     #
-    # GPU node-affinity is NOT a workaround: GFD models a mixed node as a
-    # single product/memory/compute triple and currently reports the P4
-    # (product=Tesla-P4, memory=7680, compute 6.1) even with MIG_STRATEGY=none,
-    # so nvidia.com/gpu.* labels cannot be trusted to find the V100.
+    # The P4s are gone and both remaining cards are V100 32GB, so the warning now
+    # argues against the correct configuration. The failure it protected against
+    # is impossible while the pool is uniform, and nvidia-operator.sh warns
+    # loudly if a non-uniform card is ever added back.
     #
-    # Instead this pod pins the V100 by UUID via NVIDIA_VISIBLE_DEVICES (see
-    # extraEnv below), which is injected by the container runtime hook and was
-    # verified to expose exactly one card to an unprivileged pod.
-    enabled: false
+    # Full history, including the two approaches that failed and the
+    # device-plugin 'resources' limitation behind them:
+    # kubernetes-setup/new-setup-external-gpu/EXTERNAL-NODE-SETUP.md,
+    # historical appendix.
+    enabled: true
+    type: nvidia
+    # One card. The other belongs to ollama-llama3; allocatable is 2 and the
+    # scheduler now keeps them apart.
+    number: 1
+    nvidiaResource: "nvidia.com/gpu"
 
   models:
     pull: []
@@ -67,34 +74,53 @@ extraEnv:
     value: "true"
   - name: OLLAMA_KV_CACHE_TYPE
     value: "f16"
-  # Larger context for qwen2.5:32b — it supports up to 128k but 8192 is a
-  # practical default that fits comfortably within 32GB VRAM alongside the
-  # llama3 pod's steady-state usage.
-  - name: OLLAMA_NUM_CTX
-    value: "8192"
+  # RENAMED 2026-09-13: this was OLLAMA_NUM_CTX, which OLLAMA DOES NOT
+  # RECOGNISE. Verified against the mirrored image — 'ollama serve --help' on
+  # ollama/ollama:0.15.6 lists OLLAMA_CONTEXT_LENGTH and no OLLAMA_NUM_CTX. So
+  # the old 8192 was inert and Ollama used its own default instead
+  # ("4k/32k/256k based on VRAM"), meaning the effective context was never the
+  # documented value in either direction.
+  #
+  # Raised to 16384 now that this pod owns a whole 32GB V100 rather than sharing
+  # one with ollama-llama3. Budget, at f16 KV:
+  #   KV/token = 2(K,V) x 64 layers x 8 KV heads x 128 head_dim x 2 bytes
+  #            = 256 KiB/token
+  #   16384 ctx  -> 4 GiB KV
+  #   qwen3:32b Q4_K_M weights ~20 GB, + 4 GiB KV + 2 GiB GPU_OVERHEAD = ~26/32
+  # That leaves ~6 GB of headroom, which is why 16384 and not 32768 (8 GiB KV,
+  # ~30/32 — too close to run unattended).
+  #
+  # To go further, halve KV with OLLAMA_KV_CACHE_TYPE=q8_0 (flash attention is
+  # already on, which it requires) and 32768 fits in the same envelope. Measure
+  # before adopting it: q8_0 KV is a quality trade, not a free win.
+  - name: OLLAMA_CONTEXT_LENGTH
+    value: "16384"
   - name: OLLAMA_KEEP_ALIVE
     value: "-1"
   - name: OLLAMA_NUM_PARALLEL
     value: "1"
-  # Keep to 1: qwen2.5:32b (~20GB) + a second model would exceed 32GB when
-  # ollama-llama3 is also resident on the same GPU node.
+  # KEEP AT 1, but the reason has changed. It used to be that ollama-llama3 was
+  # resident on the same card; it no longer is. The binding constraint now is
+  # this pod's own card: qwen3:32b is ~20 GB, so a second resident model (even
+  # an 8B at ~5 GB) plus both KV allocations would leave under 3 GB of a 32 GB
+  # card. All GPU models are seeded into this PVC for routing flexibility, so
+  # raising this invites exactly that overcommit.
   - name: OLLAMA_MAX_LOADED_MODELS
     value: "1"
   - name: OLLAMA_GPU_OVERHEAD
     value: "2147483648"
 
-# GPU pinning. Supplies NVIDIA_VISIBLE_DEVICES (the V100 UUID) and
-# NVIDIA_DRIVER_CAPABILITIES. The ConfigMap is generated by ollama.sh from the
-# hierocracy.home/gpu-v100-uuid node label, so no UUID is hardcoded in the repo.
-# Delivered via extraEnvFrom rather than extraEnv because Helm replaces whole
-# lists on merge — an index-based --set override would be silently fragile.
-extraEnvFrom:
-  - configMapRef:
-      name: ollama-gpu-pin-v100
+# REMOVED 2026-09-13: the ollama-gpu-pin-v100 configMapRef, which supplied
+# NVIDIA_VISIBLE_DEVICES (a card UUID) and NVIDIA_DRIVER_CAPABILITIES. The
+# device plugin injects both now that a real nvidia.com/gpu request is made, and
+# ollama.sh no longer creates that ConfigMap — leaving the reference would put
+# this pod in CreateContainerConfigError.
+extraEnvFrom: []
 
-# Required so the container runtime honours NVIDIA_VISIBLE_DEVICES. Talos sets
-# containerd default_runtime_name=nvidia, but naming it here is explicit and
-# survives a change to that default.
+# KEEP. Still required with a plain nvidia.com/gpu request: the RuntimeClass
+# selects the NVIDIA container runtime that maps the device and driver libraries
+# into the container. Talos sets containerd default_runtime_name=nvidia, but
+# naming it here is explicit and survives a change to that default.
 runtimeClassName: "nvidia"
 
 persistentVolume:

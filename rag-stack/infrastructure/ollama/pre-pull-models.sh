@@ -36,8 +36,36 @@ if [ -f "$LOCAL_CA" ]; then
     cat "$HOST_CA_BUNDLE" "$LOCAL_CA" > "$COMBINED_CA"
 fi
 
-# Models to pre-pull (add/remove as needed)
-MODELS=("llama3.1" "granite3.1-dense:8b" "all-minilm:l6-v2" "llama3.2:3b")
+# Models to pre-pull (add/remove as needed).
+#
+# MUST match the MODELS list in push-models-to-cluster.sh. It did not until
+# 2026-09-13: this list was missing qwen3:32b, qwen2.5:32b, nomic-embed-text and
+# mxbai-embed-large, so anyone running the documented "pre-pull outside the
+# install" path got a partial set and the install then reached the internet for
+# the rest — exactly what this script exists to prevent.
+MODELS=(
+  # GPU chat / executor
+  "llama3.1"
+  "granite3.1-dense:8b"
+  "qwen2.5:32b"
+  "qwen3:32b"
+  "devstral-small-2:24b"
+  # CPU embeddings
+  "all-minilm:l6-v2"
+  "nomic-embed-text"
+  "mxbai-embed-large"
+  # CPU planner
+  "llama3.2:3b"
+)
+
+# Pull a subset instead of the whole list — for adding one new model without
+# re-walking the other eight:
+#   MODELS_OVERRIDE="devstral-small-2:24b" bash pre-pull-models.sh
+# Space-separated. Env var rather than a positional arg to stay consistent with
+# the rest of the install scripts and to keep this non-interactive.
+if [[ -n "${MODELS_OVERRIDE:-}" ]]; then
+  read -r -a MODELS <<< "$MODELS_OVERRIDE"
+fi
 
 echo "=== Ollama Model Pre-Pull ==="
 echo "Storage:  $STORAGE_DIR"

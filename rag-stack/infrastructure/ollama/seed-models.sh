@@ -29,10 +29,16 @@ declare -a SEED_PAIRS=(
   "granite3.1-dense:8b ollama-llama3"
   "qwen2.5:32b ollama-llama3"
   "qwen3:32b ollama-llama3"
+  "devstral-small-2:24b ollama-llama3"
   "llama3.1 ollama-qwen32b"
   "granite3.1-dense:8b ollama-qwen32b"
   "qwen2.5:32b ollama-qwen32b"
   "qwen3:32b ollama-qwen32b"
+  # devstral-small-2:24b — coding/agent executor candidate, seeded into both GPU
+  # PVCs like every other GPU model so either card can serve it. Selecting it is
+  # a values-file swap (EXECUTOR_VALUES=values-devstral.yaml in ollama.sh), not a
+  # new pod: there are two cards and the planner holds one.
+  "devstral-small-2:24b ollama-qwen32b"
   # CPU embedding models — inference-node PVC (embed-0 on inference-0)
   "all-minilm:l6-v2 ollama-embed-0"
   "nomic-embed-text ollama-embed-0"
@@ -185,12 +191,31 @@ spec:
           mkdir -p "$MANIFEST_DIR" "$SHORT_MANIFEST_DIR" "$BLOBS_DIR"
 
           echo "Fetching manifest for ${REPO}:${TAG}..."
-          curl -skL "https://$REGISTRY/v2/$REPO/manifests/$TAG" \
+          # -f MATTERS. Without it a 404 writes the registry's error JSON into
+          # the manifest path, and every check below then PASSES: `test -s` sees
+          # a non-empty file, and the blobs check saw any file in the shared
+          # blobs dir (other models'). The seeder reported SUCCESS while leaving
+          # a corrupt manifest, which the "already present" probe then treated
+          # as seeded — so the corruption was sticky until FORCE_RESEED.
+          if ! curl -fsSkL "https://$REGISTRY/v2/$REPO/manifests/$TAG" \
             -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-            -o "$MANIFEST_PATH"
+            -o "$MANIFEST_PATH"; then
+            echo "ERROR: ${REPO}:${TAG} is not in $REGISTRY."
+            echo "       Pull and push it BEFORE the install:"
+            echo "       MODELS_OVERRIDE=\"${MODEL}\" bash pre-pull-models.sh"
+            rm -f "$MANIFEST_PATH"
+            exit 1
+          fi
 
           echo "Parsing layers..."
           LAYERS=$(grep -o 'sha256:[a-f0-9]*' "$MANIFEST_PATH" | sort -u)
+          if [ -z "$LAYERS" ]; then
+            echo "ERROR: manifest for ${REPO}:${TAG} carries no sha256 layers —"
+            echo "       it is not a real manifest. Refusing to seed."
+            head -c 400 "$MANIFEST_PATH"
+            rm -f "$MANIFEST_PATH"
+            exit 1
+          fi
 
           for LAYER in $LAYERS; do
             BLOB_FILE="${BLOBS_DIR}/${LAYER//:/-}"
@@ -199,7 +224,11 @@ spec:
               continue
             fi
             echo "  Downloading blob $LAYER..."
-            curl -skL "https://$REGISTRY/v2/$REPO/blobs/$LAYER" -o "$BLOB_FILE"
+            if ! curl -fsSkL "https://$REGISTRY/v2/$REPO/blobs/$LAYER" -o "$BLOB_FILE"; then
+              echo "ERROR: blob $LAYER missing from $REGISTRY for ${REPO}:${TAG}."
+              rm -f "$BLOB_FILE"
+              exit 1
+            fi
           done
 
           echo "Creating short-name manifest..."
@@ -207,7 +236,11 @@ spec:
           echo "Verifying seeded files..."
           test -s "$MANIFEST_PATH"
           test -s "$SHORT_MANIFEST_PATH"
-          find "$BLOBS_DIR" -type f | grep -q .
+          # Verify THIS model's layers, not merely that the shared blobs dir is
+          # non-empty (which any previously seeded model satisfies).
+          for LAYER in $LAYERS; do
+            test -s "${BLOBS_DIR}/${LAYER//:/-}"
+          done
           echo "SUCCESS: Manual seeding complete for __MODEL__"
       securityContext:
         runAsUser: 0

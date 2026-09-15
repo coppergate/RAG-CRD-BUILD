@@ -1,3 +1,35 @@
+# wipe-disks.yaml - zero Rook-Ceph candidate disks BEFORE OSDs exist.
+#
+# GUARDED: wipe-disks.sh refuses to run this while rook-ceph-osd deployments
+# exist (FORCE_WIPE=true overrides). On 2026-09-14 an ungated re-run zeroed the
+# labels under five LIVE OSDs. See OPERATIONS.md 1.10.
+#
+# Device lists must match the node's real disks. `blockdev --getsize64` is an
+# existence probe as well as a size query: a device that is not present is
+# skipped. Without it, `dd of=/dev/vdX` on a missing device writes a regular
+# FILE onto the container's 64MB /dev tmpfs, fills it, and fails the job --
+# which is how the phantom vde/vdf entries broke worker-0.
+#
+# busybox has no wipefs, so zeroing IS the whole wipe. Three regions matter:
+#
+#   1. head 100MB  - GPT primary header, LVM PV label, BlueStore label at 0
+#   2. 1G/10G/100G - Ceph Squid (19.x) writes REDUNDANT BlueStore bdev label
+#                    copies at these offsets (BDEV_LABEL_POSITIONS). A head+tail
+#                    wipe leaves them intact, `ceph-bluestore-tool show-label`
+#                    reads a surviving copy, and `ceph-volume raw prepare` then
+#                    refuses the disk with "Raw device is already prepared".
+#                    Rook logs it as: skipping osd.N "<uuid>" belonging to a
+#                    different ceph cluster "<fsid>" -- and the device silently
+#                    never becomes an OSD.
+#                    A 2026-06-21 label survived every wipe of this build and
+#                    cost two rebuilds before it was found (2026-09-14).
+#                    If upgrading Ceph, re-check BDEV_LABEL_POSITIONS.
+#   3. tail 20MB   - GPT BACKUP header, which a head-only wipe leaves behind and
+#                    which can make ceph-volume reject an otherwise clean disk.
+#
+# Each offset is written only if the device is actually big enough for it, so a
+# small DB device does not error on the 100G position.
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -14,12 +46,26 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            wipefs -a /dev/vdb /dev/vdc /dev/vdd /dev/vde /dev/vdf
-            dd if=/dev/zero of=/dev/vdb bs=1M count=100
-            dd if=/dev/zero of=/dev/vdc bs=1M count=100
-            dd if=/dev/zero of=/dev/vdd bs=1M count=100
-            dd if=/dev/zero of=/dev/vde bs=1M count=100
-            dd if=/dev/zero of=/dev/vdf bs=1M count=100
+            set -e
+            for d in vdb vdc vdd; do
+              sz=$(blockdev --getsize64 "/dev/$d" 2>/dev/null) || {
+                echo "SKIP /dev/$d: not present on worker-0"; continue; }
+              mb=$(( sz / 1048576 ))
+              echo "wiping /dev/$d ($sz bytes, ${mb}MB)"
+              dd if=/dev/zero of="/dev/$d" bs=1M count=100 conv=fsync
+              for off in 1024 10240 102400; do
+                if [ $(( off + 4 )) -le "$mb" ]; then
+                  dd if=/dev/zero of="/dev/$d" bs=1M count=4 seek="$off" conv=fsync
+                  echo "  cleared BlueStore label copy at ${off}MB"
+                fi
+              done
+              tail_mb=$(( mb - 20 ))
+              if [ "$tail_mb" -gt 100 ]; then
+                dd if=/dev/zero of="/dev/$d" bs=1M count=20 seek="$tail_mb" conv=fsync
+                echo "  cleared GPT backup at ${tail_mb}MB"
+              fi
+            done
+            echo "wipe complete on worker-0"
       nodeSelector:
         kubernetes.io/hostname: worker-0
       restartPolicy: Never
@@ -39,10 +85,27 @@ spec:
           privileged: true
         command: ["/bin/sh", "-c"]
         args:
-        - |
-          wipefs -a /dev/vdb /dev/vdc
-          dd if=/dev/zero of=/dev/vdb bs=1M count=100
-          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+          - |
+            set -e
+            for d in vdb vdc; do
+              sz=$(blockdev --getsize64 "/dev/$d" 2>/dev/null) || {
+                echo "SKIP /dev/$d: not present on worker-1"; continue; }
+              mb=$(( sz / 1048576 ))
+              echo "wiping /dev/$d ($sz bytes, ${mb}MB)"
+              dd if=/dev/zero of="/dev/$d" bs=1M count=100 conv=fsync
+              for off in 1024 10240 102400; do
+                if [ $(( off + 4 )) -le "$mb" ]; then
+                  dd if=/dev/zero of="/dev/$d" bs=1M count=4 seek="$off" conv=fsync
+                  echo "  cleared BlueStore label copy at ${off}MB"
+                fi
+              done
+              tail_mb=$(( mb - 20 ))
+              if [ "$tail_mb" -gt 100 ]; then
+                dd if=/dev/zero of="/dev/$d" bs=1M count=20 seek="$tail_mb" conv=fsync
+                echo "  cleared GPT backup at ${tail_mb}MB"
+              fi
+            done
+            echo "wipe complete on worker-1"
       nodeSelector:
         kubernetes.io/hostname: worker-1
       restartPolicy: Never
@@ -62,10 +125,67 @@ spec:
           privileged: true
         command: ["/bin/sh", "-c"]
         args:
-        - |
-          wipefs -a /dev/vdb /dev/vdc
-          dd if=/dev/zero of=/dev/vdb bs=1M count=100
-          dd if=/dev/zero of=/dev/vdc bs=1M count=100
+          - |
+            set -e
+            for d in vdb vdc; do
+              sz=$(blockdev --getsize64 "/dev/$d" 2>/dev/null) || {
+                echo "SKIP /dev/$d: not present on worker-2"; continue; }
+              mb=$(( sz / 1048576 ))
+              echo "wiping /dev/$d ($sz bytes, ${mb}MB)"
+              dd if=/dev/zero of="/dev/$d" bs=1M count=100 conv=fsync
+              for off in 1024 10240 102400; do
+                if [ $(( off + 4 )) -le "$mb" ]; then
+                  dd if=/dev/zero of="/dev/$d" bs=1M count=4 seek="$off" conv=fsync
+                  echo "  cleared BlueStore label copy at ${off}MB"
+                fi
+              done
+              tail_mb=$(( mb - 20 ))
+              if [ "$tail_mb" -gt 100 ]; then
+                dd if=/dev/zero of="/dev/$d" bs=1M count=20 seek="$tail_mb" conv=fsync
+                echo "  cleared GPT backup at ${tail_mb}MB"
+              fi
+            done
+            echo "wipe complete on worker-2"
       nodeSelector:
         kubernetes.io/hostname: worker-2
+      restartPolicy: Never
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wipe-disks-worker-3
+  namespace: rook-ceph
+spec:
+  template:
+    spec:
+      containers:
+      - name: wipe
+        image: hierophant.hierocracy.home:5000/busybox:1.36
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -e
+            for d in vdb vdc vdd; do
+              sz=$(blockdev --getsize64 "/dev/$d" 2>/dev/null) || {
+                echo "SKIP /dev/$d: not present on worker-3"; continue; }
+              mb=$(( sz / 1048576 ))
+              echo "wiping /dev/$d ($sz bytes, ${mb}MB)"
+              dd if=/dev/zero of="/dev/$d" bs=1M count=100 conv=fsync
+              for off in 1024 10240 102400; do
+                if [ $(( off + 4 )) -le "$mb" ]; then
+                  dd if=/dev/zero of="/dev/$d" bs=1M count=4 seek="$off" conv=fsync
+                  echo "  cleared BlueStore label copy at ${off}MB"
+                fi
+              done
+              tail_mb=$(( mb - 20 ))
+              if [ "$tail_mb" -gt 100 ]; then
+                dd if=/dev/zero of="/dev/$d" bs=1M count=20 seek="$tail_mb" conv=fsync
+                echo "  cleared GPT backup at ${tail_mb}MB"
+              fi
+            done
+            echo "wipe complete on worker-3"
+      nodeSelector:
+        kubernetes.io/hostname: worker-3
       restartPolicy: Never

@@ -11,12 +11,44 @@ export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 VERSION="${VERSION:-2.2.8}"
 REGISTRY="registry.hierocracy.home:5000"
 INTERNAL_REGISTRY="registry.container-registry.svc.cluster.local:5000"
+
+# UPSTREAM_REGISTRY is where MIRRORED THIRD-PARTY images live (busybox, kaniko,
+# aws-cli). INTERNAL_REGISTRY is where LOCALLY BUILT artifacts are pushed. The
+# two hold complementary content and must not be conflated:
+#
+#   hierophant  -> the 84 mirrored upstream images (install-image-plan.sh)
+#   in-cluster  -> build-orchestrator and the rag service images
+#
+# Until 2026-09-15 the helper images below were pulled via INTERNAL_REGISTRY.
+# That only ever worked by accident: the Talos extraHostEntries pinned
+# registry.container-registry.svc.cluster.local to hierophant, so the name
+# resolved to the upstream mirror. Splitting that entry so build-orchestrator
+# could be pulled (it lives in the in-cluster registry) made these helper pulls
+# resolve to the in-cluster registry instead, where they do not exist -- the
+# in-cluster registry is a plain registry:2 with no pull-through proxy.
+#
+# NOTE this is deliberately NOT ${REGISTRY}: build-pipeline/install.sh exports
+# REGISTRY as the INTERNAL name and passes it in, overriding this script's own
+# default, so REGISTRY cannot be used for upstream pulls.
+UPSTREAM_REGISTRY="${UPSTREAM_REGISTRY:-hierophant.hierocracy.home:5000}"
+
+# CHECK_REGISTRY is where we PROBE for an already-built artifact from the host.
+# Must be the in-cluster registry, addressed by its PureLB IP because hierophant
+# has no cluster DNS. Sourced from network.env so it tracks REGISTRY_LB_IP.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env" ]]; then
+    # shellcheck source=../../../config/network.env
+    source "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env"
+fi
+CHECK_REGISTRY="${CHECK_REGISTRY:-${REGISTRY_LB_IP:-192.168.5.201}:${REGISTRY_PORT:-5000}}"
 ORCHESTRATOR_TAG="${ORCHESTRATOR_TAG:-$VERSION}"
 
 # Check if image already exists in registry to avoid redundant bootstrap builds
 echo "--- Checking if Build Orchestrator image $ORCHESTRATOR_TAG already exists ---"
 if command -v skopeo >/dev/null 2>&1; then
-    if skopeo inspect --tls-verify=false "docker://$REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG" >/dev/null 2>&1; then
+    # Probe the registry that HOLDS the artifact (the in-cluster one), reachable
+    # from hierophant via its PureLB address. $REGISTRY is the in-cluster DNS
+    # name, which does not resolve off-cluster, so it cannot be used here.
+    if skopeo inspect --tls-verify=false "docker://$CHECK_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG" >/dev/null 2>&1; then
         echo "Image build-orchestrator:$ORCHESTRATOR_TAG already exists in registry. Skipping bootstrap build."
         exit 0
     fi
@@ -35,12 +67,12 @@ cd - > /dev/null
 
 echo "--- 2. Uploading sources to S3 ---"
 # Create a temporary uploader pod
-$KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=$INTERNAL_REGISTRY/amazon/aws-cli:2.34.4 --overrides='
+$KUBECTL run s3-bootstrap-uploader -n $NAMESPACE --image=$UPSTREAM_REGISTRY/amazon/aws-cli:2.34.4 --overrides='
 {
   "spec": {
     "containers": [{
       "name": "uploader",
-      "image": "'"$INTERNAL_REGISTRY"'/amazon/aws-cli:2.34.4",
+      "image": "'"$UPSTREAM_REGISTRY"'/amazon/aws-cli:2.34.4",
       "command": ["sleep", "300"],
       "securityContext": {
         "allowPrivilegeEscalation": false,
@@ -124,7 +156,7 @@ spec:
     spec:
       initContainers:
       - name: fetch-context
-        image: $INTERNAL_REGISTRY/busybox:1.37.0
+        image: $UPSTREAM_REGISTRY/busybox:1.37.0
         command: ["sh", "-c"]
         args: ["wget -O /workspace/context.tar.gz \"$PRESIGNED_URL\" && tar -xzof /workspace/context.tar.gz -C /workspace && rm /workspace/context.tar.gz"]
         securityContext:
@@ -140,7 +172,7 @@ spec:
           mountPath: /workspace
       containers:
       - name: kaniko
-        image: $INTERNAL_REGISTRY/martizih/kaniko:v1.27.0
+        image: $UPSTREAM_REGISTRY/martizih/kaniko:v1.27.0
         args:
         - "--dockerfile=build-orchestrator/Dockerfile"
         - "--context=dir:///workspace"

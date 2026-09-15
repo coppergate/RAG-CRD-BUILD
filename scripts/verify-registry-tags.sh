@@ -21,7 +21,13 @@ set -Eeuo pipefail
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$BASE_DIR/scripts/version-utils.sh"
 
-SERVICES=${SERVICES:-"rag-test-runner rag-worker rag-ingestion llm-gateway db-adapter qdrant-adapter object-store-mgr"}
+# Keep in sync with SERVICES in rag-stack/build.sh and the local-build-output
+# group in scripts/install-image-plan.sh. rag-admin-api/memory-controller/
+# prompt-aggregator/embed-gateway were added to the build without ever being
+# added here, so a build could "verify" clean while four service images were
+# absent from the registry. rag-explorer is intentionally NOT listed — it is
+# excluded from build.sh, so it has no image to verify.
+SERVICES=${SERVICES:-"rag-test-runner rag-worker rag-ingestion llm-gateway db-adapter qdrant-adapter object-store-mgr rag-admin-api memory-controller prompt-aggregator embed-gateway"}
 
 # Source of truth for versioning
 if [[ -z "${VERSION:-}" ]]; then
