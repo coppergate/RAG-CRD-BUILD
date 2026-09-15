@@ -74,10 +74,29 @@ spec:
 ---
 
 #################################################################################################################
-# NVMe fast-tier pool: backed by the single NVMe-only OSD on worker-0 (vdd, 195GB).
-# size: 1 — no replication (single OSD). Use for latency-sensitive workloads where
-# data can be rebuilt: Qdrant vector indexes, TimescaleDB, Pulsar journal.
-# deviceClass: nvme ensures only the NVMe OSD is used for this pool.
+# NVMe fast-tier pool: backed by the TWO NVMe-only OSDs (worker-0 vdd, worker-3 vdd; 195GB each).
+#
+# Rewritten 2026-09-15. It previously carried size: 1 with deviceClass omitted and
+# this comment:
+#
+#   "deviceClass intentionally omitted: KVM/QEMU VirtIO block devices are never
+#    classified as 'nvme' by Ceph regardless of physical backing media."
+#
+# That is FALSE, and the combination made this pool strictly worse than
+# ceph-replica-pool: no redundancy AND no NVMe placement. VirtIO does hide the
+# rotational flag, so Ceph's AUTO-detection classes these devices hdd — but the
+# per-device `deviceClass: nvme` in cluster.yaml overrides auto-detection, and
+# does. Verified with `ceph osd tree`:
+#
+#   osd.4  nvme  worker-0      osd.5  nvme  worker-3
+#
+# Without deviceClass here, Rook built the rule as a bare `take default`, so the
+# "nvme" pool placed PGs on the HDD OSDs — confirmed by `ceph pg ls-by-pool
+# ceph-nvme-pool` showing UP [3] and [0], both hdd.
+#
+# size: 2 is the MAXIMUM possible: there are exactly two nvme OSDs, on two
+# distinct hosts, and failureDomain is host. size 3 needs a third NVMe device.
+# 195GB usable. Survives the loss of one host.
 #################################################################################################################
 
 apiVersion: ceph.rook.io/v1
@@ -88,12 +107,12 @@ metadata:
 spec:
   failureDomain: host
   replicated:
-    size: 1
-    # Single OSD — no redundancy. Acceptable for rebuilable data (indexes, caches).
-    requireSafeReplicaSize: false
-  # deviceClass intentionally omitted: KVM/QEMU VirtIO block devices are never
-  # classified as 'nvme' by Ceph regardless of physical backing media. Removing
-  # the constraint lets Rook use any available OSD for this pool.
+    size: 2
+    # Back to true: this guard exists only to permit size 1, which we no longer use.
+    requireSafeReplicaSize: true
+  # Restricts the CRUSH rule to `take default class nvme`, which is what makes
+  # this a fast tier rather than a name.
+  deviceClass: nvme
   parameters:
     pg_autoscale_mode: 'on'
     compression_mode: none
