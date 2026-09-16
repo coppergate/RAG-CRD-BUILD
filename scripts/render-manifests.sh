@@ -71,6 +71,12 @@ MANIFESTS=(
   # Verified before adding: none of these files reference a locally BUILT
   # service, so render_one's blanket "<host>:5000/" -> REGISTRY_PREFIX rewrite
   # cannot mis-point a built artifact. Do NOT add a file here that mixes the two.
+  # seed-models.sh pulls the ollama runtime image and the model blobs; its two
+  # helper images were BARE refs until 2026-09-16. A bare ref resolves as
+  # docker.io/library/..., and the containerd mirror strips the host, so it asked
+  # hierophant for /v2/library/busybox/... which 404s (the mirror has "busybox",
+  # not "library/busybox") and fell through to the internet.
+  rag-stack/infrastructure/ollama/seed-models.sh
   infrastructure/APM/otel-collector/otel-collector.yaml
   rag-stack/infrastructure/pulsar/full-values.yaml
   rag-stack/infrastructure/timescaledb/cnpg-1.25.0.yaml

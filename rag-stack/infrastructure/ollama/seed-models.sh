@@ -9,7 +9,20 @@ set -euo pipefail
 KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 NAMESPACE="llms-ollama"
-REGISTRY="registry.container-registry.svc.cluster.local:5000"
+# The ollama/ollama runtime image AND every ollama/* model artifact live in the
+# upstream mirror on hierophant. The in-cluster registry holds only locally
+# built services, so this used to fail twice over: the seeder image was "not
+# found", and the model blob fetches curled a registry that never had them.
+#
+# $REGISTRY is also used as a PATH COMPONENT inside Ollama's model store
+# (manifests/$REGISTRY/$REPO). That is safe to change: the seeder also writes
+# each manifest to manifests/registry.ollama.ai/library/<model>, which is the
+# path consumers resolve by short name, so model lookup does not depend on this.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env" ]]; then
+    # shellcheck source=../../../config/network.env
+    source "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env"
+fi
+REGISTRY="${REGISTRY_PREFIX:-hierophant.hierocracy.home:5000}"
 
 # Set FORCE_RESEED=true to bypass the "already present" check and re-download all models.
 # Use this when updating a model to a new version:
@@ -169,7 +182,7 @@ spec:
   restartPolicy: Never
   initContainers:
     - name: seed-model
-      image: curlimages/curl:7.78.0
+      image: hierophant.hierocracy.home:5000/curlimages/curl:7.78.0
       command:
         - /bin/sh
         - -c
@@ -254,7 +267,7 @@ spec:
           subPath: ca.crt
   containers:
     - name: complete
-      image: busybox:1.37.0
+      image: hierophant.hierocracy.home:5000/busybox:1.37.0
       command:
         - /bin/sh
         - -c
