@@ -108,7 +108,23 @@ EOF
 
 # Deploy using the OCI artifacts pushed to the local registry
 # We revert image.repository to the base Ollama image and specify models to pull from the local registry.
-REGISTRY="registry.container-registry.svc.cluster.local:5000"
+# The ollama/ollama runtime image and every ollama/* model artifact live in the
+# UPSTREAM mirror on hierophant, not the in-cluster registry (which holds only
+# locally built services). Verified: hierophant carries ollama/ollama plus
+# ollama/{all-minilm,devstral-small-2,granite3.1-dense,llama3.1,llama3.2,
+# mxbai-embed-large,nomic-embed-text}; the in-cluster catalog is
+# ["build-orchestrator"] alone.
+#
+# This was the in-cluster name until 2026-09-16 and it silently overrode the
+# values files via --set image.repository, so repointing values*.yaml alone was
+# not enough: every ollama-embed-*/planner-cpu-*/llama3/qwen32b deployment went
+# into ImagePullBackOff with "not found". $REGISTRY is used ONLY for
+# image.repository here, so pointing it upstream is complete.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env" ]]; then
+    # shellcheck source=../../../config/network.env
+    source "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env"
+fi
+REGISTRY="${REGISTRY_PREFIX:-hierophant.hierocracy.home:5000}"
 
 # --- GPU allocation ----------------------------------------------------------
 # REMOVED 2026-09-13: the UUID-resolve block and the ollama-gpu-pin-v100

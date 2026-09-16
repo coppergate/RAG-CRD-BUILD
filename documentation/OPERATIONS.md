@@ -386,6 +386,24 @@ grep -rhoE 'registry\.container-registry\.svc\.cluster\.local:5000/[A-Za-z0-9._/
 python3 -c "import json;print(sorted(json.load(open('CURRENT_VERSION'))))"
 ```
 
+**Values files are not the last word — check for `--set` overrides.** Repointing
+`ollama/values*.yaml` was necessary but useless on its own: `ollama.sh` hardcoded
+
+```bash
+REGISTRY="registry.container-registry.svc.cluster.local:5000"
+--set image.repository="${REGISTRY}/ollama/ollama"     # 4 call sites
+```
+
+and a Helm `--set` beats the values file, so all 14 ollama deployments
+(`ollama-embed-2..9`, `ollama-planner-cpu-2..5`, `ollama-llama3`,
+`ollama-qwen32b`) still went to ImagePullBackOff. When repointing an image, grep
+the installer scripts for `--set image` / `image.repository`, not just the
+manifests. In `ollama.sh` that variable feeds `image.repository` and nothing
+else, so pointing it at `REGISTRY_PREFIX` is complete — and correct, because
+every `ollama/*` artifact (the runtime image and all seven model artifacts)
+lives on hierophant while the in-cluster catalog is `["build-orchestrator"]`
+alone.
+
 After the fix the only in-cluster-name refs remaining are the ten built
 services (`db-adapter`, `embed-gateway`, `llm-gateway`, `memory-controller`,
 `object-store-mgr`, `qdrant-adapter`, `rag-explorer`, `rag-ingestion`,
