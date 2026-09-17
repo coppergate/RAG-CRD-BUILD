@@ -931,7 +931,157 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 /home/k8s/kube/kubectl describe node worker-3 | sed -n '/Allocated resources/,/Events/p'
 ```
 
-### 2.1 Session Establishment (Operational Context)
+### 1.11 Worker OS Disk Pressure — MON_DISK_LOW, image GC, growing the VMs (2026-09-17)
+
+#### The warning, and what it is NOT
+
+```
+HEALTH_WARN mon a is low on available space
+[WRN] MON_DISK_LOW: mon.a has 24% avail
+```
+
+Not a Ceph capacity problem: the OSDs had 7.2 TiB free with all 266 pgs
+`active+clean`. It is the mon's *local* data directory, which `dataDirHostPath`
+places in `/var/lib/rook` on the node's **32 GB OS disk**. On worker-2:
+
+```
+/var/lib/containerd   19.8 G     <- container images
+/var/lib/kubelet       4.7 G
+/var/lib/rook        123.9 M     <- the mon's own data
+                     -------
+                      24.6 G  of ~28 G  ->  24% avail
+```
+
+The mon needs 124 MB and is being squeezed out by the image cache.
+
+#### Why nothing pruned: the two thresholds disagree
+
+```
+imagefs used = 70.5%   kubelet image GC fires at 85% used  -> never fired
+nodefs avail = 24.5%   Ceph warns below 30% avail          -> warns
+```
+
+Ceph's `mon_data_avail_warn` (30%) is far stricter than kubelet's
+`imageGCHighThresholdPercent` (85% default), so Ceph complains long before
+kubelet considers cleaning up. 99 images cached, 35 referenced by pods.
+
+#### There is no `talosctl` image prune
+
+`talosctl image` offers only `list`, `pull`, `cache-create`, `cache-serve`,
+`k8s-bundle`, `talos-bundle` — **no `rm`/`prune`**. The Talos-native prune is to
+lower kubelet's own thresholds, now applied to all four workers:
+
+```yaml
+machine:
+  kubelet:
+    extraConfig:
+      imageGCHighThresholdPercent: 65
+      imageGCLowThresholdPercent: 55
+```
+
+Applied without a reboot; confirmed live with
+`kubectl get --raw /api/v1/nodes/<node>/proxy/configz`.
+
+**It helps but does not fix this.** Measured: images 99 -> 84, avail 24.6% ->
+25.5%, then flat — including after deleting every `Succeeded` pod to release
+image references. kubelet will not evict an image that any existing container
+references, so GC is bounded by *what is removable*, not by the trigger point.
+Lowering the threshold further reclaims nothing. Keep the setting; do not expect
+it to clear MON_DISK_LOW.
+
+#### ⚠ IMAGE_PREFETCH_GROUPS does NOT prefetch to nodes
+
+The name misleads:
+
+```
+setup-complete.sh:60   IMAGE_PREFETCH_GROUPS=bootstrap,storage,apm-core,...
+setup-complete.sh:253  APPLY=true MIRROR_GROUPS="$IMAGE_PREFETCH_GROUPS" \
+                         bash scripts/mirror-all-images.sh
+```
+
+`mirror-all-images.sh` is *"Mirror install/runtime images into local registry"*
+with `TARGET_REGISTRY=registry.hierocracy.home:5000`, and the step is labelled
+"Initial Image Prefetch to **Local Registry**". It copies into **hierophant's
+registry** and never touches the nodes.
+
+So trimming that list **cannot** reduce worker disk usage — it would only shrink
+hierophant's mirror and push the next install toward the internet for whatever
+was dropped. Do not trim it for disk-pressure reasons. Node image growth comes
+from ordinary pod scheduling; every rebuild adds fresh service tags
+(`db-adapter:2.4.21`, `llm-gateway:2.4.22`, `rag-worker:2.4.48`, ...).
+
+#### Growing the worker OS disks — the actual fix
+
+**In-place growth is impossible.** The worker OS disks are **raw host
+partitions**, not qcow2 files, and each sits between partitions still in use:
+
+| NVMe serial | Layout | Worker OS partition | Tail free |
+|---|---|---|---|
+| ...362830 | p1 30G, p2 30G, p3 70G, p4 30G, p5 70G | worker-0 = p2, worker-1 = p4 | ~2.9 G |
+| ...362984 | p1 30G, p2 30G, p3 70G, p4 30G, p5 70G | worker-2 = p2 | ~2.9 G |
+| ...362935 | p1 30G, p2 195G | worker-3 = p1 | ~7.9 G |
+| ...362996 | p1 30G, p2 195G | (p2 = worker-0 NVMe OSD) | ~7.9 G |
+
+A partition cannot be extended with another immediately after it, and there is
+**no free whole disk**: all four NVMes are allocated to VMs, the four 2 TB
+SATAs are the worker HDD OSDs (`vdb`), `sdf` is the host OS, `sda` is
+host-mounted at `/mnt/storage`.
+
+Nor is anything on a worker reusable. Every disk is committed — e.g. worker-0:
+`vda` OS, `vdb` HDD OSD data, `vdc` its **dedicated BlueStore DB** (`osd.2`,
+`bluefs_dedicated_db=1`, 70 GiB, zero free extents), `vdd` the NVMe OSD
+(`osd.4`). Losing a DB device destroys its OSD; it is not a droppable cache.
+
+**Approach: attach a file-backed disk and move the image store onto it.**
+`/mnt/storage` has 632 G free of 916 G.
+
+```bash
+# On hierophant, ONE WORKER AT A TIME.
+W=worker-2                     # repeat for worker-0, worker-1, worker-3
+IMG=/mnt/storage/vm-disks/${W}-containerd.qcow2
+sudo mkdir -p /mnt/storage/vm-disks
+sudo qemu-img create -f qcow2 "$IMG" 48G
+
+# vde is the next free target on every worker
+sudo virsh attach-disk "$W" "$IMG" vde \
+  --driver qemu --subdriver qcow2 --targetbus virtio --persistent
+```
+
+Then mount it over the image store and reboot that node:
+
+```bash
+T=/home/k8s/talos/talosctl; TC=/home/k8s/talos/config/talosconfig
+IP=192.168.5.23                # worker-0 .21, worker-1 .22, worker-2 .23, worker-3 .24
+$T --talosconfig $TC -n $IP -e 192.168.5.11 patch machineconfig --patch \
+  '[{"op":"add","path":"/machine/disks","value":[
+      {"device":"/dev/vde","partitions":[{"mountpoint":"/var/lib/containerd"}]}]}]'
+```
+
+`machine.disks` validates on Talos v1.12.4 and the patch reports **"Applied
+configuration with a reboot"** — unlike the kubelet change, this one reboots.
+Talos partitions, formats and mounts on boot. `talosctl get volumestatus`
+already lists `/var/lib/containerd` as a plain `directory` volume inside
+EPHEMERAL, so disk-backing it fits the Talos model.
+
+**Safety and ordering.**
+
+- Ceph is `size 3 / min_size 2`, `failureDomain: host`, across 4 workers, so
+  exactly **one** node may be down at a time. Wait for pgs to return to
+  `active+clean` before the next.
+- `ceph-nvme-pool` is `size 2` on `osd.4` (worker-0) and `osd.5` (worker-3) with
+  `min_size 1` — never take those two down together.
+- **Do not add `vde` to `wipe-disks.yaml`** (see §1.10; device lists are
+  per-node and deliberately explicit).
+- Ceph will not claim `vde`: `cluster.yaml` sets `useAllDevices: false` and
+  names devices explicitly (`vdb`, `vdd`).
+- Verify per node: `talosctl -n <ip> get volumestatus | grep containerd`, and
+  `df` on `/var` from a privileged pod.
+
+**No-reboot alternative:** `ceph config set mon mon_data_avail_warn 15`.
+Instant and non-disruptive, but it silences a symptom that will keep recurring
+as images accumulate. Prefer the disk.
+
+### 2 Session Establishment (Operational Context)
 Every new session for the **Junie** agent MUST establish the operational context by following these steps:
 1.  **Git Initialization**:
     - If the current branch is `main`, pull the latest changes from origin.
@@ -955,26 +1105,26 @@ Every new session for the **Junie** agent MUST establish the operational context
 4. **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
-### 2.2 Current Focus (Iteration 8)
+### 2.1 Current Focus (Iteration 8)
 As of version 2.12.0, the project is focusing on **Iteration 8: Advanced Reasoning, Verification, and Self-Correction**.
 1.  **Refiner/Critic Phase**: Implementing a multi-stage reasoning process in the `rag-worker`.
 2.  **Verification Contracts**: Extending `InternalRequest` to include `verification_mode` and `critic_model`.
 3.  **Self-Correction**: Enabling autonomous re-plan/re-search loops for inconsistent outputs.
 4.  **Audit Trails**: Capturing verification results in TimescaleDB.
 
-### 2.3 Change Logs
+### 2.2 Change Logs
 - **Location**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json`
 - **Frequency**: Update at the conclusion of each prompting session when changes are made.
 - **Format**: Structured JSON with datetime stamp and brief description (most recent at the top).
 - **Git Policy**: The changelog does NOT need to be committed to git.
 
-### 2.4 Journaling and Permissions
+### 2.3 Journaling and Permissions
 To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
 1.  **Log/State Storage**: Redirect any script that writes state files, locks, or persistent journals to local storage on **hierophant**.
 2.  **Preferred Paths**: Use `/tmp` (for transient state) or `/home/junie` (for persistent user state).
 3.  **Implementation**: Pass environment variables like `JOURNAL_DIR` or use `sh -c` to set context before running the target script.
 
-### 2.5 Messaging & Data Contracts (Protobuf)
+### 2.4 Messaging & Data Contracts (Protobuf)
 As of Iteration 11, the project uses **Protobuf** as the single source of truth for all network-crossing DTOs (Data Transfer Objects) across Pulsar and REST APIs.
 
 #### Contract Management
