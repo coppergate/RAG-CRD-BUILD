@@ -67,9 +67,53 @@ pulsar_admin() {
     $KUBECTL exec -n "$NAMESPACE" "$TOOLSET_POD" -- /pulsar/bin/pulsar-admin "$@"
 }
 
+# WHY THESE LOOK CLUMSIER THAN "cmd | grep -q" (fixed 2026-09-17)
+#
+# This script runs under `set -Eeuo pipefail`. `grep -q` exits the instant it
+# matches and closes the pipe; the `kubectl exec` producer then hits EPIPE and
+# exits non-zero, and pipefail makes the PIPELINE report that failure -- even
+# though grep matched. So `if ! cmd | grep -q X` could take the "missing"
+# branch for something that plainly exists, try to create it, get HTTP 409, and
+# abort the whole install on `set -e`.
+#
+# It is a race, so it looked arbitrary. Exposure depends on match position,
+# because the listings are alphabetical: an early match short-circuits while
+# the producer is still writing, a late one does not. Observed 2026-09-17 on
+# rag-pipeline/dlq (2nd of 6) while stage (6th) and operations (4th) passed in
+# the same run, and pulsar-init then succeeded on retry with no code change.
+#
+# Two defences, both needed:
+#   1. capture the listing into a variable first, so grep cannot signal the
+#      producer at all (and, for namespaces, fetch it ONCE instead of per-item);
+#   2. treat "already exists" from a create as success -- it is idempotent, and
+#      no amount of pre-checking removes the create/check window.
+#
+# Do NOT "simplify" these back into `cmd | grep -q`.
+
+# Succeeded-or-empty: a listing failure must not masquerade as "not found",
+# so callers check the create result too.
+pulsar_list() { pulsar_admin "$@" 2>/dev/null || true; }
+
+# Run a create, tolerating an "already exists" collision.
+pulsar_create_idempotent() {
+    local what="$1"; shift
+    local out rc=0
+    out="$(pulsar_admin "$@" 2>&1)" || rc=$?
+    if [[ $rc -ne 0 ]]; then
+        if printf '%s\n' "$out" | grep -qiE 'already exist'; then
+            echo "  $what already existed (409 tolerated)"
+            return 0
+        fi
+        printf '%s\n' "$out" >&2
+        return $rc
+    fi
+    return 0
+}
+
 echo "--- 2. Ensuring 'rag-pipeline' tenant exists ---"
-if ! pulsar_admin tenants list | grep -q "^rag-pipeline$"; then
-    pulsar_admin tenants create rag-pipeline
+existing_tenants="$(pulsar_list tenants list)"
+if ! printf '%s\n' "$existing_tenants" | grep -q "^rag-pipeline$"; then
+    pulsar_create_idempotent "tenant rag-pipeline" tenants create rag-pipeline
     echo "Created tenant: rag-pipeline"
 else
     echo "Tenant 'rag-pipeline' already exists"
@@ -77,10 +121,12 @@ fi
 
 echo "--- 3. Ensuring namespaces exist ---"
 namespaces=("stage" "data" "operations" "dlq" "sessions" "embed")
+# Fetched once: six execs become one, and there is no per-item pipeline to race.
+existing_ns="$(pulsar_list namespaces list rag-pipeline)"
 for ns in "${namespaces[@]}"; do
     full_ns="rag-pipeline/$ns"
-    if ! pulsar_admin namespaces list rag-pipeline | grep -q "^$full_ns$"; then
-        pulsar_admin namespaces create "$full_ns"
+    if ! printf '%s\n' "$existing_ns" | grep -q "^$full_ns$"; then
+        pulsar_create_idempotent "namespace $full_ns" namespaces create "$full_ns"
         echo "Created namespace: $full_ns"
         # Enable topic auto-creation if it was disabled
         pulsar_admin namespaces set-is-allow-auto-update-schema "$full_ns" --enable
@@ -121,11 +167,13 @@ done
 
 echo "--- 4. Creating partitioned embed/jobs topic ---"
 EMBED_JOBS_TOPIC="persistent://rag-pipeline/embed/jobs"
-if pulsar_admin topics get-partitioned-topic-metadata "$EMBED_JOBS_TOPIC" 2>/dev/null | grep -q '"partitions"'; then
+topic_meta="$(pulsar_list topics get-partitioned-topic-metadata "$EMBED_JOBS_TOPIC")"
+if printf '%s\n' "$topic_meta" | grep -q '"partitions"'; then
     echo "Topic $EMBED_JOBS_TOPIC already exists"
 else
     # 8 partitions — one per worker-node embed pod pair, allows parallel consumption
-    pulsar_admin topics create-partitioned-topic "$EMBED_JOBS_TOPIC" --partitions 8
+    pulsar_create_idempotent "topic $EMBED_JOBS_TOPIC" \
+        topics create-partitioned-topic "$EMBED_JOBS_TOPIC" --partitions 8
     echo "Created partitioned topic: $EMBED_JOBS_TOPIC (8 partitions)"
 fi
 
