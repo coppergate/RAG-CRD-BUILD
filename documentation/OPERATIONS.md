@@ -138,6 +138,112 @@ The RAG stack uses the following Grafana dashboards for monitoring:
 - **performance-overview** (`uid: rag-performance`): Detailed performance and error metrics per service.
 - **rag-logs** (`uid: rag-logs`): Loki-based dashboard for log analysis.
 
+#### 1.5.1 Grafana was installed but unreachable, and its data was ephemeral (2026-09-18)
+
+Reported as "the Grafana UI was not installed". It **was** installed — the
+`Grafana` CR read `stage: complete / success`, the deployment had been up 3d1h,
+and `/api/health` returned `{"database":"ok","version":"13.1.3"}`. Three
+separate defects in `infrastructure/APM/grafana/operator-manifests.yaml` made it
+look otherwise. All three are the same class of mistake: **something was
+declared but never actually wired up.**
+
+**1. `root_url` pointed off its own ingress.** The manifest defines an ingress
+for `grafana.rag.hierocracy.home` at path `/`, then set:
+
+```yaml
+root_url: "https://rag-admin-api.rag.hierocracy.home/api/grafana/"
+serve_from_sub_path: "true"
+```
+
+So Grafana 301-redirected every browser request on its own ingress to a host
+that has **no Ingress object** and is **not deployed** — the whole `rag-system`
+namespace is empty. `curl -L` landed on a 404 while `/api/health` was fine,
+which is exactly the shape that reads as "not installed".
+
+That sub-path existed so `rag-explorer` could embed panels through the
+`rag-admin-api` BFF. `rag-explorer` is excluded from build and deploy (§5.5), so
+`root_url` now names the ingress that actually serves it. Restore the sub-path
+only alongside that service, and note `rendering.callback_url` carries the same
+path and must track it. `allow_embedding` is independent and still permits
+direct iframes.
+
+**2. The PVC was Bound but mounted by nothing — all data was in an emptyDir.**
+`spec.persistentVolumeClaim` in the `Grafana` CR only **creates** the PVC; the
+grafana-operator (v5.25.0) does not wire it into the deployment it generates,
+which backs `/var/lib/grafana` with an `emptyDir`. Result:
+
+```
+$ kubectl describe pvc central-grafana-pvc -n monitoring | grep 'Used By'
+Used By:  <none>                 # 5Gi Bound, paid for, attached to nothing
+```
+
+Grafana's sqlite DB lived in the pod, so **every restart silently wiped all
+dashboards, users, annotations and preferences.** This is why the dashboards
+vanished the moment the deployment rolled out. Fixed by overriding the volume
+**by name** in `deployment.spec.template.spec` — same name `grafana-data`, PVC
+source instead of emptyDir, which keeps the operator's own
+`grafana-data -> /var/lib/grafana` mount.
+
+Do not diagnose this from the CR. `spec.persistentVolumeClaim` being present
+tells you nothing; check the generated deployment and the PVC's `Used By`:
+
+```bash
+kubectl get deploy central-grafana-deployment -n monitoring \
+  -o jsonpath='{range .spec.template.spec.volumes[*]}{.name}{" pvc="}{.persistentVolumeClaim.claimName}{" emptyDir="}{.emptyDir}{"\n"}{end}'
+kubectl describe pvc central-grafana-pvc -n monitoring | grep 'Used By'
+```
+
+**3. Mounting the PVC then needs `fsGroup`, or Grafana CrashLoops.** The
+container runs `10001:10001` with `runAsNonRoot` and `readOnlyRootFilesystem`,
+while a freshly provisioned `rook-ceph-block` volume mounts root-owned. An
+emptyDir never hit this because the kubelet makes those writable. Symptom:
+
+```
+GF_PATHS_DATA='/var/lib/grafana' is not writable.
+mkdir: can't create directory '/var/lib/grafana/plugins': Permission denied
+```
+
+`securityContext.fsGroup: 10001` is set on the pod spec (re-declaring
+`seccompProfile: RuntimeDefault`, since specifying a pod `securityContext`
+replaces the operator's). **Any PVC mounted into this deployment needs the same
+treatment.**
+
+##### Two traps when verifying this
+
+- **`kubectl rollout restart` does not restart this deployment.** The operator
+  owns the deployment spec and reverts the `restartedAt` annotation, so the pod
+  UID never changes and a persistence test silently proves nothing. Delete the
+  pod instead, and compare `.metadata.uid` before and after.
+- **Dashboards reappearing is not evidence of persistence.** The operator
+  re-pushes them, so they come back on a wiped DB regardless. Probe with
+  something the operator does not manage — an annotation works:
+
+```bash
+# write, delete the pod, then re-read. Survival is the actual proof.
+curl -sk -u admin:admin -X POST https://grafana.rag.hierocracy.home/api/annotations \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"persistence-probe","tags":["pvc-test"]}'
+curl -sk -u admin:admin 'https://grafana.rag.hierocracy.home/api/annotations?tags=pvc-test'
+```
+
+##### Recovering dashboards after a data loss
+
+The operator stores a content hash in each `GrafanaDashboard` status and skips
+the push when it is unchanged, so a wiped Grafana is **not** necessarily
+repopulated — `lastResync` keeps advancing while the dashboard is absent. If
+dashboards are missing but the CRs report `ApplySuccessful`, force a reconcile
+by recreating the CRs (idempotent — they all live in the one manifest):
+
+```bash
+KUBECTL=/home/k8s/kube/kubectl
+F=/mnt/hegemon-share/share/code/complete-build/infrastructure/APM/grafana/operator-manifests.yaml
+$KUBECTL delete grafanadashboard,grafanadatasource --all -n monitoring
+$KUBECTL apply -f $F
+```
+
+Expected end state: 5 dashboards, 4 datasources, and the UID/slug paths §1.5
+lists below (`/d/rag-inference/inference-nodes` and friends).
+
 #### Embedded Grafana Configuration
 To allow `rag-explorer` to display embedded panels and links:
 1. **Anonymous Access**: Must be enabled in `central-grafana` (`Grafana` CR) with `org_role: Admin` (or `Viewer`) and `enabled: true`.
