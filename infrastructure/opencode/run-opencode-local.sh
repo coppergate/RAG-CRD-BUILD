@@ -88,16 +88,39 @@ if ! models_json=$(curl -fsS --max-time 10 "${OLLAMA_URL}/models" 2>/dev/null); 
   echo "       Check the service:  kubectl -n llms-ollama get svc ollama-code" >&2
   exit 1
 fi
-if ! printf '%s' "$models_json" | grep -q -- "$MODEL"; then
+# Build the provider's model map from what the endpoint actually serves, so the
+# picker offers every seeded model rather than just the default one.
+#
+# Two things this has to handle. First, seed-models.sh leaves each model tagged
+# BOTH bare and registry-prefixed (`qwen3:32b` and
+# `hierophant.hierocracy.home:5000/ollama/qwen3:32b` share one ID), so half the
+# list is duplicates that would double the picker; the prefixed form is dropped.
+# Second, the default must be an exact match -- a substring test passes on the
+# prefixed variant, which is a different string to OpenCode.
+# A registry-prefixed OPENCODE_MODEL is normalised to its bare tag rather than
+# rejected: the two tags are one model, and the previous substring check
+# accepted the prefixed form.
+MODEL="${MODEL##*/}"
+if ! models_map=$(printf '%s' "$models_json" | MODEL="$MODEL" python3 -c '
+import json, os, sys
+want = os.environ["MODEL"]
+ids = [m["id"] for m in json.load(sys.stdin).get("data", []) if "/" not in m["id"]]
+if want not in ids:
+    print("NOT_SERVED:" + ",".join(ids))
+    sys.exit(1)
+ids.sort(key=lambda i: (i != want, i))
+print(json.dumps({i: {"name": i} for i in ids}, indent=6)[1:-1].strip())
+' 2>/dev/null); then
   echo "ERROR: '$MODEL' is not served by $OLLAMA_URL." >&2
   echo "       Available:" >&2
   printf '%s' "$models_json" \
-    | python3 -c 'import sys,json;[print("         -",m["id"]) for m in json.load(sys.stdin).get("data",[])]' 2>/dev/null \
+    | python3 -c 'import sys,json;[print("         -",m["id"]) for m in json.load(sys.stdin).get("data",[]) if "/" not in m["id"]]' 2>/dev/null \
     || printf '         %s\n' "$models_json" >&2
   echo "       Override with OPENCODE_MODEL=<id>." >&2
   exit 1
 fi
-echo "  endpoint OK, '$MODEL' available"
+model_count=$(printf '%s' "$models_map" | grep -c '"name"')
+echo "  endpoint OK, '$MODEL' available (${model_count} models offered)"
 
 # ── 3. Write opencode.json ───────────────────────────────────────────────────
 # Same shape the chart renders, minus the {file:} apiKey indirection: Ollama
@@ -112,7 +135,9 @@ cat > "$CONF_DIR/opencode.json" <<JSON
       "npm": "@ai-sdk/openai-compatible",
       "name": "Ollama (hierocracy cluster)",
       "options": { "baseURL": "${OLLAMA_URL}" },
-      "models": { "${MODEL}": { "name": "${MODEL}" } }
+      "models": {
+      ${models_map}
+      }
     }
   }
 }
