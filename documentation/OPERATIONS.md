@@ -2115,3 +2115,91 @@ The `rag-admin-api` now supports API key authentication via the `ADMIN_API_KEY` 
 - **Transition State**: Currently configured as "fail-open" (optional: true in deployment). If the `rag-admin-api-auth` secret is missing, the service will allow unauthenticated access.
 - **Enforcement**: Once stable, the `optional: true` flag should be removed from the deployment.
 - **Setup**: Run `scripts/setup-admin-auth.sh` on **hierophant** to generate and apply the API key secret.
+
+## 14. OpenCode Agent (2026-09-18)
+
+OpenCode talks to the cluster's Ollama over its OpenAI-compatible `/v1` surface.
+It does **not** depend on the RAG stack, so it works while `rag-system` is empty.
+
+### 14.1 Two paths, and which to use
+
+| Path | Version | Config file | Use |
+|---|---|---|---|
+| **JetBrains built-in** (preferred) | tracks upstream, currently `1.18.31` | `~/.config/opencode/opencode.json` | day-to-day |
+| `infrastructure/opencode/run-opencode-local.sh` | pinned `1.14.48` | `~/.config/opencode-local/opencode.json` | standalone / no IDE |
+
+Both point at `ollama-code` (`192.168.5.207:11434`, the `ollama-qwen32b`
+deployment) and use the same provider shape.
+
+**The container is pinned at 1.14.48 because that is the only tag that exists.**
+`ghcr.io/neomanexlabs/opencode` published `1.14.48` and `1.14.48-1` and nothing
+since, while the official `opencode-ai` npm package is at `1.18.31`. There is no
+official OpenCode container image (`ghcr.io/sst/opencode` and
+`ghcr.io/opencode-ai/opencode` both 403). **This is not neglect** — do not
+"bump" the tag, it will not resolve. Getting current means building an image
+from the npm package or running the CLI natively, which is what the IDE does.
+
+### 14.2 Declare ONE model — the endpoint cannot cheaply serve more
+
+`ollama-qwen32b` runs `OLLAMA_MAX_LOADED_MODELS=1` with `OLLAMA_KEEP_ALIVE=-1`,
+so the resident model is pinned indefinitely:
+
+```bash
+curl -sS http://192.168.5.207:11434/api/ps    # expires reads year 2318 == never
+```
+
+Requesting a different model evicts the resident one and loads the replacement —
+~18GB out, ~20GB in, on a V100. Per §4.4.1 the VRAM budget (~26/32GB for
+`qwen3:32b`) means two 32B-class models cannot co-reside regardless.
+
+So **both configs declare a single model**. Listing all five puts that swap one
+click away mid-session. Switch by editing the config and restarting the agent,
+which pays the cost once at startup instead. The launcher takes
+`OPENCODE_ALL_MODELS=true` when you deliberately want to compare.
+
+Seeded on both GPU PVCs: `devstral-small-2:24b` (default executor),
+`qwen3:32b`, `qwen2.5:32b`, `granite3.1-dense:8b`, `llama3.1:latest`.
+
+> `/v1/models` lists each model **twice** — bare and registry-prefixed
+> (`qwen3:32b` and `hierophant.hierocracy.home:5000/ollama/qwen3:32b` share one
+> ID), because `seed-models.sh` tags both. Use the bare form in config.
+
+### 14.3 Switching the model the IDE uses
+
+```bash
+# one-line switch, then restart the agent so it re-reads the file
+python3 - <<'PY'
+import json, pathlib
+M = "qwen3:32b"                      # or devstral-small-2:24b
+p = pathlib.Path.home() / ".config/opencode/opencode.json"
+c = json.loads(p.read_text())
+c["model"] = f"ollama/{M}"
+c["provider"]["ollama"]["models"] = {M: {"name": M}}
+p.write_text(json.dumps(c, indent=2) + "\n")
+print("set to", M)
+PY
+```
+
+The first request after a switch stalls while Ollama swaps the weights. That is
+expected, not a hang.
+
+### 14.4 Port 4096 collides with the IDE
+
+The JetBrains ACP agent
+(`~/.cache/JetBrains/<IDE>/acp-agents/opencode/<ver>/opencode acp`, a child of
+the IDE process) listens on **the same default 4096** the container wants. pasta
+reports it uselessly and only after the image pull:
+
+```text
+Error: pasta failed with exit code 1:
+Listen failed for HOST TCP port 127.0.0.1/4096: Address already in use
+```
+
+`run-opencode-local.sh` now pre-flights the port and names the holder. To run
+both side by side:
+
+```bash
+OPENCODE_PORT=4097 bash infrastructure/opencode/run-opencode-local.sh
+```
+
+Identify the holder directly with `ss -ltnp "sport = :4096"`.
