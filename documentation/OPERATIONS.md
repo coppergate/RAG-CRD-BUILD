@@ -1082,7 +1082,7 @@ Instant and non-disruptive, but it silences a symptom that will keep recurring
 as images accumulate. Prefer the disk.
 
 ### 2 Session Establishment (Operational Context)
-Every new session for the **Junie** agent MUST establish the operational context by following these steps:
+Every new session for the **AGENT** MUST establish the operational context by following these steps:
 1.  **Git Initialization**:
     - If the current branch is `main`, pull the latest changes from origin.
     - If on a work branch:
