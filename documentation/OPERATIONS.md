@@ -1499,7 +1499,68 @@ treat that as a blocker for anything assuming 32GB.
 > reports the board code. Now that the pool is uniform they should be truthful,
 > but reconcile them by eye rather than writing a `nodeAffinity` against them.
 
-#### 4.4.1 Ollama VRAM tuning (re-based 2026-09-13)
+#### 4.4.0 Are both cards actually being used? (2026-09-18)
+
+Ask this directly rather than inferring it from the deployment. Both GPU pods
+holding `nvidia.com/gpu: 1` means both cards are **allocated**, not that either
+is doing anything:
+
+```bash
+# resident models + VRAM, per endpoint
+for ip in 192.168.5.206 192.168.5.207; do curl -sS "http://$ip:11434/api/ps"; done
+# and the card's own view
+kubectl exec -n llms-ollama deploy/ollama-llama3   -c ollama -- nvidia-smi --query-gpu=memory.used,memory.total --format=csv
+kubectl exec -n llms-ollama deploy/ollama-qwen32b  -c ollama -- nvidia-smi --query-gpu=memory.used,memory.total --format=csv
+```
+
+Measured 2026-09-18, **before** that day's changes: executor 18,200 / 32,768
+MiB, planner **0 / 32,768 MiB**. The planner card held nothing at all, because
+its only consumer is `rag-worker` and the RAG stack is not deployed (§14 / the
+`rag-system` namespace is empty). ~46 GiB of 64 GiB idle while the coding agent
+ran on one card.
+
+Each pod's `nvidia-smi` shows only its own card, both reported as index 0, so
+you cannot see the pair from inside one. Use the two endpoints, not one pod.
+
+**Both endpoints serve all five seeded models**, so the second card needs no
+redeployment to be useful — point a second client at the planner endpoint
+(`192.168.5.206`, service `ollama`) and a model loads there. After doing exactly
+that: planner `qwen3:32b` 23.3 GiB, executor `devstral-small-2:24b` 25.3 GiB —
+49 GiB of 64 GiB, one model per card, **neither evicting the other** because
+they are different pods. This is the cheap way to run two models at once given
+`OLLAMA_MAX_LOADED_MODELS=1` on the executor (§14.2).
+
+> Reserve capacity, not just placement: when the RAG stack returns, the planner
+> needs a planning model on that card. It runs `MAX_LOADED_MODELS=2`, so
+> `qwen3:32b` (23.3 GiB) plus `llama3.1` (~5 GiB) is ~29/32 — it fits, but
+> barely. Re-check before assuming both stay resident.
+
+##### Why not vLLM tensor-parallel across both (asked again 2026-09-18)
+
+Recurring external advice is `vllm/vllm-openai:latest` with
+`--tensor-parallel-size 2`. It does not apply here and the reasons are
+independent, so disproving one does not rescue it:
+
+1. **The image will not start.** These cards are `compute_cap 7.0` on driver
+   `580.126.16`. vLLM mainline has dropped `sm_70` — `vllm==0.20.0` on a V100
+   fails with a compute-capability-7.5-minimum `ValueError` / "no kernel image
+   is available for execution on the device". TGI, TensorRT-LLM and Triton
+   dropped Volta too. Only the `1CatAI/1Cat-vLLM` fork keeps it alive, which is
+   the single-fork exposure §4.4.2 already declined.
+2. **TP is the worst possible mode on this topology.** `nvidia-smi topo -m`
+   reports `SYS` — no NVLink, cross-socket. TP all-reduces *every layer* across
+   that link. Layer-split (`OLLAMA_SCHED_SPREAD=1`, a real variable: "Always
+   schedule model across all GPUs") crosses it once per split point and is the
+   supported route for a >32 GiB model.
+3. **The advice usually contradicts itself** — a 7B model "for throughput"
+   alongside the claim that coding agents degrade below 32B, and TP2 for a model
+   it concedes fits one card. Both are downgrades from `devstral-small-2:24b`
+   at 68.0% SWE-bench Verified.
+
+Nothing here needs more than one card today. Reach for `OLLAMA_SCHED_SPREAD=1`
+only when you want a single model larger than 32 GiB.
+
+#### 4.4.1 Ollama VRAM tuning (re-based 2026-09-13, executor re-tuned 2026-09-18)
 
 Two corrections landed together here.
 
@@ -1520,17 +1581,40 @@ values, with the arithmetic that justifies them:
 
 | | `ollama-llama3` (planner) | `ollama-qwen32b` (executor) |
 |---|---|---|
-| `OLLAMA_CONTEXT_LENGTH` | 16384 | 16384 |
+| values file | `values.yaml` | **`values-devstral.yaml`** (default since 2026-09-18) |
+| `OLLAMA_CONTEXT_LENGTH` | 16384 | **65536** |
 | `OLLAMA_MAX_LOADED_MODELS` | 2 | 1 |
 | `OLLAMA_KV_CACHE_TYPE` | `f16` | `f16` |
 | `OLLAMA_GPU_OVERHEAD` | 2 GiB | 2 GiB |
-| KV per token @ f16 | ~128 KiB (8B class) | ~256 KiB (32B, 64 layers, 8 KV heads) |
-| Budget | 2×~5 GB weights + 4 GiB KV + 2 GiB = **~16/32 GB** | ~20 GB weights + 4 GiB KV + 2 GiB = **~26/32 GB** |
+| KV per token @ f16 | ~128 KiB (8B class) | **~160 KiB** (devstral: 40 layers, 8 KV heads, head_dim 128) |
+| Budget | 2×~5 GB weights + 4 GiB KV + 2 GiB = **~16/32 GB** | ~15 GB weights + 10 GiB KV + 2 GiB = **~27/32 GB** |
+| **Measured** (2026-09-18) | `qwen3:32b` **23.3 GiB** | `devstral-small-2:24b` **25.3 GiB** |
 
-Both sit at 16384 rather than higher even though the planner has room, because
-`seed-models.sh` also seeds `qwen2.5:32b` / `qwen3:32b` into the planner PVC — a
-routing change could make a 32B resident there, and 16384 stays inside the
-envelope if it does.
+**The executor ran on the wrong file until 2026-09-18.** `EXECUTOR_VALUES`
+defaulted to `values-qwen32b.yaml` while the model the coding agent actually
+requested was **devstral**, so devstral was served under a budget computed for
+qwen3:32b's KV cache (256 KiB/token against devstral's 160) and got **16384 ctx
+instead of the 65536 its own file was written for** — a quarter of its context,
+on a card with 14 GiB free. `ollama.sh` now defaults to `values-devstral.yaml`;
+pass `EXECUTOR_VALUES=values-qwen32b.yaml` to go back.
+
+Measured after the switch: **25.3 GiB at 65536**, under the ~27 GiB calculated
+above, so the arithmetic was conservative and holds. This is the one case in
+this section where the numbers are measured rather than derived.
+
+The planner stays at 16384 because `seed-models.sh` also seeds `qwen2.5:32b` /
+`qwen3:32b` into its PVC — a routing change could make a 32B resident there, and
+16384 stays inside the envelope if it does. That is now the live arrangement
+(§4.4.0), and the measured 23.3 GiB confirms it.
+
+> **`qwen3:32b` is a thinking model.** It returns reasoning in a separate
+> `reasoning` field and burns completion budget before emitting any `content`
+> — measured: 69 tokens for a two-character answer, and at `max_tokens: 20` an
+> **empty `content` with `finish_reason: length`**, the whole budget spent
+> reasoning. That empty string is not a failure and not the §7.2 empty-answer
+> bug; it is the token budget. Fine for a planner, awkward for a coding agent
+> whose client may not render that field — one more reason devstral is the
+> executor.
 
 **To go beyond 16384**, halve the KV cache with `OLLAMA_KV_CACHE_TYPE=q8_0`
 (flash attention is already enabled, which it requires); 32768 then fits the
