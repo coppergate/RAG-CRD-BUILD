@@ -2248,7 +2248,48 @@ Seeded on both GPU PVCs: `devstral-small-2:24b` (default executor),
 > (`qwen3:32b` and `hierophant.hierocracy.home:5000/ollama/qwen3:32b` share one
 > ID), because `seed-models.sh` tags both. Use the bare form in config.
 
-### 14.3 Switching the model the IDE uses
+### 14.3 One provider per endpoint — how to offer two models safely
+
+§14.2 says declare one model, and that holds **per endpoint**. The constraint
+is `MAX_LOADED_MODELS=1` on a *pod*, so two models on one endpoint evict each
+other — but the two GPU pods are separate, one card each (§4.4.0), so a
+**second provider pointing at the other endpoint costs nothing**:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "ollama/devstral-small-2:24b",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama executor (devstral, 64k ctx)",
+      "options": { "baseURL": "http://192.168.5.207:11434/v1" },
+      "models": { "devstral-small-2:24b": { "name": "devstral-small-2:24b" } }
+    },
+    "ollama-planner": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama planner card (qwen3:32b, 16k ctx)",
+      "options": { "baseURL": "http://192.168.5.206:11434/v1" },
+      "models": { "qwen3:32b": { "name": "qwen3:32b (thinking)" } }
+    }
+  }
+}
+```
+
+Both appear in the picker as `ollama/...` and `ollama-planner/...`, and
+switching between them evicts nothing — verified 2026-09-18: both answered a
+completion and `api/ps` still showed devstral 25.3 GiB and qwen3:32b 23.3 GiB
+resident simultaneously.
+
+**Adding a model to an existing provider is the thing to avoid** — that is the
+same-endpoint swap. Adding a provider for a distinct endpoint is not.
+
+> **The IDE caches config at agent start.** Editing the file changes nothing
+> until the ACP agent restarts (restart the IDE, or kill the
+> `acp-agents/opencode/<ver>/opencode acp` process and let it respawn). A
+> config edit that "did nothing" is almost always this.
+
+### 14.4 Switching the model the IDE uses
 
 ```bash
 # one-line switch, then restart the agent so it re-reads the file
@@ -2267,7 +2308,7 @@ PY
 The first request after a switch stalls while Ollama swaps the weights. That is
 expected, not a hang.
 
-### 14.4 Port 4096 collides with the IDE
+### 14.5 Port 4096 collides with the IDE
 
 The JetBrains ACP agent
 (`~/.cache/JetBrains/<IDE>/acp-agents/opencode/<ver>/opencode acp`, a child of
