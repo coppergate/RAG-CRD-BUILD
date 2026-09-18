@@ -4,7 +4,20 @@
 set -euo pipefail
 
 MODEL="granite3.1-dense:8b"
-REGISTRY="registry.container-registry.svc.cluster.local:5000"
+# The ollama/ollama runtime image AND every ollama/* model artifact live in the
+# upstream mirror on hierophant. The in-cluster registry holds only locally
+# built services, so this used to fail twice over: the seeder image was "not
+# found", and the model blob fetches curled a registry that never had them.
+#
+# $REGISTRY is also used as a PATH COMPONENT inside Ollama's model store
+# (manifests/$REGISTRY/$REPO). That is safe to change: the seeder also writes
+# each manifest to manifests/registry.ollama.ai/library/<model>, which is the
+# path consumers resolve by short name, so model lookup does not depend on this.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env" ]]; then
+    # shellcheck source=../../../config/network.env
+    source "$(dirname "${BASH_SOURCE[0]}")/../../../config/network.env"
+fi
+REGISTRY="${REGISTRY_PREFIX:-hierophant.hierocracy.home:5000}"
 REPO="ollama/granite3.1-dense"
 TAG="8b"
 MODELS_DIR="./ollama-models"

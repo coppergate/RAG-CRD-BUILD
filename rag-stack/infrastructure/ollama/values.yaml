@@ -23,7 +23,7 @@ knative:
 # Docker image
 image:
   # -- Docker image registry
-  repository: registry.container-registry.svc.cluster.local:5000/ollama/ollama
+  repository: hierophant.hierocracy.home:5000/ollama/ollama
 
   # -- Docker pull policy
   pullPolicy: IfNotPresent
@@ -53,18 +53,19 @@ ollama:
 
   gpu:
     # -- Enable GPU integration
-    # Deliberately FALSE — this does NOT mean "run on CPU". This pod still uses
-    # a GPU; it just does not request the fungible 'nvidia.com/gpu' resource.
+    # TRUE as of 2026-09-13. This was deliberately false for the mixed pool:
+    # inference-0 held 1x V100 32GB (sm_70) + 2x Tesla P4 8GB (sm_61) advertised
+    # as one indistinguishable nvidia.com/gpu, so requesting the resource could
+    # hand this pod an 8GB card that cannot load the 32B models seeded into its
+    # PVC. The card was pinned by UUID via the ollama-gpu-pin-v100 ConfigMap
+    # instead, with no resource request at all.
     #
-    # inference-0 holds a MIXED pool: 1x Tesla V100 32GB (sm_70) + 2x Tesla P4
-    # 8GB (sm_61), all advertised as one indistinguishable nvidia.com/gpu.
-    # Requesting it would let the scheduler pick any of the three, and the
-    # 32B models seeded into this PVC (seed-models.sh) cannot load in 8GB.
-    # GFD labels cannot disambiguate either — see values-qwen32b.yaml.
-    #
-    # The card is instead pinned by UUID via the ollama-gpu-pin-v100 ConfigMap
-    # referenced from extraEnvFrom below.
-    enabled: false
+    # The P4s are gone; the node holds two identical V100 32GB cards. A plain
+    # request is now both correct and strictly better — allocatable is 2, so
+    # this pod and ollama-qwen32b land on SEPARATE cards rather than sharing
+    # one, and the scheduler accounts for the allocation so nothing can
+    # double-book. History: EXTERNAL-NODE-SETUP.md historical appendix.
+    enabled: true
 
     # -- Enable DRA GPU integration
     # If enabled, it will use DRA instead of Device Driver Plugin and create a ResourceClserviceaim and GpuClaimParameters
@@ -84,6 +85,10 @@ ollama:
 
     # -- Specify the number of GPU
     # If you use MIG section below then this parameter is ignored
+    # ONE card. Do not raise this: there are exactly 2 on the node and
+    # ollama-qwen32b needs the other. Two cards to one pod would only help a
+    # tensor-parallel runtime, and nvidia-smi topo -m reports SYS between them
+    # (no NVLink, cross-socket), so that would be a poor trade here anyway.
     number: 1
 
     # -- only for nvidia cards; change to (example) 'nvidia.com/mig-1g.10gb' to use MIG slice
@@ -177,9 +182,12 @@ securityContext: { }
 # runAsUser: 1000
 
 # -- Specify runtime class
-# Required so the container runtime honours NVIDIA_VISIBLE_DEVICES from the
-# ollama-gpu-pin-v100 ConfigMap. Talos sets containerd default_runtime_name to
-# nvidia already, but naming it here is explicit and survives that changing.
+# KEEP. Originally required so the runtime honoured the NVIDIA_VISIBLE_DEVICES
+# injected by the (now deleted) ollama-gpu-pin-v100 ConfigMap. Still required
+# with a plain nvidia.com/gpu request: the RuntimeClass is what selects the
+# NVIDIA container runtime that maps the device and driver libraries into the
+# container. Talos sets containerd default_runtime_name to nvidia already, but
+# naming it here is explicit and survives that changing.
 runtimeClassName: "nvidia"
 
 
@@ -332,12 +340,28 @@ extraEnv:
     value: "true"
   - name: OLLAMA_KV_CACHE_TYPE
     value: "f16"
-  - name: OLLAMA_NUM_CTX
-    value: "8192"
+  # RENAMED 2026-09-13: was OLLAMA_NUM_CTX, which Ollama does not recognise —
+  # 'ollama serve --help' on the mirrored ollama/ollama:0.15.6 lists
+  # OLLAMA_CONTEXT_LENGTH only. The old 8192 was inert; Ollama fell back to its
+  # own VRAM-derived default.
+  #
+  # 16384 on a now-dedicated 32GB V100. Budget, at f16 KV for an 8B-class model
+  # (32 layers, 8 KV heads, 128 head_dim -> 128 KiB/token):
+  #   16384 ctx -> 2 GiB KV per resident model, 4 GiB for the two allowed below
+  #   2x ~5 GB weights + 4 GiB KV + 2 GiB GPU_OVERHEAD = ~16/32
+  # Deliberately the same value as the executor rather than higher, even though
+  # there is room: seed-models.sh also seeds qwen2.5:32b and qwen3:32b into this
+  # PVC, so a routing change could make a 32B resident here. 16384 stays inside
+  # the envelope if that happens; 32768 with two models would not.
+  - name: OLLAMA_CONTEXT_LENGTH
+    value: "16384"
   - name: OLLAMA_KEEP_ALIVE
     value: "-1"
   - name: OLLAMA_NUM_PARALLEL
     value: "1"
+  # 2 resident 8B-class models (planner + a second for routing). Room exists for
+  # 3 on a dedicated 32GB card, but see the context note above: a 32B can land
+  # here, and 2 is the count that stays safe in that case.
   - name: OLLAMA_MAX_LOADED_MODELS
     value: "2"
   - name: OLLAMA_GPU_OVERHEAD
@@ -346,12 +370,13 @@ extraEnv:
 #    value: "1"
 
 # -- Additionl environment variables from external sources (like ConfigMap)
-# GPU pinning. Supplies NVIDIA_VISIBLE_DEVICES (the V100 UUID) and
-# NVIDIA_DRIVER_CAPABILITIES. Generated by ollama.sh from the
-# hierocracy.home/gpu-v100-uuid node label — no UUID is hardcoded in the repo.
-extraEnvFrom:
-  - configMapRef:
-      name: ollama-gpu-pin-v100
+# REMOVED 2026-09-13: the ollama-gpu-pin-v100 configMapRef. It supplied
+# NVIDIA_VISIBLE_DEVICES (a specific card's UUID) and NVIDIA_DRIVER_CAPABILITIES
+# so this pod could pin the V100 without requesting nvidia.com/gpu. With
+# ollama.gpu.enabled=true the device plugin injects both, and ollama.sh no
+# longer creates that ConfigMap — a stale reference here would leave the pod
+# stuck in CreateContainerConfigError.
+extraEnvFrom: []
 
 # Enable persistence using Persistent Volume Claims
 # ref: https://kubernetes.io/docs/concepts/storage/persistent-volumes/

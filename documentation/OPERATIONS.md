@@ -179,12 +179,252 @@ As of version `2.2.11`, Alloy (DaemonSet) uses **local pod discovery** for clust
 ### 1.6 TLS and Security
 1.  **Management Guide**: Refer to [TLS-GUIDE.md](TLS-GUIDE.md) for step-by-step instructions on creating certificates, adding SANs, and managing trust.
 2.  **Architecture**: Refer to [TLS-SECURITY.md](TLS-SECURITY.md) for the end-to-end security architecture.
-3.  **Trust Distribution**: The Root CA is distributed to all Talos nodes via the `machine.install.extraCerts` configuration in `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml`, and managed in-cluster via the `registry-ca-cm` ConfigMap in target namespaces.
+3.  **Trust Distribution**: **Corrected 2026-09-13.** There is no `machine.install.extraCerts` anywhere in `kubernetes-setup` — that claim was wrong. Talos nodes trust the bootstrap registry via `tls: insecureSkipVerify: true` in the registry section of [`kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml`](../../kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml), deliberately, so a regenerated bootstrap cert cannot break pulls. In-cluster trust is still the `registry-ca-cm` ConfigMap; its CA is read from the `ca:` field of the legacy `kubernetes-setup/configs/talos-registry-patch.yaml` by `APM/install.sh`, `rag-stack/setup-all.sh`, `pulsar/install.sh` and `ollama/ollama.sh` as a fallback — which is the only remaining reason that file exists.
 4.  **Client Configuration**: Ensure applications use the `SSL_CERT_FILE` environment variable (set to `/etc/ssl/certs/ca-certificates.crt`).
 5.  **Verification**: Use `kubectl get certificate -A` to verify certificate status.
 6.  **Service TLS**: All RAG services (adapters, gateway, admin-api) now use TLS for their REST APIs (port 8080 or 443).
     -   Certificates and keys are mounted from secrets named `<service>-tls`.
     -   Probes use `scheme: HTTPS`.
+
+### 1.7 DNS — Zone `hierocracy.home` and the Pod `ndots` Trap (verified 2026-09-13)
+
+**Server**: Technitium DNS on **diakonia.hierocracy.home / 192.168.1.210**
+(`DNS_SERVER` in `config/network.env`). Admin UI and REST API on port **5380**;
+the API requires a token, so record edits are made in the UI unless one is
+issued. **AXFR is refused** from both the editing VM and **hierophant**, so the
+zone cannot be enumerated remotely — when you need the full record list, export
+it from the Technitium UI. A `dig`-derived list only covers names you already
+know to ask for and must not be treated as complete.
+
+**Zone**: `hierocracy.home`, SOA `diakonia.hierocracy.home. admin.hierocracy.home.`
+
+#### Record model (current, after the 2026-09-13 wildcard removal)
+
+| Name | Type | Value |
+|---|---|---|
+| `traefik` | A | `192.168.5.200` (`INGRESS_IP`) |
+| `hierophant`, `registry` | A | `192.168.1.101` (`REGISTRY_PREFIX` host) |
+| `k8s-api` | A | `192.168.5.10` (kube API VIP) |
+| exposed services (below) | CNAME | `traefik.hierocracy.home.` |
+
+CNAME'd to `traefik` at the zone apex: `build-orchestrator`, `dashboard`,
+`gateway`, `grafana`, `ollama`, `qdrant`, `s3`, `timescaledb`. Under `rag.`:
+`grafana.rag`, `rag-admin-api.rag`, `rag-explorer.rag` — the only `rag.` names
+any manifest actually declares. Every other `*.rag.hierocracy.home` name in the
+documentation (`db-adapter`, `llm-gateway`, `memory-controller`,
+`object-store-mgr`, `qdrant-adapter`, `qdrant.rag`, `rag-ingestion`) is prose
+only and has no record.
+
+Ingress names are CNAMEs on purpose: when `INGRESS_IP` moves, exactly one A
+record changes. Per guidelines §SERVICE EXPOSURE every exposed service needs a
+`*.hierocracy.home` name, which means **adding a CNAME here is now part of
+exposing a service** — there is no wildcard left to fall back on.
+
+#### The removed wildcard — do not reintroduce it
+
+`*.hierocracy.home 3600 IN A 192.168.5.200` existed from 2026-07-03 to
+2026-09-13. It made in-pod resolution of the registry host **silently wrong**,
+and the failure mode is worth understanding before anyone adds a wildcard back:
+
+1. Pods get `options ndots:5` and inherit `hierocracy.home` in their search path
+   from the Talos node config (verified in-pod: `search default.svc.cluster.local
+   svc.cluster.local cluster.local hierocracy.home`, `nameserver 10.96.0.10`).
+2. `hierophant.hierocracy.home` has only 2 dots, under the `ndots:5` threshold,
+   so the **search list is tried before the absolute name**.
+3. The walk NXDOMAINs through the `cluster.local` suffixes, then reaches
+   `hierophant.hierocracy.home.hierocracy.home` — which the apex wildcard
+   synthesized, because per RFC 4592 a wildcard applies at *any* depth whose
+   closest encloser is the apex.
+4. That returns `192.168.5.200` and resolution **stops on the positive answer**.
+   The correct record is never consulted.
+
+Symptom: anything in a pod reaching the registry by name landed on the ingress
+VIP (`can't connect to remote host (192.168.5.200)`), while the same pull by IP
+worked. **Nodes were unaffected** — node `resolv.conf` uses the default
+`ndots:1`, so 2 dots clears the threshold and the absolute name is tried first.
+That asymmetry is why the fault looked identical on all 8 nodes and appeared
+node-independent: it was never the node, it was the pod resolver.
+
+#### Verification
+
+```bash
+# Absolute vs search-expanded. The doubled form MUST be NXDOMAIN.
+dig +short A hierophant.hierocracy.home. @192.168.1.210
+dig +short A hierophant.hierocracy.home.hierocracy.home @192.168.1.210
+
+# End to end from inside a pod (on hierophant):
+export KUBECONFIG=/home/k8s/kube/config/kubeconfig
+/home/k8s/kube/kubectl run dnscheck --rm -i --restart=Never \
+  --image=registry.hierocracy.home:5000/busybox:1.36 \
+  --command -- nslookup hierophant.hierocracy.home
+# Expect 192.168.1.101, NOT 192.168.5.200.
+```
+
+#### Gotchas
+
+- **Technitium "Last Used" is contaminated by diagnostics.** Any `dig` you run
+  updates it, so it is not evidence that a real client depends on a record.
+- **TTL tells explicit records from wildcard synthesis.** Host records carry
+  604800; the old wildcard carried 3600. A name answering with the wildcard's
+  TTL had no record of its own.
+- **`DNS_SEARCH` in `config/network.env` is dead config** — nothing reads it.
+  Pod search domains come from the Talos node config via kubelet, so editing
+  `network.env` changes nothing about resolution.
+- **Do not add a trailing dot to image references** to force an absolute lookup.
+  It re-keys the registry host, so the containerd mirror configured in
+  `kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml` (see §1.6) no longer
+  matches and the pull escapes to the internet. Keep refs prefixed with the bare
+  `REGISTRY_PREFIX` as `scripts/render-manifests.sh` emits them.
+- **Do not add `dnsConfig`/`ndots` overrides** for this. They were only ever
+  compensation for the wildcard and are unnecessary now.
+- **`rag.hierocracy.home` is an empty non-terminal**, created by the records
+  beneath it. Names under it need explicit records; no apex wildcard would cover
+  them even if one existed.
+- DNS is **not** part of `config-cluster.sh` or any install step. It is
+  hand-maintained on diakonia and survives cluster rebuilds independently.
+
+#### 1.7.1 Node registry addressing — `extraHostEntries` beats DNS (2026-09-13)
+
+`infrastructure/registry/apply-patch.sh` (step 1 `registry-patch` of
+`setup-01-basic.sh`) does not merge. It **replaces**:
+
+```bash
+patch machineconfig --patch '[{"op":"replace","path":"/machine/network/extraHostEntries","value":[]}]'
+patch machineconfig --patch '[{"op":"replace","path":"/machine/registries","value":{}}]'
+patch machineconfig --patch "@$PATCH_FILE"
+```
+
+So whatever `$PATCH_FILE` says becomes the node's registry reality on every run,
+and a stale file does not merely fail to help — it actively writes bad state.
+
+Observed 2026-09-13: the script pointed at
+`kubernetes-setup/configs/talos-registry-patch.yaml`, which still pins the
+pre-flat-LAN `registry.hierocracy.home -> 172.20.1.26`. Running the install
+wrote that dead IP onto all three control planes and all four workers, and every
+pull failed:
+
+```
+failed to resolve reference "hierophant.hierocracy.home:5000/busybox:1.36":
+  Head "https://registry.hierocracy.home:5000/v2/busybox/manifests/1.36?ns=..."
+  dial tcp 172.20.1.26:5000: i/o timeout
+```
+
+Note the shape of that error: the ref is correct, the registry is healthy, the
+tag is present, and DNS resolves the name correctly to 192.168.1.101 — but
+`extraHostEntries` is a static host entry and **overrides DNS on the node**, so
+none of that matters. When a pull fails on an IP that DNS does not return,
+suspect the machine config, not the registry and not DNS.
+
+`apply-patch.sh` now points at the live build path's patch. Keep exactly one
+authoritative patch file: `new-setup-external-gpu` is the only current build.
+
+#### 1.7.2 Two registries, complementary content — do not conflate them (2026-09-15)
+
+There are two registries and they hold **different** things:
+
+| Registry | Name | Holds |
+|---|---|---|
+| bootstrap / upstream mirror | `hierophant.hierocracy.home:5000` (`REGISTRY_PREFIX`) | the 84 mirrored third-party images from `install-image-plan.sh` |
+| in-cluster | `registry.container-registry.svc.cluster.local:5000` (`REGISTRY_LB_IP` 192.168.5.201) | locally built artifacts: `build-orchestrator`, the rag service images |
+
+Neither contains the other's content. The in-cluster registry is a plain
+`registry:2` — **no `REGISTRY_PROXY_REMOTEURL`**, so it is not a pull-through
+cache and will not fall back to hierophant.
+
+The same name also resolves differently depending on who asks:
+
+| Consumer | Resolves via | Lands on |
+|---|---|---|
+| a pod (Kaniko pushing, skopeo in-cluster) | CoreDNS → Service ClusterIP | in-cluster registry |
+| containerd pulling a pod's image | node `extraHostEntries` (§1.7.1) | whatever that entry says |
+
+So an image reference must name the registry that actually holds it. Until
+2026-09-15 several manifests pulled **upstream** images via the **in-cluster**
+name, which worked only because `extraHostEntries` pinned that name to
+hierophant. Splitting that entry so `build-orchestrator` could be pulled broke
+those helper pulls — same name, different destination, and the upstream images
+are not in the in-cluster registry.
+
+Fixed by naming the right registry in each case:
+
+- `bootstrap-orchestrator.sh` gained `UPSTREAM_REGISTRY` for busybox / kaniko /
+  aws-cli. It deliberately does **not** reuse `$REGISTRY`, because
+  `build-pipeline/install.sh` exports `REGISTRY` as the *internal* name and
+  passes it in, overriding the script's own default.
+- `kaniko-job-template.yaml` and `ingestion/ingest-job.yaml` now use
+  `REGISTRY_PREFIX` for their helper images, and are listed in
+  `render-manifests.sh` so the prefix tracks `network.env`. Safe to render:
+  `render_one`'s regex needs a literal `<host>:5000/`, so it cannot touch the
+  `${REGISTRY}/...` push destinations.
+
+**Rule of thumb: pull third-party images from `REGISTRY_PREFIX`; push and pull
+locally built artifacts via the in-cluster name.**
+
+The full set of third-party images that had to be repointed (2026-09-15), found
+only after `otel-collector` failed in `ImagePullBackOff` during the `apm` step:
+
+| Image | Would have broken |
+|---|---|
+| `otel/opentelemetry-collector-contrib` | `apm` (this is the one that fired) |
+| `apachepulsar/pulsar-all`, `apachepulsar/pulsar-manager`, `streamnative/oxia` | `pulsar` |
+| `ghcr.io/cloudnative-pg/cloudnative-pg`, `ghcr.io/imusmanmalik/timescaledb-postgis` | `timescaledb` |
+| `qdrant/qdrant`, `ollama/ollama` | `rag-stack` |
+
+**How to find these properly.** The first sweep pattern-matched a hand-written
+list of vendor prefixes (`busybox|amazon|martizih|gcr.io|alpine|golang|python`)
+and therefore missed `otel/`, `apachepulsar/`, `streamnative/`, `ollama/`,
+`qdrant/` and both `ghcr.io/` refs. Enumerate every reference and classify it
+instead of guessing the vendor list:
+
+```bash
+# every distinct path referenced via the in-cluster registry name
+grep -rhoE 'registry\.container-registry\.svc\.cluster\.local:5000/[A-Za-z0-9._/-]+' \
+  --include='*.yaml' --include='*.sh' . | grep -v vendor \
+  | sed 's#.*:5000/##' | sort -u
+# anything NOT in CURRENT_VERSION's key list is third-party and belongs on
+# REGISTRY_PREFIX; the built services legitimately keep the in-cluster name.
+python3 -c "import json;print(sorted(json.load(open('CURRENT_VERSION'))))"
+```
+
+**Values files are not the last word — check for `--set` overrides.** Repointing
+`ollama/values*.yaml` was necessary but useless on its own: `ollama.sh` hardcoded
+
+```bash
+REGISTRY="registry.container-registry.svc.cluster.local:5000"
+--set image.repository="${REGISTRY}/ollama/ollama"     # 4 call sites
+```
+
+and a Helm `--set` beats the values file, so all 14 ollama deployments
+(`ollama-embed-2..9`, `ollama-planner-cpu-2..5`, `ollama-llama3`,
+`ollama-qwen32b`) still went to ImagePullBackOff. When repointing an image, grep
+the installer scripts for `--set image` / `image.repository`, not just the
+manifests. In `ollama.sh` that variable feeds `image.repository` and nothing
+else, so pointing it at `REGISTRY_PREFIX` is complete — and correct, because
+every `ollama/*` artifact (the runtime image and all seven model artifacts)
+lives on hierophant while the in-cluster catalog is `["build-orchestrator"]`
+alone.
+
+After the fix the only in-cluster-name refs remaining are the ten built
+services (`db-adapter`, `embed-gateway`, `llm-gateway`, `memory-controller`,
+`object-store-mgr`, `qdrant-adapter`, `rag-explorer`, `rag-ingestion`,
+`rag-test-runner`, `rag-worker`) — which is correct, because that is where
+Kaniko pushes them.
+
+**Fixed 2026-09-15: the bootstrap's idempotency check.** It used to `skopeo
+inspect` hierophant for an image that is only ever pushed to the in-cluster
+registry, so it could never pass and the orchestrator was rebuilt on every
+install. Both check sites (`build-pipeline/install.sh` and
+`bootstrap-orchestrator.sh`) now probe `REGISTRY_LB_IP:REGISTRY_PORT`, sourced
+from `network.env`.
+
+An earlier revision of this section claimed `REGISTRY_LB_IP:5000` is
+unreachable from hierophant. **That was wrong** — it was measured while the
+`container-registry` namespace was deleted, so nothing was listening. The LB
+pool is reachable: `ip route get 192.168.5.201` resolves on-link via `br-lan`,
+and the ingress VIP on the same pool (`192.168.5.200:80`) answers from
+hierophant. What hierophant genuinely cannot do is resolve the
+`.svc.cluster.local` name (it has no cluster DNS), which is why the probe uses
+the IP, with `--tls-verify=false` since the cert carries no SAN for a bare IP.
 
 ### 1.8 Cluster Installation & Build Orchestration
 If you need to build the cluster from scratch, use the orchestration script on **hierophant**. This script handles disk formatting, network setup, bootstrap registry creation, and VM building in the correct order.
@@ -204,7 +444,7 @@ bash ./config-cluster.sh
     3.  Defines Libvirt networks (talos-nat, lb-net).
     4.  Starts and seeds the bootstrap registry (Podman) with Talos installer images.
     5.  Builds Control Plane VMs and waits for maintenance mode.
-    6.  Generates and applies Talos configuration (using the registry patch at `/mnt/hegemon-share/share/code/kubernetes-setup/configs/talos-registry-patch.yaml`).
+    6.  Generates and applies Talos configuration (using the registry patch at `kubernetes-setup/new-setup-external-gpu/configs/talos-registry-patch.yaml`).
     7.  Bootstraps the Kubernetes control plane.
     8.  Builds all Worker and Inference VMs.
     9.  Applies configuration and labels nodes (GPU Operator, etc.).
@@ -285,6 +525,35 @@ something the step actually creates. A check that can never succeed re-runs the 
 every install — which is why `k8tz` deliberately has none (its chart installs with no
 `--namespace`, so there is no `k8tz` namespace to test for).
 
+**Verifies added 2026-09-14.** `basic`, `apm`, `apm-stabilize`, `pulsar`,
+`cnpg-operator` and `timescaledb` used the bare legacy form until then; all six
+now pass a verify (helpers at the top of `setup-complete.sh`, beside
+`gpu_labels_published`). Each was confirmed to SUCCEED against a healthy
+cluster first — a verify that can never succeed re-runs its step on every
+install, which for a destructive step is far worse than a stale marker.
+
+Two deliberate exceptions:
+
+- **`pulsar-init` has no verify.** Its output is Pulsar tenants/namespaces,
+  confirmable only by exec-ing `pulsar-admin` in the toolset pod. Too expensive
+  for a guard. COUPLING: clearing `pulsar` means clearing `pulsar-init` too.
+- **`rook-ceph-wipe-disks` has no verify.** A wipe leaves no artifact to test —
+  the jobs are deleted — so any verify would permanently fail and re-run a
+  DESTRUCTIVE step every install. Its protection is the OSD-existence gate in
+  `wipe-disks.sh` instead.
+
+One trap when writing these: **the verify must test the right thing.** The
+first `registry-patch` verify grepped the whole machineconfig for
+`REGISTRY_LB_IP` and passed on a node whose registry alias still pointed at
+hierophant, because that IP also appears in the PureLB pool. It now anchors on
+the alias line and checks the following lines for the IP. Presence is not
+adjacency.
+
+Note also that these verifies test **Kubernetes objects, which survive
+destruction of Ceph itself**. Rebuilding storage therefore requires deleting
+the dependent namespaces/PVCs — only then do the verifies correctly fail and
+re-run the steps that repopulate them.
+
 `rag-stack/infrastructure/timescaledb/install.sh` and `build-pipeline/install.sh`
 have a local `should_run_step` implementing the same idea, plus an adopt-existing-state
 case (not in journal but verify passes → mark done and skip). The shared helper
@@ -347,6 +616,137 @@ The worker pool is **deliberately asymmetric**. Defined in
 | `worker-1` | 28 GiB | 8 | `18-21,46-49` | 1 | 1 | |
 | `worker-2` | 28 GiB | 8 | `22-25,50-53` | 1 | 1 | |
 | `worker-3` | **64 GiB** | **14** | `0-13` | **0** | 2 | NVMe fast-tier OSD **co-located with its own OS disk** |
+
+#### CephCluster drifted from this table — reconciled 2026-09-13
+
+The table above is correct and `infrastructure/rook-ceph/cluster.yaml` was the
+file that drifted. Do not "fix" it back. Until 2026-09-13 it omitted `worker-3`
+entirely and instead declared a third OSD on worker-0:
+
+```yaml
+# HDD OSD #2 (1.8TB, former worker-3 SATA) with NVMe bluestore DB
+- name: "vde"
+  config:
+    metadataDevice: "vdf"
+```
+
+That was a half-finished consolidation of worker-3's SATA disk onto worker-0.
+The config was written; **the disks were never moved**. `virsh domblklist
+worker-0` shows only `vda`–`vdd`, while worker-3 still holds its own 2 TB HDD,
+75 GB DB partition and 209 GB NVMe — attached, running, and unused by Ceph.
+Resolved by using worker-3 directly, which restores the 6 OSDs this table
+describes.
+
+`wipe-disks.yaml` had two matching faults: worker-0 wiped the nonexistent
+`vde`/`vdf`, and **worker-3 had no wipe job at all**. Both fixed.
+
+##### ⚠ 2026-09-14: the wipe ran against a LIVE cluster and silently destroyed all OSDs
+
+`wipe-disks.sh` zeroes the first 100 MB of every device its YAML lists. Run
+after OSDs exist, that destroys the LVM PV labels and BlueStore superblocks
+underneath them. **The OSDs do not fail.** They keep serving from device-mapper
+mappings already present in the kernel, so `kubectl get pods` shows
+`READY=true, RESTARTS=0` while nothing on disk is recoverable. The loss only
+surfaces at the next reboot, `dm` reload, or OSD pod restart.
+
+How to recognise it — the disks backing running OSDs read as all zeros:
+
+```bash
+# in a privileged pod pinned to the node (rook-ceph ns; default rejects privileged)
+dd if=/dev/vdb bs=1M count=4 2>/dev/null | tr -d '\000' | wc -c   # 0 == destroyed
+ls -A /sys/block/vdb/holders/                                     # dm-N still mapped
+```
+
+Why it re-ran: the only guard in `setup-01-basic.sh` was the journal marker
+`rook-ceph-wipe-disks`, and an earlier run had created the CephCluster and then
+died **before** writing it. A journal marker cannot express "OSDs now exist" —
+that state lives in the cluster, not the journal. This is the same class of
+problem as §1.8.2, one level deeper: the marker was not stale, it was *missing*,
+and re-running the step was destructive rather than merely redundant.
+
+`wipe-disks.sh` now asks the cluster and refuses by default:
+
+```bash
+osd_count=$($KUBECTL -n rook-ceph get deploy -l app=rook-ceph-osd --no-headers | wc -l)
+# >0 and FORCE_WIPE != true  ->  skip with a loud message, exit 0
+```
+
+`FORCE_WIPE=true` is the deliberate "reprovisioning storage, accept the loss"
+override. **Any new destructive step must be gated on observed cluster state,
+never on a journal marker alone.**
+
+Also fixed: the default `WIPE_JOB_SELECTOR` waited only on workers 0-2, so the
+worker-3 job added the same day would never have been waited on.
+
+##### ⚠ BlueStore keeps REDUNDANT labels at 1G/10G/100G — a head wipe is not enough
+
+Ceph Squid (19.x) writes BlueStore bdev label copies at **0, 1 GiB, 10 GiB and
+100 GiB** into the device (`BDEV_LABEL_POSITIONS`). Zeroing only the head — or
+even head and tail — leaves the deeper copies intact. `ceph-bluestore-tool
+show-label` then reads a survivor, `ceph-volume raw prepare` refuses the disk
+with `Raw device /dev/vdX is already prepared`, and Rook logs:
+
+```
+skipping osd.N: "<osd-uuid>" belonging to a different ceph cluster "<old-fsid>"
+```
+
+The device then **silently never becomes an OSD**. Nothing fails loudly; you
+just get fewer OSDs than `cluster.yaml` declares.
+
+This is expensive to diagnose because every ordinary check says the disk is
+clean:
+
+```bash
+lsblk -o NAME,FSTYPE /dev/vdd                      # no filesystem
+dd if=/dev/vdd bs=1M count=4 | tr -d '\000' | wc -c  # 0 -- head is zeroed
+ceph-volume raw list                               # ...but reports an OSD
+ceph-bluestore-tool show-label --dev /dev/vdd      # and shows its fsid + btime
+```
+
+Scan the actual positions instead:
+
+```bash
+for off in 0 1 10 100; do
+  printf '%sG: ' $off
+  dd if=/dev/vdd bs=1M count=1 skip=$((off*1024)) 2>/dev/null \
+    | strings | grep -m1 -i bluestore || echo clean
+done
+```
+
+Observed 2026-09-14: a label with `btime: 2026-06-21` survived **every** wipe in
+this build, including a full teardown. worker-0 and worker-3 `vdd` were skipped
+in every OSD-prepare run for weeks, which is the whole reason the pool kept
+coming up with 4 OSDs instead of 6. `wipe-disks.yaml` now zeroes all four
+positions (guarded by device size, so a small DB device does not error on the
+100 G offset) plus the tail. **Re-check `BDEV_LABEL_POSITIONS` when upgrading
+Ceph.**
+
+`ceph-volume zap --destroy` is the "proper" tool but did not clear the labels
+when tried here; the explicit offset zeroing did, and is what the manifest uses.
+
+##### Why a nonexistent device fails the wipe job instead of being skipped
+
+`dd if=/dev/zero of=/dev/vde` on a node without `vde` does **not** error out.
+The container's `/dev` is a 64 MB tmpfs, so `dd` creates a *regular file* there
+and writes until the tmpfs fills:
+
+```
+dd: error writing '/dev/vde': No space left on device
+65+0 records in / 64+0 records out          <- exactly 64 MB, the tmpfs size
+dd: error writing '/dev/vdf': No space left on device
+1+0 records in / 0+0 records out            <- tmpfs already full
+```
+
+The job then exits non-zero on the last `dd` and the rook step fails. A
+`No space left on device` against a supposedly multi-terabyte disk means the
+device does not exist — check `virsh domblklist <node>` before believing the
+manifest.
+
+Also note `wipefs -a` is a **no-op on every node**: the job runs busybox, which
+has no `wipefs` (`/bin/sh: wipefs: not found`). The `dd` zeroing of the first
+100 MB is the entire wipe. It now reads `|| true` to make that explicit. If a
+disk ever carries a GPT whose *backup* header at the end of the device survives,
+that 100 MB will not clear it and ceph-volume may reject the disk.
 
 Pool total: 148 GiB / 38 vCPU. Every worker also carries a 1.8 TB HDD OSD (`vdb`)
 plus an NVMe BlueStore DB (`vdc`), and 2 iothreads.
@@ -509,8 +909,14 @@ reserves memory; the limit only caps it.
 `embed-instance=0..3` and then deploys an even **2 embed + 1 planner-cpu per
 worker**. `worker-3` therefore carries the same embedding load as a node with
 one-third the physical cores. Options: leave it (keeps headroom free for
-in-memory services — arguably the right call), or weight the spread. Moot once
-embeddings move to the GPU under the vLLM plan's §9 step 3.
+in-memory services — arguably the right call), or weight the spread.
+
+**Correction 2026-09-13:** this used to end "Moot once embeddings move to the GPU
+under the vLLM plan's §9 step 3." That is not happening. Embeddings were fixed on
+CPU by decision (plan §9.1, closed 2026-09-07 — nothing in the embedding path
+batches, so a GPU endpoint would spend VRAM for no gain), and the vLLM server
+migration is itself shelved (§4.4.2). The uneven spread is therefore a standing
+condition to decide on, not something a future migration resolves.
 
 #### Verify
 
@@ -525,8 +931,158 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
 /home/k8s/kube/kubectl describe node worker-3 | sed -n '/Allocated resources/,/Events/p'
 ```
 
-### 2.1 Session Establishment (Operational Context)
-Every new session for the **Junie** agent MUST establish the operational context by following these steps:
+### 1.11 Worker OS Disk Pressure — MON_DISK_LOW, image GC, growing the VMs (2026-09-17)
+
+#### The warning, and what it is NOT
+
+```
+HEALTH_WARN mon a is low on available space
+[WRN] MON_DISK_LOW: mon.a has 24% avail
+```
+
+Not a Ceph capacity problem: the OSDs had 7.2 TiB free with all 266 pgs
+`active+clean`. It is the mon's *local* data directory, which `dataDirHostPath`
+places in `/var/lib/rook` on the node's **32 GB OS disk**. On worker-2:
+
+```
+/var/lib/containerd   19.8 G     <- container images
+/var/lib/kubelet       4.7 G
+/var/lib/rook        123.9 M     <- the mon's own data
+                     -------
+                      24.6 G  of ~28 G  ->  24% avail
+```
+
+The mon needs 124 MB and is being squeezed out by the image cache.
+
+#### Why nothing pruned: the two thresholds disagree
+
+```
+imagefs used = 70.5%   kubelet image GC fires at 85% used  -> never fired
+nodefs avail = 24.5%   Ceph warns below 30% avail          -> warns
+```
+
+Ceph's `mon_data_avail_warn` (30%) is far stricter than kubelet's
+`imageGCHighThresholdPercent` (85% default), so Ceph complains long before
+kubelet considers cleaning up. 99 images cached, 35 referenced by pods.
+
+#### There is no `talosctl` image prune
+
+`talosctl image` offers only `list`, `pull`, `cache-create`, `cache-serve`,
+`k8s-bundle`, `talos-bundle` — **no `rm`/`prune`**. The Talos-native prune is to
+lower kubelet's own thresholds, now applied to all four workers:
+
+```yaml
+machine:
+  kubelet:
+    extraConfig:
+      imageGCHighThresholdPercent: 65
+      imageGCLowThresholdPercent: 55
+```
+
+Applied without a reboot; confirmed live with
+`kubectl get --raw /api/v1/nodes/<node>/proxy/configz`.
+
+**It helps but does not fix this.** Measured: images 99 -> 84, avail 24.6% ->
+25.5%, then flat — including after deleting every `Succeeded` pod to release
+image references. kubelet will not evict an image that any existing container
+references, so GC is bounded by *what is removable*, not by the trigger point.
+Lowering the threshold further reclaims nothing. Keep the setting; do not expect
+it to clear MON_DISK_LOW.
+
+#### ⚠ IMAGE_PREFETCH_GROUPS does NOT prefetch to nodes
+
+The name misleads:
+
+```
+setup-complete.sh:60   IMAGE_PREFETCH_GROUPS=bootstrap,storage,apm-core,...
+setup-complete.sh:253  APPLY=true MIRROR_GROUPS="$IMAGE_PREFETCH_GROUPS" \
+                         bash scripts/mirror-all-images.sh
+```
+
+`mirror-all-images.sh` is *"Mirror install/runtime images into local registry"*
+with `TARGET_REGISTRY=registry.hierocracy.home:5000`, and the step is labelled
+"Initial Image Prefetch to **Local Registry**". It copies into **hierophant's
+registry** and never touches the nodes.
+
+So trimming that list **cannot** reduce worker disk usage — it would only shrink
+hierophant's mirror and push the next install toward the internet for whatever
+was dropped. Do not trim it for disk-pressure reasons. Node image growth comes
+from ordinary pod scheduling; every rebuild adds fresh service tags
+(`db-adapter:2.4.21`, `llm-gateway:2.4.22`, `rag-worker:2.4.48`, ...).
+
+#### Growing the worker OS disks — the actual fix
+
+**In-place growth is impossible.** The worker OS disks are **raw host
+partitions**, not qcow2 files, and each sits between partitions still in use:
+
+| NVMe serial | Layout | Worker OS partition | Tail free |
+|---|---|---|---|
+| ...362830 | p1 30G, p2 30G, p3 70G, p4 30G, p5 70G | worker-0 = p2, worker-1 = p4 | ~2.9 G |
+| ...362984 | p1 30G, p2 30G, p3 70G, p4 30G, p5 70G | worker-2 = p2 | ~2.9 G |
+| ...362935 | p1 30G, p2 195G | worker-3 = p1 | ~7.9 G |
+| ...362996 | p1 30G, p2 195G | (p2 = worker-0 NVMe OSD) | ~7.9 G |
+
+A partition cannot be extended with another immediately after it, and there is
+**no free whole disk**: all four NVMes are allocated to VMs, the four 2 TB
+SATAs are the worker HDD OSDs (`vdb`), `sdf` is the host OS, `sda` is
+host-mounted at `/mnt/storage`.
+
+Nor is anything on a worker reusable. Every disk is committed — e.g. worker-0:
+`vda` OS, `vdb` HDD OSD data, `vdc` its **dedicated BlueStore DB** (`osd.2`,
+`bluefs_dedicated_db=1`, 70 GiB, zero free extents), `vdd` the NVMe OSD
+(`osd.4`). Losing a DB device destroys its OSD; it is not a droppable cache.
+
+**Approach: attach a file-backed disk and move the image store onto it.**
+`/mnt/storage` has 632 G free of 916 G.
+
+```bash
+# On hierophant, ONE WORKER AT A TIME.
+W=worker-2                     # repeat for worker-0, worker-1, worker-3
+IMG=/mnt/storage/vm-disks/${W}-containerd.qcow2
+sudo mkdir -p /mnt/storage/vm-disks
+sudo qemu-img create -f qcow2 "$IMG" 48G
+
+# vde is the next free target on every worker
+sudo virsh attach-disk "$W" "$IMG" vde \
+  --driver qemu --subdriver qcow2 --targetbus virtio --persistent
+```
+
+Then mount it over the image store and reboot that node:
+
+```bash
+T=/home/k8s/talos/talosctl; TC=/home/k8s/talos/config/talosconfig
+IP=192.168.5.23                # worker-0 .21, worker-1 .22, worker-2 .23, worker-3 .24
+$T --talosconfig $TC -n $IP -e 192.168.5.11 patch machineconfig --patch \
+  '[{"op":"add","path":"/machine/disks","value":[
+      {"device":"/dev/vde","partitions":[{"mountpoint":"/var/lib/containerd"}]}]}]'
+```
+
+`machine.disks` validates on Talos v1.12.4 and the patch reports **"Applied
+configuration with a reboot"** — unlike the kubelet change, this one reboots.
+Talos partitions, formats and mounts on boot. `talosctl get volumestatus`
+already lists `/var/lib/containerd` as a plain `directory` volume inside
+EPHEMERAL, so disk-backing it fits the Talos model.
+
+**Safety and ordering.**
+
+- Ceph is `size 3 / min_size 2`, `failureDomain: host`, across 4 workers, so
+  exactly **one** node may be down at a time. Wait for pgs to return to
+  `active+clean` before the next.
+- `ceph-nvme-pool` is `size 2` on `osd.4` (worker-0) and `osd.5` (worker-3) with
+  `min_size 1` — never take those two down together.
+- **Do not add `vde` to `wipe-disks.yaml`** (see §1.10; device lists are
+  per-node and deliberately explicit).
+- Ceph will not claim `vde`: `cluster.yaml` sets `useAllDevices: false` and
+  names devices explicitly (`vdb`, `vdd`).
+- Verify per node: `talosctl -n <ip> get volumestatus | grep containerd`, and
+  `df` on `/var` from a privileged pod.
+
+**No-reboot alternative:** `ceph config set mon mon_data_avail_warn 15`.
+Instant and non-disruptive, but it silences a symptom that will keep recurring
+as images accumulate. Prefer the disk.
+
+### 2 Session Establishment (Operational Context)
+Every new session for the **AGENT** MUST establish the operational context by following these steps:
 1.  **Git Initialization**:
     - If the current branch is `main`, pull the latest changes from origin.
     - If on a work branch:
@@ -549,26 +1105,26 @@ Every new session for the **Junie** agent MUST establish the operational context
 4. **Changelog**: Add an initialization entry to `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json` with the current datetime and "Environment initialization" description.
 5. **Operational Review**: Read `guidelines.md` and `OPERATIONS.md`.
 
-### 2.2 Current Focus (Iteration 8)
+### 2.1 Current Focus (Iteration 8)
 As of version 2.12.0, the project is focusing on **Iteration 8: Advanced Reasoning, Verification, and Self-Correction**.
 1.  **Refiner/Critic Phase**: Implementing a multi-stage reasoning process in the `rag-worker`.
 2.  **Verification Contracts**: Extending `InternalRequest` to include `verification_mode` and `critic_model`.
 3.  **Self-Correction**: Enabling autonomous re-plan/re-search loops for inconsistent outputs.
 4.  **Audit Trails**: Capturing verification results in TimescaleDB.
 
-### 2.3 Change Logs
+### 2.2 Change Logs
 - **Location**: `/mnt/hegemon-share/share/code/_KUBERNETES_BUILD/ai-changes/changelog.json`
 - **Frequency**: Update at the conclusion of each prompting session when changes are made.
 - **Format**: Structured JSON with datetime stamp and brief description (most recent at the top).
 - **Git Policy**: The changelog does NOT need to be committed to git.
 
-### 2.4 Journaling and Permissions
+### 2.3 Journaling and Permissions
 To avoid `Permission denied` errors on the shared `/mnt/hegemon-share` mount:
 1.  **Log/State Storage**: Redirect any script that writes state files, locks, or persistent journals to local storage on **hierophant**.
 2.  **Preferred Paths**: Use `/tmp` (for transient state) or `/home/junie` (for persistent user state).
 3.  **Implementation**: Pass environment variables like `JOURNAL_DIR` or use `sh -c` to set context before running the target script.
 
-### 2.5 Messaging & Data Contracts (Protobuf)
+### 2.4 Messaging & Data Contracts (Protobuf)
 As of Iteration 11, the project uses **Protobuf** as the single source of truth for all network-crossing DTOs (Data Transfer Objects) across Pulsar and REST APIs.
 
 #### Contract Management
@@ -743,56 +1299,189 @@ ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
    bash ./push-models-to-cluster.sh"
 ```
 
-#### GPU Selection on inference-0 (Mixed Pool — Pin by UUID)
-`inference-0` holds a **heterogeneous** GPU pool: 1x Tesla V100 32GB (sm_70, volta) and
-2x Tesla P4 8GB (sm_61, pascal). All three are advertised as a single fungible
-`nvidia.com/gpu` resource (`allocatable: 3`).
+#### GPU Selection on inference-0 (Uniform Dual V100 — Ordinary Requests)
 
-**DO NOT request `nvidia.com/gpu` for inference workloads.** The scheduler cannot
-distinguish the cards, and two of the three cannot hold a 32B model (~19GB Q4_K_M)
-in 8GB of VRAM.
+**Rewritten 2026-09-13. This section previously documented a pin-by-UUID
+workaround; that workaround is retired and must not be reintroduced while the
+pool stays uniform.**
 
-**Node affinity on GFD labels does NOT work either.** GFD models a mixed node as a
-single product/memory/compute triple. Observed live on 2026-08-08 with
-`MIG_STRATEGY=none` correctly set, GFD still reported the P4:
-```text
-nvidia.com/gpu.product = Tesla-P4     nvidia.com/gpu.memory = 7680
-nvidia.com/gpu.family  = pascal       nvidia.com/gpu.compute.major/minor = 6/1
+`inference-0` holds **two identical Tesla V100 32GB cards**. Verified on the live
+node 2026-09-13:
+
+| idx | UUID | Reported name | Memory | Compute | PCI |
+|---|---|---|---|---|---|
+| 0 | `GPU-ce06ba79-…47c6ecb` | `Tesla PG500-216` | 32768 MiB | 7.0 | `05:00.0` |
+| 1 | `GPU-1b623f18-…f03761e5` | `Tesla PG500-216` | 32768 MiB | 7.0 | `81:00.0` |
+
+Driver `580.126.16`. The 2x Tesla P4 8GB cards have been **physically removed**.
+
+> `Tesla PG500-216` is a **board code**, not a marketing name — the driver falls
+> back to it when it has no SKU string. **Do not grep for "V100".** Classify
+> these cards on memory and compute capability instead; `nvidia-operator.sh`
+> does exactly that.
+
+**Request GPUs the ordinary way.** With a uniform pool the device plugin's single
+`nvidia.com/gpu` resource is honest, `allocatable` is 2, and the scheduler keeps
+two single-GPU pods on two distinct cards:
+
+```yaml
+resources:
+  limits:
+    nvidia.com/gpu: 1
+runtimeClassName: nvidia      # required: selects the NVIDIA container runtime
+nodeSelector:
+  role: inference-node
+tolerations:                  # inference-0 is tainted; see the next subsection
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
 ```
-The `hierocracy.home/gpu-labels-describe=tesla-v100-32gb` label asserts the opposite
-and is currently **false**. Treat `nvidia.com/gpu.*` labels as unreliable on this node.
 
-**The supported mechanism is pin-by-UUID.** Published as node labels by
-`kubernetes-setup/new-setup-external-gpu/52-install-gpu-operator.sh`:
+`nvidia.com/gpu` is an *extended resource*: setting only `limits` is correct —
+Kubernetes copies the limit into `requests`, and the two may not differ.
 
-| Label | Card |
+**Do NOT pin by UUID any more.** There are no `hierocracy.home/gpu-*-uuid` node
+labels; `nvidia-operator.sh` actively unsets them. Pinning sets
+`NVIDIA_VISIBLE_DEVICES` and requests no resource, so the scheduler does not know
+the card is taken — two pods can pin the same card and contend for VRAM while
+Kubernetes reports both as satisfied. That accounting hole is the whole reason
+the workaround was removed.
+
+**Interconnect: no NVLink.** `nvidia-smi topo -m` reports `SYS` between the two
+cards — GPU0 on NUMA 0, GPU1 on NUMA 1, traversing PCIe *and* the cross-socket
+interconnect. Consequences:
+
+- **One card per pod is the right topology**, and it is what the RAG stack uses.
+- **Tensor parallelism would be penalised here.** A TP job all-reduces every
+  layer across that link. Avoid it.
+- **Layer-split across both cards is fine** (llama.cpp/Ollama's default mode):
+  activations cross the boundary once per split point, which is a small
+  transfer. If you ever want a single model larger than 32GB, this is the
+  supported route — give one pod `nvidia.com/gpu: 2` and set
+  `OLLAMA_SCHED_SPREAD=1`. Nothing does this today.
+
+**Current assignment — one card each, which is new.** Both GPU Ollama pods used
+to share a single card (a hangover from the single-GPU node) and contend for its
+VRAM. They now get a card apiece by ordinary scheduling:
+
+| Deployment | Service | Role | Card |
+|---|---|---|---|
+| `ollama-llama3` | `ollama` | planner | one, scheduler-assigned |
+| `ollama-qwen32b` | `ollama-code` | executor | the other |
+
+VRAM tuning was re-based on that in `values.yaml` / `values-qwen32b.yaml` — see
+§4.4.1.
+
+**Inventory labels** published by `nvidia-operator.sh`, all measured rather than
+asserted:
+
+| Label | Meaning |
 |---|---|
-| `hierocracy.home/gpu-v100-uuid` | Tesla V100 32GB, `05:00.0` |
-| `hierocracy.home/gpu-p4-0-uuid` | Tesla P4 8GB, `81:00.0` |
-| `hierocracy.home/gpu-p4-1-uuid` | Tesla P4 8GB, `82:00.0` |
+| `gpu=true` | **load-bearing** — device plugin, GFD, DCGM exporter and the Talos validation-fix DaemonSet all select on it |
+| `gpu-count`, `hierocracy.home/gpu-total-count` | cards discovered on the node |
+| `hierocracy.home/gpu-32gb-count` | how many are ≥32GB / `sm_7x` |
+| `hierocracy.home/gpu-inventory-rev` | label-schema revision (currently `2`); the idempotency predicate for the label step |
 
-A workload pins a card by setting `NVIDIA_VISIBLE_DEVICES` to the UUID and
-`NVIDIA_DRIVER_CAPABILITIES=compute,utility` (`utility` alone yields only
-`nvidia-smi`, no CUDA), with `runtimeClassName: nvidia`, and requests **no**
-`nvidia.com/gpu`.
+`gpu-32gb-count` is named for the **property**, not for "v100", because these
+cards do not report a V100 product string. If it ever differs from
+`gpu-total-count` the pool is no longer uniform and the script warns loudly —
+treat that as a blocker for anything assuming 32GB.
 
-In the RAG stack, `infrastructure/ollama/ollama.sh` resolves the V100 UUID from the
-node label at deploy time and writes it into the `ollama-gpu-pin-v100` ConfigMap in
-`llms-ollama`. Both GPU values files consume it via `extraEnvFrom` and set
-`ollama.gpu.enabled: false`. No UUID is hardcoded in the repo. `extraEnvFrom` is used
-rather than `extraEnv` because Helm replaces whole lists on merge, which makes an
-index-based `--set` override silently fragile.
+> **GFD's `nvidia.com/gpu.*` labels: record, do not gate.** They were observed
+> lying on this node while the pool was mixed (reporting `Tesla-P4` /
+> `memory=7680` with `MIG_STRATEGY=none` correctly set), and `gpu.product`
+> reports the board code. Now that the pool is uniform they should be truthful,
+> but reconcile them by eye rather than writing a `nodeAffinity` against them.
 
-**Caveat:** with no `nvidia.com/gpu` request there is no scheduler GPU accounting.
-Preventing two pods from pinning the same card is the manifests' responsibility.
+#### 4.4.1 Ollama VRAM tuning (re-based 2026-09-13)
 
-**Current assignment** — both `ollama-llama3` and `ollama-qwen32b` share the V100,
-preserving the VRAM tuning originally written for the single-GPU node.
-**TODO (revisit once the cluster is stable):** move `ollama-llama3` to
-`gpu-p4-0-uuid` to free ~5GB of V100 VRAM for the 32B executor. That also requires
-trimming `qwen2.5:32b` / `qwen3:32b` from `ollama-llama3` in `seed-models.sh` (an 8GB
-P4 cannot load them) and forcing its `OLLAMA_MAX_LOADED_MODELS` to 1.
+Two corrections landed together here.
 
+**`OLLAMA_NUM_CTX` is not a real Ollama variable.** Verified against the
+mirrored image — `ollama serve --help` on `ollama/ollama:0.15.6` lists
+`OLLAMA_CONTEXT_LENGTH` and no `OLLAMA_NUM_CTX`. Every values file had been
+setting the wrong name, so the documented context length was **inert** and
+Ollama used its own default (`4k/32k/256k based on VRAM`). Renamed in
+`values.yaml`, `values-qwen32b.yaml`, `values-planner-cpu.yaml` and
+`values-planner-cpu-worker.yaml`.
+
+> `rag-stack/infrastructure/ollama/ollama-deploy.yaml` carries the same stale
+> variable but is **referenced by no script** — dead config, left untouched.
+> Fix the name there if it is ever revived.
+
+**The old tuning assumed two pods on one card.** That premise is gone. Current
+values, with the arithmetic that justifies them:
+
+| | `ollama-llama3` (planner) | `ollama-qwen32b` (executor) |
+|---|---|---|
+| `OLLAMA_CONTEXT_LENGTH` | 16384 | 16384 |
+| `OLLAMA_MAX_LOADED_MODELS` | 2 | 1 |
+| `OLLAMA_KV_CACHE_TYPE` | `f16` | `f16` |
+| `OLLAMA_GPU_OVERHEAD` | 2 GiB | 2 GiB |
+| KV per token @ f16 | ~128 KiB (8B class) | ~256 KiB (32B, 64 layers, 8 KV heads) |
+| Budget | 2×~5 GB weights + 4 GiB KV + 2 GiB = **~16/32 GB** | ~20 GB weights + 4 GiB KV + 2 GiB = **~26/32 GB** |
+
+Both sit at 16384 rather than higher even though the planner has room, because
+`seed-models.sh` also seeds `qwen2.5:32b` / `qwen3:32b` into the planner PVC — a
+routing change could make a 32B resident there, and 16384 stays inside the
+envelope if it does.
+
+**To go beyond 16384**, halve the KV cache with `OLLAMA_KV_CACHE_TYPE=q8_0`
+(flash attention is already enabled, which it requires); 32768 then fits the
+same envelope. **Measure first** — `q8_0` KV is a quality trade, not a free win.
+
+These figures are arithmetic, not measurements. Validate against real VRAM use
+before trusting them under load:
+
+```bash
+ssh -i ~/.ssh/id_hierophant_access junie@hierophant \
+  "export KUBECONFIG=/home/k8s/kube/config/kubeconfig && \
+   /home/k8s/kube/kubectl get nodes -L gpu,hierocracy.home/gpu-total-count,hierocracy.home/gpu-32gb-count && \
+   /home/k8s/kube/kubectl get node inference-0 -o jsonpath='{.status.allocatable.nvidia\.com/gpu}{\"\\n\"}'"
+```
+
+#### 4.4.2 Serving engine: Ollama retained, vLLM server swap shelved (2026-09-13)
+
+**Decision: stay on Ollama.** The dual-V100 rebuild was originally the trigger
+for migrating the executor to vLLM
+(`kubernetes-setup/new-setup-external-gpu/VLLM-DUAL-V100-PLAN.md`). That server
+migration is **shelved**, not paused. Reasons, in order of weight:
+
+1. **Concurrency is 1.** `OLLAMA_NUM_PARALLEL=1` and the workload is a
+   single-user coding assistant plus RAG experimentation. vLLM's decisive
+   advantage is continuous batching under concurrent load, which does not pay
+   here. The plan's own open question 6 had already flagged this.
+2. **Volta is the wrong side of the BF16/FP8 line.** `sm_70` has no native
+   BF16. GGUF INT4/INT8 via llama.cpp is a well-supported path on this
+   hardware; vLLM's quantised kernels are not uniformly available for `sm_70`,
+   which is precisely why the plan targeted a **fork** (1Cat-vLLM) exposing
+   `VLLM_SM70_QUANT_BACKEND` with `marlin`/`turbomind` and **no benchmarked
+   winner**. Depending on one fork's Volta support is real exposure.
+3. **vLLM reserves VRAM statically.** `--gpu-memory-utilization` is
+   pre-allocated and held; Ollama allocates per model and can unload. Useful on
+   a box also used for experiments. *(Caveat: our
+   `OLLAMA_KEEP_ALIVE=-1` disables unloading by choice, to keep the coding
+   assistant warm.)*
+4. **No NVLink** (`SYS`, cross-socket) makes vLLM's TP2 variant unattractive
+   while leaving Ollama's layer-split mode viable — see §4.4.
+
+Arguments that did **not** drive this, because they were not true of the plan as
+written: vLLM does not require Ray for single-node TP; the plan specified AWQ
+INT4 rather than BF16/FP16 inference; the plan used no tensor parallelism at
+all; and the RAG pipeline does not compete for VRAM — Qdrant, `rag-worker` and
+TimescaleDB run on worker nodes and **embeddings stay on CPU** by decision
+(plan §9.1, closed 2026-09-07).
+
+**What survives from the migration work.** The OpenAI-protocol client refactor
+in `documentation/VLLM-CLIENT-MIGRATION-PLAN.md` is **still worth doing on its
+own merits** and is independent of this decision: Ollama 0.15.6 serves an
+OpenAI-compatible `/v1` surface, so replacing `rag-worker`'s Ollama-native
+client collapses the codebase to one protocol, is provable against the running
+Ollama pods, and needs no new hardware. It only *also* happens to be what a
+future vLLM cutover would require.
+
+**To revisit this decision**, the trigger is concurrency rising above 1 or a
+measured need for throughput Ollama cannot reach — not new hardware.
 #### inference-0 is Tainted — GPU Workloads Only
 `inference-0` is tainted so that **only pods that need the GPU** schedule there:
 
@@ -853,13 +1542,22 @@ That is fixed; `--gpu` is safe, and GPU setup now **defaults ON**.
 provisioning (machine config, kernel modules, driver extensions, enrolment).
 `complete-build` owns everything that is a Kubernetes object — the operator Helm
 release, RuntimeClass, device-plugin ConfigMap, validation-fix DaemonSet, and the
-GPU node labels. `52-install-gpu-operator.sh` is left in place but is no longer the
-source of truth; do not edit both.
+GPU node labels. `52-install-gpu-operator.sh` has since been **deleted** (commit
+`e1d54a4`); `nvidia-operator.sh` is the only copy. Any error message still telling
+you to re-run it is stale — report it.
 
-**Ordering — this matters.** The operator publishes the
-`hierocracy.home/gpu-*-uuid` node labels, and `ollama.sh` **hard-fails** without
-them. The step therefore runs as **Step 1.9, immediately before the RAG stack**. It
-used to run after, which meant a fresh install could never deploy Ollama.
+**Ordering — this matters.** The operator must run before the RAG stack, as
+**Step 1.9**. It used to run after, which meant a fresh install could never deploy
+Ollama.
+
+The *reason* changed on 2026-09-13 and the requirement did not. It used to be that
+the operator published the `hierocracy.home/gpu-*-uuid` labels and `ollama.sh`
+hard-failed without them. Those labels are gone, and `ollama.sh` no longer reads
+any label — but the GPU Ollama pods now request `nvidia.com/gpu: 1`, and that
+resource does not exist on the node until the device plugin is running. Deploy the
+RAG stack first and both GPU pods sit `Pending` on an unschedulable resource
+instead. Same ordering, sturdier reason: a resource request is visible in
+`kubectl describe pod`, where a missing label was not.
 
 **The old deferral rationale no longer applies.** It read:
 
@@ -877,14 +1575,40 @@ Three settings in `nvidia-operator.sh` are load-bearing and interact:
 
 | Setting | Consequence if wrong |
 |---|---|
-| `mig.strategy: none` (Helm) | chart default `single` makes GFD collapse the mixed node onto one product and hide the V100. Surfaces as the `MIG_STRATEGY` env var, which the plugin resolves **above** its config file — so the ConfigMap alone cannot fix it |
+| `mig.strategy: none` (Helm) | the V100 does not support MIG and the chart default is `single`. Surfaces as the `MIG_STRATEGY` env var, which the plugin resolves **above** its config file — so `migStrategy` in the ConfigMap alone cannot fix a wrong value here. *(Its original, sharper purpose was stopping GFD collapsing the mixed V100+P4 pool onto one product and hiding the V100. That pool is gone; the env-above-config precedence is a plugin property and is unchanged.)* |
 | `devicePlugin.config.default: config.yaml` | without it the operator ignores the ConfigMap entirely and runs chart defaults |
 | no empty `sharing: timeSlicing: {}` in the ConfigMap | fails parsing with "no resources specified"; the plugin will not start and `nvidia.com/gpu` drops to 0. Was previously present and *inert* — it only becomes fatal once `config.default` makes the file load |
 
-GPU UUIDs are now **discovered** from the live node via a throwaway privileged pod
-running `nvidia-smi -L` (Talos cannot run it directly), with the known UUIDs as
-fallback. Set `GPU_UUID_DISCOVER=false` to use the fallbacks only. Re-run this
-script after any GPU is added, removed or reseated.
+**GPU inventory is discovered, not configured** (rewritten 2026-09-13). A
+throwaway privileged pod runs `nvidia-smi --query-gpu=...` on the node (Talos
+cannot run it directly) and the script derives the card count and how many are
+≥32GB/`sm_7x`. No UUIDs are collected — nothing pins a card any more. Set
+`GPU_INVENTORY_DISCOVER=false` to skip the probe and trust `GPU_EXPECTED_COUNT`
+(default 2). Re-run the script after any GPU is added, removed or reseated.
+
+> **Two bugs were fixed here on 2026-09-13; both had been silent.**
+>
+> 1. **The probe never worked.** It ran `kubectl run` with **no `-n`**, so the
+>    pod landed in `default`, which this cluster admits at PodSecurity
+>    `baseline` — `privileged`, `hostPID` and `hostPath` are all rejected there.
+>    `2>/dev/null || echo ""` swallowed the `Forbidden` error, so every run
+>    silently fell back to hardcoded UUIDs while appearing to discover them. The
+>    probe now runs in `$NAMESPACE`, which the script labels
+>    `enforce=privileged` in its first step. That step also gained a verify
+>    command (§1.8.2), since a stale journal marker there would break the probe.
+> 2. **The label step's idempotency guard never skipped.** It read
+>    `is_step_done "nvidia-gpu-labels" $KUBECTL get node -l ... -o name | grep -q node`,
+>    where bash binds the pipe to `is_step_done`'s **own stdout**, not to
+>    kubectl's — so the guard tested a log message for the string `node` and
+>    always failed. Harmless, because the step is idempotent, but it was not
+>    doing what it read as doing. The predicate is now a shell function that
+>    tests for the current label-schema revision and checks for empty output
+>    explicitly (`kubectl get -l` exits 0 when nothing matches).
+>
+> The label step's journal key is `nvidia-gpu-labels-v2`. Bump `GPU_LABEL_REV`
+> if the label set changes shape again — a marker alone cannot tell you which
+> schema is on the node, which is exactly how rev-1 labels would otherwise
+> outlive the hardware.
 
 #### Model Seeding (During Install)
 `seed-models.sh` creates temporary seeder pods that pull models from the local registry into the PVCs. 

@@ -7,6 +7,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLAN_FILE="$ROOT_DIR/scripts/install-image-plan.sh"
 LOCAL_REGISTRY_PREFIX_BOOTSTRAP="registry.hierocracy.home:5000/"
 LOCAL_REGISTRY_PREFIX_CLUSTER="registry.container-registry.svc.cluster.local:5000/"
+# Flat-LAN host registry prefix (config/network.env REGISTRY_PREFIX). Rendered
+# manifests carry this form, so it must be recognised as local — otherwise every
+# rendered ref is reported as an uncovered upstream ref.
+LOCAL_REGISTRY_PREFIX_HOST="hierophant.hierocracy.home:5000/"
 
 TMP_CONSUMED_RAW="$(mktemp)"
 TMP_CONSUMED_UPSTREAM="$(mktemp)"
@@ -28,18 +32,28 @@ normalize_to_upstream() {
     echo "${ref#$LOCAL_REGISTRY_PREFIX_CLUSTER}"
     return
   fi
+  if [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_HOST"* ]]; then
+    echo "${ref#$LOCAL_REGISTRY_PREFIX_HOST}"
+    return
+  fi
   echo "$ref"
 }
 
 is_local_ref() {
   local ref="$1"
-  [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_BOOTSTRAP"* ]] || [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_CLUSTER"* ]]
+  [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_BOOTSTRAP"* ]] ||
+  [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_CLUSTER"* ]] ||
+  [[ "$ref" == "$LOCAL_REGISTRY_PREFIX_HOST"* ]]
 }
 
 is_local_exception_ref() {
   local ref="$1"
   # Bootstrap exception: the in-cluster registry deployment image itself.
-  [[ "$ref" == "registry:2" ]]
+  [[ "$ref" == "registry:2" ]] && return 0
+  # Refs built from a shell variable ($INTERNAL_REGISTRY/..., $REGISTRY/...) are
+  # already registry-local once expanded.
+  [[ "$ref" == \$* ]] && return 0
+  return 1
 }
 
 is_active_path() {
@@ -69,9 +83,38 @@ while IFS= read -r -d '' f; do
     -e 's/.*-configmapServerImage=([^"[:space:]]+).*/\1/p' \
     -e 's/.*--acme-http01-solver-image=([^"[:space:]]+).*/\1/p' \
     -e '/OPERATOR_IMAGE_NAME/{n;s/^[[:space:]]*value:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/p;}' \
-    -e 's/^[[:space:]]*-[[:space:]]+((registry\.hierocracy\.home:5000|registry\.container-registry\.svc\.cluster\.local:5000|docker\.io|quay\.io|ghcr\.io|gcr\.io|registry\.k8s\.io|kubernetesui|apachepulsar|streamnative)\/[^"[:space:]]+).*/\1/p' \
+    -e 's/^[[:space:]]*-[[:space:]]+((registry\.hierocracy\.home:5000|hierophant\.hierocracy\.home:5000|registry\.container-registry\.svc\.cluster\.local:5000|docker\.io|quay\.io|ghcr\.io|gcr\.io|registry\.k8s\.io|kubernetesui|apachepulsar|streamnative)\/[^"[:space:]]+).*/\1/p' \
     "$f" >> "$TMP_CONSUMED_RAW" || true
 done < <(find "$ROOT_DIR" -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 2>/dev/null)
+
+# 2b) Helm-style split image refs: `repository:` plus a nearby `tag:`.
+# The plain `image:` scan above misses these entirely, which is how the Ollama
+# and Pulsar values files stayed invisible to this audit.
+while IFS= read -r -d '' f; do
+  is_active_path "$f" || continue
+  awk '
+    match($0, /^[[:space:]]*repository:[[:space:]]*"?[^"[:space:]]+"?[[:space:]]*$/) {
+      line = $0
+      sub(/^[[:space:]]*repository:[[:space:]]*/, "", line)
+      gsub(/"/, "", line)
+      repo = line
+      pending = repo
+      # a tag seen just above the repository line still belongs to it
+      if (prev_tag != "" && NR - prev_tag_line <= 3) { print repo ":" prev_tag; pending = "" }
+      next
+    }
+    match($0, /^[[:space:]]*tag:[[:space:]]*"?[^"[:space:]]*"?[[:space:]]*$/) {
+      line = $0
+      sub(/^[[:space:]]*tag:[[:space:]]*/, "", line)
+      gsub(/"/, "", line)
+      prev_tag = line
+      prev_tag_line = NR
+      if (pending != "" && line != "") { print pending ":" line; pending = "" }
+      next
+    }
+  ' "$f" \
+    | grep -Ev '\{\{|^\s*$' >> "$TMP_CONSUMED_RAW" || true
+done < <(find "$ROOT_DIR" -type f \( -name 'values*.yaml' -o -name 'values*.yml' \) -print0 2>/dev/null)
 
 # 3) Shell kubectl run --image= refs
 while IFS= read -r -d '' f; do
@@ -138,7 +181,16 @@ fi
 
 echo
 echo "Consumed refs missing from install-image-plan.sh:"
+# Exemptions:
+#   *:__VERSION__       locally built service images; the tag is substituted at
+#                       deploy time from the build-processor version, so no
+#                       literal tag can ever match the plan.
+#   *:latest (local)    build-orchestrator is pushed as both :<tag> and :latest.
+#   $VAR/...            refs assembled from a shell variable at runtime
+#                       (e.g. $INTERNAL_REGISTRY/...), already registry-local.
 comm -23 "$TMP_CONSUMED_UPSTREAM" "$TMP_PLAN" \
   | while read -r img; do normalize_to_upstream "$img"; done \
   | sort -u \
-  | grep -Ev '^(build-orchestrator:latest|llm-gateway:__VERSION__|rag-worker:__VERSION__|rag-ingestion:__VERSION__|db-adapter:__VERSION__|qdrant-adapter:__VERSION__|object-store-mgr:__VERSION__|rag-test-runner:__VERSION__)$' || true
+  | grep -Ev '^[A-Za-z0-9._/-]+:__VERSION__$' \
+  | grep -Ev '^build-orchestrator:latest$' \
+  | grep -Ev '^\$[A-Za-z_][A-Za-z0-9_]*/' || true

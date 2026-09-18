@@ -135,8 +135,24 @@ if should_run_step "build-pipeline-timescaledb-secret" "$KUBECTL get secret time
     mark_step_done "build-pipeline-timescaledb-secret"
 fi
 
-# Use the external registry URL for skopeo if running on hierophant
-SKOPEO_REGISTRY="registry.hierocracy.home:5000"
+# Existence check for the BUILT artifact, run from hierophant.
+#
+# It must probe the registry that actually HOLDS build-orchestrator: the
+# in-cluster one. Until 2026-09-15 this probed hierophant, where the artifact is
+# never pushed, so the check could never pass and the orchestrator was rebuilt
+# on every install.
+#
+# hierophant cannot resolve registry.container-registry.svc.cluster.local (no
+# cluster DNS), but it CAN route to the PureLB address on the flat LAN --
+# 192.168.5.201 is on-link via br-lan, same pool as the ingress VIP. So probe
+# REGISTRY_LB_IP directly. --tls-verify=false below covers the cert having no
+# SAN for the bare IP.
+if [[ -f "$REPO_DIR/../../../config/network.env" ]]; then
+    # shellcheck source=../../../config/network.env
+    source "$REPO_DIR/../../../config/network.env"
+fi
+SKOPEO_REGISTRY="${SKOPEO_REGISTRY:-${REGISTRY_LB_IP:+${REGISTRY_LB_IP}:${REGISTRY_PORT:-5000}}}"
+SKOPEO_REGISTRY="${SKOPEO_REGISTRY:-registry.hierocracy.home:5000}"
 if should_run_step "build-orchestrator-image" "command -v skopeo >/dev/null 2>&1 && skopeo inspect --tls-verify=false docker://$SKOPEO_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG"; then
     echo "--- Bootstrapping Build Orchestrator Image (Cluster-Native) ---"
     ORCHESTRATOR_TAG="$ORCHESTRATOR_TAG" REGISTRY="$REGISTRY" bash "$REPO_DIR/bootstrap-orchestrator.sh"

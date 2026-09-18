@@ -47,7 +47,14 @@ if [ -f "$LOCAL_CA" ]; then
 fi
 
 # Models to pre-pull (add/remove as needed)
-MODELS=("llama3.1" "granite3.1-dense:8b" "qwen2.5:32b" "qwen3:32b" "all-minilm:l6-v2" "nomic-embed-text" "mxbai-embed-large" "llama3.2:3b")
+# devstral-small-2:24b added 2026-09-13 — coding/agent executor candidate.
+# The :24b tag is q4_K_M (~15GB) and is the same digest as :latest; there is no
+# q6_K tag published. Requires Ollama >= 0.13.3 to pull, and the mirrored image
+# is 0.15.6, so the temporary container below can fetch it.
+# This is the step that must run BEFORE the install (setup-complete.sh Step
+# 1.1.2) — nodes only reach the local registry during the install proper, so a
+# model absent here cannot be seeded into a PVC later without internet.
+MODELS=("llama3.1" "granite3.1-dense:8b" "qwen2.5:32b" "qwen3:32b" "devstral-small-2:24b" "all-minilm:l6-v2" "nomic-embed-text" "mxbai-embed-large" "llama3.2:3b")
 
 echo "--- Pushing Models to Cluster Registry ($REGISTRY) as OCI artifacts ---"
 

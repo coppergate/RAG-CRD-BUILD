@@ -24,9 +24,31 @@ function obc_diagnostics() {
     $KUBECTL get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 40 || true
 }
 
+# Seconds of no progress before nudging the bucket provisioner (see below).
+OBC_NUDGE_AFTER_SECONDS="${OBC_NUDGE_AFTER_SECONDS:-120}"
+
+# The OBC provisioner lives in the rook-ceph operator and uses a workqueue with
+# exponential backoff. If the RGW is briefly unreachable when a claim is first
+# synced -- which happens routinely, because the operator rolls the RGW
+# deployment while the object store settles -- every claim fails with
+# "connection refused" on the secure endpoint and then sits in backoff. Observed
+# 2026-09-14: five OBCs failed inside a 16-second RGW rollout and had still not
+# been retried four minutes later, with port 443 open the whole time. Restarting
+# the operator drops the backoff state and all five bound within 40s.
+#
+# So: nudge once, rather than burn the whole timeout waiting for a retry that
+# may not come. Idempotent and safe -- the operator is stateless and reconciles
+# from the CRs on start.
+function nudge_bucket_provisioner() {
+    echo "No bucket progress in ${OBC_NUDGE_AFTER_SECONDS}s -- restarting rook-ceph operator to clear provisioner backoff"
+    $KUBECTL -n rook-ceph rollout restart deploy/rook-ceph-operator || true
+    $KUBECTL -n rook-ceph rollout status deploy/rook-ceph-operator --timeout=120s || true
+}
+
 function wait_for_bucket_secret() {
     local bucket="$1"
     local waited=0
+    local nudged="false"
 
     echo "Checking bucket: $bucket"
     while ! $KUBECTL get secret "$bucket" -n "$NAMESPACE" >/dev/null 2>&1; do
@@ -35,6 +57,10 @@ function wait_for_bucket_secret() {
         echo "Still waiting for $bucket... phase=${phase:-unknown} elapsed=${waited}s"
         sleep "$OBC_WAIT_POLL_SECONDS"
         waited=$((waited + OBC_WAIT_POLL_SECONDS))
+        if [[ "$nudged" != "true" && "$waited" -ge "$OBC_NUDGE_AFTER_SECONDS" ]]; then
+            nudge_bucket_provisioner
+            nudged="true"
+        fi
         if [[ "$waited" -ge "$OBC_WAIT_TIMEOUT_SECONDS" ]]; then
             echo "ERROR: Timeout waiting for bucket secret for $bucket after ${OBC_WAIT_TIMEOUT_SECONDS}s"
             obc_diagnostics "$bucket"
