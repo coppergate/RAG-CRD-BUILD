@@ -24,7 +24,33 @@ if ! host build-orchestrator.hierocracy.home >/dev/null 2>&1; then
     CURL_H_HEADER="Host: build-orchestrator.hierocracy.home"
 fi
 BUILD_METADATA_URL="${BUILD_METADATA_URL:-$DEFAULT_METADATA_URL}"
-REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
+# REGISTRY is where locally built artifacts are PUSHED and where the deployment
+# manifests are rewritten to pull from. It must be the IN-CLUSTER registry:
+# upstream (hierophant) is the mirror for third-party images, and the two hold
+# complementary content -- see OPERATIONS.md 1.7.2.
+#
+# This defaulted to registry.hierocracy.home:5000 until 2026-09-20, which was
+# harmless while the Talos extraHostEntries pinned both names to hierophant.
+# The 2026-09-15 split gave the names distinct destinations, after which builds
+# pushed upstream while setup-all.sh deployed from in-cluster -- ImagePullBackOff
+# on every service.
+REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
+export REGISTRY   # trigger-build.sh puts this in the build task payload
+
+# PROBE_REGISTRY is how THIS HOST reaches $REGISTRY. hierophant has no cluster
+# DNS, so the in-cluster name is addressed by its PureLB IP. Used only for
+# existence checks; the push destination stays the DNS name because Kaniko runs
+# in-cluster and resolves it through CoreDNS.
+if [[ -f "$BASE_DIR/config/network.env" ]]; then
+    # shellcheck source=../config/network.env
+    source "$BASE_DIR/config/network.env"
+fi
+if [[ "$REGISTRY" == registry.container-registry.svc.cluster.local:* ]]; then
+    PROBE_REGISTRY="${PROBE_REGISTRY:-${REGISTRY_LB_IP:-192.168.5.201}:${REGISTRY_PORT:-5000}}"
+else
+    PROBE_REGISTRY="${PROBE_REGISTRY:-$REGISTRY}"
+fi
+
 FORCE_BUILD="${FORCE_BUILD:-false}"
 WAIT_FOR_COMPLETION="${WAIT_FOR_COMPLETION:-false}"
 OVERRIDE_VERSION="${OVERRIDE_VERSION:-}"
@@ -204,8 +230,13 @@ image_exists() {
     local svc="$1"; local ver="$2"
     if [[ "$FORCE_BUILD" == "true" ]]; then return 1; fi
     if command -v skopeo >/dev/null 2>&1; then
-        if skopeo inspect "docker://$REGISTRY/$svc:$ver" --tls-verify=false >/dev/null 2>&1; then 
-            return 0 
+        # Probe where the push actually lands, not the in-cluster DNS name --
+        # hierophant cannot resolve that. Probing the wrong registry here is
+        # worse than it looks: stale copies upstream would report every service
+        # as already built and skip the rebuild, leaving the in-cluster registry
+        # empty while the script reports success.
+        if skopeo inspect "docker://$PROBE_REGISTRY/$svc:$ver" --tls-verify=false >/dev/null 2>&1; then
+            return 0
         fi
     fi
     return 1
@@ -358,6 +389,16 @@ build_service() {
             if [[ "$svc" == "rag-test-runner" ]]; then
                 context_dir="$REPO_DIR/tests"
                 dockerfile="$REPO_DIR/tests/Dockerfile.test-runner"
+            fi
+            # podman runs on the HOST, which cannot resolve the in-cluster
+            # registry's DNS name. Fail with guidance rather than emitting a
+            # confusing resolver error mid-build. MODE=local is a bootstrap
+            # path only (OPERATIONS.md 3.1/3.3); set REGISTRY explicitly.
+            if [[ "$REGISTRY" == registry.container-registry.svc.cluster.local:* ]]; then
+                log "ERROR: MODE=local cannot push to $REGISTRY -- that name only resolves in-cluster."
+                log "       Re-run with an address this host can reach, e.g.:"
+                log "         REGISTRY=$PROBE_REGISTRY MODE=local bash rag-stack/build.sh"
+                return 1
             fi
             podman build --tls-verify=false \
                 -t "$REGISTRY/$svc:$ver" -t "$REGISTRY/$svc:latest" \

@@ -76,10 +76,21 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        # Where locally built artifacts are PUSHED. See OPERATIONS.md 1.7.2.
         - name: INTERNAL_REGISTRY_ADDR
           value: "registry.container-registry.svc.cluster.local:5000"
+        # Legacy name a client may still send as task.registry; when it matches,
+        # the push is redirected to INTERNAL_REGISTRY_ADDR. This was set to the
+        # in-cluster name (2026-03, pre-dating the registry split), which made
+        # the comparison in launchKanikoJob unsatisfiable, so the redirect never
+        # fired and builds pushed upstream instead.
         - name: EXTERNAL_REGISTRY_NAME
-          value: "registry.container-registry.svc.cluster.local:5000"
+          value: "registry.hierocracy.home:5000"
+        # Where MIRRORED THIRD-PARTY tooling (busybox, kaniko) is PULLED from.
+        # Deliberately the upstream registry, never the push target -- the
+        # in-cluster registry does not carry these images.
+        - name: TOOLING_REGISTRY_ADDR
+          value: "hierophant.hierocracy.home:5000"
         - name: PULSAR_URL
           value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
         - name: BUILD_TOPIC

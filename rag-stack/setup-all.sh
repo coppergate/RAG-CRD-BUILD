@@ -26,15 +26,41 @@ KUBECTL="/home/k8s/kube/kubectl"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 REGISTRY="${REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
 
+# VERIFY_REGISTRY is the address used to PROBE $REGISTRY from hierophant.
+#
+# apply_manifest rewrites every image reference to $REGISTRY, so verification
+# MUST interrogate that same registry. Until now this was hardcoded to
+# registry.hierocracy.home:5000 -- the UPSTREAM mirror -- while the deployment
+# pointed at the in-cluster registry. The two hold complementary content
+# (OPERATIONS.md 1.7.2), so the check was wrong in both directions: it aborted
+# on build-orchestrator, which only ever exists in-cluster, and it passed on
+# service images present upstream but absent in-cluster, producing exactly the
+# ImagePullBackOff it exists to prevent.
+#
+# hierophant has no cluster DNS, so the in-cluster name is addressed by its
+# PureLB IP instead -- same approach as build-pipeline/install.sh. Any other
+# value of $REGISTRY is probed by name, so overriding REGISTRY keeps the check
+# and the deployment in agreement.
+if [[ -f "${BASE_DIR:-$REPO_DIR/..}/config/network.env" ]]; then
+    # shellcheck source=../config/network.env
+    source "${BASE_DIR:-$REPO_DIR/..}/config/network.env"
+fi
+if [[ "$REGISTRY" == registry.container-registry.svc.cluster.local:* ]]; then
+    VERIFY_REGISTRY="${VERIFY_REGISTRY:-${REGISTRY_LB_IP:-192.168.5.201}:${REGISTRY_PORT:-5000}}"
+else
+    VERIFY_REGISTRY="${VERIFY_REGISTRY:-$REGISTRY}"
+fi
+export VERIFY_REGISTRY
+
 source "${BASE_DIR:-$REPO_DIR/..}/scripts/journal-helper.sh"
 init_journal
 
 verify_image_ready() {
   local svc="$1"
   local ver="$2"
-  # Use the external registry name for verification from hierophant
-  local img="registry.hierocracy.home:5000/${svc}:${ver}"
-  
+  # Probe the registry the manifest will actually be deployed from (see above).
+  local img="${VERIFY_REGISTRY}/${svc}:${ver}"
+
   echo "--- Verifying image readiness: $img ---"
   if ! command -v skopeo >/dev/null 2>&1; then
       echo "WARN: skopeo not found, skipping readiness check."
@@ -52,6 +78,12 @@ verify_image_ready() {
   done
   
   echo "ERROR: Image $img not found in registry after 120s. Aborting deployment to prevent ImagePullBackOff."
+  echo "  Probed:   $img"
+  echo "  Deploy:   ${REGISTRY}/${svc}:${ver}  (what the manifest will reference)"
+  echo "  If the image exists in the OTHER registry, the build pushed it to the"
+  echo "  wrong one -- see OPERATIONS.md 1.7.2. Compare with:"
+  echo "    curl -sk https://${VERIFY_REGISTRY}/v2/${svc}/tags/list"
+  echo "    curl -sk https://${REGISTRY_PREFIX:-hierophant.hierocracy.home:5000}/v2/${svc}/tags/list"
   return 1
 }
 
