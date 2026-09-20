@@ -10,8 +10,18 @@ spec:
     log:
       mode: console
     server:
-      root_url: "https://rag-admin-api.rag.hierocracy.home/api/grafana/"
-      serve_from_sub_path: "true"
+      # Must match the ingress defined below in this same file. This previously
+      # pointed at "https://rag-admin-api.rag.hierocracy.home/api/grafana/" with
+      # serve_from_sub_path, so Grafana 301'd every request on its own ingress
+      # to a host that has no Ingress object and is not deployed -- the UI was
+      # unreachable in a browser while /api/health reported ok.
+      #
+      # That sub-path was for rag-explorer embedding panels through the
+      # rag-admin-api BFF (OPERATIONS.md 1.5). rag-explorer is excluded from
+      # build and deploy (5.5), so restore it only alongside that service.
+      # allow_embedding below is independent and still permits direct iframes.
+      root_url: "https://grafana.rag.hierocracy.home/"
+      serve_from_sub_path: "false"
     auth.anonymous:
       enabled: "true"
       org_role: Admin
@@ -21,7 +31,9 @@ spec:
       allow_embedding: "true"
     rendering:
       server_url: http://localhost:8081/render
-      callback_url: http://localhost:3000/api/grafana/
+      # The renderer calls back into Grafana here; it carried the same
+      # /api/grafana/ sub-path as root_url and has to track it.
+      callback_url: http://localhost:3000/
       renderer_token: hierocracy-grafana-renderer
   service:
     spec:
@@ -62,6 +74,29 @@ spec:
         spec:
           nodeSelector:
             role: storage-node
+          # spec.persistentVolumeClaim above only CREATES the PVC -- the
+          # operator does not wire it in, and its generated deployment backs
+          # /var/lib/grafana with an emptyDir. So central-grafana-pvc sat Bound
+          # with "Used By: <none>" while Grafana's sqlite DB lived in the pod,
+          # and every restart silently wiped all dashboards, users and
+          # annotations. Overriding the volume by name replaces the emptyDir;
+          # the operator's own grafana-data -> /var/lib/grafana mount is kept.
+          #
+          # fsGroup is required with it. The container runs as 10001:10001
+          # (runAsNonRoot, readOnlyRootFilesystem), while a freshly provisioned
+          # rook-ceph-block volume mounts root-owned -- an emptyDir never hit
+          # this because the kubelet makes those writable. Without fsGroup the
+          # grafana container CrashLoops on
+          #   GF_PATHS_DATA='/var/lib/grafana' is not writable
+          #   mkdir: can't create directory '/var/lib/grafana/plugins'
+          securityContext:
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          volumes:
+            - name: grafana-data
+              persistentVolumeClaim:
+                claimName: central-grafana-pvc
           containers:
             - name: image-renderer
               image: hierophant.hierocracy.home:5000/grafana/grafana-image-renderer:latest

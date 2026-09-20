@@ -138,6 +138,112 @@ The RAG stack uses the following Grafana dashboards for monitoring:
 - **performance-overview** (`uid: rag-performance`): Detailed performance and error metrics per service.
 - **rag-logs** (`uid: rag-logs`): Loki-based dashboard for log analysis.
 
+#### 1.5.1 Grafana was installed but unreachable, and its data was ephemeral (2026-09-18)
+
+Reported as "the Grafana UI was not installed". It **was** installed — the
+`Grafana` CR read `stage: complete / success`, the deployment had been up 3d1h,
+and `/api/health` returned `{"database":"ok","version":"13.1.3"}`. Three
+separate defects in `infrastructure/APM/grafana/operator-manifests.yaml` made it
+look otherwise. All three are the same class of mistake: **something was
+declared but never actually wired up.**
+
+**1. `root_url` pointed off its own ingress.** The manifest defines an ingress
+for `grafana.rag.hierocracy.home` at path `/`, then set:
+
+```yaml
+root_url: "https://rag-admin-api.rag.hierocracy.home/api/grafana/"
+serve_from_sub_path: "true"
+```
+
+So Grafana 301-redirected every browser request on its own ingress to a host
+that has **no Ingress object** and is **not deployed** — the whole `rag-system`
+namespace is empty. `curl -L` landed on a 404 while `/api/health` was fine,
+which is exactly the shape that reads as "not installed".
+
+That sub-path existed so `rag-explorer` could embed panels through the
+`rag-admin-api` BFF. `rag-explorer` is excluded from build and deploy (§5.5), so
+`root_url` now names the ingress that actually serves it. Restore the sub-path
+only alongside that service, and note `rendering.callback_url` carries the same
+path and must track it. `allow_embedding` is independent and still permits
+direct iframes.
+
+**2. The PVC was Bound but mounted by nothing — all data was in an emptyDir.**
+`spec.persistentVolumeClaim` in the `Grafana` CR only **creates** the PVC; the
+grafana-operator (v5.25.0) does not wire it into the deployment it generates,
+which backs `/var/lib/grafana` with an `emptyDir`. Result:
+
+```
+$ kubectl describe pvc central-grafana-pvc -n monitoring | grep 'Used By'
+Used By:  <none>                 # 5Gi Bound, paid for, attached to nothing
+```
+
+Grafana's sqlite DB lived in the pod, so **every restart silently wiped all
+dashboards, users, annotations and preferences.** This is why the dashboards
+vanished the moment the deployment rolled out. Fixed by overriding the volume
+**by name** in `deployment.spec.template.spec` — same name `grafana-data`, PVC
+source instead of emptyDir, which keeps the operator's own
+`grafana-data -> /var/lib/grafana` mount.
+
+Do not diagnose this from the CR. `spec.persistentVolumeClaim` being present
+tells you nothing; check the generated deployment and the PVC's `Used By`:
+
+```bash
+kubectl get deploy central-grafana-deployment -n monitoring \
+  -o jsonpath='{range .spec.template.spec.volumes[*]}{.name}{" pvc="}{.persistentVolumeClaim.claimName}{" emptyDir="}{.emptyDir}{"\n"}{end}'
+kubectl describe pvc central-grafana-pvc -n monitoring | grep 'Used By'
+```
+
+**3. Mounting the PVC then needs `fsGroup`, or Grafana CrashLoops.** The
+container runs `10001:10001` with `runAsNonRoot` and `readOnlyRootFilesystem`,
+while a freshly provisioned `rook-ceph-block` volume mounts root-owned. An
+emptyDir never hit this because the kubelet makes those writable. Symptom:
+
+```
+GF_PATHS_DATA='/var/lib/grafana' is not writable.
+mkdir: can't create directory '/var/lib/grafana/plugins': Permission denied
+```
+
+`securityContext.fsGroup: 10001` is set on the pod spec (re-declaring
+`seccompProfile: RuntimeDefault`, since specifying a pod `securityContext`
+replaces the operator's). **Any PVC mounted into this deployment needs the same
+treatment.**
+
+##### Two traps when verifying this
+
+- **`kubectl rollout restart` does not restart this deployment.** The operator
+  owns the deployment spec and reverts the `restartedAt` annotation, so the pod
+  UID never changes and a persistence test silently proves nothing. Delete the
+  pod instead, and compare `.metadata.uid` before and after.
+- **Dashboards reappearing is not evidence of persistence.** The operator
+  re-pushes them, so they come back on a wiped DB regardless. Probe with
+  something the operator does not manage — an annotation works:
+
+```bash
+# write, delete the pod, then re-read. Survival is the actual proof.
+curl -sk -u admin:admin -X POST https://grafana.rag.hierocracy.home/api/annotations \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"persistence-probe","tags":["pvc-test"]}'
+curl -sk -u admin:admin 'https://grafana.rag.hierocracy.home/api/annotations?tags=pvc-test'
+```
+
+##### Recovering dashboards after a data loss
+
+The operator stores a content hash in each `GrafanaDashboard` status and skips
+the push when it is unchanged, so a wiped Grafana is **not** necessarily
+repopulated — `lastResync` keeps advancing while the dashboard is absent. If
+dashboards are missing but the CRs report `ApplySuccessful`, force a reconcile
+by recreating the CRs (idempotent — they all live in the one manifest):
+
+```bash
+KUBECTL=/home/k8s/kube/kubectl
+F=/mnt/hegemon-share/share/code/complete-build/infrastructure/APM/grafana/operator-manifests.yaml
+$KUBECTL delete grafanadashboard,grafanadatasource --all -n monitoring
+$KUBECTL apply -f $F
+```
+
+Expected end state: 5 dashboards, 4 datasources, and the UID/slug paths §1.5
+lists below (`/d/rag-inference/inference-nodes` and friends).
+
 #### Embedded Grafana Configuration
 To allow `rag-explorer` to display embedded panels and links:
 1. **Anonymous Access**: Must be enabled in `central-grafana` (`Grafana` CR) with `org_role: Admin` (or `Viewer`) and `enabled: true`.
@@ -1393,7 +1499,68 @@ treat that as a blocker for anything assuming 32GB.
 > reports the board code. Now that the pool is uniform they should be truthful,
 > but reconcile them by eye rather than writing a `nodeAffinity` against them.
 
-#### 4.4.1 Ollama VRAM tuning (re-based 2026-09-13)
+#### 4.4.0 Are both cards actually being used? (2026-09-18)
+
+Ask this directly rather than inferring it from the deployment. Both GPU pods
+holding `nvidia.com/gpu: 1` means both cards are **allocated**, not that either
+is doing anything:
+
+```bash
+# resident models + VRAM, per endpoint
+for ip in 192.168.5.206 192.168.5.207; do curl -sS "http://$ip:11434/api/ps"; done
+# and the card's own view
+kubectl exec -n llms-ollama deploy/ollama-llama3   -c ollama -- nvidia-smi --query-gpu=memory.used,memory.total --format=csv
+kubectl exec -n llms-ollama deploy/ollama-qwen32b  -c ollama -- nvidia-smi --query-gpu=memory.used,memory.total --format=csv
+```
+
+Measured 2026-09-18, **before** that day's changes: executor 18,200 / 32,768
+MiB, planner **0 / 32,768 MiB**. The planner card held nothing at all, because
+its only consumer is `rag-worker` and the RAG stack is not deployed (§14 / the
+`rag-system` namespace is empty). ~46 GiB of 64 GiB idle while the coding agent
+ran on one card.
+
+Each pod's `nvidia-smi` shows only its own card, both reported as index 0, so
+you cannot see the pair from inside one. Use the two endpoints, not one pod.
+
+**Both endpoints serve all five seeded models**, so the second card needs no
+redeployment to be useful — point a second client at the planner endpoint
+(`192.168.5.206`, service `ollama`) and a model loads there. After doing exactly
+that: planner `qwen3:32b` 23.3 GiB, executor `devstral-small-2:24b` 25.3 GiB —
+49 GiB of 64 GiB, one model per card, **neither evicting the other** because
+they are different pods. This is the cheap way to run two models at once given
+`OLLAMA_MAX_LOADED_MODELS=1` on the executor (§14.2).
+
+> Reserve capacity, not just placement: when the RAG stack returns, the planner
+> needs a planning model on that card. It runs `MAX_LOADED_MODELS=2`, so
+> `qwen3:32b` (23.3 GiB) plus `llama3.1` (~5 GiB) is ~29/32 — it fits, but
+> barely. Re-check before assuming both stay resident.
+
+##### Why not vLLM tensor-parallel across both (asked again 2026-09-18)
+
+Recurring external advice is `vllm/vllm-openai:latest` with
+`--tensor-parallel-size 2`. It does not apply here and the reasons are
+independent, so disproving one does not rescue it:
+
+1. **The image will not start.** These cards are `compute_cap 7.0` on driver
+   `580.126.16`. vLLM mainline has dropped `sm_70` — `vllm==0.20.0` on a V100
+   fails with a compute-capability-7.5-minimum `ValueError` / "no kernel image
+   is available for execution on the device". TGI, TensorRT-LLM and Triton
+   dropped Volta too. Only the `1CatAI/1Cat-vLLM` fork keeps it alive, which is
+   the single-fork exposure §4.4.2 already declined.
+2. **TP is the worst possible mode on this topology.** `nvidia-smi topo -m`
+   reports `SYS` — no NVLink, cross-socket. TP all-reduces *every layer* across
+   that link. Layer-split (`OLLAMA_SCHED_SPREAD=1`, a real variable: "Always
+   schedule model across all GPUs") crosses it once per split point and is the
+   supported route for a >32 GiB model.
+3. **The advice usually contradicts itself** — a 7B model "for throughput"
+   alongside the claim that coding agents degrade below 32B, and TP2 for a model
+   it concedes fits one card. Both are downgrades from `devstral-small-2:24b`
+   at 68.0% SWE-bench Verified.
+
+Nothing here needs more than one card today. Reach for `OLLAMA_SCHED_SPREAD=1`
+only when you want a single model larger than 32 GiB.
+
+#### 4.4.1 Ollama VRAM tuning (re-based 2026-09-13, executor re-tuned 2026-09-18)
 
 Two corrections landed together here.
 
@@ -1414,17 +1581,40 @@ values, with the arithmetic that justifies them:
 
 | | `ollama-llama3` (planner) | `ollama-qwen32b` (executor) |
 |---|---|---|
-| `OLLAMA_CONTEXT_LENGTH` | 16384 | 16384 |
+| values file | `values.yaml` | **`values-devstral.yaml`** (default since 2026-09-18) |
+| `OLLAMA_CONTEXT_LENGTH` | 16384 | **65536** |
 | `OLLAMA_MAX_LOADED_MODELS` | 2 | 1 |
 | `OLLAMA_KV_CACHE_TYPE` | `f16` | `f16` |
 | `OLLAMA_GPU_OVERHEAD` | 2 GiB | 2 GiB |
-| KV per token @ f16 | ~128 KiB (8B class) | ~256 KiB (32B, 64 layers, 8 KV heads) |
-| Budget | 2×~5 GB weights + 4 GiB KV + 2 GiB = **~16/32 GB** | ~20 GB weights + 4 GiB KV + 2 GiB = **~26/32 GB** |
+| KV per token @ f16 | ~128 KiB (8B class) | **~160 KiB** (devstral: 40 layers, 8 KV heads, head_dim 128) |
+| Budget | 2×~5 GB weights + 4 GiB KV + 2 GiB = **~16/32 GB** | ~15 GB weights + 10 GiB KV + 2 GiB = **~27/32 GB** |
+| **Measured** (2026-09-18) | `qwen3:32b` **23.3 GiB** | `devstral-small-2:24b` **25.3 GiB** |
 
-Both sit at 16384 rather than higher even though the planner has room, because
-`seed-models.sh` also seeds `qwen2.5:32b` / `qwen3:32b` into the planner PVC — a
-routing change could make a 32B resident there, and 16384 stays inside the
-envelope if it does.
+**The executor ran on the wrong file until 2026-09-18.** `EXECUTOR_VALUES`
+defaulted to `values-qwen32b.yaml` while the model the coding agent actually
+requested was **devstral**, so devstral was served under a budget computed for
+qwen3:32b's KV cache (256 KiB/token against devstral's 160) and got **16384 ctx
+instead of the 65536 its own file was written for** — a quarter of its context,
+on a card with 14 GiB free. `ollama.sh` now defaults to `values-devstral.yaml`;
+pass `EXECUTOR_VALUES=values-qwen32b.yaml` to go back.
+
+Measured after the switch: **25.3 GiB at 65536**, under the ~27 GiB calculated
+above, so the arithmetic was conservative and holds. This is the one case in
+this section where the numbers are measured rather than derived.
+
+The planner stays at 16384 because `seed-models.sh` also seeds `qwen2.5:32b` /
+`qwen3:32b` into its PVC — a routing change could make a 32B resident there, and
+16384 stays inside the envelope if it does. That is now the live arrangement
+(§4.4.0), and the measured 23.3 GiB confirms it.
+
+> **`qwen3:32b` is a thinking model.** It returns reasoning in a separate
+> `reasoning` field and burns completion budget before emitting any `content`
+> — measured: 69 tokens for a two-character answer, and at `max_tokens: 20` an
+> **empty `content` with `finish_reason: length`**, the whole budget spent
+> reasoning. That empty string is not a failure and not the §7.2 empty-answer
+> bug; it is the token budget. Fine for a planner, awkward for a coding agent
+> whose client may not render that field — one more reason devstral is the
+> executor.
 
 **To go beyond 16384**, halve the KV cache with `OLLAMA_KV_CACHE_TYPE=q8_0`
 (flash attention is already enabled, which it requires); 32768 then fits the
@@ -2009,3 +2199,132 @@ The `rag-admin-api` now supports API key authentication via the `ADMIN_API_KEY` 
 - **Transition State**: Currently configured as "fail-open" (optional: true in deployment). If the `rag-admin-api-auth` secret is missing, the service will allow unauthenticated access.
 - **Enforcement**: Once stable, the `optional: true` flag should be removed from the deployment.
 - **Setup**: Run `scripts/setup-admin-auth.sh` on **hierophant** to generate and apply the API key secret.
+
+## 14. OpenCode Agent (2026-09-18)
+
+OpenCode talks to the cluster's Ollama over its OpenAI-compatible `/v1` surface.
+It does **not** depend on the RAG stack, so it works while `rag-system` is empty.
+
+### 14.1 Two paths, and which to use
+
+| Path | Version | Config file | Use |
+|---|---|---|---|
+| **JetBrains built-in** (preferred) | tracks upstream, currently `1.18.31` | `~/.config/opencode/opencode.json` | day-to-day |
+| `infrastructure/opencode/run-opencode-local.sh` | pinned `1.14.48` | `~/.config/opencode-local/opencode.json` | standalone / no IDE |
+
+Both point at `ollama-code` (`192.168.5.207:11434`, the `ollama-qwen32b`
+deployment) and use the same provider shape.
+
+**The container is pinned at 1.14.48 because that is the only tag that exists.**
+`ghcr.io/neomanexlabs/opencode` published `1.14.48` and `1.14.48-1` and nothing
+since, while the official `opencode-ai` npm package is at `1.18.31`. There is no
+official OpenCode container image (`ghcr.io/sst/opencode` and
+`ghcr.io/opencode-ai/opencode` both 403). **This is not neglect** — do not
+"bump" the tag, it will not resolve. Getting current means building an image
+from the npm package or running the CLI natively, which is what the IDE does.
+
+### 14.2 Declare ONE model — the endpoint cannot cheaply serve more
+
+`ollama-qwen32b` runs `OLLAMA_MAX_LOADED_MODELS=1` with `OLLAMA_KEEP_ALIVE=-1`,
+so the resident model is pinned indefinitely:
+
+```bash
+curl -sS http://192.168.5.207:11434/api/ps    # expires reads year 2318 == never
+```
+
+Requesting a different model evicts the resident one and loads the replacement —
+~18GB out, ~20GB in, on a V100. Per §4.4.1 the VRAM budget (~26/32GB for
+`qwen3:32b`) means two 32B-class models cannot co-reside regardless.
+
+So **both configs declare a single model**. Listing all five puts that swap one
+click away mid-session. Switch by editing the config and restarting the agent,
+which pays the cost once at startup instead. The launcher takes
+`OPENCODE_ALL_MODELS=true` when you deliberately want to compare.
+
+Seeded on both GPU PVCs: `devstral-small-2:24b` (default executor),
+`qwen3:32b`, `qwen2.5:32b`, `granite3.1-dense:8b`, `llama3.1:latest`.
+
+> `/v1/models` lists each model **twice** — bare and registry-prefixed
+> (`qwen3:32b` and `hierophant.hierocracy.home:5000/ollama/qwen3:32b` share one
+> ID), because `seed-models.sh` tags both. Use the bare form in config.
+
+### 14.3 One provider per endpoint — how to offer two models safely
+
+§14.2 says declare one model, and that holds **per endpoint**. The constraint
+is `MAX_LOADED_MODELS=1` on a *pod*, so two models on one endpoint evict each
+other — but the two GPU pods are separate, one card each (§4.4.0), so a
+**second provider pointing at the other endpoint costs nothing**:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "ollama/devstral-small-2:24b",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama executor (devstral, 64k ctx)",
+      "options": { "baseURL": "http://192.168.5.207:11434/v1" },
+      "models": { "devstral-small-2:24b": { "name": "devstral-small-2:24b" } }
+    },
+    "ollama-planner": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama planner card (qwen3:32b, 16k ctx)",
+      "options": { "baseURL": "http://192.168.5.206:11434/v1" },
+      "models": { "qwen3:32b": { "name": "qwen3:32b (thinking)" } }
+    }
+  }
+}
+```
+
+Both appear in the picker as `ollama/...` and `ollama-planner/...`, and
+switching between them evicts nothing — verified 2026-09-18: both answered a
+completion and `api/ps` still showed devstral 25.3 GiB and qwen3:32b 23.3 GiB
+resident simultaneously.
+
+**Adding a model to an existing provider is the thing to avoid** — that is the
+same-endpoint swap. Adding a provider for a distinct endpoint is not.
+
+> **The IDE caches config at agent start.** Editing the file changes nothing
+> until the ACP agent restarts (restart the IDE, or kill the
+> `acp-agents/opencode/<ver>/opencode acp` process and let it respawn). A
+> config edit that "did nothing" is almost always this.
+
+### 14.4 Switching the model the IDE uses
+
+```bash
+# one-line switch, then restart the agent so it re-reads the file
+python3 - <<'PY'
+import json, pathlib
+M = "qwen3:32b"                      # or devstral-small-2:24b
+p = pathlib.Path.home() / ".config/opencode/opencode.json"
+c = json.loads(p.read_text())
+c["model"] = f"ollama/{M}"
+c["provider"]["ollama"]["models"] = {M: {"name": M}}
+p.write_text(json.dumps(c, indent=2) + "\n")
+print("set to", M)
+PY
+```
+
+The first request after a switch stalls while Ollama swaps the weights. That is
+expected, not a hang.
+
+### 14.5 Port 4096 collides with the IDE
+
+The JetBrains ACP agent
+(`~/.cache/JetBrains/<IDE>/acp-agents/opencode/<ver>/opencode acp`, a child of
+the IDE process) listens on **the same default 4096** the container wants. pasta
+reports it uselessly and only after the image pull:
+
+```text
+Error: pasta failed with exit code 1:
+Listen failed for HOST TCP port 127.0.0.1/4096: Address already in use
+```
+
+`run-opencode-local.sh` now pre-flights the port and names the holder. To run
+both side by side:
+
+```bash
+OPENCODE_PORT=4097 bash infrastructure/opencode/run-opencode-local.sh
+```
+
+Identify the holder directly with `ss -ltnp "sport = :4096"`.

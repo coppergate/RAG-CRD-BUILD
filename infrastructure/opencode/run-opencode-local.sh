@@ -79,7 +79,21 @@ if [[ -z "$OLLAMA_URL" ]]; then
 fi
 echo "  ollama    : $OLLAMA_URL"
 
-# ── 2. Pre-flight: endpoint reachable AND serving the requested model ────────
+# ── 2. Pre-flight: the host port must be free ────────────────────────────────
+# pasta reports this uselessly -- "Listen failed for HOST TCP port
+# 127.0.0.1/4096: Address already in use", exit 1, no mention of the holder,
+# and only AFTER the image pull. The usual culprit on a dev VM is JetBrains'
+# own bundled OpenCode ACP agent, which defaults to the same 4096
+# (.cache/JetBrains/<IDE>/acp-agents/opencode/<ver>/opencode acp). If you are
+# already driving OpenCode from the IDE you probably do not need this script.
+if command -v ss >/dev/null 2>&1 && [[ -n "$(ss -ltnH "sport = :${PORT}" 2>/dev/null)" ]]; then
+  echo "ERROR: port ${PORT} is already in use; the container cannot bind it." >&2
+  ss -ltnpH "sport = :${PORT}" 2>/dev/null | sed 's/^/       /' >&2
+  echo "       Override with OPENCODE_PORT=<port>, or stop the listener." >&2
+  exit 1
+fi
+
+# ── 3. Pre-flight: endpoint reachable AND serving the requested model ────────
 # Worth checking explicitly: the models live on a PVC seeded during the
 # rag-stack install, so the endpoint can be up while serving nothing.
 echo "--- Pre-flight ---"
@@ -88,18 +102,55 @@ if ! models_json=$(curl -fsS --max-time 10 "${OLLAMA_URL}/models" 2>/dev/null); 
   echo "       Check the service:  kubectl -n llms-ollama get svc ollama-code" >&2
   exit 1
 fi
-if ! printf '%s' "$models_json" | grep -q -- "$MODEL"; then
+# Declare ONE model by default. The endpoint cannot cheaply serve more than
+# one: ollama-qwen32b runs OLLAMA_MAX_LOADED_MODELS=1 with OLLAMA_KEEP_ALIVE=-1,
+# so the resident model is pinned and asking for another evicts ~20GB and loads
+# the replacement on a V100 -- and per OPERATIONS.md 4.4.1 the VRAM budget
+# (~26/32GB for qwen3:32b) means two 32B-class models cannot co-reside anyway.
+# Listing every seeded model puts that swap one click away mid-session, so the
+# full list is opt-in via OPENCODE_ALL_MODELS=true for deliberate comparison.
+# Switch models the cheap way instead: OPENCODE_MODEL=<id> and re-run.
+#
+# Two things this has to handle either way. First, seed-models.sh leaves each
+# model tagged BOTH bare and registry-prefixed (`qwen3:32b` and
+# `hierophant.hierocracy.home:5000/ollama/qwen3:32b` share one ID), so half of
+# /v1/models is duplicates; the prefixed form is dropped. Second, the default
+# must be an exact match -- a substring test also passes on the prefixed
+# variant, which is a different string to OpenCode.
+# A registry-prefixed OPENCODE_MODEL is normalised to its bare tag rather than
+# rejected: the two tags are one model, and the previous substring check
+# accepted the prefixed form.
+MODEL="${MODEL##*/}"
+ALL_MODELS="${OPENCODE_ALL_MODELS:-false}"
+if ! models_map=$(printf '%s' "$models_json" | MODEL="$MODEL" ALL="$ALL_MODELS" python3 -c '
+import json, os, sys
+want = os.environ["MODEL"]
+ids = [m["id"] for m in json.load(sys.stdin).get("data", []) if "/" not in m["id"]]
+if want not in ids:
+    print("NOT_SERVED:" + ",".join(ids))
+    sys.exit(1)
+if os.environ.get("ALL", "false").lower() == "true":
+    ids.sort(key=lambda i: (i != want, i))
+else:
+    ids = [want]
+print(json.dumps({i: {"name": i} for i in ids}, indent=6)[1:-1].strip())
+' 2>/dev/null); then
   echo "ERROR: '$MODEL' is not served by $OLLAMA_URL." >&2
   echo "       Available:" >&2
   printf '%s' "$models_json" \
-    | python3 -c 'import sys,json;[print("         -",m["id"]) for m in json.load(sys.stdin).get("data",[])]' 2>/dev/null \
+    | python3 -c 'import sys,json;[print("         -",m["id"]) for m in json.load(sys.stdin).get("data",[]) if "/" not in m["id"]]' 2>/dev/null \
     || printf '         %s\n' "$models_json" >&2
   echo "       Override with OPENCODE_MODEL=<id>." >&2
   exit 1
 fi
-echo "  endpoint OK, '$MODEL' available"
+model_count=$(printf '%s' "$models_map" | grep -c '"name"')
+if [[ "$ALL_MODELS" == "true" ]]; then
+  echo "  endpoint OK, '$MODEL' available (${model_count} offered; switching evicts/reloads on the GPU)"
+else
+  echo "  endpoint OK, '$MODEL' available (1 offered; OPENCODE_ALL_MODELS=true to list all)"
+fi
 
-# ── 3. Write opencode.json ───────────────────────────────────────────────────
+# ── 4. Write opencode.json ───────────────────────────────────────────────────
 # Same shape the chart renders, minus the {file:} apiKey indirection: Ollama
 # does not authenticate, so no key is configured at all.
 mkdir -p "$CONF_DIR" "$STATE_DIR"
@@ -112,14 +163,16 @@ cat > "$CONF_DIR/opencode.json" <<JSON
       "npm": "@ai-sdk/openai-compatible",
       "name": "Ollama (hierocracy cluster)",
       "options": { "baseURL": "${OLLAMA_URL}" },
-      "models": { "${MODEL}": { "name": "${MODEL}" } }
+      "models": {
+      ${models_map}
+      }
     }
   }
 }
 JSON
 echo "  wrote $CONF_DIR/opencode.json"
 
-# ── 4. Image ─────────────────────────────────────────────────────────────────
+# ── 5. Image ─────────────────────────────────────────────────────────────────
 IMAGE="$MIRRORED_IMAGE"
 if ! $RT image exists "$IMAGE" 2>/dev/null; then
   echo "--- Pulling image ---"
@@ -131,7 +184,7 @@ if ! $RT image exists "$IMAGE" 2>/dev/null; then
 fi
 echo "  image: $IMAGE"
 
-# ── 5. Run ───────────────────────────────────────────────────────────────────
+# ── 6. Run ───────────────────────────────────────────────────────────────────
 # Idempotent: replace any previous instance.
 $RT rm -f "$NAME" >/dev/null 2>&1 || true
 echo "--- Starting $NAME ---"
@@ -158,7 +211,7 @@ $RT run -d --name "$NAME" \
   "$IMAGE" \
   >/dev/null
 
-# ── 6. Verify it came up ─────────────────────────────────────────────────────
+# ── 7. Verify it came up ─────────────────────────────────────────────────────
 echo "--- Waiting for the server ---"
 for i in $(seq 1 20); do
   if curl -fsS --max-time 3 "http://${BIND}:${PORT}/provider" >/dev/null 2>&1; then

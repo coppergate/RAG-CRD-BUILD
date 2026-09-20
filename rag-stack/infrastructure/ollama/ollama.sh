@@ -169,17 +169,30 @@ REGISTRY="${REGISTRY_PREFIX:-hierophant.hierocracy.home:5000}"
 # mutually exclusive: there are two cards, the planner holds one, so the
 # executor model is a swap and never an addition.
 #
-#   values-qwen32b.yaml   qwen3:32b        ~20 GB Q4_K_M, 16384 ctx  (default)
-#   values-devstral.yaml  devstral-small-2 ~15 GB q4_K_M, 65536 ctx
+#   values-devstral.yaml  devstral-small-2 ~15 GB q4_K_M, 65536 ctx  (default)
+#   values-qwen32b.yaml   qwen3:32b        ~20 GB Q4_K_M, 16384 ctx
 #
-# To switch:  EXECUTOR_VALUES=values-devstral.yaml bash ollama.sh
+# To switch:  EXECUTOR_VALUES=values-qwen32b.yaml bash ollama.sh
+#
+# Default flipped to devstral 2026-09-18. devstral was already the model the
+# coding agent requested, but the executor was still installed from the qwen32b
+# file, so it ran under a budget sized for a DIFFERENT model's KV cache
+# (256 KiB/token vs devstral's 160) and got 16384 ctx instead of the 65536 its
+# own file was written for. Measured after the switch: 25.3 GiB resident at
+# 65536, under the ~27 GiB the file calculates, on one card.
+#
+# qwen3:32b is also a THINKING model -- it emits reasoning tokens into a
+# separate `reasoning` field and burns completion budget before any content
+# (measured: 69 tokens for a two-character answer, and an empty `content` with
+# finish_reason=length at max_tokens=20). Fine for a planner, awkward for a
+# coding agent whose client may not render that field.
 #
 # The release name stays 'ollama-qwen32b' under either file. The otwld/ollama
 # chart names the PVC after the release, so renaming it would create a new PVC
 # and discard every seeded model. Service name (ollama-code), endpoint URL and
 # rag-worker config are unaffected by the swap; only which model is resident
 # changes, and both are seeded into this PVC by seed-models.sh.
-EXECUTOR_VALUES="${EXECUTOR_VALUES:-values-qwen32b.yaml}"
+EXECUTOR_VALUES="${EXECUTOR_VALUES:-values-devstral.yaml}"
 if [[ ! -f "$SCRIPT_DIR/$EXECUTOR_VALUES" ]]; then
   echo "ERROR: EXECUTOR_VALUES=$EXECUTOR_VALUES not found in $SCRIPT_DIR" >&2
   exit 1
