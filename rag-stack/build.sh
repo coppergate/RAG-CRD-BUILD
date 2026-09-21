@@ -191,8 +191,21 @@ sync_current_version_file() {
     if echo "$raw_versions" \
         | jq 'sort_by(.service_name) | map({key: .service_name, value: {version: .version, last_build: .last_build}}) | from_entries' \
         2>/dev/null > "$tmp_file" && [[ -s "$tmp_file" ]]; then
-        mv "$tmp_file" "$CURRENT_VERSION_FILE"
-        chmod 664 "$CURRENT_VERSION_FILE"
+        # Write THROUGH the existing file rather than mv'ing over it. The shared
+        # mount is multi-user (wjones and junie both run builds), and mv tries to
+        # preserve the temp file's ownership -- which fails for whichever user
+        # does not own the destination:
+        #   mv: failed to preserve ownership for '.../CURRENT_VERSION':
+        #       Operation not permitted
+        # Redirecting into the existing inode keeps the owner and the 664/
+        # super-user group that makes it writable by both.
+        if cat "$tmp_file" > "$CURRENT_VERSION_FILE" 2>/dev/null; then
+            rm -f "$tmp_file"
+            chmod 664 "$CURRENT_VERSION_FILE" 2>/dev/null || true
+        else
+            rm -f "$tmp_file"
+            log "WARN: Could not write $CURRENT_VERSION_FILE (permissions?). Backup cache not updated."
+        fi
     else
         rm -f "$tmp_file"
         log "WARN: Could not sync CURRENT_VERSION from build metadata."
@@ -226,6 +239,16 @@ increment_version() {
 }
 
 # --- Build Logic ---
+# Raw "is this tag in the registry?" probe, with no FORCE_BUILD suppression.
+# Phase 3 needs this to confirm a build whose Job object has already been
+# garbage-collected -- and Phase 3 runs precisely when FORCE_BUILD is set, so it
+# cannot use image_exists.
+image_in_registry() {
+    local svc="$1"; local ver="$2"
+    command -v skopeo >/dev/null 2>&1 || return 1
+    skopeo inspect "docker://$PROBE_REGISTRY/$svc:$ver" --tls-verify=false >/dev/null 2>&1
+}
+
 image_exists() {
     local svc="$1"; local ver="$2"
     if [[ "$FORCE_BUILD" == "true" ]]; then return 1; fi
@@ -660,6 +683,22 @@ main() {
                         succeeded=true
                         break
                     fi
+                    # An EMPTY result does not mean failure. Kaniko jobs carry
+                    # ttlSecondsAfterFinished: 600, so any job that finished more
+                    # than 10 minutes before Phase 2 returned has already been
+                    # garbage-collected and reads as ''. Phase 2 can easily block
+                    # for the full hour on one slow service, so on 2026-09-20 ten
+                    # of eleven builds were reported as failures and had their
+                    # deploy updates skipped -- while every image was in fact
+                    # pushed correctly.
+                    #
+                    # The Job is ephemeral; the pushed image is the durable
+                    # evidence. Ask the registry instead.
+                    if [[ -z "$result" ]] && image_in_registry "$svc" "$ver"; then
+                        log "  Phase 3: job for $svc $ver is gone (TTL expiry), but $PROBE_REGISTRY has the image — build succeeded."
+                        succeeded=true
+                        break
+                    fi
                     log "  Phase 3 attempt $attempt/3 for $svc $ver: result='${result}' — retrying in 5s"
                     sleep 5
                 done
@@ -668,6 +707,7 @@ main() {
                     update_svc_info "$svc" "$ver"
                 else
                     log "ERROR: Build for $svc version $ver did not succeed after 3 checks. Skipping deploy update."
+                    log "       Job status was '${result:-<absent>}' and $PROBE_REGISTRY does not have $svc:$ver."
                 fi
             done
         fi
