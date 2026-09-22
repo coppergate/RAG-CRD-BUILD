@@ -438,25 +438,62 @@ if [[ -f "$VERSION_FILE" ]]; then
     # Check if we can reach it (10s connect timeout, 15s max-time)
     if curl -s -I -H "$H_HEADER" "$ORCH_URL/versions" \
         --connect-timeout 5 --max-time 15 >/dev/null 2>&1; then
-        jq -r 'to_entries[] | "\(.key) \(.value.version)"' "$VERSION_FILE" | while read -r svc ver; do
+        # Seeding build metadata is BOOKKEEPING -- it must never be able to
+        # abort the install.
+        #
+        # It previously could, and did (2026-09-21). Under `set -Eeuo pipefail`
+        # a single failed curl exits the `while` subshell, pipefail propagates
+        # that through the `jq | while` pipeline, and set -e kills the whole
+        # script. Because curl ran with -s and >/dev/null, it died with no error
+        # at all: the install simply stopped after "Seeding llm-gateway: 2.4.22"
+        # (the echo precedes the curl, so the last name printed is the one that
+        # FAILED), and steps 7 onward never ran.
+        #
+        # The trigger was transient -- the orchestrator had just been rolled in
+        # 6.5 and Traefik was still routing to the terminating pod; the same
+        # POSTs all returned 204 minutes later. Hence retries here, and a
+        # redirect through process substitution so the loop body runs in THIS
+        # shell where a non-zero curl cannot take the pipeline down with it.
+        seed_failures=0
+        while read -r svc ver; do
+            [[ -n "$svc" ]] || continue
             echo "  Seeding $svc: $ver"
-            curl -s -X POST -H "$H_HEADER" "$ORCH_URL/versions/$svc" \
+            if ! curl -sS -X POST -H "$H_HEADER" "$ORCH_URL/versions/$svc" \
                 --connect-timeout 5 --max-time 15 \
-                -d "{\"version\": \"$ver\"}" >/dev/null
-        done
+                --retry 3 --retry-delay 2 --retry-all-errors \
+                -d "{\"version\": \"$ver\"}" >/dev/null 2>&1; then
+                echo "  WARN: could not seed $svc ($ver) -- continuing"
+                seed_failures=$((seed_failures + 1))
+            fi
+        done < <(jq -r 'to_entries[] | "\(.key) \(.value.version)"' "$VERSION_FILE")
 
         # Seed journals if available
         if [[ -d "/tmp/.build_journal_junie" ]]; then
-            find "/tmp/.build_journal_junie" -name "*.last_hash" | while read -r jf; do
+            while read -r jf; do
+                [[ -n "$jf" ]] || continue
                 svc=$(basename "$jf" .last_hash)
-                hash=$(cat "$jf")
+                hash=$(cat "$jf" 2>/dev/null || true)
+                [[ -n "$hash" ]] || continue
                 echo "  Seeding journal for $svc"
-                curl -s -X POST -H "$H_HEADER" "$ORCH_URL/journals/$svc" \
+                if ! curl -sS -X POST -H "$H_HEADER" "$ORCH_URL/journals/$svc" \
                     --connect-timeout 5 --max-time 15 \
-                    -d "{\"last_hash\": \"$hash\"}" >/dev/null
-            done
+                    --retry 3 --retry-delay 2 --retry-all-errors \
+                    -d "{\"last_hash\": \"$hash\"}" >/dev/null 2>&1; then
+                    echo "  WARN: could not seed journal for $svc -- continuing"
+                    seed_failures=$((seed_failures + 1))
+                fi
+            done < <(find "/tmp/.build_journal_junie" -name "*.last_hash" 2>/dev/null || true)
         fi
-        mark_step_done "migrate-build-metadata"
+
+        # Only claim the step if everything landed. A partial seed leaves the
+        # marker unset so the next run retries it -- harmless, since the POSTs
+        # are idempotent upserts -- while the install carries on regardless.
+        if (( seed_failures == 0 )); then
+            mark_step_done "migrate-build-metadata"
+        else
+            echo "WARN: $seed_failures metadata seed(s) failed. Not marking 'migrate-build-metadata' done; it will retry on the next run."
+            echo "      This does NOT block the install -- continuing to step 7."
+        fi
     else
         echo "WARN: Could not reach build-orchestrator API at $ORCH_URL with Host $H_HEADER. Skipping migration for now."
     fi
