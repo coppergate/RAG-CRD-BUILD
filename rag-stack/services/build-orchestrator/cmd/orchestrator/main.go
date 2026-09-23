@@ -795,7 +795,17 @@ func launchKanikoJob(ctx context.Context, clientset *kubernetes.Clientset, task 
 		pushRegistry = internalRegistryAddr
 	}
 
-	toolingRegistry := pushRegistry
+	// Tooling (busybox, kaniko) are MIRRORED THIRD-PARTY images and exist only
+	// in the upstream registry. Locally built artifacts are pushed to the
+	// in-cluster one, which is a plain registry:2 with no pull-through proxy --
+	// the two hold complementary content (OPERATIONS.md 1.7.2). So tooling must
+	// NOT follow pushRegistry.
+	//
+	// This previously read `toolingRegistry := pushRegistry`, which was only
+	// ever correct while pushes also went upstream. The moment pushes move
+	// in-cluster, every Kaniko job fails pulling busybox/kaniko from a registry
+	// that does not have them.
+	toolingRegistry := getenvDefault("TOOLING_REGISTRY_ADDR", "hierophant.hierocracy.home:5000")
 	if contextURL == "" {
 		contextURL = "s3://$(BUCKET_NAME)/" + task.SourceTarball
 	}
