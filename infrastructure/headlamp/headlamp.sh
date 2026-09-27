@@ -18,6 +18,14 @@ $HELM uninstall headlamp -n headlamp 2>/dev/null || true
 echo "Applying Headlamp static manifest..."
 $KUBECTL apply -f "$SCRIPT_DIR/headlamp.yaml"
 
+# Scoped metrics login account (kube-system/headlamp-admin). Separate from the
+# application's own service account above; see the header of the file for why
+# it is here. Applied unconditionally because a ClusterRoleBinding whose
+# ClusterRole is absent grants nothing and fails at LOGIN time, not install
+# time -- which is how it went unnoticed for a week.
+echo "Applying Headlamp scoped metrics RBAC..."
+$KUBECTL apply -f "$SCRIPT_DIR/headlamp-metrics-rbac.yaml"
+
 # Label the namespace for pod security standards
 $KUBECTL label --overwrite namespace headlamp \
   pod-security.kubernetes.io/enforce=privileged \

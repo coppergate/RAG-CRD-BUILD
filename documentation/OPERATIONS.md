@@ -1368,6 +1368,154 @@ FORCE_BUILD=true bash ./rag-stack/build.sh --service db-adapter
 PARALLELISM=8 bash ./rag-stack/build.sh
 ```
 
+### 3.6 Where built artifacts live — five places had to agree (2026-09-20)
+
+**Rule (restating §1.7.2 for the build path): locally built artifacts are pushed
+to and pulled from the IN-CLUSTER registry. Third-party/tooling images come from
+`REGISTRY_PREFIX` (hierophant). Neither registry contains the other's content,
+and the in-cluster one is a plain `registry:2` with no pull-through proxy.**
+
+The install aborted at `setup-all.sh` step 6.5 with
+
+```text
+ERROR: Image registry.hierocracy.home:5000/build-orchestrator:2.4.11
+       not found in registry after 120s.
+```
+
+`build-orchestrator` was not missing. It was Running on that exact tag with 4d3h
+uptime, pulled from the in-cluster registry. The upstream mirror does not even
+have the repository (`NAME_UNKNOWN`) because nothing ever pushes it there.
+
+Five places disagreed about the destination. All predated the 2026-09-15
+host-entry split and were harmless while `extraHostEntries` pinned both names to
+hierophant; splitting it (§1.7.1) gave the names distinct destinations and the
+disagreement surfaced in **both directions at once**:
+
+| Place | Targeted | Consequence |
+|---|---|---|
+| `setup-all.sh` `verify_image_ready` | upstream | aborted on `build-orchestrator` |
+| `setup-all.sh` `apply_manifest` | in-cluster | (correct) |
+| `build.sh` push + probe | upstream | 10 services landed in the wrong registry |
+| `trigger-build.sh` `TOOLING_REGISTRY` | in-cluster | aws-cli uploader unpullable |
+| `bootstrap-orchestrator.sh` | in-cluster | the only one that was right |
+
+So the same defect **hid a second one**: `llm-gateway` was already in
+`ImagePullBackOff`, verified against a registry that had it while deployed from
+one that did not. A check that probes a different registry than the deployment
+does not merely fail to help — it certifies the exact failure it exists to
+prevent.
+
+#### Two traps when fixing this
+
+- **`toolingRegistry` must not follow `pushRegistry`.** `launchKanikoJob` had
+  `toolingRegistry := pushRegistry`, correct only while pushes went upstream.
+  Moving pushes in-cluster would have made every Kaniko job fail pulling
+  busybox/kaniko from a registry that has neither. Now `TOOLING_REGISTRY_ADDR`.
+- **`EXTERNAL_REGISTRY_NAME` is a redirect key, not a destination.** It was set
+  to the in-cluster name in 2026-03, which makes the
+  `pushRegistry == externalRegistryName` comparison unsatisfiable, so the
+  redirect never fired. It must name the *legacy* value clients send.
+
+#### Probing from hierophant
+
+hierophant has no cluster DNS, so the in-cluster registry is addressed by its
+PureLB IP, `--tls-verify=false` (the cert has no SAN for a bare IP). Both
+`setup-all.sh` and `build.sh` derive this from `network.env` and fall back to
+`$REGISTRY` if it is overridden, so check and deployment cannot drift apart:
+
+```bash
+curl -sk https://192.168.5.201:5000/v2/_catalog                  # built artifacts
+curl -sk https://registry.hierocracy.home:5000/v2/_catalog       # upstream mirror
+```
+
+`kaniko-job-template.yaml` is referenced only by `render-manifests.sh` — the
+orchestrator builds Job specs in Go. Editing the template changes nothing.
+
+### 3.7 Install failures that look like something else
+
+Three separate silent-abort patterns cost most of 2026-09-20..22. All three
+produce output that points away from the real cause.
+
+#### 3.7.1 A vanished Kaniko job is not a failed build
+
+`build.sh` Phase 3 reported `did not succeed after 3 checks` for **ten of eleven
+services that had all built and pushed correctly**, and skipped their deploy
+updates.
+
+Kaniko jobs carry `ttlSecondsAfterFinished: 600`, but Phase 2 waits on *all*
+jobs against one deadline. Fast services finish, their Job objects are garbage
+collected 10 minutes later, and Phase 2 keeps blocking on the slow one — here
+`rag-worker`, for the full 3600s. Phase 3 then reads `.status.succeeded` on
+objects that no longer exist and gets `''`, indistinguishable from failure.
+
+**The Job is ephemeral; the pushed image is the durable evidence.** An empty
+result now falls through to a registry probe. Note this needs a *raw* probe:
+`image_exists` returns false whenever `FORCE_BUILD=true`, which is exactly when
+Phase 3 runs, so reusing it would silently never fire — hence
+`image_in_registry`.
+
+Phase 2's shared deadline still lets one slow build consume the whole budget.
+Left as-is deliberately; revisit if it recurs.
+
+#### 3.7.2 `set -e` + `pipefail` + `| while read` = a silent, total abort
+
+The install stopped dead after `Seeding llm-gateway: 2.4.22` with no error.
+
+```bash
+jq -r '...' "$FILE" | while read -r svc ver; do
+    echo "  Seeding $svc: $ver"      # prints BEFORE the attempt
+    curl -s -X POST ... >/dev/null   # one failure exits the subshell
+done
+```
+
+One failed curl exits the `while` subshell, `pipefail` propagates it, `set -e`
+kills the script — and `-s` plus `>/dev/null` means it dies producing nothing.
+**Because the echo precedes the attempt, the last name printed is the one that
+FAILED**, which sends you looking at the next item instead.
+
+The trigger was transient: step 6.5 had just rolled `build-orchestrator` and
+Traefik was still routing to the terminating pod. The same POSTs returned 204
+minutes later.
+
+Rules that came out of it, for any bookkeeping loop in an install script:
+
+- Read from **process substitution** (`done < <(cmd)`), not a pipe, so the body
+  runs in the current shell and cannot take a pipeline down with it.
+- Handle each call's failure explicitly; use `-sS` so curl errors are visible.
+- Retry (`--retry 3 --retry-all-errors`) around anything hit right after a
+  rollout.
+- Count failures and **mark the step done only if all succeeded** — a partial
+  seed retries next run (the POSTs are idempotent upserts) while the install
+  continues.
+
+#### 3.7.3 The wait helpers need a terminal — or did
+
+`WaitForPodsRunning`, `WaitForDeploymentToComplete` and `WaitForServiceToStart`
+query the cursor position with an ANSI DSR escape and repaint with `tput`. With
+no TTY nothing answers, `$startRow` is left empty, and `tput cup  0` exits
+non-zero — fatal under `setup-01-basic.sh`'s `set -e`. The log shows only:
+
+```text
+failed with error: 1 ;
+tput: No value for $TERM and no -T specified
+```
+
+which reads as a wait still in progress rather than an abort. It killed the run
+at the first call, against an operator that had been Running for 7d20h.
+
+**This only breaks headless** — interactively the escape is answered, which is
+why running the same script by hand gets much further. Guarded behind
+`_tty_available` / `_tput`; interactive behaviour is unchanged.
+
+Same functions also shelled out to bare `kubectl`, which is **not on the
+non-interactive PATH** on hierophant, so even past the abort the check could
+never match. Now `${KUBECTL:-kubectl}`, as `WaitForCRD` already did.
+
+> **When running an install headlessly, check for TTY assumptions first.** And
+> when checking whether a script is still alive, use a `pgrep`/`ps` pattern that
+> cannot match your own command line — `pgrep -f "setup-complete.sh"` run over
+> ssh matches the ssh command itself and reports a dead install as RUNNING.
+
 ## 4. Data & Model Management
 
 ### 4.1 Database Migrations & Secrets (TimescaleDB)

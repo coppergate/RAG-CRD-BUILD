@@ -26,6 +26,13 @@ set -Eeuo pipefail
 BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export BASE_DIR
 
+# Single source of truth for registry/network addressing (config/network.env).
+# Needed here for REGISTRY_LB_IP, which the rag-images verify probes.
+if [[ -f "$BASE_DIR/config/network.env" ]]; then
+    # shellcheck source=config/network.env
+    source "$BASE_DIR/config/network.env"
+fi
+
 # --- Argument parsing ---
 # GPU setup now defaults ON. This cluster has a GPU node and the RAG stack cannot
 # deploy Ollama without the labels the GPU operator publishes, so opt-out is the
@@ -426,7 +433,23 @@ wait_namespace_stable "timescaledb"      300
 mark_step_done "pre-build-stabilize"
 fi
 
-if ! is_step_done "rag-images"; then
+# Verify for rag-images: the step's real output is built service images in the
+# IN-CLUSTER registry, which is state the journal cannot express (OPERATIONS.md
+# 1.8.2). Observed 2026-09-20: the marker was set 2026-09-16 while that registry
+# held only build-orchestrator, because builds were pushing upstream -- so a
+# re-run skipped the rebuild and the rag-stack step failed on ImagePullBackOff.
+#
+# Probed from hierophant via the PureLB IP (no cluster DNS here). rag-worker is
+# a core service built on every run and Kaniko tags :latest alongside the
+# version, so this succeeds against a healthy cluster and fails only when the
+# images genuinely are not where the deployment expects them.
+rag_images_present() {
+  command -v skopeo >/dev/null 2>&1 || return 0   # cannot check; do not force a rebuild
+  skopeo inspect --tls-verify=false \
+    "docker://${REGISTRY_LB_IP:-192.168.5.201}:${REGISTRY_PORT:-5000}/rag-worker:latest" \
+    >/dev/null 2>&1
+}
+if ! is_step_done "rag-images" rag_images_present; then
 STEP_TS_START=$(date +%s)
 echo ""
 echo "Step 1.6: Build and Push RAG Images (Cluster-Native)"

@@ -48,6 +48,9 @@ if command -v skopeo >/dev/null 2>&1; then
     # Probe the registry that HOLDS the artifact (the in-cluster one), reachable
     # from hierophant via its PureLB address. $REGISTRY is the in-cluster DNS
     # name, which does not resolve off-cluster, so it cannot be used here.
+    echo "----- probing registry $CHECK_REGISTRY"
+    echo 'skopeo inspect --tls-verify=false "docker://$(CHECK_REGISTRY)/build-orchestrator:$ORCHESTRATOR_TAG"'
+
     if skopeo inspect --tls-verify=false "docker://$CHECK_REGISTRY/build-orchestrator:$ORCHESTRATOR_TAG" >/dev/null 2>&1; then
         echo "Image build-orchestrator:$ORCHESTRATOR_TAG already exists in registry. Skipping bootstrap build."
         exit 0

@@ -33,9 +33,15 @@ fi
 export VERSION
 NAMESPACE="build-pipeline"
 KUBECTL="/home/k8s/kube/kubectl"
-REGISTRY="${REGISTRY:-registry.hierocracy.home:5000}"
 INTERNAL_REGISTRY="${INTERNAL_REGISTRY:-registry.container-registry.svc.cluster.local:5000}"
-TOOLING_REGISTRY="${TOOLING_REGISTRY:-$INTERNAL_REGISTRY}"
+# Goes into the build task payload as "registry" -- the Kaniko PUSH destination.
+# Locally built artifacts belong in the in-cluster registry (OPERATIONS.md 1.7.2).
+# build.sh exports REGISTRY, so this default only applies to direct invocation.
+REGISTRY="${REGISTRY:-$INTERNAL_REGISTRY}"
+# The aws-cli uploader is a MIRRORED THIRD-PARTY image and exists only upstream;
+# the in-cluster registry carries built artifacts and nothing else. This
+# defaulted to $INTERNAL_REGISTRY, which cannot serve it.
+TOOLING_REGISTRY="${TOOLING_REGISTRY:-${REGISTRY_PREFIX:-hierophant.hierocracy.home:5000}}"
 export KUBECONFIG="/home/k8s/kube/config/kubeconfig"
 
 source "$REPO_DIR/../scripts/journal-helper.sh"

@@ -1,8 +1,27 @@
 #############################################################################################################################
 ## create an exit call to reset the cursor.
 
+# ── Non-interactive safety ───────────────────────────────────────────────────
+# The waiters below were written for an ATTACHED TERMINAL: they ask the terminal
+# where the cursor is with an ANSI DSR escape, then repaint in place with tput.
+#
+# Under nohup, CI, or any ssh without a TTY there is no terminal to answer. The
+# DSR read fails, $startRow is left EMPTY, and the following `tput cup  0` exits
+# non-zero -- which under the callers' `set -e` (setup-01-basic.sh:5) kills the
+# whole install. Observed 2026-09-22: the run died at the first
+# WaitForPodsRunning leaving nothing in the log but
+#   failed with error: 1 ;
+#   tput: No value for $TERM and no -T specified
+# which reads as a stuck wait rather than an abort.
+#
+# _tty_available gates the cosmetics; _tput makes any tput call a no-op (and
+# always succeeds) when there is no terminal. On a real terminal behaviour is
+# byte-for-byte unchanged.
+_tty_available() { [[ -t 1 && -n "${TERM:-}" && "${TERM:-}" != "dumb" ]]; }
+_tput() { if _tty_available; then tput "$@" 2>/dev/null || true; fi; return 0; }
+
 function cleanup() {
-    tput cnorm
+    _tput cnorm
 }
 
 trap cleanup EXIT
@@ -12,14 +31,14 @@ trap cleanup EXIT
 
 # advanceConsole rowCount
 advanceConsole(){
- tput civis      ## hide the cursor
+ _tput civis      ## hide the cursor
    count=$1
 	for (( c=1; c<=$count; c++ )) 
 	do 
 	    sleep .025
 		printf "\n"
 	done
- tput cnorm
+ _tput cnorm
 
 }
 
@@ -38,32 +57,35 @@ function WaitForPodsRunning() {
 	grepStrings=$2
 	sleepDelay=$3
     printf "waiting for pod startup...\n"; 
-	echo "kubectl get pods --namespace $namespace | grep -i -E $grepStrings"
+	echo "${KUBECTL:-kubectl} get pods --namespace $namespace | grep -i -E $grepStrings"
 
 # We're going to try to put the output location so that all of the check returns
 # display without issue...  if the terminal is very short (say less than 25 lines)
 # this may not place the output in the correct locations....
 
-	IFS='[;' read -p $'\e[6n' -d R -a pos -rs || echo "failed with error: $? ; ${pos[*]}"
-	startRow=${pos[1]}
-	totalLines=`tput lines`
-	
+	# startRow is fixed at topRowSpan+1 regardless, so the DSR query only ever
+	# fed neededEchos. Skip the whole terminal dance when there is no terminal.
 	topRowSpan=5
-	neededEchos=0
-	if [[ $startRow -gt $topRowSpan ]]; then
-		neededEchos=$(( totalLines -  topRowSpan ))
+	startRow=$(( topRowSpan + 1 ))
+	if _tty_available; then
+		IFS='[;' read -p $'\e[6n' -d R -a pos -rs || echo "failed with error: $? ; ${pos[*]}"
+		probedRow=${pos[1]:-0}
+		totalLines=$(tput lines 2>/dev/null || echo 24)
+		neededEchos=0
+		if [[ ${probedRow:-0} -gt $topRowSpan ]]; then
+			neededEchos=$(( totalLines - topRowSpan ))
+		fi
+		advanceConsole $neededEchos
+		_tput cup $startRow 0
 	fi
-	let startRow=topRowSpan+1
-	advanceConsole $neededEchos
-	tput cup $startRow 0
 
 	
 	while [[ $notRunning -eq 1 && $currentCount -lt $ABORT_COUNT ]] ; do
 	
-		tput cup $startRow 0
-		tput ed;
+		_tput cup $startRow 0
+		_tput ed
 		
-		check_result=($(kubectl get pods --namespace $namespace | grep -i -E $grepStrings | sed -e "s/ \+  /\t/g" | cut --fields=1,3))
+		check_result=($(${KUBECTL:-kubectl} get pods --namespace $namespace | grep -i -E $grepStrings | sed -e "s/ \+  /\t/g" | cut --fields=1,3))
 		
 		if [[ ${#check_result[@]} -gt 0 ]]; then
 		
@@ -112,32 +134,35 @@ function WaitForDeploymentToComplete() {
 	grepStrings=$2
 	sleepDelay=$3
     printf "waiting for deployment to complete...\n"; 
-	echo "kubectl get deployments --namespace $namespace | grep -i -E $grepStrings "
+	echo "${KUBECTL:-kubectl} get deployments --namespace $namespace | grep -i -E $grepStrings "
 
 # We're going to try to put the output location so that all of the check returns
 # display without issue...  if the terminal is very short (say less than 15 lines)
 # this may not place the output in the correct locations....
 
-	IFS='[;' read -p $'\e[6n' -d R -a pos -rs || echo "failed with error: $? ; ${pos[*]}"
-	startRow=${pos[1]}
-	totalLines=`tput lines`
-	
+	# startRow is fixed at topRowSpan+1 regardless, so the DSR query only ever
+	# fed neededEchos. Skip the whole terminal dance when there is no terminal.
 	topRowSpan=5
-	neededEchos=0
-	if [[ $startRow -gt $topRowSpan ]]; then
-		neededEchos=$(( totalLines -  topRowSpan ))
+	startRow=$(( topRowSpan + 1 ))
+	if _tty_available; then
+		IFS='[;' read -p $'\e[6n' -d R -a pos -rs || echo "failed with error: $? ; ${pos[*]}"
+		probedRow=${pos[1]:-0}
+		totalLines=$(tput lines 2>/dev/null || echo 24)
+		neededEchos=0
+		if [[ ${probedRow:-0} -gt $topRowSpan ]]; then
+			neededEchos=$(( totalLines - topRowSpan ))
+		fi
+		advanceConsole $neededEchos
+		_tput cup $startRow 0
 	fi
-	let startRow=topRowSpan+1
-	advanceConsole $neededEchos
-	tput cup $startRow 0
 
 	
 	while [[ $notRunning -eq 1 && $currentCount -lt $ABORT_COUNT ]] ; do
 	
-		tput cup $startRow 0
-		tput ed;
+		_tput cup $startRow 0
+		_tput ed
 		
-		check_result=($(kubectl get deployments --namespace $namespace | grep -i -E $grepStrings | sed -e "s/ \+  /\t/g" | cut --fields=1,3))
+		check_result=($(${KUBECTL:-kubectl} get deployments --namespace $namespace | grep -i -E $grepStrings | sed -e "s/ \+  /\t/g" | cut --fields=1,3))
 		
 		if [[ ${#check_result[@]} -gt 0 ]]; then
 		
@@ -185,31 +210,34 @@ function WaitForServiceToStart() {
 	grepStrings=$2
 	sleepDelay=$3
     printf "waiting for services to start...\n"; 
-	echo "kubectl get services --namespace $namespace | grep -i -E $grepStrings"
+	echo "${KUBECTL:-kubectl} get services --namespace $namespace | grep -i -E $grepStrings"
 
 # We're going to try to put the output location so that all of the check returns
 # display without issue...  if the terminal is very short (say less than 15 lines)
 # this may not place the output in the correct locations....
 
-	IFS='[;' read -p $'\e[6n' -d R -a pos -rs || echo "failed with error: $? ; ${pos[*]}"
-	startRow=${pos[1]}
-	totalLines=`tput lines`
-	
+	# startRow is fixed at topRowSpan+1 regardless, so the DSR query only ever
+	# fed neededEchos. Skip the whole terminal dance when there is no terminal.
 	topRowSpan=5
-	neededEchos=0
-	if [[ $startRow -gt $topRowSpan ]]; then
-		neededEchos=$(( totalLines -  topRowSpan ))
+	startRow=$(( topRowSpan + 1 ))
+	if _tty_available; then
+		IFS='[;' read -p $'\e[6n' -d R -a pos -rs || echo "failed with error: $? ; ${pos[*]}"
+		probedRow=${pos[1]:-0}
+		totalLines=$(tput lines 2>/dev/null || echo 24)
+		neededEchos=0
+		if [[ ${probedRow:-0} -gt $topRowSpan ]]; then
+			neededEchos=$(( totalLines - topRowSpan ))
+		fi
+		advanceConsole $neededEchos
+		_tput cup $startRow 0
 	fi
-	let startRow=topRowSpan+1
-	advanceConsole $neededEchos
-	tput cup $startRow 0
 
 	
 	while [[ $notRunning -eq 1 && $currentCount -lt $ABORT_COUNT ]] ; do
 	
-		tput cup $startRow 0
-		tput ed;
-		check_result=($(kubectl get services --namespace $namespace | grep -i -E $grepStrings | sed -e "s/ \+  /\t/g" | cut --fields=1,6))
+		_tput cup $startRow 0
+		_tput ed
+		check_result=($(${KUBECTL:-kubectl} get services --namespace $namespace | grep -i -E $grepStrings | sed -e "s/ \+  /\t/g" | cut --fields=1,6))
 		
 		
 		if [[ ${#check_result[@]} -gt 0 ]]; then
@@ -260,7 +288,7 @@ repeat(){
 #############################################################################################################################
 # repeatToColWidth {char}
 repeatToColWidth(){
-    count=`tput lines`
+    count=$(_tty_available && tput lines 2>/dev/null || echo 80)
 	char="$2"
 	repeat $count $char
 }
