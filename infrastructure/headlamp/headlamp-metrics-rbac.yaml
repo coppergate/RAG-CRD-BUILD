@@ -1,0 +1,71 @@
+# headlamp-metrics-rbac.yaml
+#
+# Adopts into the repo a set of resources that had been applied BY HAND on
+# 2026-09-20 and existed only in the cluster. They were therefore invisible to
+# every rebuild, and one of the three was missing entirely.
+#
+# The fault (reported 2026-09-27):
+#
+#   namespaces is forbidden: User "system:serviceaccount:kube-system:headlamp-admin"
+#   cannot list resource "namespaces" ... RBAC: clusterrole.rbac.authorization.k8s.io
+#   "headlamp-metrics-access" not found
+#
+# headlamp-metrics-access-binding existed and referenced headlamp-metrics-access,
+# but that ClusterRole was never created -- a binding to a missing role grants
+# NOTHING, so the service account had no permissions at all. The binding shares
+# an exact creation timestamp with ClusterRole "headlamp-readonly", so the two
+# almost certainly came from one apply in which the role and the roleRef were
+# named differently.
+#
+# NOTE this account is SEPARATE from the Headlamp application itself. The pod in
+# namespace "headlamp" runs as ServiceAccount "headlamp" (cluster-admin, see
+# headlamp.yaml) and was never affected. This set exists for a scoped LOGIN
+# token, which is what produced the error above.
+#
+# SCOPE: deliberately limited to what the name says -- cluster metrics, plus the
+# minimum cluster-scoped reads required to make metrics legible (you cannot
+# render per-namespace or per-node usage without listing namespaces and nodes).
+# It is NOT a general browsing role. To also browse workloads with this account,
+# bind headlamp-readonly to it as well rather than widening this role.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: headlamp-admin
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: headlamp-metrics-access
+rules:
+  # The metrics themselves, served by metrics-server via the aggregation layer.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list", "watch"]
+  # Cluster-scoped objects the metrics are keyed by. "namespaces" is the one
+  # whose absence produced the reported error.
+  - apiGroups: [""]
+    resources: ["namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  # Pods are needed to attribute pod metrics to a workload; read-only.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Node capacity/allocatable for the usage-vs-capacity display.
+  - apiGroups: [""]
+    resources: ["nodes/status"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: headlamp-metrics-access-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: headlamp-metrics-access
+subjects:
+  - kind: ServiceAccount
+    name: headlamp-admin
+    namespace: kube-system
