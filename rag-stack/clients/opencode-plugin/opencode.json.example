@@ -1,0 +1,61 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "plugin": [
+    [
+      "/mnt/hegemon-share/share/code/complete-build/rag-stack/clients/opencode-plugin",
+      {
+        "baseUrl": "https://rag-retrieval.rag.hierocracy.home",
+        "toolEnabled": true,
+        "injectEnabled": false,
+        "ingestEnabled": false,
+        "topK": 6,
+        "maxTokens": 4096,
+        "project": "complete-build",
+        "debug": false
+      }
+    ]
+  ],
+
+  "provider": {
+    "rag-stack": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "RAG Stack (hierophant)",
+      "options": {
+        "baseURL": "http://192.168.5.206:11434/v1",
+        "apiKey": "unused"
+      },
+      "models": {
+        "qwen3:32b": {
+          "name": "Planner - Qwen3 32B (V100 #0)",
+          "tool_call": true,
+          "temperature": true,
+          "reasoning": true,
+          "interleaved": "reasoning",
+          "limit": { "context": 16384, "output": 8192 }
+        }
+      }
+    },
+    "rag-stack-exec": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "RAG Stack Executor (hierophant)",
+      "options": {
+        "baseURL": "http://192.168.5.207:11434/v1",
+        "apiKey": "unused"
+      },
+      "models": {
+        "devstral-small-2:24b": {
+          "name": "Executor - Devstral Small 2 24B (V100 #1)",
+          "tool_call": true,
+          "temperature": true,
+          "limit": { "context": 65536, "output": 16384 }
+        }
+      }
+    }
+  },
+
+  "agent": {
+    "plan": { "model": "rag-stack/qwen3:32b" },
+    "build": { "model": "rag-stack-exec/devstral-small-2:24b" }
+  }
+}

@@ -52,3 +52,17 @@ spec:
   selector:
     matchLabels:
       app: rag-ingestion-service
+---
+# maxUnavailable rather than minAvailable: rag-retrieval runs a single replica,
+# and minAvailable: 1 against one replica blocks node drains outright. This
+# matches the qdrant-adapter/db-adapter pattern in this file.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rag-retrieval-pdb
+  namespace: rag-system
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: rag-retrieval

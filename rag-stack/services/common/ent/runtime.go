@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"app-builds/common/ent/agentsession"
 	"app-builds/common/ent/behaviorallog"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
@@ -33,6 +34,20 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	agentsessionFields := schema.AgentSession{}.Fields()
+	_ = agentsessionFields
+	// agentsessionDescSource is the schema descriptor for source field.
+	agentsessionDescSource := agentsessionFields[2].Descriptor()
+	// agentsession.DefaultSource holds the default value on creation for the source field.
+	agentsession.DefaultSource = agentsessionDescSource.Default.(string)
+	// agentsessionDescCreatedAt is the schema descriptor for created_at field.
+	agentsessionDescCreatedAt := agentsessionFields[3].Descriptor()
+	// agentsession.DefaultCreatedAt holds the default value on creation for the created_at field.
+	agentsession.DefaultCreatedAt = agentsessionDescCreatedAt.Default.(func() time.Time)
+	// agentsessionDescLastSeenAt is the schema descriptor for last_seen_at field.
+	agentsessionDescLastSeenAt := agentsessionFields[4].Descriptor()
+	// agentsession.DefaultLastSeenAt holds the default value on creation for the last_seen_at field.
+	agentsession.DefaultLastSeenAt = agentsessionDescLastSeenAt.Default.(func() time.Time)
 	behaviorallogFields := schema.BehavioralLog{}.Fields()
 	_ = behaviorallogFields
 	// behaviorallogDescAppliedAt is the schema descriptor for applied_at field.

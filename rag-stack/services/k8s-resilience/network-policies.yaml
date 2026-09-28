@@ -148,3 +148,34 @@ spec:
     ports:
     - protocol: TCP
       port: 8080
+---
+# Allow Traefik to reach rag-retrieval.
+#
+# Mirrors allow-ingress-to-gateway: default-deny-ingress selects every pod in
+# the namespace, and allow-rag-internal only permits same-namespace sources, so
+# an externally-routed service needs its own rule.
+#
+# NOTE: the CNI is Flannel with no policy controller, so every NetworkPolicy in
+# this file is currently applied but NOT enforced -- which is why rag-admin-api
+# reaches Traefik today despite having no rule of its own. This is added so the
+# intent is recorded and rag-retrieval does not break the day a policy-capable
+# CNI lands. rag-admin-api still needs the same treatment.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-rag-retrieval
+  namespace: rag-system
+spec:
+  podSelector:
+    matchLabels:
+      app: rag-retrieval
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 8080

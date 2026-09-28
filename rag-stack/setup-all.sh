@@ -144,6 +144,7 @@ $KUBECTL wait --for=condition=Ready certificate/memory-controller-cert -n $NAMES
 $KUBECTL wait --for=condition=Ready certificate/rag-worker-cert -n $NAMESPACE --timeout=180s
 # $KUBECTL wait --for=condition=Ready certificate/rag-explorer-cert -n $NAMESPACE --timeout=180s
 $KUBECTL wait --for=condition=Ready certificate/prompt-aggregator-cert -n $NAMESPACE --timeout=180s
+$KUBECTL wait --for=condition=Ready certificate/rag-retrieval-cert -n $NAMESPACE --timeout=180s
 mark_step_done "rag-system-tls"
 fi
 
@@ -560,15 +561,32 @@ $KUBECTL apply -f "$REPO_DIR/services/qdrant-adapter/k8s/service.yaml"
 mark_step_done "qdrant-adapter"
 fi
 
+# Deployed after Qdrant, db-adapter and memory-controller, all of which it
+# calls. The manifest carries its own Service, IngressRoute and ServersTransport.
+if ! is_step_done "rag-retrieval"; then
+echo "--- 11.5 Deploying RAG Retrieval API (Go, opencode integration) ---"
+apply_manifest "$REPO_DIR/services/rag-retrieval/k8s/deployment.yaml"
+mark_step_done "rag-retrieval"
+fi
+
 if ! is_step_done "rag-ingestion-service"; then
 echo "--- 11.5. Deploying RAG Ingestion Service (Python) ---"
 apply_manifest "$REPO_DIR/services/rag-ingestion/k8s/deployment.yaml"
 mark_step_done "rag-ingestion-service"
 fi
 
+# Step 12 intentionally applies nothing.
+#
+# It used to apply infrastructure/ingestion/ingest-job.yaml, a Job whose
+# `ingest-s3-script` ConfigMap does not exist anywhere in this repo. Every
+# install therefore created a Job that wedged in Init:0/1 forever (backoffLimit
+# is 0) and left the corpus empty. That manifest is now marked SUPERSEDED.
+#
+# Corpus ingestion is a deliberate, tagged operation against the running
+# rag-ingestion-service (POST /ingest), not an install step -- the scopes and
+# tags differ per corpus. See documentation/OPERATIONS.md, "Corpus ingestion".
 if ! is_step_done "ingestion-job"; then
-echo "--- 12. Preparing Ingestion Pipeline ---"
-$KUBECTL apply -f "$REPO_DIR/infrastructure/ingestion/ingest-job.yaml"
+echo "--- 12. Ingestion Pipeline (no-op: ingest via rag-ingestion-service POST /ingest) ---"
 mark_step_done "ingestion-job"
 fi
 

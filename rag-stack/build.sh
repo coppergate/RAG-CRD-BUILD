@@ -135,6 +135,7 @@ SERVICES=(
     "memory-controller"
     "prompt-aggregator"
     "embed-gateway"
+    "rag-retrieval"
 )
 
 # Infrastructure services are only built if explicitly requested or if they have changed.

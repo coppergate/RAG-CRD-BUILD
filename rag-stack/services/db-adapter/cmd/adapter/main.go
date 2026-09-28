@@ -101,6 +101,7 @@ func main() {
 
 	// Initialize Services
 	sessSvc := service.NewSessionService(entClient)
+	agentSessSvc := service.NewAgentSessionService(entClient)
 	metricsSvc := service.NewMetricsService(entClient)
 	storageSvc := service.NewStorageService(entClient)
 	maintSvc := service.NewMaintenanceService(entClient, qdrantProducer, cfg.IngestionURL)
@@ -160,6 +161,11 @@ func main() {
 
 	mux.HandleFunc("/sessions", sessSvc.ListSessions)
 	mux.HandleFunc("/sessions/tags", sessSvc.UpdateSessionTags)
+
+	// Resolve an external coding-agent session id (opencode "ses_…") to an
+	// int64 session. Registered as an exact pattern so it wins over the
+	// "/sessions/" prefix handler above.
+	mux.HandleFunc("/sessions/external", agentSessSvc.HandleResolve)
 
 	mux.HandleFunc("/metrics/sessions/health", func(w http.ResponseWriter, r *http.Request) {
 		sessionIDStr := r.URL.Query().Get("session_id")

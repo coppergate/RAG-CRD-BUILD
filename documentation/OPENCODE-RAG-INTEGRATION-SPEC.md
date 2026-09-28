@@ -890,8 +890,25 @@ Instrumentation, and only instrumentation:
 - No recorded percentiles anywhere in the repo, for the Pulsar path or any other.
 - No load or latency harness under `rag-stack/tests/` — the suite is functional
   (correctness, sad-path, contract, cross-model), with no timing assertions.
-- No live data: the `rag-system` namespace is empty and the stack is not
-  deployed, so these histograms have never been scraped for this purpose.
+- ~~No live data: the `rag-system` namespace is empty and the stack is not
+  deployed, so these histograms have never been scraped for this purpose.~~
+  **Struck 2026-09-27 — this was already false when written.** The stack *is*
+  deployed: 14 pods in `rag-system`, all `1/1 Running`, with uptimes of 4d5h-7d
+  that predate this document by four days. Verified via
+  `/home/k8s/kube/kubectl get pods -n rag-system` on hierophant. **M0 is
+  therefore runnable now**, and whether the histograms are actually scraped is
+  an open question to answer, not a known negative.
+
+  What *is* true is that the **corpus** is empty — Qdrant reports
+  `{"result":{"collections":[]}}` — because the `ingest-codebase-s3` Job sat in
+  `Init:0/1` for four days on a `configmap "ingest-s3-script" not found` that
+  exists nowhere in the repo. See §10.4 and OPERATIONS.md §15.3.
+
+  Two traps that made "not deployed" look plausible, recorded so the conclusion
+  is not reached again: Traefik's default 404/500 bodies are identical whether a
+  route is unwired or a backend is sick, so HTTP probing cannot establish
+  deployment state; and Qdrant serves **HTTPS only** on 6333, so a plain `http://`
+  probe returns an empty body and reads as a dead service.
 - No VRAM or context-headroom figures under agentic load. The VRAM arithmetic in
   `values-devstral.yaml` is a calculation from published weight sizes, not an
   observation of a running pod.

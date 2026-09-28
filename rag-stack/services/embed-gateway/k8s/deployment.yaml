@@ -333,3 +333,26 @@ spec:
       - name: registry-ca
         configMap:
           name: registry-ca-cm
+---
+# One ClusterIP in front of all four node-pinned Deployments. They share the
+# `app: embed-gateway` label, so this load-balances the synchronous /embed
+# route across whichever instances are up, while the Pulsar path each pod
+# consumes is unaffected.
+#
+# Plain HTTP: these pods' probes are HTTP and no TLS cert is mounted, so
+# rag-retrieval's EMBED_GATEWAY_URL is http://. Revisit alongside TLS for this
+# service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: embed-gateway
+  namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
+spec:
+  selector:
+    app: embed-gateway
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http

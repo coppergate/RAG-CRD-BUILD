@@ -1,3 +1,26 @@
+# SUPERSEDED -- DO NOT APPLY.
+#
+# This Job mounts a ConfigMap named `ingest-s3-script` that exists nowhere in
+# this repository. Nothing creates it. Applied to the cluster on 2026-09-23, the
+# Job sat in Init:0/1 for over four days emitting
+#   MountVolume.SetUp failed for volume "script": configmap "ingest-s3-script" not found
+# roughly 3000 times, and with backoffLimit: 0 it can never progress. That is
+# the entire reason the Qdrant corpus was empty.
+#
+# It is also the wrong path even if the ConfigMap existed: it pip-installs torch
+# and sentence-transformers at runtime and writes Qdrant directly, bypassing the
+# deployed rag-ingestion-service -- which embeds via Ollama, publishes through
+# Pulsar, and writes the payload schema (path/chunk/text/tags/start_line/
+# end_line) that rag-retrieval and rag-worker both read.
+#
+# Ingest through the live service instead:
+#   POST /ingest on rag-ingestion-service:443  (services/rag-ingestion/service.py)
+# See documentation/OPERATIONS.md, "Corpus ingestion".
+#
+# setup-all.sh no longer applies this file. To clear the Job already stuck in
+# the cluster:
+#   kubectl delete job ingest-codebase-s3 -n rag-system
+#
 apiVersion: batch/v1
 kind: Job
 metadata:

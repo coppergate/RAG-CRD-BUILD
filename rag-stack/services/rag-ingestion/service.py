@@ -137,13 +137,54 @@ def get_db_pool():
         logger.info(f"Database connection pool created (min={DB_POOL_MIN}, max={DB_POOL_MAX})")
     return _db_pool
 
-# Text splitter — sentence/paragraph-aware chunking
+# Text splitter — sentence/paragraph-aware chunking.
+#
+# add_start_index makes the splitter record each chunk's byte offset into the
+# source in doc.metadata["start_index"]. That offset is what lets us derive
+# start_line/end_line below: split_text() returns bare strings and throws the
+# position away, so line ranges are not recoverable after the fact.
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=CHUNK_SIZE,
     chunk_overlap=CHUNK_OVERLAP,
     length_function=len,
     separators=["\n\n", "\n", ". ", " ", ""],
+    add_start_index=True,
 )
+
+
+def _line_span(content: str, start_index: int, chunk_text: str) -> tuple:
+    """Return the 1-based (start_line, end_line) a chunk occupies in content.
+
+    Retrieval cites chunks back to the model, and "pipeline.go:612-664" is
+    actionable in a way that "chunk 7 of pipeline.go" is not. The executor
+    retrieval profile in particular is specified in terms of tight line ranges.
+
+    start_index is a character offset, so counting newlines before it gives the
+    starting line directly. Chunks that fail to carry an offset degrade to
+    (None, None) rather than to a wrong line number.
+    """
+    if start_index is None or start_index < 0:
+        return None, None
+    start_line = content.count("\n", 0, start_index) + 1
+    end_line = start_line + chunk_text.count("\n")
+
+    # Fail closed. The splitter computes start_index itself, and whitespace
+    # stripping means we cannot assume the offset lands exactly on the chunk's
+    # first character. Confirm the chunk's opening line really is on the line we
+    # are about to cite; if it is not, return no span rather than a wrong one --
+    # a missing citation is recoverable, a confidently wrong one is not.
+    lines = content.split("\n")
+    if not (1 <= start_line <= len(lines)):
+        return None, None
+    first_line = chunk_text.split("\n", 1)[0].strip()
+    if first_line and first_line not in lines[start_line - 1]:
+        logger.warning(
+            "[ingestion] discarding line span: chunk at offset %d starts %r "
+            "but source line %d is %r",
+            start_index, first_line[:60], start_line, lines[start_line - 1][:60],
+        )
+        return None, None
+    return start_line, end_line
 
 class IngestRequest(BaseModel):
     ingestion_id: Optional[int] = None
@@ -548,17 +589,25 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                 content = response['Body'].read().decode('utf-8')
 
                 # Use langchain text splitter for sentence/paragraph-aware chunking
-                chunks = text_splitter.split_text(content)
-                logger.info("[ingestion=%s] split file %r into %d chunks", ingestion_id, s3_key, len(chunks))
+                # create_documents (not split_text) so each chunk keeps its
+                # start_index, which _line_span turns into a line range.
+                documents = text_splitter.create_documents([content])
+                logger.info("[ingestion=%s] split file %r into %d chunks", ingestion_id, s3_key, len(documents))
 
-                for i, chunk in enumerate(chunks):
+                for i, document in enumerate(documents):
+                    chunk = document.page_content
+                    start_line, end_line = _line_span(
+                        content, document.metadata.get("start_index"), chunk
+                    )
                     try:
                         source_hash = _source_hash(chunk)
                         logger.info(
-                            "[ingestion=%s] embedding chunk file=%r chunk=%d chars=%d model=%r dims=%d tags=%r hash=%s",
+                            "[ingestion=%s] embedding chunk file=%r chunk=%d lines=%s-%s chars=%d model=%r dims=%d tags=%r hash=%s",
                             ingestion_id,
                             s3_key,
                             i,
+                            start_line,
+                            end_line,
                             len(chunk),
                             current_model,
                             current_vs,
@@ -592,6 +641,13 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                         "vector_size": current_vs,
                         "source_hash": source_hash,
                     }
+                    # Omitted rather than zeroed when unavailable, so a consumer
+                    # can tell "line 0" from "this chunk predates line ranges".
+                    # rag-retrieval relies on the key's absence for exactly that.
+                    if start_line is not None:
+                        payload_dict["start_line"] = start_line
+                        payload_dict["end_line"] = end_line
+                        payload_dict["start_index"] = document.metadata.get("start_index")
                     payload_struct.update(payload_dict)
                     logger.info(
                         "[ingestion=%s] qdrant payload file=%r chunk=%d payload=%s",
@@ -627,6 +683,8 @@ def run_ingestion(ingestion_id: int, tag_names: List[str], tag_ids: List[int],
                             "embedding_model": current_model,
                             "vector_size": current_vs,
                             "source_hash": _source_hash(chunk),
+                            "start_line": start_line,
+                            "end_line": end_line,
                         }), _pg_now())
                         )
                         emb_id = cur.fetchone()[0]

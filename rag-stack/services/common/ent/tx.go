@@ -16,6 +16,8 @@ type Tx struct {
 	ActionIdentifier *ActionIdentifierClient
 	// ActionType is the client for interacting with the ActionType builders.
 	ActionType *ActionTypeClient
+	// AgentSession is the client for interacting with the AgentSession builders.
+	AgentSession *AgentSessionClient
 	// BehavioralLog is the client for interacting with the BehavioralLog builders.
 	BehavioralLog *BehavioralLogClient
 	// BehavioralRule is the client for interacting with the BehavioralRule builders.
@@ -189,6 +191,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.ActionIdentifier = NewActionIdentifierClient(tx.config)
 	tx.ActionType = NewActionTypeClient(tx.config)
+	tx.AgentSession = NewAgentSessionClient(tx.config)
 	tx.BehavioralLog = NewBehavioralLogClient(tx.config)
 	tx.BehavioralRule = NewBehavioralRuleClient(tx.config)
 	tx.BuildJournal = NewBuildJournalClient(tx.config)

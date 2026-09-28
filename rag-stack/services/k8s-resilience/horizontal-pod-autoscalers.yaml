@@ -348,3 +348,26 @@ spec:
       - type: Pods
         value: 1
         periodSeconds: 30
+---
+# rag-retrieval is stateless and read-only, so it scales horizontally without
+# coordination. It sits on the critical path of every coding-agent turn against
+# an 800ms budget, which is the reason to let it scale out under load at all.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rag-retrieval-hpa
+  namespace: rag-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rag-retrieval
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

@@ -91,7 +91,9 @@ MANIFESTS=(
   rag-stack/infrastructure/ollama/values-planner-cpu-worker.yaml
   rag-stack/infrastructure/ollama/values-devstral.yaml
   rag-stack/infrastructure/build-pipeline/kaniko-job-template.yaml
-  rag-stack/infrastructure/ingestion/ingest-job.yaml
+  # rag-stack/infrastructure/ingestion/ingest-job.yaml -- SUPERSEDED, no longer
+  # applied by any script (its ingest-s3-script ConfigMap does not exist).
+  # Rendering it would only keep a dead manifest in step with the network config.
   infrastructure/vendor/cert-manager-v1.19.2.yaml
   infrastructure/vendor/kubernetes-dashboard-v2.7.0.yaml
   # NOT listed: infrastructure/vendor/olm.yaml — OLM was removed from

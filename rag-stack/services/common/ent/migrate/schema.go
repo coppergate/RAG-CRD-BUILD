@@ -41,6 +41,29 @@ var (
 		Columns:    ActionTypesColumns,
 		PrimaryKey: []*schema.Column{ActionTypesColumns[0]},
 	}
+	// AgentSessionColumns holds the columns for the "agent_session" table.
+	AgentSessionColumns = []*schema.Column{
+		{Name: "agent_session_id", Type: field.TypeInt64, Increment: true},
+		{Name: "external_id", Type: field.TypeString, Unique: true, Size: 2147483647},
+		{Name: "source", Type: field.TypeString, Default: "opencode"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "last_seen_at", Type: field.TypeTime},
+		{Name: "session_id", Type: field.TypeInt64},
+	}
+	// AgentSessionTable holds the schema information for the "agent_session" table.
+	AgentSessionTable = &schema.Table{
+		Name:       "agent_session",
+		Columns:    AgentSessionColumns,
+		PrimaryKey: []*schema.Column{AgentSessionColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "agent_session_sessions_session",
+				Columns:    []*schema.Column{AgentSessionColumns[5]},
+				RefColumns: []*schema.Column{SessionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
 	// BehavioralLogsColumns holds the columns for the "behavioral_logs" table.
 	BehavioralLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -602,6 +625,7 @@ var (
 	Tables = []*schema.Table{
 		ActionIdentifiersTable,
 		ActionTypesTable,
+		AgentSessionTable,
 		BehavioralLogsTable,
 		BehavioralRulesTable,
 		BuildJournalsTable,
@@ -630,6 +654,10 @@ var (
 
 func init() {
 	ActionIdentifiersTable.ForeignKeys[0].RefTable = ActionTypesTable
+	AgentSessionTable.ForeignKeys[0].RefTable = SessionsTable
+	AgentSessionTable.Annotation = &entsql.Annotation{
+		Table: "agent_session",
+	}
 	CodeEmbeddingTable.ForeignKeys[0].RefTable = CodeIngestionTable
 	CodeEmbeddingTable.Annotation = &entsql.Annotation{
 		Table: "code_embedding",
