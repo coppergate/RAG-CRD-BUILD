@@ -56,6 +56,8 @@ spec:
           value: "https://memory-controller.rag-system.svc.cluster.local"
         - name: INGESTION_URL
           value: "https://rag-ingestion-service.rag-system.svc.cluster.local"
+        - name: RAG_RETRIEVAL_URL
+          value: "https://rag-retrieval.rag-system.svc.cluster.local"
         - name: GRAFANA_URL
           value: "http://central-grafana-service.monitoring.svc.cluster.local:3000"
         - name: OTEL_USE_TLS

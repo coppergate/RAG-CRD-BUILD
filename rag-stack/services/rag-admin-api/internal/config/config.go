@@ -12,6 +12,7 @@ type Config struct {
 	LLMGatewayURL      string
 	MemoryControllerURL string
 	IngestionURL       string
+	RagRetrievalURL    string
 	QdrantDirectURL    string
 	GrafanaURL         string
 	TLSCert            string
@@ -27,6 +28,7 @@ func Load() *Config {
 		LLMGatewayURL:       envutil.GetEnv("LLM_GATEWAY_URL", "https://llm-gateway.rag-system.svc.cluster.local"),
 		MemoryControllerURL: envutil.GetEnv("MEMORY_CONTROLLER_URL", "https://memory-controller.rag-system.svc.cluster.local"),
 		IngestionURL:        envutil.GetEnv("INGESTION_URL", "https://rag-ingestion-service.rag-system.svc.cluster.local"),
+		RagRetrievalURL:     envutil.GetEnv("RAG_RETRIEVAL_URL", "https://rag-retrieval.rag-system.svc.cluster.local"),
 		QdrantDirectURL:     envutil.GetEnv("QDRANT_DIRECT_URL", "https://qdrant.rag-system.svc.cluster.local:6333"),
 		GrafanaURL:          envutil.GetEnv("GRAFANA_URL", "https://grafana.rag.hierocracy.home"),
 		TLSCert:             envutil.GetEnv("TLS_CERT", ""),

@@ -64,6 +64,7 @@ func (h *AdminHandler) HandleHealthAggregation(w http.ResponseWriter, r *http.Re
 		"llm-gateway":       h.Cfg.LLMGatewayURL,
 		"memory-controller": h.Cfg.MemoryControllerURL,
 		"rag-ingestion":     h.Cfg.IngestionURL,
+		"rag-retrieval":     h.Cfg.RagRetrievalURL,
 	}
 
 	client, err := tlsutil.NewHTTPClient(true, 5*time.Second)

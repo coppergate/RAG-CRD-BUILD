@@ -2632,7 +2632,67 @@ Keep `infrastructure/timescaledb/schema.sql` in step with the schema —
 `db-adapter` also runs `entClient.Schema.Create()`, so both paths must agree.
 Standalone migration: `infrastructure/timescaledb/iteration-12-agent-session.sql`.
 
-### 15.8 Running the tests
+### 15.8 Building and deploying it
+
+`build.sh` is convention-based: a name in its `SERVICES` array is enough,
+because the context is `services/<svc>`, the Dockerfile is
+`services/<svc>/Dockerfile`, `hash_context` hashes `services/<svc>` plus
+`common`, and `deploy_update` falls through to `services/<svc>/k8s/deployment.yaml`.
+No per-service special-casing was needed (only `object-store-mgr`,
+`build-orchestrator` and `rag-test-runner` have entries in that `case`).
+
+```bash
+# On hierophant. Kaniko builds in-cluster; there is no podman/docker path.
+cd /mnt/hegemon-share/share/code/complete-build/rag-stack
+bash ./build.sh --mode cluster --service rag-retrieval --wait
+
+# embed-gateway also changed (new /embed route + Service)
+bash ./build.sh --mode cluster --service embed-gateway --wait
+# db-adapter changed (agent_session), rag-admin-api changed (health aggregation)
+bash ./build.sh --mode cluster --service db-adapter --service rag-admin-api --wait
+```
+
+Versions come from the build-orchestrator API (`$BUILD_METADATA_URL/versions/<svc>`),
+**not** from `CURRENT_VERSION` — that file is a generated backup artifact. A new
+service starts at `1.0.0`.
+
+First-time deploy of the new objects (cert must exist before the Deployment
+mounts its secret):
+
+```bash
+KUBECTL=/home/k8s/kube/kubectl
+R=/mnt/hegemon-share/share/code/complete-build/rag-stack
+
+$KUBECTL apply -f $R/infrastructure/rag-system-tls.yaml          # adds rag-retrieval-cert
+$KUBECTL wait --for=condition=Ready certificate/rag-retrieval-cert -n rag-system --timeout=180s
+$KUBECTL apply -f $R/services/embed-gateway/k8s/deployment.yaml  # adds the ClusterIP Service
+# then let build.sh roll rag-retrieval, or apply the manifest with __VERSION__ substituted
+$KUBECTL apply -f $R/services/k8s-resilience/pod-disruption-budgets.yaml
+$KUBECTL apply -f $R/services/k8s-resilience/horizontal-pod-autoscalers.yaml
+$KUBECTL apply -f $R/services/k8s-resilience/network-policies.yaml
+```
+
+A fresh install needs none of that by hand — `setup-all.sh` step 11.5 deploys
+rag-retrieval after qdrant-adapter (so Qdrant, db-adapter and memory-controller,
+all of which it calls, already exist), and step 13 applies the resilience
+primitives.
+
+**The `-no-gpu` install variants are deliberately not updated.** They are retired;
+wire new services into `setup-all.sh` only.
+
+#### NetworkPolicy in this cluster is decorative
+
+Worth knowing before relying on it: the CNI is **Flannel with no policy
+controller** (no Calico/Cilium/kube-router in `kube-system`). Every
+`NetworkPolicy` in `services/k8s-resilience/network-policies.yaml` is applied but
+**not enforced** — which is why `rag-admin-api` serves traffic through Traefik
+despite `default-deny-ingress` and no allow rule of its own.
+
+`allow-ingress-to-rag-retrieval` was added anyway so the intent is recorded and
+the service does not break the day a policy-capable CNI lands. If one is ever
+installed, `rag-admin-api` needs the same rule or it goes dark.
+
+### 15.9 Running the tests
 
 All four suites run offline, with no cluster and no Docker. Upstreams are
 `httptest` servers; the DB is ent-on-sqlite in memory.
@@ -2668,7 +2728,7 @@ Two notes on what is deliberately *not* tested:
   until the first real ingest. This is why `_line_span` fails closed (§15.5):
   watch the ingestion log for `discarding line span`.
 
-### 15.9 Known pre-existing failure (not caused by this work)
+### 15.10 Known pre-existing failure (not caused by this work)
 
 `scripts/vet-all.sh` fails on `memory-controller`:
 
