@@ -326,7 +326,7 @@ func TestMemoryManager(t *testing.T) {
 		}
 	})
 
-	t.Run("RecordLearningStagesRules", func(t *testing.T) {
+	t.Run("RecordLearningCreatesPendingRule", func(t *testing.T) {
 		localClient := enttest.Open(t, "sqlite3", "file:behavioral-stage?mode=memory&cache=shared&_fk=1")
 		defer localClient.Close()
 		manager := behavioral.NewBehaviorManager(localClient)
@@ -335,8 +335,8 @@ func TestMemoryManager(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to stage learning: %v", err)
 		}
-		if rule.State != behavioralrule.StateSTAGED {
-			t.Fatalf("Expected staged rule state, got %s", rule.State)
+		if rule.State != behavioralrule.StatePENDING {
+			t.Fatalf("Expected pending rule state, got %s", rule.State)
 		}
 	})
 }

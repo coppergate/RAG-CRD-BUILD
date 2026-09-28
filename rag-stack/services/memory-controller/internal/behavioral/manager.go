@@ -132,6 +132,13 @@ func (m *BehaviorManager) ClearSessionOverrides(ctx context.Context, sessionID i
 // Learning Loop (Initial Implementation)
 
 func (m *BehaviorManager) RecordLearning(ctx context.Context, feedback string, actionType string, category string, priority int) (*ent.BehavioralRule, error) {
-	// Learned behaviors start as STAGED so they are persisted without taking effect immediately.
-	return m.CreateRule(ctx, actionType, feedback, category, priority, "GLOBAL", "STAGED")
+	// Learned behaviors are persisted without taking effect immediately.
+	//
+	// PENDING, not STAGED: the behavioral_rule enum declares only
+	// PENDING/ACTIVE/REJECTED/EXPIRED, and ent's StateValidator rejects anything
+	// else before save -- so the old "STAGED" literal made every call to this
+	// function fail at runtime. Retrieval filters on ACTIVE
+	// (see GetActiveRules and logic.Manager), so PENDING is already inert and
+	// carries the intended meaning.
+	return m.CreateRule(ctx, actionType, feedback, category, priority, "GLOBAL", "PENDING")
 }

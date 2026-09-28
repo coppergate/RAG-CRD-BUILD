@@ -2728,16 +2728,45 @@ Two notes on what is deliberately *not* tested:
   until the first real ingest. This is why `_line_span` fails closed (§15.5):
   watch the ingestion log for `discarding line span`.
 
-### 15.10 Known pre-existing failure (not caused by this work)
+### 15.10 Fixed: behavioural learning never persisted anything
 
-`scripts/vet-all.sh` fails on `memory-controller`:
+`scripts/vet-all.sh` used to fail on `memory-controller`:
 
 ```text
 vet: internal/logic/manager_test.go:338:35: undefined: behavioralrule.StateSTAGED
 ```
 
-Present at `HEAD` before any of this work. The `behavioral_rule` schema declares
-`PENDING / ACTIVE / REJECTED / EXPIRED`; the test expects a `STAGED` state that
-does not exist. Either the schema lost a state or the test should assert
-`StatePENDING` — needs a decision from whoever removed it. Every other service
-vets and builds clean.
+That compile error was hiding a runtime bug, and the two concealed each other.
+
+**The mismatch was three-way:**
+
+| Where | Said |
+|---|---|
+| `internal/behavioral/manager.go:136` | `RecordLearning` passed the literal `"STAGED"` |
+| `common/ent/schema/behavioral_rule.go:25` | enum is `PENDING / ACTIVE / REJECTED / EXPIRED` |
+| `internal/logic/manager_test.go:338` | asserted `behavioralrule.StateSTAGED` |
+
+`STAGED` was **never** in the schema — `git log -S"STAGED"` on that file returns
+nothing, so this was not a state that got removed. `CreateRule` does
+`SetState(behavioralrule.State(state))`, and ent's `StateValidator` rejects any
+value outside the enum *before save*, so **every call to `RecordLearning` failed
+at runtime**. The learning loop had never persisted a rule. Nobody saw it,
+because the test written to catch it could not compile and therefore never ran.
+
+**Fix:** `RecordLearning` now uses `PENDING`. Retrieval filters on `ACTIVE`
+(`behavioral/manager.go:23`, `logic/manager.go:315`), so `PENDING` is already
+inert and carries the intended "persisted but not in effect" meaning. `STAGED`
+would have needed a schema change plus an ent regeneration for a distinction no
+consumer reads. No DB migration either way: `schema.sql:118` is
+`state TEXT NOT NULL DEFAULT 'ACTIVE'` with no `CHECK`, so Postgres would have
+stored `'STAGED'` happily — the rejection was purely ent-side.
+
+`TestMemoryManager/RecordLearningCreatesPendingRule` now runs, and passes, for
+the first time. `vet-all.sh` exits 0 across all twelve services, so `build.sh`
+is no longer blocked.
+
+**The underlying hazard is still there:** `CreateRule`, `UpdateRule` and
+`RecordLearning` all take `state string`, so any typo compiles cleanly and fails
+only at save time. Typing those parameters as `behavioralrule.State` would make
+this class of bug impossible; it was left alone here to keep the fix small.
+
