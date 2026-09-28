@@ -1,0 +1,194 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-retrieval
+  namespace: rag-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-retrieval
+  template:
+    metadata:
+      labels:
+        app: rag-retrieval
+    spec:
+      # Retrieval does no GPU work -- it only calls out to the embed pods -- so
+      # it belongs on a worker, per the node-affinity rule in guidelines.md.
+      nodeSelector:
+        role: storage-node
+      serviceAccountName: rag-service-sa
+      enableServiceLinks: false
+      containers:
+      - name: retrieval
+        image: registry.container-registry.svc.cluster.local:5000/rag-retrieval:__VERSION__
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+            scheme: HTTPS
+          # /readyz embeds a probe string, so it is slower than a liveness ping
+          # and must not be polled aggressively.
+          initialDelaySeconds: 15
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 4
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTPS
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "1"
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        env:
+        - name: LISTEN_ADDR
+          value: ":8080"
+
+        # ── Upstreams (service names, never IPs -- guidelines.md) ────────────
+        - name: QDRANT_URL
+          value: "https://qdrant.rag-system.svc.cluster.local:6333"
+        - name: DB_ADAPTER_URL
+          value: "https://db-adapter.rag-system.svc.cluster.local:443"
+        - name: MEMORY_CONTROLLER_URL
+          value: "https://memory-controller.rag-system.svc.cluster.local:443"
+        - name: OLLAMA_EMBED_URL
+          value: "http://ollama-embed.llms-ollama.svc.cluster.local:11434"
+        - name: EMBED_GATEWAY_URL
+          value: "http://embed-gateway.rag-system.svc.cluster.local:8080"
+
+        # ── Embedding ────────────────────────────────────────────────────────
+        # "ollama" calls the embed pods directly; "gateway" goes through
+        # embed-gateway's /embed and reuses its node-local discovery. Flip this
+        # to A/B the two for measurement M3.
+        - name: EMBED_TRANSPORT
+          value: "ollama"
+        # MUST match the model the corpus was ingested with. The collection name
+        # encodes model and dims, so a mismatch searches a collection that does
+        # not exist and silently returns nothing. See OPERATIONS.md.
+        - name: EMBEDDING_MODEL
+          value: "all-minilm:l6-v2"
+
+        # ── Retrieval defaults ───────────────────────────────────────────────
+        - name: RAG_DEFAULT_TOP_K
+          value: "6"
+        - name: RAG_PLANNER_TOP_K
+          value: "10"
+        - name: RAG_EXECUTOR_TOP_K
+          value: "4"
+        # Counted against the same context budget as everything else; keep it
+        # small until M4 has measured real headroom.
+        - name: RAG_INJECT_MAX_TOKENS
+          value: "4096"
+        # Tag convention from spec §10.5.
+        - name: RAG_PLANNER_TAGS
+          value: "stack-docs"
+        - name: RAG_EXECUTOR_TAGS
+          value: "stack-go"
+
+        # ── Limits ───────────────────────────────────────────────────────────
+        # 32 MiB, not the 1 MiB that truncates coding-agent payloads.
+        - name: RAG_MAX_BODY_BYTES
+          value: "33554432"
+
+        # ── Turn ingest ──────────────────────────────────────────────────────
+        - name: RAG_INGEST_ENABLED
+          value: "true"
+        - name: PULSAR_URL
+          value: "pulsar+ssl://pulsar-proxy.apache-pulsar.svc.cluster.local:6651"
+        - name: PULSAR_INGEST_TURN_TOPIC
+          value: "persistent://rag-pipeline/data/agent-turns"
+
+        # ── TLS / telemetry ──────────────────────────────────────────────────
+        - name: TLS_CERT
+          value: "/etc/ssl/certs/tls.crt"
+        - name: TLS_KEY
+          value: "/etc/ssl/certs/tls.key"
+        - name: SSL_CERT_FILE
+          value: "/etc/ssl/certs/ca-certificates.crt"
+        - name: OTEL_USE_TLS
+          value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "otel-collector.monitoring.svc.cluster.local:4317"
+        volumeMounts:
+        - name: registry-ca
+          mountPath: /etc/ssl/certs/ca-certificates.crt
+          subPath: ca.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.crt
+          subPath: tls.crt
+        - name: service-tls
+          mountPath: /etc/ssl/certs/tls.key
+          subPath: tls.key
+      volumes:
+      - name: registry-ca
+        configMap:
+          name: registry-ca-cm
+      - name: service-tls
+        secret:
+          secretName: rag-retrieval-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-retrieval
+  namespace: rag-system
+  labels:
+    app.kubernetes.io/part-of: rag-stack
+spec:
+  selector:
+    app: rag-retrieval
+  ports:
+  - port: 443
+    targetPort: 8080
+    name: https
+---
+# An explicit IngressRoute rather than an Ingress, so the timeouts are stated
+# rather than inherited. Gate V3 in the spec is unresolved for our own services:
+# Traefik does not buffer responses, but its default timeouts are the risk.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rag-retrieval
+  namespace: rag-system
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`rag-retrieval.rag.hierocracy.home`)
+      kind: Rule
+      services:
+        - name: rag-retrieval
+          port: 443
+          serversTransport: rag-retrieval-transport
+  tls:
+    secretName: rag-retrieval-tls
+---
+# Own ServersTransport rather than the shared `skip-verify`, so the forwarding
+# timeouts are stated rather than inherited from Traefik's defaults. Gate V3 is
+# unresolved for our own services: Traefik does not buffer responses, but its
+# default timeouts are the real risk.
+#
+# Retrieval targets p95 < 800ms, but the first request after a pod restart pays
+# a cold embed-model load (observed 12-18s for chat models), which must not
+# surface to the client as a 504.
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: rag-retrieval-transport
+  namespace: rag-system
+spec:
+  insecureSkipVerify: true
+  forwardingTimeouts:
+    dialTimeout: 10s
+    responseHeaderTimeout: 60s
+    idleConnTimeout: 90s

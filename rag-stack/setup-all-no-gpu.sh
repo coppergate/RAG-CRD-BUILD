@@ -480,9 +480,12 @@ $KUBECTL set env deployment/rag-ingestion-service -n $NAMESPACE OLLAMA_REQUIRED=
 mark_step_done "rag-ingestion-service"
 fi
 
+# Step 12 intentionally applies nothing -- see the same step in setup-all.sh.
+# infrastructure/ingestion/ingest-job.yaml is SUPERSEDED: its `ingest-s3-script`
+# ConfigMap does not exist in this repo, so applying it only ever produced a Job
+# wedged in Init:0/1. Ingest via rag-ingestion-service (POST /ingest) instead.
 if ! is_step_done "ingestion-job"; then
-echo "--- 12. Preparing Ingestion Pipeline ---"
-$KUBECTL apply -f "$REPO_DIR/infrastructure/ingestion/ingest-job.yaml"
+echo "--- 12. Ingestion Pipeline (no-op: ingest via rag-ingestion-service POST /ingest) ---"
 mark_step_done "ingestion-job"
 fi
 

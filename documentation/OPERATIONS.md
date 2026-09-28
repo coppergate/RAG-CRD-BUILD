@@ -2476,3 +2476,208 @@ OPENCODE_PORT=4097 bash infrastructure/opencode/run-opencode-local.sh
 ```
 
 Identify the holder directly with `ss -ltnp "sport = :4096"`.
+
+---
+
+## 15. RAG Retrieval API & OpenCode Integration (2026-09-27)
+
+Implements **Option B** of `documentation/OPENCODE-RAG-INTEGRATION-SPEC.md`: a
+synchronous retrieval API (`rag-retrieval`) plus an opencode plugin
+(`rag-stack/clients/opencode-plugin/`).
+
+### 15.1 Service surface
+
+`rag-retrieval` at `https://rag-retrieval.rag.hierocracy.home` (in-cluster:
+`rag-retrieval.rag-system.svc.cluster.local:443`).
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/v1/rag/retrieve` | Core primitive. Budget **p95 < 800 ms**. |
+| `POST` | `/v1/rag/ingest/turn` | `202`, fire-and-forget to Pulsar |
+| `GET`  | `/v1/rag/tags` | Tag inventory + per-profile defaults |
+| `GET`  | `/healthz` `/readyz` `/metrics` | `/readyz` gates on Qdrant + embedder only |
+
+```bash
+curl -sk https://rag-retrieval.rag.hierocracy.home/v1/rag/retrieve \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"how does the ingestion worker chunk files",
+       "top_k":6,"format":"block"}' | jq
+```
+
+### 15.2 THE trap: the embedding model must match ingestion
+
+Collection names encode the model and dimensions
+(`contracts.BuildEmbeddingCollection` → `vectors-all-minilm-l6-v2-384`). If
+`EMBEDDING_MODEL` on `rag-retrieval` differs from the model the corpus was
+ingested with, retrieval searches a collection that **does not exist** and
+returns zero results forever, with no error anywhere.
+
+Defaults disagree across the repo, so this is easy to get wrong:
+
+| Service | Variable | Default |
+|---|---|---|
+| `rag-worker` | `EMBEDDING_MODEL` | `all-minilm:l6-v2` |
+| `rag-ingestion` | `OLLAMA_MODEL` | `llama3.1:latest` |
+| `rag-retrieval` | `EMBEDDING_MODEL` | `all-minilm:l6-v2` |
+
+The response makes the failure legible rather than silent — check these first:
+
+```bash
+# collection_missing:true plus a "not ingested" note in degraded[]
+curl -sk .../v1/rag/retrieve -d '{"query":"x"}' | jq '{collection, collection_missing, degraded}'
+```
+
+Confirm what actually exists (**note the https** — Qdrant is TLS-only on 6333;
+plain http returns an empty body and reads as a dead service):
+
+```bash
+nohup /home/k8s/kube/kubectl port-forward -n rag-system deploy/qdrant 16333:6333 >/dev/null 2>&1 &
+curl -sk https://127.0.0.1:16333/collections | jq
+```
+
+### 15.3 Corpus ingestion
+
+**Do not apply `infrastructure/ingestion/ingest-job.yaml`.** It is SUPERSEDED:
+its `ingest-s3-script` ConfigMap exists nowhere in the repo, so it only ever
+produces a Job wedged in `Init:0/1` (this is what left the corpus empty for four
+days). `setup-all.sh` step 12 no longer applies it. To clear a stuck one:
+
+```bash
+kubectl delete job ingest-codebase-s3 -n rag-system
+```
+
+Ingest through the running service instead:
+
+```bash
+kubectl exec -n rag-system deploy/rag-admin-api -- \
+  curl -sk -X POST https://rag-ingestion-service.rag-system.svc.cluster.local/ingest \
+    -H 'Content-Type: application/json' \
+    -d '{"tag_names":["stack-docs"],"embedding_model":"all-minilm:l6-v2"}'
+```
+
+Tag convention (spec §10.5) — pinned, because retrieval scoping depends on it:
+
+| Tag | Contents | Consumer |
+|---|---|---|
+| `stack-docs` | `documentation/**`, values files, scripts | planner / `plan` agent |
+| `stack-go` | `rag-stack/services/**` | executor / `build` agent |
+| `opencode-src` | opencode TypeScript sources | either |
+
+Prove one small tag end-to-end before ingesting all three.
+
+### 15.4 Embedding transport (measurement M3)
+
+`EMBED_TRANSPORT` switches between two paths without a rebuild:
+
+- `ollama` (default) — direct to `ollama-embed`, the lowest floor.
+- `gateway` — `POST /embed` on `embed-gateway`, reusing its node-local
+  discovery and fallback. This route and the `embed-gateway` ClusterIP are new;
+  `embed-gateway` previously had no Service at all.
+
+A/B them by comparing `timings_ms.embed` across a flip. That settles §7.3's
+"drop the bypass-Pulsar framing" question with a number.
+
+### 15.5 Line ranges require re-ingestion
+
+`rag-ingestion` now records `start_line`/`end_line` per chunk (via the splitter's
+`add_start_index`). Chunks ingested before this **lack the fields**, and both
+`rag-retrieval` and the plugin omit them per-chunk rather than emitting `0`, so
+a citation degrades to `path#chunkN` instead of lying about a line number.
+
+`_line_span` **fails closed**: it verifies the chunk's first line really is on
+the computed line and returns no span if not, logging a warning. If citations
+come back as `#chunkN` for freshly ingested content, grep the ingestion log for
+`discarding line span` — that means the splitter's `start_index` contract is not
+what we assumed, and the offset logic needs revisiting.
+
+### 15.6 Plugin
+
+`rag-stack/clients/opencode-plugin/` — referenced from `opencode.json` by path;
+nothing is written into the opencode checkout. See its README, and
+`opencode.json.example` for a complete config.
+
+```bash
+cd rag-stack/clients/opencode-plugin && npm test   # 17 tests, no cluster needed
+```
+
+Defaults: `rag_search` tool **on**, injection **off**, ingest **off**.
+
+**Injection is the expensive path, not the cheap one.** A mutating system block
+invalidates llama.cpp's KV prefix cache every turn, re-prefilling 20-60k tokens.
+The plugin therefore caches the block per session byte-identically. Do not make
+it refresh per turn without reading spec §4 A.3 and running M9.
+
+Client env:
+
+```bash
+export NODE_EXTRA_CA_CERTS=/mnt/hegemon-share/share/code/complete-build/root-ca.crt
+export NO_PROXY="localhost,127.0.0.1,.hierocracy.home"   # required if HTTPS_PROXY is set
+export RAG_DEBUG=1                                        # logs to stderr as [rag-stack]
+```
+
+### 15.7 Regenerating ent after a schema change
+
+`agent_session` (spec §A.5) maps opencode's `ses_…` strings to `int64` sessions.
+If you add or change an ent schema, regenerate **with the upsert feature** — the
+existing code was generated with it, and omitting the flag silently deletes
+~11.8k lines of `OnConflict` builders that other services call:
+
+```bash
+cd rag-stack/services/common
+go run entgo.io/ent/cmd/ent generate --feature sql/upsert ./ent/schema
+go build ./...
+```
+
+Keep `infrastructure/timescaledb/schema.sql` in step with the schema —
+`db-adapter` also runs `entClient.Schema.Create()`, so both paths must agree.
+Standalone migration: `infrastructure/timescaledb/iteration-12-agent-session.sql`.
+
+### 15.8 Running the tests
+
+All four suites run offline, with no cluster and no Docker. Upstreams are
+`httptest` servers; the DB is ent-on-sqlite in memory.
+
+```bash
+cd /mnt/hegemon-share/share/code/complete-build
+
+# Go -- 120 test functions across the new/changed services
+(cd rag-stack/services/rag-retrieval && go test ./...)     # 82
+(cd rag-stack/services/db-adapter    && go test ./...)     # 31 (13 new: agent_session)
+(cd rag-stack/services/embed-gateway && go test ./...)     #  7 (sync /embed)
+
+# The agent_session tests are the ones worth running with -race
+(cd rag-stack/services/db-adapter && go test -race -count=5 ./internal/service/)
+
+# Python -- line-range derivation
+(cd rag-stack/services/rag-ingestion && python3 -m unittest test_line_span -v)  # 15
+
+# Plugin -- needs only node, not an opencode install
+(cd rag-stack/clients/opencode-plugin && npm test)         # 17
+```
+
+Two notes on what is deliberately *not* tested:
+
+- **N-way concurrency on `agent_session`.** sqlite in shared-cache mode returns
+  `SQLITE_LOCKED` under concurrent writers, which is a driver artifact, not the
+  behaviour Postgres exhibits (there the unique constraint fires and the loser
+  re-reads). A concurrency test against sqlite is flaky and proves nothing about
+  production, so the two branches that matter — post-race reuse and orphan
+  adoption — are exercised deterministically instead.
+- **langchain's `start_index` contract.** `langchain_text_splitters` is not
+  installed on the dev host, so the offset the splitter reports is unverified
+  until the first real ingest. This is why `_line_span` fails closed (§15.5):
+  watch the ingestion log for `discarding line span`.
+
+### 15.9 Known pre-existing failure (not caused by this work)
+
+`scripts/vet-all.sh` fails on `memory-controller`:
+
+```text
+vet: internal/logic/manager_test.go:338:35: undefined: behavioralrule.StateSTAGED
+```
+
+Present at `HEAD` before any of this work. The `behavioral_rule` schema declares
+`PENDING / ACTIVE / REJECTED / EXPIRED`; the test expects a `STAGED` state that
+does not exist. Either the schema lost a state or the test should assert
+`StatePENDING` — needs a decision from whoever removed it. Every other service
+vets and builds clean.

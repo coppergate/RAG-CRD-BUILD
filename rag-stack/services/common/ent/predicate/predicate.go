@@ -12,6 +12,9 @@ type ActionIdentifier func(*sql.Selector)
 // ActionType is the predicate function for actiontype builders.
 type ActionType func(*sql.Selector)
 
+// AgentSession is the predicate function for agentsession builders.
+type AgentSession func(*sql.Selector)
+
 // BehavioralLog is the predicate function for behaviorallog builders.
 type BehavioralLog func(*sql.Selector)
 

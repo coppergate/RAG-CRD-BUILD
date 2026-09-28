@@ -13,6 +13,7 @@ import (
 
 	"app-builds/common/ent/actionidentifier"
 	"app-builds/common/ent/actiontype"
+	"app-builds/common/ent/agentsession"
 	"app-builds/common/ent/behaviorallog"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
@@ -49,6 +50,8 @@ type Client struct {
 	ActionIdentifier *ActionIdentifierClient
 	// ActionType is the client for interacting with the ActionType builders.
 	ActionType *ActionTypeClient
+	// AgentSession is the client for interacting with the AgentSession builders.
+	AgentSession *AgentSessionClient
 	// BehavioralLog is the client for interacting with the BehavioralLog builders.
 	BehavioralLog *BehavioralLogClient
 	// BehavioralRule is the client for interacting with the BehavioralRule builders.
@@ -102,6 +105,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.ActionIdentifier = NewActionIdentifierClient(c.config)
 	c.ActionType = NewActionTypeClient(c.config)
+	c.AgentSession = NewAgentSessionClient(c.config)
 	c.BehavioralLog = NewBehavioralLogClient(c.config)
 	c.BehavioralRule = NewBehavioralRuleClient(c.config)
 	c.BuildJournal = NewBuildJournalClient(c.config)
@@ -216,6 +220,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		config:               cfg,
 		ActionIdentifier:     NewActionIdentifierClient(cfg),
 		ActionType:           NewActionTypeClient(cfg),
+		AgentSession:         NewAgentSessionClient(cfg),
 		BehavioralLog:        NewBehavioralLogClient(cfg),
 		BehavioralRule:       NewBehavioralRuleClient(cfg),
 		BuildJournal:         NewBuildJournalClient(cfg),
@@ -257,6 +262,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		config:               cfg,
 		ActionIdentifier:     NewActionIdentifierClient(cfg),
 		ActionType:           NewActionTypeClient(cfg),
+		AgentSession:         NewAgentSessionClient(cfg),
 		BehavioralLog:        NewBehavioralLogClient(cfg),
 		BehavioralRule:       NewBehavioralRuleClient(cfg),
 		BuildJournal:         NewBuildJournalClient(cfg),
@@ -306,11 +312,11 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.ActionIdentifier, c.ActionType, c.BehavioralLog, c.BehavioralRule,
-		c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding, c.CodeIngestion,
-		c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.ModelDefinition,
-		c.ModelExecutionMetric, c.Prompt, c.Response, c.RetrievalLog, c.Session,
-		c.SessionGovernance, c.Tag, c.TagEmbeddingCoverage,
+		c.ActionIdentifier, c.ActionType, c.AgentSession, c.BehavioralLog,
+		c.BehavioralRule, c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding,
+		c.CodeIngestion, c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink,
+		c.ModelDefinition, c.ModelExecutionMetric, c.Prompt, c.Response,
+		c.RetrievalLog, c.Session, c.SessionGovernance, c.Tag, c.TagEmbeddingCoverage,
 	} {
 		n.Use(hooks...)
 	}
@@ -320,11 +326,11 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.ActionIdentifier, c.ActionType, c.BehavioralLog, c.BehavioralRule,
-		c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding, c.CodeIngestion,
-		c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink, c.ModelDefinition,
-		c.ModelExecutionMetric, c.Prompt, c.Response, c.RetrievalLog, c.Session,
-		c.SessionGovernance, c.Tag, c.TagEmbeddingCoverage,
+		c.ActionIdentifier, c.ActionType, c.AgentSession, c.BehavioralLog,
+		c.BehavioralRule, c.BuildJournal, c.BuildLock, c.BuildVersion, c.CodeEmbedding,
+		c.CodeIngestion, c.InferenceNode, c.MemoryEvent, c.MemoryItem, c.MemoryLink,
+		c.ModelDefinition, c.ModelExecutionMetric, c.Prompt, c.Response,
+		c.RetrievalLog, c.Session, c.SessionGovernance, c.Tag, c.TagEmbeddingCoverage,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -337,6 +343,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ActionIdentifier.mutate(ctx, m)
 	case *ActionTypeMutation:
 		return c.ActionType.mutate(ctx, m)
+	case *AgentSessionMutation:
+		return c.AgentSession.mutate(ctx, m)
 	case *BehavioralLogMutation:
 		return c.BehavioralLog.mutate(ctx, m)
 	case *BehavioralRuleMutation:
@@ -677,6 +685,155 @@ func (c *ActionTypeClient) mutate(ctx context.Context, m *ActionTypeMutation) (V
 		return (&ActionTypeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ActionType mutation op: %q", m.Op())
+	}
+}
+
+// AgentSessionClient is a client for the AgentSession schema.
+type AgentSessionClient struct {
+	config
+}
+
+// NewAgentSessionClient returns a client for the AgentSession from the given config.
+func NewAgentSessionClient(c config) *AgentSessionClient {
+	return &AgentSessionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `agentsession.Hooks(f(g(h())))`.
+func (c *AgentSessionClient) Use(hooks ...Hook) {
+	c.hooks.AgentSession = append(c.hooks.AgentSession, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `agentsession.Intercept(f(g(h())))`.
+func (c *AgentSessionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AgentSession = append(c.inters.AgentSession, interceptors...)
+}
+
+// Create returns a builder for creating a AgentSession entity.
+func (c *AgentSessionClient) Create() *AgentSessionCreate {
+	mutation := newAgentSessionMutation(c.config, OpCreate)
+	return &AgentSessionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AgentSession entities.
+func (c *AgentSessionClient) CreateBulk(builders ...*AgentSessionCreate) *AgentSessionCreateBulk {
+	return &AgentSessionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AgentSessionClient) MapCreateBulk(slice any, setFunc func(*AgentSessionCreate, int)) *AgentSessionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AgentSessionCreateBulk{err: fmt.Errorf("calling to AgentSessionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AgentSessionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AgentSessionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AgentSession.
+func (c *AgentSessionClient) Update() *AgentSessionUpdate {
+	mutation := newAgentSessionMutation(c.config, OpUpdate)
+	return &AgentSessionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AgentSessionClient) UpdateOne(_m *AgentSession) *AgentSessionUpdateOne {
+	mutation := newAgentSessionMutation(c.config, OpUpdateOne, withAgentSession(_m))
+	return &AgentSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AgentSessionClient) UpdateOneID(id int64) *AgentSessionUpdateOne {
+	mutation := newAgentSessionMutation(c.config, OpUpdateOne, withAgentSessionID(id))
+	return &AgentSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AgentSession.
+func (c *AgentSessionClient) Delete() *AgentSessionDelete {
+	mutation := newAgentSessionMutation(c.config, OpDelete)
+	return &AgentSessionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AgentSessionClient) DeleteOne(_m *AgentSession) *AgentSessionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AgentSessionClient) DeleteOneID(id int64) *AgentSessionDeleteOne {
+	builder := c.Delete().Where(agentsession.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AgentSessionDeleteOne{builder}
+}
+
+// Query returns a query builder for AgentSession.
+func (c *AgentSessionClient) Query() *AgentSessionQuery {
+	return &AgentSessionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAgentSession},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AgentSession entity by its id.
+func (c *AgentSessionClient) Get(ctx context.Context, id int64) (*AgentSession, error) {
+	return c.Query().Where(agentsession.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AgentSessionClient) GetX(ctx context.Context, id int64) *AgentSession {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QuerySession queries the session edge of a AgentSession.
+func (c *AgentSessionClient) QuerySession(_m *AgentSession) *SessionQuery {
+	query := (&SessionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(agentsession.Table, agentsession.FieldID, id),
+			sqlgraph.To(session.Table, session.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, agentsession.SessionTable, agentsession.SessionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *AgentSessionClient) Hooks() []Hook {
+	return c.hooks.AgentSession
+}
+
+// Interceptors returns the client interceptors.
+func (c *AgentSessionClient) Interceptors() []Interceptor {
+	return c.inters.AgentSession
+}
+
+func (c *AgentSessionClient) mutate(ctx context.Context, m *AgentSessionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AgentSessionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AgentSessionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AgentSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AgentSessionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AgentSession mutation op: %q", m.Op())
 	}
 }
 
@@ -3759,17 +3916,17 @@ func (c *TagEmbeddingCoverageClient) mutate(ctx context.Context, m *TagEmbedding
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		ActionIdentifier, ActionType, BehavioralLog, BehavioralRule, BuildJournal,
-		BuildLock, BuildVersion, CodeEmbedding, CodeIngestion, InferenceNode,
-		MemoryEvent, MemoryItem, MemoryLink, ModelDefinition, ModelExecutionMetric,
-		Prompt, Response, RetrievalLog, Session, SessionGovernance, Tag,
-		TagEmbeddingCoverage []ent.Hook
+		ActionIdentifier, ActionType, AgentSession, BehavioralLog, BehavioralRule,
+		BuildJournal, BuildLock, BuildVersion, CodeEmbedding, CodeIngestion,
+		InferenceNode, MemoryEvent, MemoryItem, MemoryLink, ModelDefinition,
+		ModelExecutionMetric, Prompt, Response, RetrievalLog, Session,
+		SessionGovernance, Tag, TagEmbeddingCoverage []ent.Hook
 	}
 	inters struct {
-		ActionIdentifier, ActionType, BehavioralLog, BehavioralRule, BuildJournal,
-		BuildLock, BuildVersion, CodeEmbedding, CodeIngestion, InferenceNode,
-		MemoryEvent, MemoryItem, MemoryLink, ModelDefinition, ModelExecutionMetric,
-		Prompt, Response, RetrievalLog, Session, SessionGovernance, Tag,
-		TagEmbeddingCoverage []ent.Interceptor
+		ActionIdentifier, ActionType, AgentSession, BehavioralLog, BehavioralRule,
+		BuildJournal, BuildLock, BuildVersion, CodeEmbedding, CodeIngestion,
+		InferenceNode, MemoryEvent, MemoryItem, MemoryLink, ModelDefinition,
+		ModelExecutionMetric, Prompt, Response, RetrievalLog, Session,
+		SessionGovernance, Tag, TagEmbeddingCoverage []ent.Interceptor
 	}
 )

@@ -5,6 +5,7 @@ package ent
 import (
 	"app-builds/common/ent/actionidentifier"
 	"app-builds/common/ent/actiontype"
+	"app-builds/common/ent/agentsession"
 	"app-builds/common/ent/behaviorallog"
 	"app-builds/common/ent/behavioralrule"
 	"app-builds/common/ent/buildjournal"
@@ -96,6 +97,7 @@ func checkColumn(t, c string) error {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
 			actionidentifier.Table:     actionidentifier.ValidColumn,
 			actiontype.Table:           actiontype.ValidColumn,
+			agentsession.Table:         agentsession.ValidColumn,
 			behaviorallog.Table:        behaviorallog.ValidColumn,
 			behavioralrule.Table:       behavioralrule.ValidColumn,
 			buildjournal.Table:         buildjournal.ValidColumn,
